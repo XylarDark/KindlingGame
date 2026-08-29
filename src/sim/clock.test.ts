@@ -3,11 +3,11 @@ import { clockHour, formatGameClock, GameClock } from "./clock";
 import { GAME_END_HOUR, GAME_START_HOUR, MS_PER_GAME_HOUR, SHIFT_MS } from "./constants";
 
 describe("GameClock", () => {
-  it("maps 2 real seconds to 1 game minute and 2 real minutes to 1 game hour", () => {
+  it("maps 1 real second to 1 game minute and 1 real minute to 1 game hour", () => {
     const clock = new GameClock();
-    clock.tick(2_000);
+    clock.tick(1_000);
     expect(formatGameClock(clock.gameMs)).toBe("09:01");
-    clock.tick(MS_PER_GAME_HOUR - 2_000);
+    clock.tick(MS_PER_GAME_HOUR - 1_000);
     expect(clock.gameHours).toBe(1);
     expect(formatGameClock(clock.gameMs)).toBe("10:00");
   });

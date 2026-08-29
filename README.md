@@ -42,6 +42,6 @@ Drive:
 - **Pickup:** tablet ticket → bag + strain → wait → customer arrives → tap them
 - **Delivery:** tablet ticket → bag + strain → HIT THE ROAD → GPS → call → door
 
-1 game hour = 2 real minutes of clock (2s per game minute). Late deliveries still complete but lose points. While you drive, an NPC key-lead keeps working the shop.
+1 game minute = 1 real second (1 game hour = 1 real minute). Late deliveries still complete but lose points. While you drive, an NPC key-lead keeps working the shop.
 
 Placeholder pixels only. City maps stay handmade at T0.

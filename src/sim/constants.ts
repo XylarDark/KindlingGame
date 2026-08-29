@@ -1,8 +1,8 @@
 export const GAME_WIDTH = 1920;
 export const GAME_HEIGHT = 1080;
 
-/** One game minute = 2 real seconds. One session is the 9am–11pm shop day. */
-export const MS_PER_GAME_MINUTE = 2_000;
+/** One game minute = 1 real second. One session is the 9am–11pm shop day. */
+export const MS_PER_GAME_MINUTE = 1_000;
 export const MS_PER_GAME_HOUR = 60 * MS_PER_GAME_MINUTE;
 export const GAME_START_HOUR = 9;
 export const GAME_END_HOUR = 23;
