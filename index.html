@@ -4,9 +4,20 @@
     <meta charset="UTF-8" />
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content"
     />
+    <meta name="theme-color" content="#241c16" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="application-name" content="Kindling" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Kindling" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="description" content="Run the Kindling shop, then hit the road for deliveries." />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
     <title>Kindling</title>
     <style>
       html,
@@ -14,26 +25,61 @@
         margin: 0;
         padding: 0;
         overflow: hidden;
-        background: #f7f1e8;
-        height: 100%;
+        background: #241c16;
         width: 100%;
+        height: 100%;
+        height: 100svh;
+        height: 100dvh;
+        position: fixed;
+        inset: 0;
         touch-action: none;
+        overscroll-behavior: none;
+        overscroll-behavior-y: none;
         user-select: none;
         -webkit-user-select: none;
         -webkit-touch-callout: none;
+        -webkit-tap-highlight-color: transparent;
       }
       #game-root {
+        position: absolute;
+        left: 0;
+        top: 0;
         width: 100%;
         height: 100%;
+        box-sizing: border-box;
+        padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+          env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
         touch-action: none;
       }
       #game-root canvas {
+        display: block;
         image-rendering: auto;
+        -webkit-user-drag: none;
+      }
+      #rotate-gate {
+        position: fixed;
+        inset: 0;
+        z-index: 40;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 32px;
+        background: #241c16;
+        color: #f4e8c1;
+        font-family: Inter, system-ui, sans-serif;
+        font-size: 22px;
+        font-weight: 700;
+        text-align: center;
+        line-height: 1.35;
+      }
+      #rotate-gate[hidden] {
+        display: none;
       }
     </style>
   </head>
   <body>
     <div id="game-root"></div>
+    <div id="rotate-gate" hidden aria-hidden="true">Turn your phone sideways to run Kindling.</div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

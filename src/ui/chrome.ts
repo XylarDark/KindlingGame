@@ -20,6 +20,9 @@ export function addPanel(
   return g;
 }
 
+/** Tall enough that FIT-scaled 16:9 still hits ~44pt on iPhone landscape. */
+export const HUD_BUTTON_MIN_H = 112;
+
 export function addHudButton(
   scene: Phaser.Scene,
   x: number,
@@ -53,8 +56,8 @@ export function addHudButton(
   }).setOrigin(0.5);
 
   const paint = (pressed: boolean): void => {
-    const w = Math.max(opts.minWidth ?? 220, text.width + 48);
-    const h = Math.max(56, text.height + 24);
+    const w = Math.max(opts.minWidth ?? 260, text.width + 56);
+    const h = Math.max(HUD_BUTTON_MIN_H, text.height + 40);
     const left = -w * originX;
     const top = -h * originY;
     bg.clear();
@@ -76,8 +79,11 @@ export function addHudButton(
   container.setDepth(opts.depth ?? 21);
   paint(false);
 
-  container.on("pointerover", () => paint(true));
-  container.on("pointerout", () => paint(false));
+  const hover = !(globalThis.matchMedia?.("(pointer: coarse)")?.matches ?? false);
+  if (hover) {
+    container.on("pointerover", () => paint(true));
+    container.on("pointerout", () => paint(false));
+  }
   container.on("pointerdown", (p: Phaser.Input.Pointer) => {
     p.event.stopPropagation();
     paint(true);

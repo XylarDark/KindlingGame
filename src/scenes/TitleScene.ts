@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import { beginPlay, shouldShowHowTo } from "../session";
-import { addHudButton, addPanel } from "../ui/chrome";
+import { addHudButton, addPanel, HUD_BUTTON_MIN_H } from "../ui/chrome";
 import { HOWTO_HINT, PAUSE_HINT, WELCOME_HINT, WELCOME_TITLE } from "../ui/copy";
 import { addUiText } from "../ui/text";
 import { Color, Type } from "../ui/theme";
@@ -119,7 +119,7 @@ export class TitleScene extends Phaser.Scene {
     const cardH = 184;
     const gap = 28;
     const rowW = cardW * 3 + gap * 2;
-    const btnH = 56;
+    const btnH = HUD_BUTTON_MIN_H;
     const stackGap = 16;
     const hintGap = 8;
     const hintH = 28;

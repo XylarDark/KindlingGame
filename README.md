@@ -1,8 +1,20 @@
 # Kindling (T0)
 
-A 2D pixel-art cannabis shop + delivery game for **mobile browsers** and desktop. You play the **key-lead** in a side-cutaway of Kindling, then **hit the road** as the driver on a handmade city map.
+A 2D pixel-art cannabis shop + delivery game for **iPhone, iPad, Android, and desktop** browsers. You play the **key-lead** in a side-cutaway of Kindling, then **hit the road** as the driver on a handmade city map.
 
-## Run
+## Play
+
+Public build: **https://xylardark.github.io/KindlingGame/**
+
+On a phone, turn it **sideways**. For a full-screen app:
+
+- **iPhone / iPad:** Safari → Share → Add to Home Screen
+- **Android Chrome:** menu → Add to Home screen / Install app
+- **Samsung Internet:** menu → Add page to → Home screen
+
+Pushes to `master` publish that link through GitHub Pages.
+
+## Run locally
 
 ```bash
 npm install
@@ -10,34 +22,26 @@ npm test
 npm run dev
 ```
 
-Open the printed local URL on desktop or your phone (same Wi-Fi). `npm run build` typechecks and emits `dist/` for any static host.
+Open the printed local URL on desktop or your phone (same Wi-Fi). `npm run build` typechecks and emits `dist/` for any static host. `npm run preview` serves that production build.
 
 ## Controls
 
-Shop (click / tap):
-- Tap the **budtender**, then **BAGS**, then a **strain jar**, then the **bag on the counter**
-- Wrong jar: tap the right strain (it goes to your hand) and tap the bag again
-- **Tablet** shows pickup and delivery tickets; delivery bags get the customer name
-- In-store customers use the same counter
+Shop (tap / click):
+- Tablet → strain TV → bag. Packed deliveries sit on the counter.
+- Walk-ins: tap that TV, then the customer. No bag.
+- **HIT THE ROAD** takes every packed delivery
 
 Drive:
 - **Move:** WASD / arrows / on-screen pad
-- **Interact:** E / Space / INTERACT at the GPS pin
-- **Hit the road / Back to shop:** HUD button after a delivery bag is labeled
+- **Call** from the curb, then photo → check ID → hand the bag at the door
+- **Hit the road / Back to shop:** HUD button
 
 ## Loops
 
-- **In-store:** customer at the counter → bag + matching strain → sold
-- **Pickup:** tablet ticket → bag + strain → wait → customer arrives → tap them or INTERACT
-- **Delivery:** tablet ticket → bag + strain (name prints on the bag) → HIT THE ROAD → GPS → Interact at the pin
+- **In-store:** customer at the counter → matching strain → sold
+- **Pickup:** tablet ticket → bag + strain → wait → customer arrives → tap them
+- **Delivery:** tablet ticket → bag + strain → HIT THE ROAD → GPS → call → door
 
-1 game hour = 60 real seconds. Late deliveries still complete but lose points. While you drive, an NPC key-lead keeps working the shop.
-
-## T0 playtest
-
-1. Desktop: complete one in-store sale and one pickup.
-2. Bag two nearby deliveries (houses 1 and 2), wait for the second, hit the road, deliver both on time.
-3. Wait out a delivery SLA (~60s after bin) and confirm the score drops on handoff.
-4. Phone or Chrome device mode: same loop with the virtual pad; buttons stay on the bottom/right.
+1 game hour = 2 real minutes of clock (2s per game minute). Late deliveries still complete but lose points. While you drive, an NPC key-lead keeps working the shop.
 
 Placeholder pixels only. City maps stay handmade at T0.

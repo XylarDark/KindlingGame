@@ -15,7 +15,6 @@ export class HudScene extends Phaser.Scene {
   private clockText!: Phaser.GameObjects.Text;
   private roleBtn!: Phaser.GameObjects.Container;
   private interactBtn!: Phaser.GameObjects.Container;
-  private rotateHint!: Phaser.GameObjects.Text;
   private padRing!: Phaser.GameObjects.Graphics;
   private padKnob!: Phaser.GameObjects.Arc;
   private padLabel!: Phaser.GameObjects.Text;
@@ -25,7 +24,7 @@ export class HudScene extends Phaser.Scene {
   private idName!: Phaser.GameObjects.Text;
   private flash!: Phaser.GameObjects.Rectangle;
   private sawPhoto = false;
-  private padCenter = { x: 150, y: GAME_HEIGHT - 150 };
+  private padCenter = { x: 196, y: GAME_HEIGHT - 220 };
   private pointerId: number | null = null;
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
   private arrows!: TutorialArrows;
@@ -70,18 +69,18 @@ export class HudScene extends Phaser.Scene {
       variant: "primary",
       minWidth: 250,
     });
-    this.interactBtn = addHudButton(this, GAME_WIDTH - 108, GAME_HEIGHT - 16, "HANDOFF", () => getSim().queueInteract(), {
+    this.interactBtn = addHudButton(this, GAME_WIDTH - 108, GAME_HEIGHT - 24, "HANDOFF", () => getSim().queueInteract(), {
       originX: 1,
       originY: 1,
       variant: "amber",
-      minWidth: 220,
+      minWidth: 260,
     });
     this.roleBtn.setVisible(false);
     this.interactBtn.setVisible(false);
 
     this.phone = this.add
-      .image(GAME_WIDTH - 130, GAME_HEIGHT - 250, "tex-phone")
-      .setScale(2)
+      .image(GAME_WIDTH - 150, GAME_HEIGHT - 280, "tex-phone")
+      .setScale(2.35)
       .setDepth(22)
       .setInteractive({ useHandCursor: true })
       .setVisible(false);
@@ -89,7 +88,7 @@ export class HudScene extends Phaser.Scene {
       p.event.stopPropagation();
       getSim().queueInteract();
     });
-    this.phoneCaption = addUiText(this, GAME_WIDTH - 130, GAME_HEIGHT - 175, "Tap to call", {
+    this.phoneCaption = addUiText(this, GAME_WIDTH - 150, GAME_HEIGHT - 188, "Tap to call", {
       size: Type.caption,
       color: Color.neonHex,
       fontStyle: "600",
@@ -135,8 +134,8 @@ export class HudScene extends Phaser.Scene {
 
     this.padRing = this.add.graphics().setDepth(19);
     this.drawPad();
-    this.padKnob = this.add.circle(this.padCenter.x, this.padCenter.y, 32, Color.cream, 0.92).setDepth(20);
-    this.padLabel = addUiText(this, this.padCenter.x, this.padCenter.y - 108, "MOVE", {
+    this.padKnob = this.add.circle(this.padCenter.x, this.padCenter.y, 40, Color.cream, 0.92).setDepth(20);
+    this.padLabel = addUiText(this, this.padCenter.x, this.padCenter.y - 128, "MOVE", {
       size: Type.caption,
       color: Color.creamHex,
       backgroundColor: "#1c1612ee",
@@ -148,17 +147,6 @@ export class HudScene extends Phaser.Scene {
     this.padRing.setVisible(false);
     this.padKnob.setVisible(false);
     this.padLabel.setVisible(false);
-
-    this.rotateHint = addUiText(this, GAME_WIDTH / 2, 200, "Rotate your phone for the shop", {
-      size: Type.heading,
-      color: Color.creamHex,
-      backgroundColor: "#1c1612ee",
-      padding: { x: 20, y: 14 },
-      fontStyle: "600",
-    })
-      .setOrigin(0.5)
-      .setDepth(30)
-      .setVisible(false);
 
     const kb = this.input.keyboard;
     this.keys = kb
@@ -238,7 +226,6 @@ export class HudScene extends Phaser.Scene {
     this.padRing.setVisible(driving);
     this.padKnob.setVisible(driving);
     this.padLabel.setVisible(driving);
-    this.rotateHint.setVisible(window.innerHeight > window.innerWidth + 40);
     this.paintTutorialArrows(snap);
     this.syncDoorScene(snap);
   }
@@ -259,7 +246,7 @@ export class HudScene extends Phaser.Scene {
       } else if (hint.kind === "idCard" && this.idPanel.visible) {
         spots.push({ id: hint.id, x: this.idPanel.x, y: this.idPanel.y - 140 });
       } else if (hint.kind === "movePad" && this.padRing.visible) {
-        spots.push({ id: hint.id, x: this.padCenter.x, y: this.padCenter.y - 120 });
+        spots.push({ id: hint.id, x: this.padCenter.x, y: this.padCenter.y - 140 });
       }
     }
     this.arrows.sync(spots);
@@ -324,9 +311,9 @@ export class HudScene extends Phaser.Scene {
     this.settingsPanel.setDepth(41).setVisible(false);
 
     this.cog = this.add
-      .image(GAME_WIDTH - 52, GAME_HEIGHT - 40, "tex-cog")
+      .image(GAME_WIDTH - 56, GAME_HEIGHT - 48, "tex-cog")
       .setOrigin(1, 1)
-      .setScale(1.15)
+      .setScale(1.55)
       .setDepth(42)
       .setInteractive({ useHandCursor: true });
     this.cog.on("pointerdown", (p: Phaser.Input.Pointer) => {
@@ -361,11 +348,11 @@ export class HudScene extends Phaser.Scene {
     const { x, y } = this.padCenter;
     this.padRing.clear();
     this.padRing.fillStyle(Color.ink, 0.4);
-    this.padRing.fillCircle(x, y, 88);
-    this.padRing.lineStyle(4, Color.lime, 0.85);
-    this.padRing.strokeCircle(x, y, 88);
-    this.padRing.lineStyle(2, Color.cream, 0.35);
-    this.padRing.strokeCircle(x, y, 62);
+    this.padRing.fillCircle(x, y, 108);
+    this.padRing.lineStyle(5, Color.lime, 0.85);
+    this.padRing.strokeCircle(x, y, 108);
+    this.padRing.lineStyle(3, Color.cream, 0.35);
+    this.padRing.strokeCircle(x, y, 76);
   }
 
   private syncDoorScene(snap: SimSnapshot): void {
@@ -424,9 +411,9 @@ export class HudScene extends Phaser.Scene {
         (pt): pt is Phaser.Input.Pointer => !!pt,
       );
       const p = pointers.find((pt) => pt.id === this.pointerId) ?? this.input.activePointer;
-      dx = Phaser.Math.Clamp((p.x - this.padCenter.x) / 70, -1, 1);
-      dy = Phaser.Math.Clamp((p.y - this.padCenter.y) / 70, -1, 1);
-      this.padKnob.setPosition(this.padCenter.x + dx * 40, this.padCenter.y + dy * 40);
+      dx = Phaser.Math.Clamp((p.x - this.padCenter.x) / 88, -1, 1);
+      dy = Phaser.Math.Clamp((p.y - this.padCenter.y) / 88, -1, 1);
+      this.padKnob.setPosition(this.padCenter.x + dx * 48, this.padCenter.y + dy * 48);
     } else {
       this.padKnob.setPosition(this.padCenter.x, this.padCenter.y);
     }
@@ -436,7 +423,7 @@ export class HudScene extends Phaser.Scene {
   private onPointerDown(p: Phaser.Input.Pointer): void {
     if (!this.padRing.visible) return;
     const d = Phaser.Math.Distance.Between(p.x, p.y, this.padCenter.x, this.padCenter.y);
-    if (d <= 96) this.pointerId = p.id;
+    if (d <= 120) this.pointerId = p.id;
   }
 
   private onPointerUp(p: Phaser.Input.Pointer): void {

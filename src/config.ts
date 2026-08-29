@@ -27,9 +27,15 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
     default: "arcade",
     arcade: { gravity: { x: 0, y: 0 }, debug: false },
   },
+  audio: {
+    noAudio: true,
+  },
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
+    parent: "game-root",
+    expandParent: false,
+    autoRound: true,
   },
   input: {
     activePointers: 3,
