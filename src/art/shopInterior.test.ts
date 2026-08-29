@@ -19,6 +19,7 @@ describe("shop type proportionality", () => {
     expect(src).toContain("function potFloorPool");
     expect(src).toContain("for (const x of pots) potFloorPool(g, x)");
     expect(src).toMatch(/drawBoardFloor\(g\);\s*for \(const x of pots\) potFloorPool/);
-    expect(src).not.toMatch(/y: 360, w: 200, h: 72/);
+    expect(src).toContain("inwardX");
+    expect(src).toContain("fillEllipse(inwardX");
   });
 });

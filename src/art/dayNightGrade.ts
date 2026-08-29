@@ -15,8 +15,8 @@ import type { SkySample } from "../sim/dayNight";
  * RIM  — faint D65 kick from the delivery window onto the driver/bench by day
  *        only. Local, not a global tint.
  *
- * SUN  — delivery WINDOW only. Wide, dim frame-shaped grade — not a disc in
- *        the glass, not volumetric shafts. Noon is cooler than the pots, dimmer.
+ * SUN  — delivery WINDOW only. Soft area fill that comes *into* the room
+ *        (offset off the glass, large oval). Not a disc in the pane, not shafts.
  *
  * MOON — same window, ~7000K cool, low intensity. Glow almost gone.
  *
@@ -34,18 +34,19 @@ export const DAY_NIGHT_TUNE = {
   potY: 918,
   potRadius: 380,
   potColor: 0xffd6a0,
-  potIntensity: 0.48,
+  potIntensity: 0.42,
   potScaleX: 0.82,
   potScaleY: 1.12,
-  daySpillGain: 0.2,
-  nightSpillGain: 0.05,
+  daySpillGain: 0.44,
+  nightSpillGain: 0.08,
   outdoorMin: 0.04,
-  windowRadius: 300,
-  windowYOffset: 0,
-  windowScaleX: 0.38,
-  windowScaleY: 1.72,
-  dayGlowAlpha: 0.09,
-  nightGlowAlpha: 0.028,
+  windowRadius: 820,
+  windowXOffset: 240,
+  windowYOffset: 70,
+  windowScaleX: 0.7,
+  windowScaleY: 0.96,
+  dayGlowAlpha: 0.11,
+  nightGlowAlpha: 0.03,
   rimColor: 0xc6d4ee,
   rimRadius: 160,
   rimIntensity: 0.14,
@@ -188,7 +189,7 @@ export function shopGrade(sky: SkySample, potXs: number[]): GradeFrame {
   pushOutdoor(
     lights,
     "window",
-    WINDOW.x,
+    WINDOW.x - DAY_NIGHT_TUNE.windowXOffset,
     WINDOW_MID + DAY_NIGHT_TUNE.windowYOffset,
     DAY_NIGHT_TUNE.windowRadius,
     spill,

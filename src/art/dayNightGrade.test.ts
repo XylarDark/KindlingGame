@@ -38,7 +38,7 @@ describe("shopGrade", () => {
     expect(noonPots[0]!.scaleX ?? 1).toBeLessThan(1);
     expect(noonPots[0]!.scaleY ?? 1).toBeGreaterThan(0.9);
     expect(noonPots[0]!.scaleY ?? 1).toBeLessThan(1.35);
-    expect(noonPots[0]!.intensity).toBeGreaterThanOrEqual(0.45);
+    expect(noonPots[0]!.intensity).toBeGreaterThanOrEqual(0.4);
     expect(noonPots.map((l) => l.x)).toEqual(ceilingPots());
     const xs = noonPots.map((l) => l.x);
     expect(xs[0]).toBe(CEILING_POT_LEFT);
@@ -52,7 +52,7 @@ describe("shopGrade", () => {
     expect(noon.ambient[0]).toBeGreaterThanOrEqual(noon.ambient[2]);
   });
 
-  it("spills a modest outdoor glow through the delivery window only", () => {
+  it("softly fills the room from the delivery window, not a frame slash", () => {
     const noon = shopGrade(skyAt(atHour(12)), ceilingPots());
     const night = shopGrade(skyAt(atHour(20.5)), ceilingPots());
     const noonWin = noon.lights.filter((l) => l.kind === "window");
@@ -61,11 +61,13 @@ describe("shopGrade", () => {
     expect(noon.lights.every((l) => l.kind !== "door")).toBe(true);
     expect(night.lights.every((l) => l.kind !== "door")).toBe(true);
     expect(noonWin).toHaveLength(1);
-    expect(noonWin[0]!.x).toBe(WINDOW.x);
-    expect(noonWin[0]!.scaleX ?? 1).toBeLessThan(0.55);
-    expect(noonWin[0]!.scaleY ?? 1).toBeGreaterThan(1.4);
+    expect(noonWin[0]!.x).toBeLessThan(WINDOW.x);
+    expect(noonWin[0]!.radius).toBeGreaterThan(600);
+    expect(noonWin[0]!.scaleX ?? 1).toBeGreaterThan(0.55);
+    expect(noonWin[0]!.scaleX ?? 1).toBeLessThan(1);
+    expect(noonWin[0]!.scaleY ?? 1).toBeLessThan(1.2);
     expect(noonWin[0]!.intensity).toBeGreaterThan(nightWin[0]!.intensity);
-    expect(noonWin[0]!.intensity).toBeLessThan(pot.intensity);
+    expect(noonWin[0]!.intensity).toBeGreaterThanOrEqual(pot.intensity);
     expect(blueOverRed(noonWin[0]!.color)).toBeGreaterThan(blueOverRed(DAY_NIGHT_TUNE.potColor));
     expect(blueOverRed(nightWin[0]!.color)).toBeGreaterThan(blueOverRed(noonWin[0]!.color));
   });

@@ -22,6 +22,7 @@ import {
   SILL_H,
   SILL_Y,
   STRAINS_PER_TV,
+  TV_BEZEL,
   TV_COUNT,
   TV_H,
   TV_W,
@@ -225,15 +226,37 @@ function drawTabletCharger(scene: Phaser.Scene): void {
 }
 
 function tvBezel(g: Phaser.GameObjects.Graphics, left: number, top: number, w: number, h: number): void {
-  fill(g, left - 8, top + h, w + 16, 8, JAMB_DARK, 0.45);
-  fill(g, left - 8, top - 8, w + 16, h + 16, JAMB);
-  fill(g, left - 4, top - 4, w + 8, h + 8, PAINT_SHADE);
-  fill(g, left, top, w, h, 0x0a1210);
-  fill(g, left + 8, top + 4, 40, 4, PAINT_HI);
-  const slotH = Math.floor((h - 24) / STRAINS_PER_TV);
-  const blockTop = top + 12;
+  const bezel = TV_BEZEL;
+  // Thin plaster reveal + drop shadow so the set sits on the wall, not in it.
+  fill(g, left - PX, top - PX, w + PX * 2, h + PX * 2, 0x3a342c, 0.38);
+  fill(g, left + PX, top + h, w, PX * 2, 0x2a261e, 0.5);
+  // Bottom mount rail — a little depth so they are not three flat slabs.
+  fill(g, left + 28, top + h + PX, w - 56, PX * 2, 0x1a1816);
+  fill(g, left + 44, top + h + PX * 2, w - 88, PX, 0x121010);
+
+  fill(g, left, top, w, h, 0x141618);
+  fill(g, left, top, w, PX, 0x3c4044);
+  fill(g, left, top, PX, h, 0x2c3034);
+  fill(g, left + w - PX, top + PX, PX, h - PX, 0x0a0c0e);
+  fill(g, left, top + h - PX * 2, w, PX * 2, 0x0c0e10);
+
+  fill(g, left + PX * 2, top + PX * 2, w - PX * 4, h - PX * 4, 0x0a0c0e);
+  fill(g, left + PX * 2, top + PX * 2, w - PX * 4, PX, 0x2a2e32);
+  fill(g, left + PX * 2, top + PX * 2, PX, h - PX * 4, 0x1c2024);
+
+  const glassL = left + bezel;
+  const glassT = top + bezel;
+  const glassW = w - bezel * 2;
+  const glassH = h - bezel * 2;
+  fill(g, glassL, glassT, glassW, glassH, 0x080c0a);
+  fill(g, glassL + PX, glassT + PX, glassW - PX * 2, PX * 2, 0x1a2820, 0.42);
+  fill(g, glassL + PX * 2, glassT + PX, Math.floor(glassW * 0.36), PX, 0xffffff, 0.07);
+
+  const slotH = Math.floor(glassH / STRAINS_PER_TV);
+  const divL = glassL + PX * 2;
+  const divW = glassW - PX * 4;
   for (let s = 1; s < STRAINS_PER_TV; s++) {
-    fill(g, left + 10, blockTop + s * slotH, w - 20, 2, 0x1a2a22);
+    fill(g, divL, glassT + s * slotH, divW, PX, 0x1a2a22);
   }
 }
 
@@ -669,7 +692,7 @@ function drawStreetDoorHours(scene: Phaser.Scene): void {
   fitTypeToWidth(hours, maxW, 12);
 }
 
-/** Soft rim on the delivery-window frame — edge only, no pane disc or bench spill. */
+/** Soft rim on the frame plus a gentle wash that comes *into* the shop. */
 export function paintWindowGlow(g: Phaser.GameObjects.Graphics, gameMs: number): void {
   g.clear();
   const look = windowGlowLook(skyAt(gameMs));
@@ -680,6 +703,13 @@ export function paintWindowGlow(g: Phaser.GameObjects.Graphics, gameMs: number):
   const w = WINDOW.w;
   const h = WINDOW.h;
   const corner = 8;
+
+  const inwardX = left - 90;
+  const inwardY = top + h * 0.58;
+  g.fillStyle(look.color, look.alpha * 0.18);
+  g.fillEllipse(inwardX, inwardY, w * 2.4, h * 1.45);
+  g.fillStyle(look.color, look.alpha * 0.1);
+  g.fillEllipse(inwardX - 160, COUNTER_FRONT + 36, w * 2.8, 200);
 
   const halo = [
     { inset: -2, lw: 5, a: 0.72 },
@@ -694,9 +724,6 @@ export function paintWindowGlow(g: Phaser.GameObjects.Graphics, gameMs: number):
 
   g.lineStyle(3, look.color, look.alpha * 0.48);
   g.strokeRoundedRect(left + 6, top + 6, w - 12, h - 12, 5);
-
-  g.lineStyle(3, look.color, look.alpha * 0.22);
-  g.lineBetween(WINDOW.x, top + 8, WINDOW.x, top + h - 8);
 }
 
 function clipFill(
