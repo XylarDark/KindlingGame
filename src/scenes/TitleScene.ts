@@ -5,6 +5,7 @@ import { addHudButton, addPanel } from "../ui/chrome";
 import { HOWTO_HINT, PAUSE_HINT, WELCOME_HINT, WELCOME_TITLE } from "../ui/copy";
 import { addUiText } from "../ui/text";
 import { Color, Type } from "../ui/theme";
+import { fitTypeToWidth } from "../ui/typekit";
 
 const STEPS = [
   {
@@ -13,11 +14,11 @@ const STEPS = [
   },
   {
     title: "Tickets",
-    body: "Tap the flashing tablet. Pickups get bagged here. Deliveries send the driver.",
+    body: "Tap the flashing tablet, then that strain, then a bag. Pickups wait here. Deliveries go with the driver.",
   },
   {
     title: "Hit the road",
-    body: "Follow GPS to the house, call, walk to the door, photo, ID, then hand off the bag.",
+    body: "Follow GPS, call from the curb, then photo, check ID, and hand off the bag at the door. Packed deliveries on the counter all go with you.",
   },
 ];
 
@@ -47,17 +48,19 @@ export class TitleScene extends Phaser.Scene {
 
     if (showOverlays) this.drawWelcome();
     else {
-      addUiText(this, GAME_WIDTH / 2, GAME_HEIGHT - 36, PAUSE_HINT, {
-        size: Type.caption,
+      const pauseInset = 48;
+      const pause = addUiText(this, GAME_WIDTH / 2, GAME_HEIGHT - 48, PAUSE_HINT, {
+        size: Type.title,
         color: Color.inkHex,
         backgroundColor: Color.creamHex,
-        padding: { x: 12, y: 4 },
+        padding: { x: 36, y: 16 },
         fontStyle: "700",
         lineSpacing: 0,
         strokeThickness: 0,
       })
         .setOrigin(0.5, 1)
         .setDepth(43);
+      fitTypeToWidth(pause, GAME_WIDTH - pauseInset * 2);
     }
 
     this.input.keyboard?.on("keydown", (event: KeyboardEvent) => {

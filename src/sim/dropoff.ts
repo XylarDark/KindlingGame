@@ -1,4 +1,4 @@
-export type DropoffPhase = "atCurb" | "calling" | "waiting" | "onFoot";
+export type DropoffPhase = "atCurb" | "calling" | "atDoor";
 
 export interface DropoffView {
   phase: DropoffPhase | "none";

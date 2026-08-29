@@ -3,9 +3,6 @@ import { formatGameClock, GameClock } from "./clock";
 import {
   CALL_CONNECT_MS,
   CUSTOMER_SPEED,
-  DOOR_HAND_RADIUS,
-  DROPOFF_WALK_SPEED,
-  DRIVER_WALK_SPEED,
   HANDOFF_RADIUS,
   INSTORE_WALKOUT_MS,
   NPC_INTERACT_COOLDOWN_MS,
@@ -31,7 +28,6 @@ import {
   houseById,
   houseTitle,
   isDriveWalkable,
-  isFootWalkable,
   MAP_PX_H,
   MAP_PX_W,
   TILE,
@@ -239,7 +235,6 @@ export class GameSim {
     const bagSku = this.counterBag?.skuId ? skuById(this.catalog, this.counterBag.skuId) : undefined;
     const bagOrder = this.counterBag ? this.orderById(this.counterBag.orderId) : undefined;
     const receiptSku = bagOrder ? skuById(this.catalog, bagOrder.skuId) : undefined;
-    const packing = !!this.counterBag;
     const selected = this.selectedOrderId ? this.orderById(this.selectedOrderId) : undefined;
     return {
       gameMs: this.clock.gameMs,
@@ -260,7 +255,12 @@ export class GameSim {
           }
         : null,
       selectedOrderId: this.selectedOrderId,
-      awaitingBag: !packing && !!selected && selected.type !== "inStore" && needsFetch(selected),
+      awaitingBag:
+        !!selected &&
+        selected.type !== "inStore" &&
+        needsFetch(selected) &&
+        this.handSkuId === selected.skuId &&
+        this.keyLeadPhase === "idle",
       keyLead: {
         x: this.keyLeadX,
         y: KEYLEAD.y,
@@ -321,19 +321,17 @@ export class GameSim {
   shopClick(click: ShopClick): void {
     switch (click.type) {
       case "keyLead":
-        this.toast = "Pick a flashing ticket, then grab a bag.";
+        this.toast = "Pick a flashing ticket, then the strain.";
         return;
       case "bagRack":
-        this.placeBag();
+      case "counterBag":
+        this.packSelected();
         return;
       case "strain":
         this.pickStrain(click.skuId);
         return;
-      case "counterBag":
-        this.fillBag();
-        return;
       case "receipt":
-        this.clickReceipt();
+        this.toast = "Tap a bag to pack — no extra slip to grab.";
         return;
       case "tablet":
         this.selectTicket(click.orderId);
@@ -385,18 +383,9 @@ export class GameSim {
 
   hitTheRoad(): boolean {
     const fresh = this.orders.filter((o) => o.status === "inBin");
-    const selected = this.selectedOrderId ? this.orderById(this.selectedOrderId) : undefined;
-    const ticket =
-      selected?.type === "delivery" && selected.status === "queued" ? selected : undefined;
-    if (this.playerRole === "keyLead" && fresh.length === 0 && this.runOrderIds.length === 0 && !ticket) {
+    if (this.playerRole === "keyLead" && fresh.length === 0 && this.runOrderIds.length === 0) {
       this.toast = "Need a named delivery bag first.";
       return false;
-    }
-    if (ticket) {
-      ticket.status = "onRun";
-      ticket.slaStartGameMs = this.clock.gameMs;
-      this.runOrderIds.push(ticket.id);
-      if (this.selectedOrderId === ticket.id) this.selectedOrderId = null;
     }
     for (const order of fresh) {
       order.status = "onRun";
@@ -423,11 +412,9 @@ export class GameSim {
   tick(dtMs: number): void {
     this.clock.tick(dtMs);
     this.syncCurb();
-    if (this.playerRole === "driver" && this.dropoff?.driver) this.moveDriver(this.input.dx, this.input.dy, dtMs / 1000);
-    else if (this.playerRole === "driver") this.moveVehicle(this.input.dx, this.input.dy, dtMs / 1000);
+    if (this.playerRole === "driver" && this.dropoff?.phase !== "atDoor") this.moveVehicle(this.input.dx, this.input.dy, dtMs / 1000);
     this.moveCustomers(dtMs);
     this.tickKeyLead(dtMs);
-    this.moveDropoffCustomer(dtMs);
     this.tickCall();
     if (this.queuedInteract) {
       this.queuedInteract = false;
@@ -453,22 +440,33 @@ export class GameSim {
     this.interactDriver();
   }
 
-  private placeBag(): void {
+  private packSelected(): void {
+    const order = this.selectedTicket();
+    if (!order) {
+      this.toast = "Tap a flashing ticket, then the strain.";
+      return;
+    }
+    if (this.keyLeadPhase !== "idle") {
+      this.toast = "Wait — they're grabbing it.";
+      return;
+    }
+    if (!this.handSkuId) {
+      const sku = skuById(this.catalog, order.skuId);
+      this.toast = `Tap ${sku?.name ?? "the strain"} on the wall first.`;
+      return;
+    }
+    if (this.handSkuId !== order.skuId) {
+      this.toast = `Wrong item for ${order.customerName}.`;
+      return;
+    }
+    this.handSkuId = null;
+    this.sealBag(order);
+  }
+
+  private selectedTicket(): Order | undefined {
     const order = this.selectedOrderId ? this.orderById(this.selectedOrderId) : undefined;
-    if (!order || order.type === "inStore" || !needsFetch(order)) {
-      this.toast = "Tap a flashing pickup or delivery on the order screen first.";
-      return;
-    }
-    if (this.counterBag) {
-      this.toast = "Finish the bag on the counter first.";
-      return;
-    }
-    this.counterBag = { skuId: null, orderId: order.id, hasItem: false };
-    this.receiptHeld = false;
-    this.pendingDepart = false;
-    this.driverLine = null;
-    const sku = skuById(this.catalog, order.skuId);
-    this.toast = `Receipt for ${order.customerName} — ${sku?.name}. Tap that TV.`;
+    if (!order || order.type === "inStore" || !needsFetch(order)) return undefined;
+    return order;
   }
 
   private pickStrain(skuId: string): void {
@@ -478,15 +476,15 @@ export class GameSim {
       this.toast = "They're already in the back.";
       return;
     }
-    const bagOrder = this.counterBag ? this.orderById(this.counterBag.orderId) : undefined;
+    const ticket = this.selectedTicket();
     const walkIn = this.orders.find((o) => o.type === "inStore" && o.status === "atRegister");
-    if (bagOrder && needsFetch(bagOrder)) {
-      if (this.counterBag?.hasItem) {
-        this.toast = "Item is already in the bag. Tap the receipt.";
+    if (ticket) {
+      if (this.handSkuId === ticket.skuId) {
+        this.toast = `Already holding ${skuById(this.catalog, ticket.skuId)?.name}. Tap a bag.`;
         return;
       }
-      if (skuId !== bagOrder.skuId) {
-        this.toast = `Wrong TV. ${bagOrder.customerName} ordered ${skuById(this.catalog, bagOrder.skuId)?.name}.`;
+      if (skuId !== ticket.skuId) {
+        this.toast = `Wrong TV. ${ticket.customerName} ordered ${skuById(this.catalog, ticket.skuId)?.name}.`;
         return;
       }
       this.startFetch(skuId);
@@ -504,14 +502,14 @@ export class GameSim {
       this.startFetch(skuId);
       return;
     }
-    this.toast = "Select a ticket and grab a bag first — walk-ins can tap the TV they asked for.";
+    this.toast = "Select a ticket first — walk-ins can tap the TV they asked for.";
   }
 
   private startFetch(skuId: string): void {
     const sku = skuById(this.catalog, skuId);
     if (this.handSkuId === skuId) {
-      this.toast = this.counterBag
-        ? `Holding ${sku?.name}. Tap the bag.`
+      this.toast = this.selectedTicket()
+        ? `Holding ${sku?.name}. Tap a bag.`
         : `Holding ${sku?.name}. Tap the customer.`;
       return;
     }
@@ -552,70 +550,15 @@ export class GameSim {
         this.keyLeadX = dest;
         this.keyLeadPhase = "idle";
         const sku = this.handSkuId ? skuById(this.catalog, this.handSkuId) : undefined;
+        const ticket = this.selectedTicket();
         const walkIn = this.orders.find((o) => o.type === "inStore" && o.status === "atRegister");
-        this.toast = this.counterBag
-          ? `Got ${sku?.name}. Tap the bag.`
+        this.toast = ticket
+          ? `Got ${sku?.name}. Tap a bag.`
           : `Got ${sku?.name}. Tap ${walkIn?.customerName ?? "the customer"}.`;
       } else {
         this.keyLeadX += Math.sign(dest - this.keyLeadX) * step;
       }
     }
-  }
-
-  private fillBag(): void {
-    if (!this.counterBag) {
-      this.toast = "Grab a bag from the stack next to the budtender.";
-      return;
-    }
-    if (this.keyLeadPhase !== "idle") {
-      this.toast = "Wait — they're grabbing it.";
-      return;
-    }
-    const order = this.orderById(this.counterBag.orderId);
-    if (!order || !needsFetch(order)) {
-      this.counterBag = null;
-      this.receiptHeld = false;
-      this.toast = "That ticket is gone.";
-      return;
-    }
-    if (!this.counterBag.hasItem) {
-      if (!this.handSkuId) {
-        const sku = skuById(this.catalog, order.skuId);
-        this.toast = `Tap ${sku?.name ?? "the item"} on the wall TVs.`;
-        return;
-      }
-      if (this.handSkuId !== order.skuId) {
-        this.toast = `Wrong item for ${order.customerName}.`;
-        return;
-      }
-      this.counterBag.skuId = this.handSkuId;
-      this.counterBag.hasItem = true;
-      this.handSkuId = null;
-      this.toast = "Item in the bag. Tap the receipt, then the bag.";
-      return;
-    }
-    if (!this.receiptHeld) {
-      this.toast = "Tap the receipt, then the bag.";
-      return;
-    }
-    this.sealBag(order);
-  }
-
-  private clickReceipt(): void {
-    if (!this.counterBag) {
-      this.toast = "Grab a bag first — the receipt prints beside it.";
-      return;
-    }
-    if (!this.counterBag.hasItem) {
-      this.toast = "Put the item in the bag first.";
-      return;
-    }
-    if (this.receiptHeld) {
-      this.toast = "Tap the bag to finish.";
-      return;
-    }
-    this.receiptHeld = true;
-    this.toast = "Receipt in hand. Tap the bag to finish.";
   }
 
   private sealBag(order: Order): void {
@@ -655,8 +598,8 @@ export class GameSim {
     const sku = skuById(this.catalog, order.skuId);
     this.toast =
       order.type === "delivery"
-        ? `Delivery to ${destLabel(order)}: ${order.customerName} — ${sku?.name}. Grab a bag.`
-        : `Pickup: ${order.customerName} — ${sku?.name}. Grab a bag.`;
+        ? `Delivery to ${destLabel(order)}: ${order.customerName} — ${sku?.name}. Tap that TV, then a bag.`
+        : `Pickup: ${order.customerName} — ${sku?.name}. Tap that TV, then a bag.`;
   }
 
   private enqueueTicket(order: Order): void {
@@ -665,7 +608,7 @@ export class GameSim {
       return;
     }
     this.packQueue.push(order.id);
-    this.toast = `Queued ${order.customerName}. Finish the bag on the counter first.`;
+    this.toast = `Queued ${order.customerName}. Finish packing first.`;
   }
 
   private advancePackQueue(): void {
@@ -873,20 +816,10 @@ export class GameSim {
       this.npcCooldown = NPC_INTERACT_COOLDOWN_MS;
       return;
     }
-    if (!open && !this.counterBag) return;
-    if (open && !this.counterBag) {
-      if (this.selectedOrderId !== open.id) this.shopClick({ type: "tablet", orderId: open.id });
-      else this.shopClick({ type: "bagRack" });
-    } else if (this.counterBag && !this.counterBag.hasItem && !this.handSkuId) {
-      const order = this.orderById(this.counterBag.orderId);
-      if (order) this.shopClick({ type: "strain", skuId: order.skuId });
-    } else if (this.counterBag && !this.counterBag.hasItem && this.handSkuId) {
-      this.shopClick({ type: "counterBag" });
-    } else if (this.counterBag?.hasItem && !this.receiptHeld) {
-      this.shopClick({ type: "receipt" });
-    } else if (this.counterBag?.hasItem && this.receiptHeld) {
-      this.shopClick({ type: "counterBag" });
-    }
+    if (!open) return;
+    if (this.selectedOrderId !== open.id) this.shopClick({ type: "tablet", orderId: open.id });
+    else if (!this.handSkuId) this.shopClick({ type: "strain", skuId: open.skuId });
+    else this.shopClick({ type: "bagRack" });
     this.npcCooldown = NPC_INTERACT_COOLDOWN_MS;
     this.npcStep += 1;
   }
@@ -999,48 +932,37 @@ export class GameSim {
       this.toast = "Phone is ringing…";
       return;
     }
-    if (d.phase === "waiting") {
-      this.toast = "Wait — they're coming to the door.";
-      return;
-    }
 
-    const customer = d.customer;
-    if (!customer || !d.driver) {
-      this.toast = "Walk to the door.";
-      return;
-    }
-    if (dist(d.driver.x, d.driver.y, customer.x, customer.y) > DOOR_HAND_RADIUS) {
-      this.toast = "Walk up to the customer at the door.";
-      return;
-    }
-    if (!d.photoTaken) {
-      d.photoTaken = true;
-      this.toast = "Bag photo saved.";
-      return;
-    }
-    if (!d.idChecked) {
-      const order = this.orderById(d.orderId);
-      const card = idCardFor(order?.customerName ?? "Customer");
-      if (!card.ageOk) {
-        this.toast = "ID check failed.";
+    if (d.phase === "atDoor") {
+      if (!d.photoTaken) {
+        d.photoTaken = true;
+        this.toast = "Bag photo saved.";
         return;
       }
-      d.idChecked = true;
-      this.toast = `ID checks out — 21+. Hand ${order?.customerName ?? "them"} the bag.`;
+      if (!d.idChecked) {
+        const order = this.orderById(d.orderId);
+        const card = idCardFor(order?.customerName ?? "Customer");
+        if (!card.ageOk) {
+          this.toast = "ID check failed.";
+          return;
+        }
+        d.idChecked = true;
+        this.toast = `ID checks out — 21+. Hand ${order?.customerName ?? "them"} the bag.`;
+        return;
+      }
+      const order = this.runOrderIds
+        .map((id) => this.orderById(id))
+        .find((o) => o?.destinationId === d.houseId && o.status === "onRun");
+      if (!order) return;
+      this.complete(order);
+      this.runOrderIds = this.runOrderIds.filter((id) => id !== order.id);
+      this.clearDropoff();
+      if (this.runOrderIds.length === 0) {
+        this.toast = "Run complete. Back to Kindling.";
+      } else {
+        this.toast = `Dropped. GPS → ${this.nextStopId() ? houseTitle(this.nextStopId()!) : "Kindling"}.`;
+      }
       return;
-    }
-
-    const order = this.runOrderIds
-      .map((id) => this.orderById(id))
-      .find((o) => o?.destinationId === stopId && o.status === "onRun");
-    if (!order) return;
-    this.complete(order);
-    this.runOrderIds = this.runOrderIds.filter((id) => id !== order.id);
-    this.clearDropoff();
-    if (this.runOrderIds.length === 0) {
-      this.toast = "Run complete. Back to Kindling.";
-    } else {
-      this.toast = `Dropped. GPS → ${this.nextStopId() ? houseTitle(this.nextStopId()!) : "Kindling"}.`;
     }
   }
 
@@ -1089,48 +1011,11 @@ export class GameSim {
     if (this.clock.gameMs < d.callDoneAt) return;
     const house = houseById(d.houseId);
     if (!house) return;
-    const home = tileToWorld(house.house);
     const door = doorstepWorld(house);
-    d.phase = "waiting";
-    d.customer = { x: home.x, y: home.y, targetX: door.x, targetY: door.y };
-    this.toast = `${this.orderById(d.orderId)?.customerName ?? "Customer"} is coming to the door.`;
-  }
-
-  private moveDropoffCustomer(dtMs: number): void {
-    const d = this.dropoff;
-    if (!d?.customer || (d.phase !== "waiting" && d.phase !== "onFoot")) return;
-    const c = d.customer;
-    const step = DROPOFF_WALK_SPEED * (dtMs / 1000);
-    const dx = c.targetX - c.x;
-    const dy = c.targetY - c.y;
-    const len = Math.hypot(dx, dy);
-    if (len <= Math.max(1, step)) {
-      c.x = c.targetX;
-      c.y = c.targetY;
-      if (d.phase === "waiting") {
-        d.phase = "onFoot";
-        d.driver = { x: this.vehicle.x, y: this.vehicle.y };
-        this.toast = "They're at the door. Get out and walk over.";
-      }
-      return;
-    }
-    c.x += (dx / len) * step;
-    c.y += (dy / len) * step;
-  }
-
-  private moveDriver(dx: number, dy: number, dt: number): void {
-    const d = this.dropoff;
-    if (!d?.driver) return;
-    const len = Math.hypot(dx, dy);
-    if (len < 0.05) return;
-    const nx = dx / len;
-    const ny = dy / len;
-    const speed = DRIVER_WALK_SPEED * dt;
-    const house = houseById(d.houseId);
-    const tryX = d.driver.x + nx * speed;
-    const tryY = d.driver.y + ny * speed;
-    if (!footCollides(tryX, d.driver.y, house?.house)) d.driver.x = tryX;
-    if (!footCollides(d.driver.x, tryY, house?.house)) d.driver.y = tryY;
+    d.phase = "atDoor";
+    d.customer = { x: door.x, y: door.y, targetX: door.x, targetY: door.y };
+    d.driver = { x: door.x, y: door.y };
+    this.toast = `${this.orderById(d.orderId)?.customerName ?? "Customer"} is at the door.`;
   }
 
   private toDropoffView(): DropoffView {
@@ -1139,10 +1024,6 @@ export class GameSim {
     const order = this.orderById(d.orderId);
     const sku = order ? skuById(this.catalog, order.skuId) : undefined;
     const arrived = !!d.customer && d.customer.x === d.customer.targetX && d.customer.y === d.customer.targetY;
-    const near =
-      !!d.driver &&
-      !!d.customer &&
-      dist(d.driver.x, d.driver.y, d.customer.x, d.customer.y) <= DOOR_HAND_RADIUS;
     let actionLabel = "";
     let canAct = false;
     let hint = order ? `Park at ${destLabel(order)} — ${order.customerName}.` : "Park on the pin, then call from your phone.";
@@ -1153,21 +1034,15 @@ export class GameSim {
     } else if (d.phase === "calling") {
       actionLabel = "RINGING";
       hint = `Calling ${order?.customerName ?? "customer"} at ${order ? destLabel(order) : "the house"}…`;
-    } else if (d.phase === "waiting") {
-      actionLabel = "WAIT";
-      hint = `${order?.customerName ?? "The customer"} is coming to the door.`;
-    } else if (d.phase === "onFoot" && !near) {
-      actionLabel = "WALK";
-      hint = `Walk to ${order?.customerName ?? "the customer"} at the door.`;
-    } else if (d.phase === "onFoot" && !d.photoTaken) {
+    } else if (d.phase === "atDoor" && !d.photoTaken) {
       actionLabel = "PHOTO";
       canAct = true;
       hint = `Photo the bag for ${order?.customerName ?? "the drop"}.`;
-    } else if (d.phase === "onFoot" && !d.idChecked) {
+    } else if (d.phase === "atDoor" && !d.idChecked) {
       actionLabel = "CHECK ID";
       canAct = true;
       hint = `Check ID for ${order?.customerName ?? "the customer"} — must be 21+.`;
-    } else if (d.phase === "onFoot") {
+    } else if (d.phase === "atDoor") {
       actionLabel = "HAND BAG";
       canAct = true;
       hint = `Hand ${order?.customerName ?? "them"} the bag.`;
@@ -1179,7 +1054,7 @@ export class GameSim {
       customerName: order?.customerName ?? null,
       skuName: sku?.name ?? null,
       atCurb: d.phase === "atCurb",
-      driverOnFoot: d.phase === "onFoot",
+      driverOnFoot: false,
       driver: d.driver ? { ...d.driver } : null,
       customer: d.customer ? { x: d.customer.x, y: d.customer.y, arrived } : null,
       photoTaken: d.photoTaken,
@@ -1187,7 +1062,7 @@ export class GameSim {
       actionLabel,
       canAct,
       hint,
-      idCard: d.phase === "onFoot" && d.photoTaken && !d.idChecked ? idCardFor(order?.customerName ?? "Customer") : null,
+      idCard: d.phase === "atDoor" && d.photoTaken && !d.idChecked ? idCardFor(order?.customerName ?? "Customer") : null,
     };
   }
 
@@ -1199,7 +1074,7 @@ export class GameSim {
         .find((o) => o?.destinationId === stopId && o.status === "onRun");
       if (order) {
         const sku = skuById(this.catalog, order.skuId);
-        return `GPS  →  ${destLabel(order)}   ·   ${order.customerName}   ·   ${sku?.name ?? ""}`;
+        return `GPS  →  ${destLabel(order)}   ·   ${order.customerName}   ·   ${sku?.name ?? ""}   ·   ${this.runOrderIds.length} bag${this.runOrderIds.length === 1 ? "" : "s"}`;
       }
       return "Head back to Kindling";
     }
@@ -1213,18 +1088,16 @@ export class GameSim {
     if (order.type === "pickup" && order.status === "readyForHandoff") {
       return `HANDOFF  Pickup  ·  tap ${order.customerName}`;
     }
-    if (this.counterBag && this.counterBag.orderId === order.id) {
-      if (!this.counterBag.hasItem && this.keyLeadPhase !== "idle") return `BACK ROOM  ·  grabbing ${sku?.name ?? ""}`;
-      if (!this.counterBag.hasItem && this.handSkuId === order.skuId) return `BAG  ·  put ${sku?.name ?? ""} in the bag`;
-      if (!this.counterBag.hasItem) return `TV  ·  tap ${sku?.name ?? ""} on the wall`;
-      if (!this.receiptHeld) return `RECEIPT  ·  tap the slip, then the bag`;
-      return `BAG  ·  tap the bag to finish`;
+    if (needsFetch(order) && this.selectedOrderId === order.id) {
+      if (this.keyLeadPhase !== "idle") return `BACK ROOM  ·  grabbing ${sku?.name ?? ""}`;
+      if (this.handSkuId === order.skuId) return `BAG  ·  tap a bag to pack ${sku?.name ?? ""}`;
+      return `TV  ·  tap ${sku?.name ?? ""} on the wall`;
     }
     if (order.type === "pickup") {
-      return `PICKUP  ·  ${order.customerName}  ·  ${sku?.name ?? ""} — tap ticket, then a bag`;
+      return `PICKUP  ·  ${order.customerName}  ·  ${sku?.name ?? ""} — tap ticket, then the strain, then a bag`;
     }
     if (order.status === "queued") {
-      return `DELIVER  ${destLabel(order)}  ·  ${order.customerName}  ·  ${sku?.name ?? ""} — tap ticket, then a bag`;
+      return `DELIVER  ${destLabel(order)}  ·  ${order.customerName}  ·  ${sku?.name ?? ""} — tap ticket, then the strain, then a bag`;
     }
     return `DELIVER  ${destLabel(order)}  ·  ${order.customerName}  ·  ${sku?.name ?? ""}`;
   }
@@ -1244,18 +1117,12 @@ export class GameSim {
   }
 
   private focusSkuId(): string | null {
-    if (this.counterBag?.hasItem) return null;
-    if (this.counterBag) {
-      const packing = this.orderById(this.counterBag.orderId);
-      if (packing && isOpen(packing)) return packing.skuId;
-    }
-    if (this.selectedOrderId) {
-      const selected = this.orderById(this.selectedOrderId);
-      if (selected && needsFetch(selected) && selected.type !== "inStore") return selected.skuId;
-    }
+    if (this.keyLeadPhase !== "idle") return null;
+    if (this.handSkuId) return null;
     const instore = this.orders.find((o) => o.type === "inStore" && o.status === "atRegister");
-    if (instore && this.keyLeadPhase === "idle" && this.handSkuId !== instore.skuId) return instore.skuId;
-    if (instore && this.handSkuId === instore.skuId) return instore.skuId;
+    if (instore) return instore.skuId;
+    const ticket = this.selectedTicket();
+    if (ticket) return ticket.skuId;
     return null;
   }
 
@@ -1307,10 +1174,6 @@ function dist(ax: number, ay: number, bx: number, by: number): number {
 
 function collides(x: number, y: number): boolean {
   return pointsBlocked(x, y, 24, (t) => !isDriveWalkable(t));
-}
-
-function footCollides(x: number, y: number, door?: { c: number; r: number }): boolean {
-  return pointsBlocked(x, y, 12, (t) => !isFootWalkable(t, door));
 }
 
 function pointsBlocked(

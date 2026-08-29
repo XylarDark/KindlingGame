@@ -189,10 +189,19 @@ export class HudScene extends Phaser.Scene {
   private paintHud(snap: SimSnapshot): void {
     this.scoreText.setText(String(snap.score));
     this.clockText.setText(snap.clockLabel);
-    setButtonLabel(this.roleBtn, snap.playerRole === "keyLead" ? "HIT THE ROAD" : "BACK TO SHOP");
+    setButtonLabel(
+      this.roleBtn,
+      snap.playerRole === "keyLead"
+        ? snap.bagsInBin.length > 1
+          ? `HIT THE ROAD  ·  ${snap.bagsInBin.length}`
+          : "HIT THE ROAD"
+        : "BACK TO SHOP",
+    );
     const showRole = snap.playerRole === "driver" || snap.canHitTheRoad;
     this.roleBtn.setVisible(showRole);
     if (this.roleBtn.input) this.roleBtn.input.enabled = showRole;
+    const pulseRoad = snap.playerRole === "keyLead" && snap.canHitTheRoad;
+    this.roleBtn.setAlpha(pulseRoad ? 0.55 + 0.45 * (0.5 + 0.5 * Math.sin(snap.gameMs / 160)) : 1);
 
     const drop = snap.dropoff;
     const interactLabel =
@@ -202,7 +211,7 @@ export class HudScene extends Phaser.Scene {
     setButtonLabel(this.interactBtn, interactLabel);
     const showHandoff =
       snap.playerRole === "driver"
-        ? !!(drop.canAct || drop.actionLabel === "WALK" || drop.actionLabel === "PARK")
+        ? !!(drop.canAct || drop.actionLabel === "PARK")
         : snap.serveLine.startsWith("HANDOFF");
     this.interactBtn.setVisible(showHandoff);
     if (this.interactBtn.input) this.interactBtn.input.enabled = showHandoff;
@@ -224,12 +233,14 @@ export class HudScene extends Phaser.Scene {
     }
     if (!drop.photoTaken) this.sawPhoto = false;
 
-    const driving = snap.playerRole === "driver";
+    const atDoor = snap.dropoff.phase === "atDoor";
+    const driving = snap.playerRole === "driver" && !atDoor;
     this.padRing.setVisible(driving);
     this.padKnob.setVisible(driving);
     this.padLabel.setVisible(driving);
     this.rotateHint.setVisible(window.innerHeight > window.innerWidth + 40);
     this.paintTutorialArrows(snap);
+    this.syncDoorScene(snap);
   }
 
   private paintTutorialArrows(snap: SimSnapshot): void {
@@ -357,6 +368,22 @@ export class HudScene extends Phaser.Scene {
     this.padRing.strokeCircle(x, y, 62);
   }
 
+  private syncDoorScene(snap: SimSnapshot): void {
+    const wantDoor = snap.playerRole === "driver" && snap.dropoff.phase === "atDoor";
+    const doorUp = this.scene.isActive("door") && !this.scene.isSleeping("door");
+    if (wantDoor && !doorUp) {
+      this.scene.sleep("drive");
+      if (this.scene.isSleeping("door")) this.scene.wake("door");
+      else this.scene.launch("door");
+      this.scene.bringToTop("door");
+      this.scene.bringToTop();
+    } else if (!wantDoor && doorUp) {
+      this.scene.sleep("door");
+      if (snap.playerRole === "driver" && this.scene.isSleeping("drive")) this.scene.wake("drive");
+      this.scene.bringToTop();
+    }
+  }
+
   private onRole(): void {
     const sim = getSim();
     const snap = sim.snapshot();
@@ -371,6 +398,7 @@ export class HudScene extends Phaser.Scene {
 
   private showDrive(): void {
     this.scene.sleep("shop");
+    this.scene.sleep("door");
     if (this.scene.isSleeping("drive")) this.scene.wake("drive");
     else if (!this.scene.isActive("drive")) this.scene.launch("drive");
     this.scene.bringToTop();
@@ -378,6 +406,7 @@ export class HudScene extends Phaser.Scene {
 
   private showShop(): void {
     this.scene.sleep("drive");
+    this.scene.sleep("door");
     this.scene.wake("shop");
     this.scene.bringToTop();
   }

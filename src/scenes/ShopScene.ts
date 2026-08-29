@@ -12,6 +12,8 @@ import {
   CUSTOMER_BUBBLE_Y,
   DRIVER,
   KEYLEAD,
+  OUT_BAG_GAP,
+  OUT_BAG_RIGHT,
   PACK_SPOT,
   PEOPLE_SCALE,
   PERSON_DISPLAY_H,
@@ -19,6 +21,7 @@ import {
   TABLET,
   TABLET_H,
   TABLET_W,
+  TV_BEZEL,
   TV_W,
   ceilingPots,
   strainPos,
@@ -30,7 +33,7 @@ import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import { skyAt } from "../sim/dayNight";
 import type { CustomerView, SimSnapshot } from "../sim/gameSim";
 import { isPackedOnCounter } from "../sim/orders";
-import { tutorialHints } from "../sim/tutorialHints";
+import { nextShopHint, tutorialHints } from "../sim/tutorialHints";
 import { wireHover } from "../ui/chrome";
 import { addUiText } from "../ui/text";
 import { Color, Type } from "../ui/theme";
@@ -40,6 +43,7 @@ import { TutorialArrows } from "../ui/tutorialArrow";
 export class ShopScene extends Phaser.Scene {
   private keyLead!: Phaser.GameObjects.Image;
   private driver!: Phaser.GameObjects.Image;
+  private bagRack!: Phaser.GameObjects.Image;
   private packBag!: Phaser.GameObjects.Image;
   private bagLabel!: Phaser.GameObjects.Text;
   private receipt!: Phaser.GameObjects.Image;
@@ -80,7 +84,7 @@ export class ShopScene extends Phaser.Scene {
     this.events.on(Phaser.Scenes.Events.PRE_RENDER, () => this.syncLighting(getSim().snapshot().gameMs));
     this.makeHotspots();
 
-    this.add.image(BAG_STACK.x, BAG_STACK.y, "tex-bag").setOrigin(0.5, 1).setScale(BAG_SCALE).setDepth(8);
+    this.bagRack = this.add.image(BAG_STACK.x, BAG_STACK.y, "tex-bag").setOrigin(0.5, 1).setScale(BAG_SCALE).setDepth(8);
 
     this.keyLead = this.add
       .image(KEYLEAD.x, KEYLEAD.y, "tex-keylead")
@@ -140,7 +144,10 @@ export class ShopScene extends Phaser.Scene {
       .image(DRIVER.x, DRIVER.y, "tex-driver-sit")
       .setOrigin(0.5, 1)
       .setScale(PEOPLE_SCALE)
-      .setDepth(5);
+      .setDepth(10)
+      .setInteractive({ useHandCursor: true });
+    this.driver.on("pointerdown", () => this.departNow());
+    wireHover(this.driver);
 
     this.driverBubble = addUiText(this, DRIVER.x - 88, DRIVER.y - 100, "", {
       size: Type.body,
@@ -241,33 +248,36 @@ export class ShopScene extends Phaser.Scene {
       .setText(callout ?? "")
       .setPosition(snap.keyLead.x - 168, snap.keyLead.y - PERSON_DISPLAY_H - 24);
 
-    this.driverBubble.setVisible(!!snap.driverLine && snap.playerRole === "keyLead").setText(snap.driverLine ?? "");
     this.tryDepart(snap);
 
-    this.packBag.setVisible(!!snap.counterBag);
-    if (snap.counterBag?.customerName) {
-      this.bagLabel.setVisible(true).setText(snap.counterBag.hasItem ? snap.counterBag.customerName : "Empty");
-    } else {
-      this.bagLabel.setVisible(false);
-    }
-    this.packBag.setAlpha(snap.counterBag?.hasItem ? 1 : 0.85);
-
-    const showReceipt = !!snap.receipt && !snap.receipt.held;
-    this.receipt.setVisible(showReceipt);
-    this.receiptText.setVisible(showReceipt);
-    if (snap.receipt && showReceipt) {
-      this.receiptText.setText(`${snap.receipt.destLabel}\n${snap.receipt.customerName}\n${snap.receipt.skuName}`);
-    }
-
+    const next = nextShopHint(snap);
     const pulse = 0.62 + 0.38 * (0.5 + 0.5 * Math.sin(snap.gameMs / 420));
     const tabletPulse = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(snap.gameMs / 160));
+    const canGo = snap.canHitTheRoad && snap.playerRole === "keyLead";
+    const readyLine =
+      snap.bagsInBin.length > 1 ? "Tap me — I'll take those drops." : "Tap me — I'll take that drop.";
+    const driverLine = snap.driverLine ?? (canGo ? readyLine : null);
+    this.driverBubble.setVisible(!!driverLine && snap.playerRole === "keyLead").setText(driverLine ?? "");
+    this.driver.setAlpha(canGo ? pulse : 1);
+    this.driver.setTint(canGo ? 0xb8ffb0 : 0xffffff);
+    if (this.driver.input) this.driver.input.enabled = canGo;
+
+    this.packBag.setVisible(false);
+    this.bagLabel.setVisible(false);
+    this.receipt.setVisible(false);
+    this.receiptText.setVisible(false);
+
+    this.bagRack.setAlpha(next?.kind === "bagRack" ? tabletPulse : 1);
+    this.bagRack.setTint(next?.kind === "bagRack" ? 0xb8ffb0 : 0xffffff);
+
     this.tvs.forEach((tv, i) => {
       const sku = this.jarSkus[i];
-      const wanted = sku === snap.highlightSkuId;
+      const wanted = sku === snap.highlightSkuId && next?.kind === "strain";
       tv.setFillStyle(wanted ? 0x3d7a45 : 0x122018, wanted ? pulse : 0.95);
     });
     this.tvLabels.forEach((label, i) => {
-      label.setColor(this.jarSkus[i] === snap.highlightSkuId ? Color.limeHex : Color.creamHex);
+      const wanted = this.jarSkus[i] === snap.highlightSkuId && next?.kind === "strain";
+      label.setColor(wanted ? Color.limeHex : Color.creamHex);
     });
 
     const walkIn = snap.orders.find((o) => o.type === "inStore");
@@ -283,8 +293,8 @@ export class ShopScene extends Phaser.Scene {
       this.counterPrompt.setVisible(false);
     }
 
-    this.syncTablet(snap, tabletPulse);
-    this.syncCustomers(snap.customers);
+    this.syncTablet(snap, tabletPulse, next?.kind === "tablet");
+    this.syncCustomers(snap.customers, pulse, next?.kind === "customer" ? next.orderId : null);
     this.syncOutgoing(snap);
     this.paintTutorialArrows(snap);
   }
@@ -299,12 +309,16 @@ export class ShopScene extends Phaser.Scene {
     this.time.delayedCall(1200, () => {
       this.departing = false;
       if (!getSim().snapshot().pendingDepart) return;
-      if (!getSim().hitTheRoad()) return;
-      this.scene.sleep("shop");
-      if (this.scene.isSleeping("drive")) this.scene.wake("drive");
-      else if (!this.scene.isActive("drive")) this.scene.launch("drive");
-      this.scene.bringToTop("hud");
+      this.departNow();
     });
+  }
+
+  private departNow(): void {
+    if (!getSim().hitTheRoad()) return;
+    this.scene.sleep("shop");
+    if (this.scene.isSleeping("drive")) this.scene.wake("drive");
+    else if (!this.scene.isActive("drive")) this.scene.launch("drive");
+    this.scene.bringToTop("hud");
   }
 
   private paintTutorialArrows(snap: SimSnapshot): void {
@@ -331,21 +345,23 @@ export class ShopScene extends Phaser.Scene {
         spots.push({ id: hint.id, x: who.x, y: CUSTOMER_SPOT.y - PERSON_DISPLAY_H - 8 });
       } else if (hint.kind === "tablet") {
         spots.push({ id: hint.id, x: TABLET.x, y: tabletLayout().top + 8 });
+      } else if (hint.kind === "hitTheRoad") {
+        spots.push({ id: hint.id, x: DRIVER.x, y: DRIVER.y - PERSON_DISPLAY_H - 8 });
       }
     }
     this.arrows.sync(spots);
   }
 
-  private syncTablet(snap: SimSnapshot, pulse: number): void {
+  private syncTablet(snap: SimSnapshot, pulse: number, flash: boolean): void {
     const tab = tabletLayout();
-    const waiting = !!snap.tabletTicket && snap.selectedOrderId !== snap.tabletTicket.id;
+    const hasTicket = !!snap.tabletTicket || snap.tabletQueueCount > 0;
     this.tabletScreen.clear();
     this.tabletScreen.fillStyle(Color.screen, 1);
     this.tabletScreen.fillRect(tab.screenLeft, tab.screenTop, tab.screenW, tab.screenH - tab.homeH);
-    if (waiting) {
+    if (flash) {
       this.tabletScreen.fillStyle(0x3d7a45, pulse);
       this.tabletScreen.fillRect(tab.screenLeft, tab.screenTop, tab.screenW, tab.screenH - tab.homeH);
-    } else if (snap.tabletTicket) {
+    } else if (hasTicket) {
       this.tabletScreen.fillStyle(0x1a3a22, 1);
       this.tabletScreen.fillRect(tab.screenLeft, tab.screenTop, tab.screenW, tab.screenH - tab.homeH);
     }
@@ -363,9 +379,8 @@ export class ShopScene extends Phaser.Scene {
         this.outBags.delete(id);
       }
     }
-    const packingShift = snap.counterBag ? 88 : 0;
     ready.forEach((o, i) => {
-      const x = PACK_SPOT.x - packingShift - i * 76;
+      const x = OUT_BAG_RIGHT - i * OUT_BAG_GAP;
       const y = COUNTER_TOP;
       let objs = this.outBags.get(o.id);
       if (!objs) {
@@ -388,7 +403,7 @@ export class ShopScene extends Phaser.Scene {
     });
   }
 
-  private syncCustomers(list: CustomerView[]): void {
+  private syncCustomers(list: CustomerView[], pulse: number, focusId: string | null): void {
     const seen = new Set(list.map((c) => c.orderId));
     for (const [id, sprite] of this.customers) {
       if (!seen.has(id)) {
@@ -422,7 +437,10 @@ export class ShopScene extends Phaser.Scene {
           .setDepth(7);
         this.bubbles.set(customer.orderId, bubble);
       }
+      const focus = customer.orderId === focusId;
       sprite.setPosition(customer.x, CUSTOMER_SPOT.y);
+      sprite.setAlpha(focus ? pulse : 1);
+      sprite.setTint(focus ? 0xb8ffb0 : 0xffffff);
       this.bubbles
         .get(customer.orderId)
         ?.setPosition(customer.x + CUSTOMER_BUBBLE_DX, CUSTOMER_BUBBLE_Y)
@@ -441,14 +459,15 @@ export class ShopScene extends Phaser.Scene {
     sim.catalog.forEach((sku, i) => {
       const p = strainPos(i);
       const slotH = strainSlotH();
+      const glassW = TV_W - TV_BEZEL * 2;
       const screen = this.add
-        .rectangle(p.x, p.y, TV_W - 12, slotH - 4, sku.color, 0.35)
+        .rectangle(p.x, p.y, glassW - 8, slotH - 4, sku.color, 0.35)
         .setDepth(5)
         .setInteractive({ useHandCursor: true });
       screen.on("pointerdown", () => getSim().shopClick({ type: "strain", skuId: sku.id }));
       this.tvs.push(screen);
       this.jarSkus.push(sku.id);
-      const maxW = TV_W - 28;
+      const maxW = glassW - 16;
       const maxH = slotH - 8;
       const label = addUiText(this, p.x, p.y, sku.name, {
         size: Type.heading,

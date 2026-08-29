@@ -12,7 +12,7 @@ import {
   SCORE_PICKUP,
 } from "./constants";
 import { GameSim } from "./gameSim";
-import { doorstepWorld, houseById, tileToWorld } from "../maps/cityT0";
+import { houseById, tileToWorld } from "../maps/cityT0";
 
 function finishDropoff(sim: GameSim, houseId: string): void {
   const stop = houseById(houseId)!;
@@ -21,9 +21,6 @@ function finishDropoff(sim: GameSim, houseId: string): void {
   sim.tick(32);
   sim.interact();
   sim.tick(CALL_CONNECT_MS + 32);
-  for (let i = 0; i < 40; i++) sim.tick(50);
-  const door = doorstepWorld(stop);
-  sim.setDriverPosition(door.x, door.y);
   sim.interact();
   sim.interact();
   sim.interact();
@@ -46,12 +43,9 @@ function fillTicket(sim: GameSim, type: "pickup" | "inStore" | "delivery", extra
     return order;
   }
   sim.shopClick({ type: "tablet", orderId: order.id });
-  sim.shopClick({ type: "bagRack" });
   sim.shopClick({ type: "strain", skuId: order.skuId });
   waitForFetch(sim);
-  sim.shopClick({ type: "counterBag" });
-  sim.shopClick({ type: "receipt" });
-  sim.shopClick({ type: "counterBag" });
+  sim.shopClick({ type: "bagRack" });
   return order;
 }
 
@@ -118,21 +112,18 @@ describe("GameSim order loops", () => {
     expect(sim.orderById(order.id)?.slaStartGameMs).toBe(order.slaStartGameMs);
   });
 
-  it("prints a receipt with the bag and does not finish until receipt then bag", () => {
+  it("packs after tablet, strain, then bag — no receipt click", () => {
     const sim = GameSim.create({ seed: 8, autoSpawn: false });
     const order = sim.spawnOrder("pickup");
     sim.shopClick({ type: "tablet", orderId: order.id });
-    sim.shopClick({ type: "bagRack" });
-    expect(sim.snapshot().receipt?.customerName).toBe(order.customerName);
-    expect(sim.snapshot().receipt?.held).toBe(false);
+    expect(sim.snapshot().highlightSkuId).toBe(order.skuId);
+    expect(sim.snapshot().awaitingBag).toBe(false);
     sim.shopClick({ type: "strain", skuId: order.skuId });
     waitForFetch(sim);
-    sim.shopClick({ type: "counterBag" });
+    expect(sim.snapshot().awaitingBag).toBe(true);
+    expect(sim.snapshot().highlightSkuId).toBeNull();
     expect(order.status).toBe("queued");
-    sim.shopClick({ type: "receipt" });
-    expect(sim.snapshot().receipt?.held).toBe(true);
-    expect(order.status).toBe("queued");
-    sim.shopClick({ type: "counterBag" });
+    sim.shopClick({ type: "bagRack" });
     expect(order.status).toBe("onPickupShelf");
   });
 
@@ -141,16 +132,13 @@ describe("GameSim order loops", () => {
     const order = sim.spawnOrder("pickup");
     const other = sim.catalog.find((s) => s.id !== order.skuId)!;
     sim.shopClick({ type: "tablet", orderId: order.id });
-    sim.shopClick({ type: "bagRack" });
     sim.shopClick({ type: "strain", skuId: other.id });
     expect(sim.snapshot().handSkuId).toBeNull();
     expect(sim.snapshot().keyLead.phase).toBe("idle");
     sim.shopClick({ type: "strain", skuId: order.skuId });
     waitForFetch(sim);
     expect(sim.snapshot().handSkuId).toBe(order.skuId);
-    sim.shopClick({ type: "counterBag" });
-    sim.shopClick({ type: "receipt" });
-    sim.shopClick({ type: "counterBag" });
+    sim.shopClick({ type: "bagRack" });
     expect(order.status).toBe("onPickupShelf");
   });
 
@@ -182,6 +170,39 @@ describe("GameSim order loops", () => {
     expect(sim.snapshot().dropoff.phase).toBe("calling");
   });
 
+  it("puts the driver and customer at the door after the call connects", () => {
+    const sim = GameSim.create({ seed: 4, autoSpawn: false });
+    const order = fillTicket(sim, "delivery", { destinationId: "house-1" });
+    sim.hitTheRoad();
+    const stop = houseById("house-1")!;
+    const pos = tileToWorld(stop.stop);
+    sim.setVehiclePosition(pos.x, pos.y);
+    sim.tick(32);
+    sim.interact();
+    sim.tick(CALL_CONNECT_MS + 32);
+    const drop = sim.snapshot().dropoff;
+    expect(drop.phase).toBe("atDoor");
+    expect(drop.actionLabel).toBe("PHOTO");
+    expect(drop.customerName).toBe(order.customerName);
+    expect(sim.orderById(order.id)?.status).toBe("onRun");
+  });
+
+  it("hands every packed counter bag on one multi-stop run", () => {
+    const sim = GameSim.create({ seed: 5, autoSpawn: false });
+    const first = fillTicket(sim, "delivery", { destinationId: "house-1" });
+    const second = fillTicket(sim, "delivery", { destinationId: "house-2" });
+    sim.hitTheRoad();
+    expect(sim.snapshot().run?.orderIds).toEqual([first.id, second.id]);
+    finishDropoff(sim, "house-1");
+    expect(sim.orderById(first.id)?.status).toBe("completed");
+    expect(sim.orderById(second.id)?.status).toBe("onRun");
+    expect(sim.snapshot().run?.nextStopId).toBe("house-2");
+    finishDropoff(sim, "house-2");
+    expect(sim.orderById(second.id)?.status).toBe("completed");
+    expect(sim.snapshot().run).toBeNull();
+    expect(sim.score).toBe(SCORE_DELIVERY_ON_TIME * 2);
+  });
+
   it("takes multiple bin bags on one run", () => {
     const sim = GameSim.create({ seed: 5, autoSpawn: false });
     fillTicket(sim, "delivery", { destinationId: "house-1" });
@@ -191,6 +212,22 @@ describe("GameSim order loops", () => {
     const run = sim.snapshot().run;
     expect(run?.orderIds).toHaveLength(2);
     expect(run?.nextStopId).toBeTruthy();
+  });
+
+  it("lets the driver leave with packed deliveries while more tickets wait", () => {
+    const sim = GameSim.create({ seed: 4, autoSpawn: false });
+    const packed = fillTicket(sim, "delivery", { destinationId: "house-1" });
+    const waiting = sim.spawnOrder("delivery", { destinationId: "house-2" });
+    sim.shopClick({ type: "tablet", orderId: waiting.id });
+    const snap = sim.snapshot();
+    expect(snap.canHitTheRoad).toBe(true);
+    expect(snap.awaitingBag).toBe(false);
+    expect(snap.highlightSkuId).toBe(waiting.skuId);
+    expect(snap.bagsInBin).toEqual([packed.id]);
+    expect(sim.hitTheRoad()).toBe(true);
+    expect(sim.snapshot().playerRole).toBe("driver");
+    expect(sim.snapshot().run?.orderIds).toEqual([packed.id]);
+    expect(waiting.status).toBe("queued");
   });
 
   it("lets the NPC key-lead bag a delivery while the player drives", () => {
@@ -235,18 +272,24 @@ describe("GameSim order loops", () => {
     sim.shopClick({ type: "tablet", orderId: order.id });
     expect(sim.snapshot().keyLeadLine).toBe(`Delivery: ${sku.name} for ${order.customerName}`);
     expect(sim.snapshot().highlightSkuId).toBe(order.skuId);
+    expect(sim.snapshot().awaitingBag).toBe(false);
     expect(sim.snapshot().pendingDepart).toBe(false);
     expect(sim.snapshot().playerRole).toBe("keyLead");
     expect(order.status).toBe("queued");
   });
 
-  it("does not highlight a TV until that ticket is tapped", () => {
+  it("highlights the TV after the tablet is tapped, then the bag after fetch", () => {
     const sim = GameSim.create({ seed: 1, autoSpawn: false });
     const order = sim.spawnOrder("pickup");
     expect(sim.snapshot().highlightSkuId).toBeNull();
     sim.shopClick({ type: "tablet", orderId: order.id });
     expect(sim.snapshot().highlightSkuId).toBe(order.skuId);
+    expect(sim.snapshot().awaitingBag).toBe(false);
     expect(sim.snapshot().selectedOrderId).toBe(order.id);
+    sim.shopClick({ type: "strain", skuId: order.skuId });
+    waitForFetch(sim);
+    expect(sim.snapshot().highlightSkuId).toBeNull();
+    expect(sim.snapshot().awaitingBag).toBe(true);
   });
 
   it("queues a second ticket instead of interrupting the current bag", () => {
@@ -254,11 +297,10 @@ describe("GameSim order loops", () => {
     const first = sim.spawnOrder("pickup");
     const second = sim.spawnOrder("delivery", { destinationId: "house-1" });
     sim.shopClick({ type: "tablet", orderId: first.id });
-    sim.shopClick({ type: "bagRack" });
     sim.shopClick({ type: "tablet", orderId: second.id });
     expect(sim.snapshot().selectedOrderId).toBe(first.id);
     expect(sim.snapshot().highlightSkuId).toBe(first.skuId);
-    expect(sim.snapshot().counterBag?.customerName).toBe(first.customerName);
+    expect(sim.snapshot().counterBag).toBeNull();
     expect(sim.snapshot().pendingDepart).toBe(false);
     expect(sim.snapshot().tabletTicket?.id).toBeUndefined();
   });
@@ -268,17 +310,19 @@ describe("GameSim order loops", () => {
     const first = sim.spawnOrder("pickup");
     const second = sim.spawnOrder("delivery", { destinationId: "house-1" });
     sim.shopClick({ type: "tablet", orderId: first.id });
-    sim.shopClick({ type: "bagRack" });
     sim.shopClick({ type: "tablet", orderId: second.id });
     sim.shopClick({ type: "strain", skuId: first.skuId });
     waitForFetch(sim);
-    sim.shopClick({ type: "counterBag" });
-    sim.shopClick({ type: "receipt" });
-    sim.shopClick({ type: "counterBag" });
+    sim.shopClick({ type: "bagRack" });
     expect(first.status).toBe("onPickupShelf");
     expect(sim.snapshot().selectedOrderId).toBe(second.id);
     expect(sim.snapshot().highlightSkuId).toBe(second.skuId);
+    expect(sim.snapshot().awaitingBag).toBe(false);
     expect(sim.snapshot().bagsOnPickup).toContain(first.id);
+    sim.shopClick({ type: "strain", skuId: second.skuId });
+    waitForFetch(sim);
+    expect(sim.snapshot().awaitingBag).toBe(true);
+    expect(sim.snapshot().highlightSkuId).toBeNull();
   });
 
   it("leaves each sealed bag on the counter", () => {

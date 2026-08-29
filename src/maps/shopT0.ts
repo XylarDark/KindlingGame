@@ -36,6 +36,9 @@ export const BACK_DOOR = { x: 400 + (COUNTER_LEFT - 256), y: KEYLEAD.y };
 export const BAG_STACK = { x: KEYLEAD.x - 220, y: COUNTER_TOP };
 export const PACK_SPOT = { x: COUNTER_RIGHT - 120, y: COUNTER_TOP };
 export const RECEIPT_SPOT = { x: COUNTER_RIGHT - 48, y: COUNTER_TOP - 8 };
+/** Packed bags on the right of the counter; labels need a full slot between them. */
+export const OUT_BAG_GAP = 160;
+export const OUT_BAG_RIGHT = COUNTER_RIGHT - 64;
 
 export const BENCH_INSET = 0;
 export const BENCH_LEFT = COUNTER_RIGHT;
@@ -66,8 +69,11 @@ export const TV_ROWS = 1;
 export const STRAINS_PER_TV = 3;
 export const TV_W = 304;
 export const TV_H = 220;
-export const TV_GAP_X = 16;
+/** Chassis-to-chassis wall; ~32px of plaster shows after the 4px sit-on-wall reveal. */
+export const TV_GAP_X = 40;
 export const TV_GAP_Y = 0;
+/** Dark bezel / recessed-glass inset. Keep strain slots inside this. */
+export const TV_BEZEL = 16;
 export const TV_GRID_W = TV_COLS * TV_W + (TV_COLS - 1) * TV_GAP_X;
 export const TV_GRID_H = TV_ROWS * TV_H + Math.max(0, TV_ROWS - 1) * TV_GAP_Y;
 export const CEILING_POT_LEFT = 150;
@@ -158,7 +164,7 @@ export function tvX(index: number): number {
 }
 
 export function strainSlotH(): number {
-  return Math.floor((TV_H - 24) / STRAINS_PER_TV);
+  return Math.floor((TV_H - TV_BEZEL * 2) / STRAINS_PER_TV);
 }
 
 export function strainPos(index: number): { x: number; y: number } {
@@ -166,7 +172,7 @@ export function strainPos(index: number): { x: number; y: number } {
   const slot = index % STRAINS_PER_TV;
   const p = tvPos(tv);
   const slotH = strainSlotH();
-  const blockTop = p.y - TV_H / 2 + 12;
+  const blockTop = p.y - TV_H / 2 + TV_BEZEL;
   return { x: p.x, y: blockTop + slot * slotH + slotH / 2 };
 }
 

@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { BootScene } from "./scenes/BootScene";
+import { DoorScene } from "./scenes/DoorScene";
 import { DriveScene } from "./scenes/DriveScene";
 import { HudScene } from "./scenes/HudScene";
 import { ShopScene } from "./scenes/ShopScene";
@@ -33,5 +34,5 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   input: {
     activePointers: 3,
   },
-  scene: [BootScene, ShopScene, DriveScene, HudScene, TitleScene],
+  scene: [BootScene, ShopScene, DriveScene, DoorScene, HudScene, TitleScene],
 };
