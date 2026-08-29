@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CITY, MAP_COLS, MAP_ROWS } from "../maps/cityT0";
-import { destLabel, needsFetch, type Order } from "./orders";
+import { destLabel, isPackedOnCounter, needsFetch, type Order } from "./orders";
 
 describe("orders helpers", () => {
   it("treats queued and at-register as needing a fetch", () => {
@@ -16,6 +16,9 @@ describe("orders helpers", () => {
     expect(needsFetch(queued)).toBe(true);
     expect(needsFetch(ringing)).toBe(true);
     expect(needsFetch({ ...queued, status: "inBin" })).toBe(false);
+    expect(isPackedOnCounter({ ...queued, status: "onPickupShelf" })).toBe(true);
+    expect(isPackedOnCounter({ ...queued, status: "inBin" })).toBe(true);
+    expect(isPackedOnCounter(queued)).toBe(false);
   });
 
   it("labels counter vs house destinations", () => {

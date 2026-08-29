@@ -1,28 +1,41 @@
 import Phaser from "phaser";
-import { drawShopCounter, drawShopInterior } from "../art/shopInterior";
+import { shopGrade } from "../art/dayNightGrade";
+import { applyDayNight, attachDayNight, dayNightFrom, type DayNightPipeline } from "../art/dayNightPipeline";
+import { drawShopCounter, drawShopInterior, paintShopDayNight, paintWindowGlow } from "../art/shopInterior";
 import {
   BAG_STACK,
   BAG_SCALE,
-  COUNTER_RIGHT,
+  COUNTER_TOP,
+  COUNTER_FRONT,
   CUSTOMER_SPOT,
+  CUSTOMER_BUBBLE_DX,
   CUSTOMER_BUBBLE_Y,
   DRIVER,
-  FLOOR_Y,
   KEYLEAD,
   PACK_SPOT,
   PEOPLE_SCALE,
+  PERSON_DISPLAY_H,
   RECEIPT_SPOT,
   TABLET,
+  TABLET_H,
+  TABLET_W,
   TV_W,
+  ceilingPots,
   strainPos,
   strainSlotH,
   tabletLayout,
 } from "../maps/shopT0";
-import { getSim } from "../session";
-import type { CustomerView, OrderView, SimSnapshot } from "../sim/gameSim";
+import { getSim, isTutorialMode } from "../session";
+import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
+import { skyAt } from "../sim/dayNight";
+import type { CustomerView, SimSnapshot } from "../sim/gameSim";
+import { isPackedOnCounter } from "../sim/orders";
+import { tutorialHints } from "../sim/tutorialHints";
 import { wireHover } from "../ui/chrome";
 import { addUiText } from "../ui/text";
 import { Color, Type } from "../ui/theme";
+import { fitTypeToWidth, parseFontPx, polishText } from "../ui/typekit";
+import { TutorialArrows } from "../ui/tutorialArrow";
 
 export class ShopScene extends Phaser.Scene {
   private keyLead!: Phaser.GameObjects.Image;
@@ -31,8 +44,12 @@ export class ShopScene extends Phaser.Scene {
   private bagLabel!: Phaser.GameObjects.Text;
   private receipt!: Phaser.GameObjects.Image;
   private receiptText!: Phaser.GameObjects.Text;
-  private tabletEmpty!: Phaser.GameObjects.Text;
-  private ticketRows: Phaser.GameObjects.Container[] = [];
+  private tabletScreen!: Phaser.GameObjects.Graphics;
+  private tabletHit!: Phaser.GameObjects.Rectangle;
+  private queueBadge!: Phaser.GameObjects.Text;
+  private keyLeadBubble!: Phaser.GameObjects.Text;
+  private driverBubble!: Phaser.GameObjects.Text;
+  private departing = false;
   private counterPrompt!: Phaser.GameObjects.Text;
   private customers = new Map<string, Phaser.GameObjects.Image>();
   private bubbles = new Map<string, Phaser.GameObjects.Text>();
@@ -40,6 +57,11 @@ export class ShopScene extends Phaser.Scene {
   private tvs: Phaser.GameObjects.Rectangle[] = [];
   private tvLabels: Phaser.GameObjects.Text[] = [];
   private jarSkus: string[] = [];
+  private arrows!: TutorialArrows;
+  private sky!: Phaser.GameObjects.Graphics;
+  private windowGlow!: Phaser.GameObjects.Graphics;
+  private lighting?: DayNightPipeline;
+  private lastLightMs = -1;
 
   constructor() {
     super("shop");
@@ -48,6 +70,14 @@ export class ShopScene extends Phaser.Scene {
   create(): void {
     this.input.setTopOnly(false);
     drawShopInterior(this);
+    this.sky = this.add.graphics().setDepth(0.5);
+    this.windowGlow = this.add.graphics().setDepth(3).setBlendMode(Phaser.BlendModes.ADD);
+    const startMs = getSim().snapshot().gameMs;
+    paintShopDayNight(this.sky, startMs);
+    paintWindowGlow(this.windowGlow, startMs);
+    this.lighting = attachDayNight(this.cameras.main);
+    this.syncLighting(getSim().snapshot().gameMs);
+    this.events.on(Phaser.Scenes.Events.PRE_RENDER, () => this.syncLighting(getSim().snapshot().gameMs));
     this.makeHotspots();
 
     this.add.image(BAG_STACK.x, BAG_STACK.y, "tex-bag").setOrigin(0.5, 1).setScale(BAG_SCALE).setDepth(8);
@@ -60,26 +90,70 @@ export class ShopScene extends Phaser.Scene {
     drawShopCounter(this);
 
     const tab = tabletLayout();
-    const screen = this.add.graphics().setDepth(8);
-    screen.fillStyle(Color.screen);
-    screen.fillRect(tab.screenLeft, tab.screenTop, tab.screenW, tab.screenH);
-    screen.fillStyle(Color.woodLight);
-    screen.fillRect(tab.screenLeft, tab.screenTop, tab.screenW, tab.headerH);
-
-    addUiText(this, TABLET.x, tab.screenTop + tab.headerH / 2, "ORDERS", {
-      size: Type.heading,
-      color: Color.inkHex,
+    this.tabletScreen = this.add.graphics().setDepth(10);
+    const orders = addUiText(this, TABLET.x, tab.screenTop + tab.screenH / 2, "ORDERS", {
+      size: Type.caption,
+      color: Color.creamHex,
       fontStyle: "700",
       strokeThickness: 0,
     })
       .setOrigin(0.5)
-      .setDepth(9);
+      .setDepth(11);
+    fitTypeToWidth(orders, tab.screenW - 16, 12);
+
+    this.tabletHit = this.add
+      .rectangle(TABLET.x, TABLET.y, TABLET_W, TABLET_H, 0x000000, 0.001)
+      .setDepth(12)
+      .setInteractive({ useHandCursor: true });
+    this.tabletHit.on("pointerdown", () => {
+      const ticket = getSim().snapshot().tabletTicket;
+      if (ticket) getSim().shopClick({ type: "tablet", orderId: ticket.id });
+    });
+    wireHover(this.tabletHit);
+
+    this.queueBadge = addUiText(this, tab.left + tab.w - 10, tab.top + 10, "", {
+      size: Type.caption,
+      color: Color.inkHex,
+      backgroundColor: Color.creamHex,
+      padding: { x: 6, y: 2 },
+      fontStyle: "700",
+      strokeThickness: 0,
+    })
+      .setOrigin(0.5)
+      .setDepth(13)
+      .setVisible(false);
+
+    this.keyLeadBubble = addUiText(this, KEYLEAD.x - 168, KEYLEAD.y - PERSON_DISPLAY_H - 24, "", {
+      size: Type.body,
+      color: Color.inkHex,
+      backgroundColor: Color.creamHex,
+      padding: { x: 10, y: 6 },
+      align: "center",
+      fontStyle: "600",
+      wordWrap: { width: 280 },
+    })
+      .setOrigin(0.5)
+      .setDepth(12)
+      .setVisible(false);
 
     this.driver = this.add
       .image(DRIVER.x, DRIVER.y, "tex-driver-sit")
       .setOrigin(0.5, 1)
       .setScale(PEOPLE_SCALE)
       .setDepth(5);
+
+    this.driverBubble = addUiText(this, DRIVER.x - 88, DRIVER.y - 100, "", {
+      size: Type.body,
+      color: Color.inkHex,
+      backgroundColor: Color.creamHex,
+      padding: { x: 10, y: 6 },
+      align: "center",
+      fontStyle: "600",
+      wordWrap: { width: 240 },
+    })
+      .setOrigin(1, 1)
+      .setDepth(12)
+      .setVisible(false);
 
     this.packBag = this.add
       .image(PACK_SPOT.x, PACK_SPOT.y, "tex-bag")
@@ -121,7 +195,7 @@ export class ShopScene extends Phaser.Scene {
       .setDepth(10)
       .setVisible(false);
 
-    this.counterPrompt = addUiText(this, CUSTOMER_SPOT.x, 720, "", {
+    this.counterPrompt = addUiText(this, CUSTOMER_SPOT.x + 268, COUNTER_FRONT + 96, "", {
       size: Type.body,
       color: Color.inkHex,
       backgroundColor: Color.limeHex,
@@ -133,31 +207,46 @@ export class ShopScene extends Phaser.Scene {
       .setDepth(8)
       .setVisible(false);
 
-    this.tabletEmpty = addUiText(this, TABLET.x, tab.screenTop + tab.headerH + (tab.screenH - tab.headerH) / 2, "", {
-      size: Type.caption,
-      color: Color.creamHex,
-      align: "center",
-      wordWrap: { width: tab.screenW - 28 },
-      fontStyle: "600",
-      strokeThickness: 0,
-      lineSpacing: 8,
-    })
-      .setOrigin(0.5)
-      .setDepth(9);
+    this.arrows = new TutorialArrows(this, 18);
   }
 
   update(): void {
     this.sync(getSim().snapshot());
   }
 
+  private syncLighting(gameMs: number): void {
+    const pipe = this.lighting ?? dayNightFrom(this.cameras.main);
+    this.lighting = pipe;
+    const playing = this.sys.isActive();
+    if (playing && Math.abs(gameMs - this.lastLightMs) < 80) return;
+    this.lastLightMs = gameMs;
+    applyDayNight(pipe, shopGrade(skyAt(gameMs), ceilingPots()), {
+      x: 0,
+      y: 0,
+      width: GAME_WIDTH,
+      height: GAME_HEIGHT,
+    });
+  }
+
   private sync(snap: SimSnapshot): void {
+    paintShopDayNight(this.sky, snap.gameMs);
+    paintWindowGlow(this.windowGlow, snap.gameMs);
+    this.syncLighting(snap.gameMs);
     this.driver.setVisible(snap.playerRole === "keyLead");
     this.keyLead.setVisible(snap.keyLead.visible && snap.playerRole === "keyLead");
     this.keyLead.setPosition(snap.keyLead.x, snap.keyLead.y);
+    const callout = snap.keyLeadLine;
+    this.keyLeadBubble
+      .setVisible(!!callout && snap.keyLead.visible && snap.playerRole === "keyLead")
+      .setText(callout ?? "")
+      .setPosition(snap.keyLead.x - 168, snap.keyLead.y - PERSON_DISPLAY_H - 24);
+
+    this.driverBubble.setVisible(!!snap.driverLine && snap.playerRole === "keyLead").setText(snap.driverLine ?? "");
+    this.tryDepart(snap);
 
     this.packBag.setVisible(!!snap.counterBag);
     if (snap.counterBag?.customerName) {
-      this.bagLabel.setVisible(true).setText(snap.counterBag.hasItem ? snap.counterBag.customerName : "empty");
+      this.bagLabel.setVisible(true).setText(snap.counterBag.hasItem ? snap.counterBag.customerName : "Empty");
     } else {
       this.bagLabel.setVisible(false);
     }
@@ -171,6 +260,7 @@ export class ShopScene extends Phaser.Scene {
     }
 
     const pulse = 0.62 + 0.38 * (0.5 + 0.5 * Math.sin(snap.gameMs / 420));
+    const tabletPulse = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(snap.gameMs / 160));
     this.tvs.forEach((tv, i) => {
       const sku = this.jarSkus[i];
       const wanted = sku === snap.highlightSkuId;
@@ -186,92 +276,86 @@ export class ShopScene extends Phaser.Scene {
         .setVisible(true)
         .setText(
           snap.handSkuId === walkIn.skuId
-            ? `TAP ${walkIn.customerName.toUpperCase()}\nto hand over ${walkIn.skuName}`
+            ? `Tap ${walkIn.customerName}\nto hand over ${walkIn.skuName}`
             : `${walkIn.customerName} at the counter\nwants ${walkIn.skuName}`,
         );
     } else {
       this.counterPrompt.setVisible(false);
     }
 
-    this.syncTablet(snap, pulse);
+    this.syncTablet(snap, tabletPulse);
     this.syncCustomers(snap.customers);
     this.syncOutgoing(snap);
+    this.paintTutorialArrows(snap);
+  }
+
+  private tryDepart(snap: SimSnapshot): void {
+    if (snap.playerRole !== "keyLead") {
+      this.departing = false;
+      return;
+    }
+    if (!snap.pendingDepart || this.departing) return;
+    this.departing = true;
+    this.time.delayedCall(1200, () => {
+      this.departing = false;
+      if (!getSim().snapshot().pendingDepart) return;
+      if (!getSim().hitTheRoad()) return;
+      this.scene.sleep("shop");
+      if (this.scene.isSleeping("drive")) this.scene.wake("drive");
+      else if (!this.scene.isActive("drive")) this.scene.launch("drive");
+      this.scene.bringToTop("hud");
+    });
+  }
+
+  private paintTutorialArrows(snap: SimSnapshot): void {
+    if (!isTutorialMode() || snap.playerRole !== "keyLead") {
+      this.arrows.clear();
+      return;
+    }
+    const spots = [];
+    for (const hint of tutorialHints(snap)) {
+      if (hint.kind === "strain") {
+        const i = this.jarSkus.indexOf(hint.skuId);
+        if (i < 0) continue;
+        const p = strainPos(i);
+        spots.push({ id: hint.id, x: p.x, y: p.y - strainSlotH() / 2 - 8 });
+      } else if (hint.kind === "bagRack") {
+        spots.push({ id: hint.id, x: BAG_STACK.x, y: BAG_STACK.y - Math.round(120 * BAG_SCALE) - 8 });
+      } else if (hint.kind === "counterBag") {
+        spots.push({ id: hint.id, x: PACK_SPOT.x, y: PACK_SPOT.y - Math.round(120 * BAG_SCALE) - 8 });
+      } else if (hint.kind === "receipt") {
+        spots.push({ id: hint.id, x: RECEIPT_SPOT.x, y: RECEIPT_SPOT.y - 88 });
+      } else if (hint.kind === "customer") {
+        const who = this.customers.get(hint.orderId);
+        if (!who) continue;
+        spots.push({ id: hint.id, x: who.x, y: CUSTOMER_SPOT.y - PERSON_DISPLAY_H - 8 });
+      } else if (hint.kind === "tablet") {
+        spots.push({ id: hint.id, x: TABLET.x, y: tabletLayout().top + 8 });
+      }
+    }
+    this.arrows.sync(spots);
   }
 
   private syncTablet(snap: SimSnapshot, pulse: number): void {
-    const tickets = snap.orders.filter((o) => o.type !== "inStore").slice(0, 4);
-    this.tabletEmpty.setVisible(tickets.length === 0);
-    this.tabletEmpty.setText(tickets.length === 0 ? "No pickup or delivery\nWalk-ins use the counter" : "");
-
-    while (this.ticketRows.length > tickets.length) {
-      this.ticketRows.pop()?.destroy();
-    }
-    tickets.forEach((order, i) => {
-      const row = this.ticketRows[i] ?? this.makeTicketRow();
-      if (!this.ticketRows[i]) this.ticketRows[i] = row;
-      this.paintTicketRow(row, order, order.id === snap.selectedOrderId, i, pulse);
-    });
-  }
-
-  private makeTicketRow(): Phaser.GameObjects.Container {
-    const bg = this.add.graphics();
-    const dest = addUiText(this, 12, 4, "", {
-      size: Type.body,
-      color: Color.creamHex,
-      fontStyle: "700",
-      strokeThickness: 0,
-    });
-    const sku = addUiText(this, 12, 22, "", {
-      size: Type.caption,
-      color: Color.limeHex,
-      fontStyle: "600",
-      strokeThickness: 0,
-    });
-    const row = this.add.container(0, 0, [bg, dest, sku]).setDepth(9);
-    row.on("pointerdown", () => {
-      const id = row.getData("orderId") as string | undefined;
-      if (id) getSim().shopClick({ type: "tablet", orderId: id });
-    });
-    return row;
-  }
-
-  private paintTicketRow(
-    row: Phaser.GameObjects.Container,
-    order: OrderView,
-    selected: boolean,
-    index: number,
-    pulse: number,
-  ): void {
     const tab = tabletLayout();
-    const rowW = tab.screenW - 16;
-    const listH = tab.screenH - tab.headerH - 10;
-    const rowH = Math.floor(listH / 4);
-    row.setPosition(tab.screenLeft + 8, tab.screenTop + tab.headerH + 6 + index * rowH);
-    row.setSize(rowW, rowH - 6);
-    row.setData("orderId", order.id);
-    row.setInteractive(new Phaser.Geom.Rectangle(0, 0, rowW, rowH - 6), Phaser.Geom.Rectangle.Contains);
-    if (row.input) row.input.cursor = "pointer";
-
-    const waiting = order.status === "queued";
-    const bg = row.getAt(0) as Phaser.GameObjects.Graphics;
-    const dest = row.getAt(1) as Phaser.GameObjects.Text;
-    const sku = row.getAt(2) as Phaser.GameObjects.Text;
-    bg.clear();
-    if (selected) bg.fillStyle(Color.lime, 1);
-    else if (waiting) bg.fillStyle(0x2a5a32, pulse);
-    else bg.fillStyle(0x1a3320, 1);
-    bg.fillRect(0, 0, rowW, rowH - 6);
-
-    dest.setColor(selected ? Color.inkHex : Color.creamHex);
-    dest.setText(`${order.destLabel}  ·  ${order.customerName}`);
-    dest.setWordWrapWidth(rowW - 28, true);
-    sku.setColor(selected ? Color.inkHex : Color.limeHex);
-    sku.setText(order.skuName);
-    sku.setWordWrapWidth(rowW - 28, true);
+    const waiting = !!snap.tabletTicket && snap.selectedOrderId !== snap.tabletTicket.id;
+    this.tabletScreen.clear();
+    this.tabletScreen.fillStyle(Color.screen, 1);
+    this.tabletScreen.fillRect(tab.screenLeft, tab.screenTop, tab.screenW, tab.screenH - tab.homeH);
+    if (waiting) {
+      this.tabletScreen.fillStyle(0x3d7a45, pulse);
+      this.tabletScreen.fillRect(tab.screenLeft, tab.screenTop, tab.screenW, tab.screenH - tab.homeH);
+    } else if (snap.tabletTicket) {
+      this.tabletScreen.fillStyle(0x1a3a22, 1);
+      this.tabletScreen.fillRect(tab.screenLeft, tab.screenTop, tab.screenW, tab.screenH - tab.homeH);
+    }
+    const count = snap.tabletQueueCount;
+    this.queueBadge.setVisible(count > 1);
+    this.queueBadge.setText(String(count));
   }
 
   private syncOutgoing(snap: SimSnapshot): void {
-    const ready = snap.orders.filter((o) => o.status === "inBin");
+    const ready = snap.orders.filter((o) => isPackedOnCounter(o));
     const ids = new Set(ready.map((o) => o.id));
     for (const [id, objs] of this.outBags) {
       if (!ids.has(id)) {
@@ -279,12 +363,13 @@ export class ShopScene extends Phaser.Scene {
         this.outBags.delete(id);
       }
     }
+    const packingShift = snap.counterBag ? 88 : 0;
     ready.forEach((o, i) => {
-      const x = COUNTER_RIGHT + 36 + (i % 2) * 58;
-      const y = FLOOR_Y + 90 + Math.floor(i / 2) * 70;
+      const x = PACK_SPOT.x - packingShift - i * 76;
+      const y = COUNTER_TOP;
       let objs = this.outBags.get(o.id);
       if (!objs) {
-        const bag = this.add.image(x, y, "tex-bag").setOrigin(0.5, 1).setScale(BAG_SCALE).setDepth(4);
+        const bag = this.add.image(x, y, "tex-bag").setOrigin(0.5, 1).setScale(BAG_SCALE).setDepth(8);
         const label = addUiText(this, x, y - Math.round(120 * BAG_SCALE) - 8, `${o.destLabel}\n${o.customerName}`, {
           size: Type.caption,
           color: Color.inkHex,
@@ -294,7 +379,7 @@ export class ShopScene extends Phaser.Scene {
           fontStyle: "600",
         })
           .setOrigin(0.5)
-          .setDepth(5);
+          .setDepth(9);
         objs = [bag, label];
         this.outBags.set(o.id, objs);
       }
@@ -325,7 +410,7 @@ export class ShopScene extends Phaser.Scene {
         sprite.on("pointerdown", () => getSim().shopClick({ type: "customer", orderId: customer.orderId }));
         wireHover(sprite);
         this.customers.set(customer.orderId, sprite);
-        const bubble = addUiText(this, customer.x, CUSTOMER_BUBBLE_Y, "", {
+        const bubble = addUiText(this, customer.x + CUSTOMER_BUBBLE_DX, CUSTOMER_BUBBLE_Y, "", {
           size: Type.body,
           color: Color.inkHex,
           backgroundColor: Color.creamHex,
@@ -338,7 +423,10 @@ export class ShopScene extends Phaser.Scene {
         this.bubbles.set(customer.orderId, bubble);
       }
       sprite.setPosition(customer.x, CUSTOMER_SPOT.y);
-      this.bubbles.get(customer.orderId)?.setPosition(customer.x, CUSTOMER_BUBBLE_Y).setText(customer.bubble);
+      this.bubbles
+        .get(customer.orderId)
+        ?.setPosition(customer.x + CUSTOMER_BUBBLE_DX, CUSTOMER_BUBBLE_Y)
+        .setText(customer.bubble);
     }
   }
 
@@ -360,16 +448,25 @@ export class ShopScene extends Phaser.Scene {
       screen.on("pointerdown", () => getSim().shopClick({ type: "strain", skuId: sku.id }));
       this.tvs.push(screen);
       this.jarSkus.push(sku.id);
+      const maxW = TV_W - 28;
+      const maxH = slotH - 8;
       const label = addUiText(this, p.x, p.y, sku.name, {
-        size: Type.caption,
+        size: Type.heading,
         color: Color.creamHex,
         align: "center",
-        wordWrap: { width: TV_W - 20 },
         fontStyle: "700",
         lineSpacing: 0,
+        strokeThickness: 0,
       })
         .setOrigin(0.5)
         .setDepth(6);
+      fitTypeToWidth(label, maxW, 13);
+      let px = parseFontPx(label.style.fontSize);
+      while (px > 12 && label.height > maxH) {
+        px -= 1;
+        label.setFontSize(px);
+      }
+      polishText(label);
       this.tvLabels.push(label);
     });
   }

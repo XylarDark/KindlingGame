@@ -33,5 +33,5 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   input: {
     activePointers: 3,
   },
-  scene: [BootScene, TitleScene, ShopScene, DriveScene, HudScene],
+  scene: [BootScene, ShopScene, DriveScene, HudScene, TitleScene],
 };

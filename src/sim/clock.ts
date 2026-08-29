@@ -1,10 +1,10 @@
-import { GAME_START_HOUR, MS_PER_GAME_HOUR } from "./constants";
+import { GAME_END_HOUR, GAME_START_HOUR, MS_PER_GAME_HOUR, SHIFT_MS } from "./constants";
 
 export class GameClock {
   gameMs = 0;
 
   tick(realDeltaMs: number): void {
-    this.gameMs += Math.max(0, realDeltaMs);
+    this.gameMs = Math.min(SHIFT_MS, this.gameMs + Math.max(0, realDeltaMs));
   }
 
   get gameHours(): number {
@@ -12,10 +12,14 @@ export class GameClock {
   }
 }
 
+/** Clock hour in [GAME_START_HOUR, GAME_END_HOUR], including fractions. */
+export function clockHour(gameMs: number): number {
+  return GAME_START_HOUR + Math.min(Math.max(0, gameMs), SHIFT_MS) / MS_PER_GAME_HOUR;
+}
+
 export function formatGameClock(gameMs: number): string {
-  const totalMinutes = Math.floor((gameMs / MS_PER_GAME_HOUR) * 60);
-  const clockMinutes = GAME_START_HOUR * 60 + totalMinutes;
-  const hour = Math.floor(clockMinutes / 60) % 24;
-  const minute = clockMinutes % 60;
+  const hourFloat = clockHour(gameMs);
+  const hour = Math.min(GAME_END_HOUR, Math.floor(hourFloat));
+  const minute = hour >= GAME_END_HOUR ? 0 : Math.floor((hourFloat - hour) * 60);
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }

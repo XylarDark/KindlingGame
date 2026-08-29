@@ -1,8 +1,12 @@
 export const GAME_WIDTH = 1920;
 export const GAME_HEIGHT = 1080;
 
-export const MS_PER_GAME_HOUR = 60_000;
-export const GAME_START_HOUR = 10;
+/** One game minute = 2 real seconds. One session is the 9am–11pm shop day. */
+export const MS_PER_GAME_MINUTE = 2_000;
+export const MS_PER_GAME_HOUR = 60 * MS_PER_GAME_MINUTE;
+export const GAME_START_HOUR = 9;
+export const GAME_END_HOUR = 23;
+export const SHIFT_MS = (GAME_END_HOUR - GAME_START_HOUR) * MS_PER_GAME_HOUR;
 
 export const PICKUP_ARRIVE_MS = 8_000;
 export const PICKUP_HANDOFF_WAIT_MS = 12_000;
@@ -19,9 +23,11 @@ export const NPC_INTERACT_COOLDOWN_MS = 360;
 export const KEYLEAD_WALK_SPEED = 620;
 export const BACKROOM_MS = 420;
 
-/** Incoming tickets arrive at 12.5% of the original T0 cadence. */
-export const ORDER_ARRIVAL_RATE = 0.125;
-export const ORDER_AUTO_SPAWN_MS = 14_000 / ORDER_ARRIVAL_RATE;
+/** Incoming tablet tickets arrive in waves of 1–2, 10–60s apart. */
+export const TABLET_QUEUE_MAX = 6;
+export const TICKET_WAVE_MIN_MS = 10_000;
+export const TICKET_WAVE_MAX_MS = 60_000;
+export const FIRST_TICKET_WAVE_MS = 2_000;
 
 export const SCORE_INSTORE = 10;
 export const SCORE_PICKUP = 10;

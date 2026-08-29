@@ -5,6 +5,11 @@ import {
   BACK_DOOR_W,
   BAG_STACK,
   BENCH,
+  BENCH_LEFT,
+  BENCH_W,
+  CHAIR_RAIL_GREY_H,
+  CHAIR_RAIL_WHITE_H,
+  CHAIR_RAIL_Y,
   COUNTER_FRONT,
   COUNTER_LEFT,
   COUNTER_MID,
@@ -13,42 +18,32 @@ import {
   DOOR,
   DOOR_H,
   DOOR_W,
+  PASS_WINDOW,
+  SILL_H,
+  SILL_Y,
   STRAINS_PER_TV,
   TV_COUNT,
   TV_H,
   TV_W,
   WINDOW,
+  WINDOW_TOP,
+  ceilingPots,
   tabletLayout,
   tvPos,
 } from "../maps/shopT0";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
+import { skyAt, type SkySample } from "../sim/dayNight";
+import { windowGlowLook } from "./dayNightGrade";
 import { addUiText } from "../ui/text";
+import { addMark, fitTypeToWidth } from "../ui/typekit";
+import { HOURS } from "../ui/copy";
 import { Color, Type } from "../ui/theme";
+import { Pal } from "./palette";
 import { PX, fill, snap } from "./px";
 
-function tvBezel(g: Phaser.GameObjects.Graphics, left: number, top: number, w: number, h: number): void {
-  fill(g, left - 8, top + h, w + 16, 8, 0x2a2218);
-  fill(g, left - 8, top - 8, w + 16, h + 16, Color.woodDark);
-  fill(g, left - 4, top - 4, w + 8, h + 8, 0x2a2218);
-  fill(g, left, top, w, h, 0x0a1210);
-  fill(g, left + 8, top + 4, 40, 4, Color.woodLight);
-  const slotH = Math.floor((h - 20) / STRAINS_PER_TV);
-  const blockTop = top + 10;
-  for (let s = 1; s < STRAINS_PER_TV; s++) {
-    fill(g, left + 10, blockTop + s * slotH, w - 20, 2, 0x1a2a22);
-  }
-}
-
-const WALL = 0x7a4a28;
-const WALL_SHADE = 0x6a3e22;
-const WAINSCOT = 0x6a3a20;
-const WAINSCOT_LINE = 0x4a2818;
-const WOOD_HI = 0x8a522c;
-const WOOD_MID = 0x7a4a28;
-const WOOD_LO = Color.woodDark;
-const WOOD_EDGE = 0x3a2214;
-const WOOD_REVEAL = 0x2a1810;
-const WOOD_REVEAL_IN = 0x4a2818;
+const WALL = 0xe6dfd4;
+const WAINSCOT = 0xddd4c8;
+const WAINSCOT_LINE = 0xc4b9ac;
 
 const PAINT = 0xf2f2f0;
 const PAINT_HI = 0xffffff;
@@ -60,75 +55,648 @@ const JAMB = 0x6e7070;
 const JAMB_DARK = 0x4a4c4e;
 const JAMB_HI = 0xa4a6a6;
 
-const POT_HOT = 0xffe8b0;
-const POT_WARM = 0xe8c070;
+const JAR = [0x3d6a44, 0xc4a060, 0xc86a38, 0x5a9a62, 0xb89258, 0x7a4a28];
 
-function potLight(g: Phaser.GameObjects.Graphics, x: number): void {
-  fill(g, x - 48, 28, 96, 72, POT_WARM, 0.08);
-  fill(g, x - 28, 28, 56, 40, POT_WARM, 0.12);
-  fill(g, x - 12, 28, 24, 20, POT_HOT, 0.16);
-
-  fill(g, x - 14, 8, 28, 16, 0x1a1410);
-  fill(g, x - 10, 10, 20, 12, 0x2a2218);
-  fill(g, x - 8, 12, 16, 8, Color.gold);
-  fill(g, x - 4, 14, 8, 6, POT_HOT);
-  fill(g, x - 2, 16, 4, 4, 0xfff6d8);
+function fillClipped(
+  g: Phaser.GameObjects.Graphics,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  color: number,
+  clip: { x: number; y: number; w: number; h: number },
+  alpha = 1,
+): void {
+  const x0 = Math.max(x, clip.x);
+  const y0 = Math.max(y, clip.y);
+  const x1 = Math.min(x + w, clip.x + clip.w);
+  const y1 = Math.min(y + h, clip.y + clip.h);
+  if (x1 - x0 < PX || y1 - y0 < PX) return;
+  fill(g, x0, y0, x1 - x0, y1 - y0, color, alpha);
 }
 
-function drawDuskOutside(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number, accent: "moon" | "lamp"): void {
-  fill(g, x, y, w, Math.floor(h * 0.3), Color.skyTop);
-  fill(g, x, y + Math.floor(h * 0.28), w, Math.floor(h * 0.18), 0x2a2e4a);
-  fill(g, x, y + Math.floor(h * 0.44), w, Math.floor(h * 0.18), Color.skyMid);
-  fill(g, x, y + Math.floor(h * 0.6), w, Math.floor(h * 0.16), Color.skyLow);
-  fill(g, x, y + Math.floor(h * 0.74), w, h - Math.floor(h * 0.74), 0xc47868);
+function drawJars(
+  g: Phaser.GameObjects.Graphics,
+  x: number,
+  shelfY: number,
+  count: number,
+  gap: number,
+  clip?: { x: number; y: number; w: number; h: number },
+): void {
+  const paint = clip
+    ? (jx: number, jy: number, jw: number, jh: number, color: number, alpha = 1) =>
+        fillClipped(g, jx, jy, jw, jh, color, clip, alpha)
+    : (jx: number, jy: number, jw: number, jh: number, color: number, alpha = 1) =>
+        fill(g, jx, jy, jw, jh, color, alpha);
+  for (let j = 0; j < count; j++) {
+    const jx = x + j * gap;
+    const jh = 16 + (j % 3) * 5;
+    paint(jx, shelfY - jh, 11, jh, JAR[(j + count) % JAR.length]!);
+    paint(jx + 2, shelfY - jh, 7, 3, 0xe8d8b0);
+    paint(jx + 3, shelfY - jh + 5, 5, 5, 0x2a4a30, 0.35);
+  }
+}
 
-  fill(g, x + 12, y + 12, PX, PX, Color.cream, 0.7);
-  fill(g, x + Math.floor(w * 0.22), y + 28, PX, PX, Color.cream, 0.45);
-  fill(g, x + Math.floor(w * 0.4), y + 10, PX, PX, Color.cream, 0.55);
-  fill(g, x + Math.floor(w * 0.62), y + 22, PX, PX, Color.cream, 0.4);
-  fill(g, x + w - 28, y + 36, PX, PX, Color.cream, 0.5);
+function drawProductRoom(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number): void {
+  const clip = { x, y, w, h };
+  fillClipped(g, x, y, w, h, 0x241c16, clip);
+  fillClipped(g, x, y, w, Math.floor(h * 0.18), 0x1a1410, clip, 0.45);
+  fillClipped(g, x, y + Math.floor(h * 0.8), w, h - Math.floor(h * 0.8), 0x1a120c, clip);
 
-  if (accent === "moon") {
-    const moonX = x + Math.floor(w * 0.72);
-    const moonY = y + Math.floor(h * 0.18);
-    fill(g, moonX - 12, moonY - 8, 24, 24, 0xf0c070);
-    fill(g, moonX - 8, moonY - 12, 16, 32, 0xf0c070);
-    fill(g, moonX - 16, moonY - 4, 32, 16, 0xf0c070);
-    fill(g, moonX - 4, moonY - 4, 12, 12, Color.cream);
+  const inset = 8;
+  const innerL = x + inset;
+  const innerW = w - inset * 2;
+  const postW = 7;
+  fillClipped(g, innerL, y + 12, postW, h - 20, 0x5a3a22, clip);
+  fillClipped(g, innerL + innerW - postW, y + 12, postW, h - 20, 0x4a2e1a, clip);
+
+  for (const t of [0.24, 0.5, 0.76]) {
+    const sy = y + Math.floor(h * t);
+    fillClipped(g, innerL, sy, innerW, 7, 0x8b5a32, clip);
+    fillClipped(g, innerL, sy, innerW, 3, 0xc4a070, clip);
+    fillClipped(g, innerL + 3, sy + 7, innerW - 6, 3, 0x3a2818, clip, 0.35);
+    drawJars(g, innerL + 14, sy, Math.max(3, Math.floor((innerW - 28) / 22)), 22, clip);
+  }
+}
+
+function drawPassWindow(g: Phaser.GameObjects.Graphics): void {
+  const left = PASS_WINDOW.x - PASS_WINDOW.w / 2;
+  const top = PASS_WINDOW.y;
+  const w = PASS_WINDOW.w;
+  const h = PASS_WINDOW.h;
+  const reveal = 8;
+
+  fill(g, left - reveal, top - reveal, w + reveal * 2, h + reveal, JAMB_DARK);
+  fill(g, left - reveal + 4, top - reveal + 4, w + reveal * 2 - 4, h + reveal - 4, JAMB);
+  fill(g, left - reveal, top - reveal, w + reveal * 2, 8, JAMB_HI);
+  fill(g, left - reveal, top, 8, h, JAMB_DARK);
+  fill(g, left + w, top, 8, h, JAMB);
+
+  drawProductRoom(g, left, top, w, h);
+
+  fill(g, left, top, w, 8, PAINT_HI);
+  fill(g, left, top, 8, h, PAINT_HI);
+  fill(g, left + w - 8, top, 8, h, PAINT_EDGE);
+  fill(g, left, top + h - 8, w, 8, PAINT_SHADE);
+}
+
+function drawSillBench(scene: Phaser.Scene): void {
+  const g = scene.add.graphics().setDepth(8);
+  const left = PASS_WINDOW.x - PASS_WINDOW.w / 2 - 12;
+  const w = PASS_WINDOW.w + 24;
+  const top = SILL_Y;
+  const h = SILL_H;
+
+  fill(g, left + 6, top + h, w - 4, 6, 0x1a1008, 0.35);
+  fill(g, left, top, w, h, 0xb49464);
+  fill(g, left, top, w, 6, 0xccb080);
+  fill(g, left, top, w, 3, 0xd8c498);
+  fill(g, left, top + h - 4, w, 4, 0xa07c54);
+  fill(g, left, top + 6, 6, h - 6, 0xd0b888);
+  fill(g, left + w - 8, top + 6, 8, h - 6, 0xa07c54);
+  for (let x = left + 16; x < left + w - 12; x += 20) {
+    fill(g, x, top + 4, PX, h - 8, 0xa88858, 0.4);
+  }
+}
+
+function drawTabletShell(g: Phaser.GameObjects.Graphics, left: number, top: number, w: number, h: number): void {
+  g.fillStyle(0x121416, 1);
+  g.fillRoundedRect(left - 3, top - 3, w + 6, h + 6, 8);
+  g.fillStyle(0x2a2e32, 1);
+  g.fillRoundedRect(left, top, w, h, 6);
+  g.fillStyle(0x3a3e42, 1);
+  g.fillRoundedRect(left + 2, top + 2, w - 4, h - 4, 4);
+  g.fillStyle(0x080a0c, 1);
+  g.fillRoundedRect(left + 16, top + 8, w - 32, h - 16, 3);
+  fill(g, left + 5, top + h / 2 - 4, 8, 8, 0x4a5056);
+  fill(g, left + 7, top + h / 2 - 2, 4, 4, 0x1a2830);
+  fill(g, left + w - 12, top + h / 2 - 14, 4, 28, 0xc8ccd0);
+}
+
+function drawTabletOnSill(scene: Phaser.Scene): void {
+  const g = scene.add.graphics().setDepth(9);
+  const orders = tabletLayout();
+  drawTabletShell(g, orders.left, orders.top, orders.w, orders.h);
+  fill(g, orders.left + 10, orders.top + orders.h - 2, orders.w - 20, 6, 0x1a1008, 0.35);
+}
+
+/** Lightning/USB-C cable on the oak sill into a wall outlet by the pass-through. Depth 8: on the sill, under tablet 9+, over people 5. Plugs into the center of the landscape tablet's right short end. */
+function drawTabletCharger(scene: Phaser.Scene): void {
+  const g = scene.add.graphics().setDepth(8);
+  const orders = tabletLayout();
+  const tabRight = snap(orders.left + orders.w);
+  const plugY = snap(orders.top + orders.h / 2);
+  const outX = snap(PASS_WINDOW.x + PASS_WINDOW.w / 2 + 16);
+  const outY = snap(SILL_Y + SILL_H + 8);
+  const onSillY = snap(SILL_Y + 6);
+  const startX = tabRight + 8;
+  const cable = 0xe8eaee;
+  const cableSh = 0xa8acb0;
+
+  fill(g, outX, outY, 24, 32, PAINT);
+  fill(g, outX, outY, 24, 4, PAINT_HI);
+  fill(g, outX + 20, outY + 4, 4, 24, PAINT_SHADE);
+  fill(g, outX, outY + 28, 24, 4, PAINT_EDGE);
+  fill(g, outX + 4, outY + 8, 8, 8, PAINT_EDGE);
+  fill(g, outX + 12, outY + 8, 8, 8, PAINT_EDGE);
+  fill(g, outX + 6, outY + 10, 4, 4, JAMB_DARK);
+  fill(g, outX + 14, outY + 10, 4, 4, JAMB_DARK);
+  fill(g, outX + 10, outY + 20, 4, 4, PAINT_GROOVE);
+
+  fill(g, tabRight - 4, plugY - 8, 8, 16, 0x1a1c1e);
+  fill(g, tabRight, plugY - 6, 12, 12, 0xc8ccd0);
+  fill(g, tabRight + 4, plugY - 4, 8, 8, 0xe8eaee);
+  fill(g, tabRight + 8, plugY - 2, 4, 4, 0x4a5056);
+
+  const dropH = Math.max(PX, onSillY - (plugY - 2));
+  fill(g, startX, plugY - 2, 4, dropH, cable);
+  fill(g, startX + 4, plugY - 2, 4, dropH, cableSh);
+  const runW = Math.max(PX, outX + 4 - startX);
+  fill(g, startX, onSillY, runW, 4, cable);
+  fill(g, startX, onSillY + 4, runW, 4, cableSh);
+  const sagX = snap(startX + runW / 2 - 12);
+  fill(g, sagX, onSillY + 4, 24, 4, cable);
+  fill(g, sagX, onSillY + 8, 24, 4, cableSh);
+  const downH = Math.max(PX, outY + 12 - onSillY);
+  fill(g, outX + 4, onSillY, 4, downH, cable);
+  fill(g, outX + 8, onSillY, 4, downH, cableSh);
+  fill(g, outX - 4, outY + 10, 8, 8, 0x1a1c1e);
+  fill(g, outX - 2, outY + 12, 6, 4, 0x4a5056);
+}
+
+function tvBezel(g: Phaser.GameObjects.Graphics, left: number, top: number, w: number, h: number): void {
+  fill(g, left - 8, top + h, w + 16, 8, JAMB_DARK, 0.45);
+  fill(g, left - 8, top - 8, w + 16, h + 16, JAMB);
+  fill(g, left - 4, top - 4, w + 8, h + 8, PAINT_SHADE);
+  fill(g, left, top, w, h, 0x0a1210);
+  fill(g, left + 8, top + 4, 40, 4, PAINT_HI);
+  const slotH = Math.floor((h - 24) / STRAINS_PER_TV);
+  const blockTop = top + 12;
+  for (let s = 1; s < STRAINS_PER_TV; s++) {
+    fill(g, left + 10, blockTop + s * slotH, w - 20, 2, 0x1a2a22);
+  }
+}
+
+const POT_HOT = 0xffe8b0;
+const MOON = 0x6a88b0;
+
+function potCan(g: Phaser.GameObjects.Graphics, x: number): void {
+  fill(g, x - 18, 4, 36, 22, 0x1a1410);
+  fill(g, x - 14, 6, 28, 16, 0x2a2218);
+  fill(g, x - 12, 10, 24, 10, Color.gold);
+  fill(g, x - 8, 12, 16, 8, POT_HOT);
+  fill(g, x - 4, 14, 8, 5, 0xfff6d8);
+}
+
+/** Soft tungsten pools on the cream wall — stay above the chair rail / floor. */
+function potWallWash(g: Phaser.GameObjects.Graphics, x: number): void {
+  const winLeft = WINDOW.x - WINDOW.w / 2;
+  const winRight = WINDOW.x + WINDOW.w / 2;
+  const overGlass = x >= winLeft && x <= winRight;
+  const wallBottom = CHAIR_RAIL_Y - 8;
+  const rings = [
+    { y: 118, w: 200, h: 120, a: 0.15 },
+    { y: 118, w: 120, h: 84, a: 0.2 },
+    { y: 128, w: 64, h: 48, a: 0.24 },
+  ];
+  for (const r of rings) {
+    if (overGlass && r.y > WINDOW_TOP) continue;
+    const maxH = Math.max(16, (wallBottom - r.y) * 2);
+    const h = Math.min(r.h, maxH);
+    if (h < 16) continue;
+    g.fillStyle(POT_HOT, r.a);
+    g.fillEllipse(x, r.y, r.w, h);
+  }
+}
+
+/** Soft oval pools on the lobby boards under each can — wider sideways, not a slash. */
+function potFloorPool(g: Phaser.GameObjects.Graphics, x: number): void {
+  const y = COUNTER_FRONT + 92;
+  const rings = [
+    { w: 360, h: 220, a: 0.055 },
+    { w: 220, h: 150, a: 0.075 },
+    { w: 130, h: 100, a: 0.07 },
+  ];
+  for (const r of rings) {
+    g.fillStyle(POT_HOT, r.a);
+    g.fillEllipse(x, y, r.w, r.h);
+  }
+}
+
+type Clip = { x: number; y: number; w: number; h: number };
+
+/** Shared street width; each pane crops a different slice. */
+const STREET_W = 420;
+
+function streetOriginX(paneX: number, paneW: number, kind: "wide" | "door"): number {
+  return kind === "wide" ? paneX - Math.floor((STREET_W - paneW) / 2) : paneX - 188;
+}
+
+function drawSkyline(g: Phaser.GameObjects.Graphics, originX: number, y: number, h: number, sky: SkySample, clip: Clip): void {
+  const blocks = [
+    [36, 44, 0.4],
+    [248, 32, 0.5],
+    [356, 36, 0.36],
+  ] as const;
+  for (const [sx, bw, hf] of blocks) {
+    const bh = Math.floor(h * hf);
+    const top = y + Math.floor(h * 0.12);
+    fillClipped(g, originX + sx, top, bw, bh, sky.roof, clip);
+    fillClipped(g, originX + sx + 8, top + 12, 8, 10, 0xf0c070, clip, 0.1 + 0.45 * sky.windowGlow);
+  }
+}
+
+function drawShopfront(
+  g: Phaser.GameObjects.Graphics,
+  sx: number,
+  walkY: number,
+  bw: number,
+  bh: number,
+  clip: Clip,
+  sky: SkySample,
+  spec: {
+    wall: number;
+    hi: number;
+    shade: number;
+    trim: number;
+    awning: number;
+    stripe?: number;
+    shop: "brick" | "boutique" | "cafe" | "florist";
+    floors: number;
+  },
+): void {
+  const top = walkY - bh;
+  fillClipped(g, sx, top, bw, bh, spec.wall, clip);
+  fillClipped(g, sx, top, PX, bh, spec.hi, clip);
+  fillClipped(g, sx + bw - PX, top, PX, bh, spec.shade, clip);
+  fillClipped(g, sx - PX, top, bw + PX * 2, 8, spec.trim, clip);
+  fillClipped(g, sx - PX, top, bw + PX * 2, PX, spec.hi, clip);
+
+  if (spec.shop === "brick") {
+    for (let ly = top + 12; ly < walkY - 48; ly += 8) {
+      fillClipped(g, sx + 4, ly, bw - 8, PX, spec.shade, clip, 0.35);
+    }
+  }
+
+  const storeyH = Math.max(16, Math.floor((bh - 52) / spec.floors));
+  const winW = spec.floors >= 4 ? 10 : 12;
+  const gap = winW + 8;
+  const count = Math.max(1, Math.floor((bw - 16) / gap));
+  const start = sx + Math.floor((bw - count * gap + 8) / 2);
+  const lit = sky.windowGlow;
+  const glass = lit > 0.25 ? 0xf0c070 : Pal.glass;
+  for (let f = 0; f < spec.floors - 1; f++) {
+    const fy = top + 16 + f * storeyH;
+    for (let i = 0; i < count; i++) {
+      fillClipped(g, start + i * gap, fy, winW, Math.max(PX * 2, storeyH - 12), glass, clip, 0.35 + 0.55 * lit);
+      fillClipped(g, start + i * gap, fy, winW, PX, Pal.cream, clip, 0.3);
+    }
+  }
+
+  const awnY = walkY - 44;
+  fillClipped(g, sx + 4, awnY - 12, bw - 8, 10, spec.trim, clip);
+  if (spec.shop === "cafe") fillClipped(g, sx + 8, awnY - 10, bw - 16, 6, Pal.gold, clip);
+  else if (spec.shop === "florist") fillClipped(g, sx + 8, awnY - 10, bw - 16, 6, Pal.leaf, clip);
+  else if (spec.shop === "boutique") {
+    fillClipped(g, sx + 8, awnY - 10, bw - 16, 6, Pal.woodDark, clip);
+    fillClipped(g, sx + 12, awnY - 8, 8, PX, Pal.gold, clip);
+    fillClipped(g, sx + 24, awnY - 8, 6, PX, Pal.gold, clip);
   } else {
-    const poleX = x + Math.floor(w * 0.7);
-    const lampY = y + Math.floor(h * 0.2);
-    const poleH = Math.floor(h * 0.58);
-    fill(g, poleX - 36, lampY - 8, 56, 48, 0xf0c070, 0.16);
-    fill(g, poleX - 24, lampY, 40, 28, 0xc47868, 0.28);
-    fill(g, poleX - 4, lampY + 20, 6, poleH, 0x1a1014);
-    fill(g, poleX - 20, lampY + 16, 24, 4, 0x1a1014);
-    fill(g, poleX - 24, lampY - 4, 28, 4, 0x2a1824);
-    fill(g, poleX - 22, lampY, 24, 16, 0xf0c070);
-    fill(g, poleX - 18, lampY + 4, 16, 8, Color.cream);
-    fill(g, poleX - 16, lampY + 6, 8, 4, 0xfff0c0);
-    fill(g, poleX - 20, y + Math.floor(h * 0.72), 32, 12, 0xf0c070, 0.2);
+    fillClipped(g, sx + 8, awnY - 10, bw - 16, 6, Pal.rust, clip);
   }
 
-  const roofY = y + Math.floor(h * 0.78);
-  fill(g, x, roofY, w, h - Math.floor(h * 0.78), 0x2a1824);
-  fill(g, x + Math.floor(w * 0.08), roofY - 20, Math.floor(w * 0.2), 28, 0x2a1824);
-  fill(g, x + Math.floor(w * 0.12), roofY - 28, Math.floor(w * 0.12), 12, 0x2a1824);
-  fill(g, x + Math.floor(w * 0.48), roofY - 16, Math.floor(w * 0.28), 24, 0x2a1824);
-  fill(g, x + Math.floor(w * 0.56), roofY - 24, Math.floor(w * 0.14), 12, 0x2a1824);
-
-  if (accent === "lamp") {
-    const winX = x + Math.floor(w * 0.14);
-    const winY = roofY - 12;
-    fill(g, winX, winY, 10, 10, 0xf0c070, 0.7);
-    fill(g, winX + 18, winY + 4, 8, 8, 0xc47868, 0.55);
+  fillClipped(g, sx + 2, awnY, bw - 4, 12, spec.awning, clip);
+  if (spec.stripe) {
+    for (let ax = sx + 6; ax < sx + bw - 8; ax += 12) {
+      fillClipped(g, ax, awnY, 6, 12, spec.stripe, clip);
+    }
   }
+  fillClipped(g, sx + 2, awnY, bw - 4, PX, Pal.cream, clip, 0.35);
+
+  const dw = Math.max(PX * 3, Math.floor((bw - 24) / 2));
+  const dh = 24;
+  const dy = walkY - dh - 4;
+  const glow = 0.22 + 0.7 * sky.windowGlow;
+  fillClipped(g, sx + 6, dy, dw, dh, 0x2a2218, clip);
+  fillClipped(g, sx + 8, dy + 2, dw - 4, dh - 6, 0xf0c070, clip, glow);
+  fillClipped(g, sx + bw - 6 - dw, dy, dw, dh, 0x2a2218, clip);
+  fillClipped(g, sx + bw - 4 - dw, dy + 2, dw - 4, dh - 6, 0xf0c070, clip, glow * 0.85);
+  fillClipped(g, sx + Math.floor(bw / 2) - 4, dy + 4, 8, dh - 4, Pal.woodDark, clip);
+
+  if (spec.shop === "florist") {
+    fillClipped(g, sx + 8, dy - 4, dw - 4, 6, Pal.wood, clip);
+    fillClipped(g, sx + 10, dy - 8, PX, PX, Pal.leaf, clip);
+    fillClipped(g, sx + 16, dy - 10, PX, PX, Pal.gold, clip);
+    fillClipped(g, sx + 22, dy - 8, PX, PX, Pal.blush, clip);
+    fillClipped(g, sx + bw - dw, dy - 4, dw - 8, 6, Pal.wood, clip);
+    fillClipped(g, sx + bw - dw + 4, dy - 8, PX, PX, Color.leafBright, clip);
+    fillClipped(g, sx + bw - dw + 12, dy - 10, PX, PX, Pal.amber, clip);
+  }
+}
+
+function drawStreetLamp(g: Phaser.GameObjects.Graphics, lx: number, lampTop: number, poleH: number, sky: SkySample, clip: Clip): void {
+  fillClipped(g, lx, lampTop + 16, 6, poleH, 0x1a1014, clip);
+  fillClipped(g, lx - 16, lampTop + 12, 22, 4, 0x1a1014, clip);
+  fillClipped(g, lx - 20, lampTop - 4, 26, 4, 0x2a1824, clip);
+  if (sky.lampAlpha > 0.05) {
+    fillClipped(g, lx - 18, lampTop, 22, 14, 0xf0c070, clip, sky.lampAlpha);
+    fillClipped(g, lx - 14, lampTop + 4, 14, 6, Color.cream, clip, sky.lampAlpha);
+    fillClipped(g, lx - 12, lampTop + 6, 8, 4, 0xfff0c0, clip, sky.lampAlpha);
+  }
+}
+
+function drawStreetCar(
+  g: Phaser.GameObjects.Graphics,
+  left: number,
+  top: number,
+  dir: 1 | -1,
+  body: number,
+  sky: SkySample,
+  clip: Clip,
+  kind: "wide" | "door",
+): void {
+  const cw = kind === "wide" ? 56 : 36;
+  const ch = kind === "wide" ? 20 : 16;
+  const cabin = kind === "wide" ? 16 : 12;
+  const wheel = kind === "wide" ? 8 : 6;
+  fillClipped(g, left + 4, top + ch - PX, cw - 8, PX * 2, Pal.shadow, clip, 0.45);
+  fillClipped(g, left, top + 6, cw, ch - 8, body, clip);
+  fillClipped(g, left + 4, top + 4, cw - 8, 6, body, clip);
+  fillClipped(g, left + PX, top + 6, cw - PX * 2, PX, Pal.cream, clip, 0.22);
+  const cabinX = dir === 1 ? left + 8 : left + cw - 8 - cabin - 10;
+  fillClipped(g, cabinX, top, cabin + 10, 8, Pal.denimDark, clip);
+  fillClipped(g, cabinX + 2, top + PX, cabin, 6, Pal.glass, clip);
+  fillClipped(g, left + 6, top + ch - 6, wheel, 6, Pal.shoe, clip);
+  fillClipped(g, left + cw - 6 - wheel, top + ch - 6, wheel, 6, Pal.shoe, clip);
+  const night = Math.max(sky.lampAlpha, sky.moonAlpha * 0.65);
+  const head = dir === 1 ? left + cw - 4 : left;
+  const tail = dir === 1 ? left : left + cw - 4;
+  fillClipped(g, head, top + 8, 4, 4, Color.cream, clip, 0.35 + 0.65 * night);
+  fillClipped(g, tail, top + 8, 4, 4, Pal.amber, clip, 0.4 + 0.5 * night);
+  if (night > 0.12) {
+    const beamX = dir === 1 ? left + cw : left - 12;
+    fillClipped(g, beamX, top + 8, 12, 4, 0xfff0c0, clip, 0.18 * night);
+  }
+}
+
+/** Periods keep a car entering at hour=12 and hour=20.5 (those gameMs land on 15000). */
+const STREET_CARS: { period: number; offset: number; travel: number; dir: 1 | -1; body: number; lane: number }[] = [
+  { period: 15000, offset: 0, travel: 3500, dir: 1, body: Pal.rust, lane: 0 },
+  { period: 22000, offset: 9000, travel: 2800, dir: -1, body: Pal.denim, lane: 8 },
+  { period: 31000, offset: 18000, travel: 2600, dir: 1, body: Pal.leafDark, lane: 0 },
+];
+
+function paintPassingCars(
+  g: Phaser.GameObjects.Graphics,
+  originX: number,
+  streetY: number,
+  sky: SkySample,
+  clip: Clip,
+  kind: "wide" | "door",
+  gameMs: number,
+): void {
+  const cw = kind === "wide" ? 56 : 36;
+  const span = STREET_W + cw * 2;
+  for (const car of STREET_CARS) {
+    if (kind === "door" && car.period > 23000) continue;
+    const phase = ((gameMs + car.offset) % car.period + car.period) % car.period;
+    if (phase >= car.travel) continue;
+    const t = phase / car.travel;
+    const x = car.dir === 1 ? originX - cw + t * span : originX + STREET_W - t * span;
+    drawStreetCar(g, x, streetY + car.lane, car.dir, car.body, sky, clip, kind);
+  }
+}
+
+function paintBoutiqueBlock(
+  g: Phaser.GameObjects.Graphics,
+  originX: number,
+  y: number,
+  h: number,
+  sky: SkySample,
+  clip: Clip,
+): void {
+  const walkY = y + Math.floor(h * 0.7);
+  drawSkyline(g, originX, y, h, sky, clip);
+  drawShopfront(g, originX + 8, walkY, 96, Math.floor(h * 0.54), clip, sky, {
+    wall: Pal.rust,
+    hi: Pal.amber,
+    shade: Pal.rustDark,
+    trim: Pal.woodDark,
+    awning: Pal.creamSoft,
+    shop: "brick",
+    floors: 4,
+  });
+  drawShopfront(g, originX + 108, walkY, 92, Math.floor(h * 0.46), clip, sky, {
+    wall: Pal.creamSoft,
+    hi: Pal.cream,
+    shade: Pal.kraft,
+    trim: Pal.wood,
+    awning: Pal.denim,
+    shop: "boutique",
+    floors: 3,
+  });
+  drawShopfront(g, originX + 204, walkY, 104, Math.floor(h * 0.44), clip, sky, {
+    wall: Pal.wall,
+    hi: 0xffffff,
+    shade: Pal.wainscot,
+    trim: Pal.woodTrim,
+    awning: Pal.cream,
+    stripe: Pal.amber,
+    shop: "cafe",
+    floors: 3,
+  });
+  drawShopfront(g, originX + 312, walkY, 100, Math.floor(h * 0.36), clip, sky, {
+    wall: Pal.leaf,
+    hi: Color.leafBright,
+    shade: Pal.leafDark,
+    trim: Pal.woodDark,
+    awning: Pal.creamSoft,
+    stripe: Pal.leafDark,
+    shop: "florist",
+    floors: 2,
+  });
+}
+
+function paintStreet(
+  g: Phaser.GameObjects.Graphics,
+  originX: number,
+  y: number,
+  h: number,
+  clip: Clip,
+): void {
+  const walkY = y + Math.floor(h * 0.7);
+  const curbY = y + Math.floor(h * 0.76);
+  const roadY = y + Math.floor(h * 0.78);
+  fillClipped(g, originX, walkY, STREET_W, curbY - walkY, Pal.curb, clip);
+  fillClipped(g, originX, walkY, STREET_W, PX, Pal.cream, clip, 0.2);
+  fillClipped(g, originX, curbY, STREET_W, roadY - curbY, Pal.asphaltLite, clip);
+  fillClipped(g, originX, roadY, STREET_W, y + h - roadY, Pal.asphaltDark, clip);
+  fillClipped(g, originX, roadY + PX, STREET_W, Math.max(PX, y + h - roadY - PX * 2), Pal.asphalt, clip);
+  const dashY = roadY + Math.floor((y + h - roadY) * 0.42);
+  for (let dx = originX + 8; dx < originX + STREET_W; dx += 28) {
+    fillClipped(g, dx, dashY, 16, PX, Pal.dash, clip);
+  }
+}
+
+function paintOutside(
+  g: Phaser.GameObjects.Graphics,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  sky: SkySample,
+  kind: "wide" | "door",
+  gameMs = 0,
+): void {
+  const clip = { x, y, w, h };
+  fill(g, x, y, w, Math.floor(h * 0.34), sky.zenith);
+  fill(g, x, y + Math.floor(h * 0.28), w, Math.floor(h * 0.18), sky.haze);
+  fill(g, x, y + Math.floor(h * 0.44), w, Math.floor(h * 0.18), sky.glow);
+  fill(g, x, y + Math.floor(h * 0.6), w, Math.floor(h * 0.16), sky.earth);
+  fill(g, x, y + Math.floor(h * 0.74), w, h - Math.floor(h * 0.74), sky.earth);
+
+  if (sky.starAlpha > 0.04) {
+    const stars = [
+      [0.08, 0.1],
+      [0.22, 0.22],
+      [0.4, 0.08],
+      [0.62, 0.18],
+      [0.82, 0.12],
+      [0.3, 0.3],
+    ];
+    for (const [sx, sy] of stars) {
+      fill(g, x + Math.floor(w * sx!), y + Math.floor(h * sy!), PX, PX, Color.cream, sky.starAlpha * 0.7);
+    }
+  }
+
+  if (kind === "wide" && sky.sunAlpha > 0.05) {
+    const sunX = x + Math.floor(w * sky.sunX);
+    const sunY = y + Math.floor(h * sky.sunY);
+    const r = kind === "wide" ? 22 : 10;
+    fill(g, sunX - r - 8, sunY - r - 6, r * 2 + 16, r * 2 + 12, sky.sunColor, 0.18 * sky.sunAlpha);
+    fill(g, sunX - r, sunY - r, r * 2, r * 2, sky.sunColor, sky.sunAlpha);
+    fill(g, sunX - Math.floor(r * 0.45), sunY - Math.floor(r * 0.45), Math.floor(r * 0.9), Math.floor(r * 0.9), 0xfff6d8, sky.sunAlpha);
+  }
+
+  if (sky.moonAlpha > 0.05) {
+    const moonX = x + Math.floor(w * sky.moonX);
+    const moonY = y + Math.floor(h * sky.moonY);
+    const r = kind === "wide" ? 12 : 6;
+    fill(g, moonX - r - 8, moonY - r - 8, r * 2 + 16, r * 2 + 16, MOON, 0.16 * sky.moonAlpha);
+    fill(g, moonX - r, moonY - r, r * 2, r * 2, 0xd8c898, sky.moonAlpha);
+    fill(g, moonX - Math.floor(r * 0.35), moonY - Math.floor(r * 0.35), Math.floor(r * 0.7), Math.floor(r * 0.7), 0xf0e8c8, sky.moonAlpha);
+  }
+
+  const originX = streetOriginX(x, w, kind);
+  paintBoutiqueBlock(g, originX, y, h, sky, clip);
+  paintStreet(g, originX, y, h, clip);
+  const lampX = originX + 300;
+  const lampTop = y + Math.floor(h * 0.18);
+  drawStreetLamp(g, lampX, lampTop, Math.floor(h * 0.52), sky, clip);
+  const streetY = y + Math.floor(h * 0.8);
+  paintPassingCars(g, originX, streetY, sky, clip, kind, gameMs);
 
   fill(g, x + 6, y + 8, Math.max(PX * 2, Math.floor(w * 0.05)), h - 16, Color.cream, 0.1);
 }
 
-function drawNightGlass(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number): void {
-  drawDuskOutside(g, x, y, w, h, "lamp");
+function streetDoorGlass(): { x: number; y: number; w: number; h: number } {
+  const left = DOOR.x - DOOR_W / 2;
+  const top = COUNTER_FRONT - DOOR_H;
+  const glassW = Math.floor(DOOR_W * 0.62);
+  const glassH = Math.floor(DOOR_H * 0.52);
+  return {
+    x: left + Math.floor((DOOR_W - glassW) / 2),
+    y: top + Math.floor(DOOR_H * 0.16),
+    w: glassW,
+    h: glassH,
+  };
+}
+
+/** Live sky in the delivery window only. Do not paint streetDoorGlass — the door is opaque. */
+export function paintShopDayNight(g: Phaser.GameObjects.Graphics, gameMs: number): void {
+  g.clear();
+  const sky = skyAt(gameMs);
+  const winLeft = WINDOW.x - WINDOW.w / 2;
+  const winTop = WINDOW_TOP;
+  const winH = WINDOW.h;
+  paintOutside(g, winLeft, winTop, WINDOW.w, winH, sky, "wide", gameMs);
+  fill(g, winLeft, winTop, WINDOW.w, 8, PAINT_HI);
+  fill(g, winLeft, winTop, 8, winH, PAINT_HI);
+  fill(g, winLeft + WINDOW.w - 8, winTop, 8, winH, PAINT_EDGE);
+  fill(g, WINDOW.x - 4, winTop, 8, winH, PAINT_EDGE);
+  fill(g, winLeft, CHAIR_RAIL_Y, WINDOW.w, CHAIR_RAIL_GREY_H, PAINT_EDGE);
+  fill(g, winLeft, CHAIR_RAIL_Y + CHAIR_RAIL_GREY_H, WINDOW.w, CHAIR_RAIL_WHITE_H, PAINT_HI);
+}
+
+function drawDuskOutside(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number, accent: "moon" | "lamp"): void {
+  paintOutside(g, x, y, w, h, skyAt(0), accent === "moon" ? "wide" : "door");
+}
+
+function paintDoorHoursPanel(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number): void {
+  fill(g, x, y, w, h, PAINT_EDGE);
+  fill(g, x + PX, y + PX, w - PX * 2, h - PX * 2, Pal.creamSoft);
+  fill(g, x + PX * 2, y + PX * 2, w - PX * 4, h - PX * 4, Pal.cream);
+  fill(g, x + PX * 2, y + PX * 2, w - PX * 4, PX, PAINT_HI);
+  fill(g, x + PX * 2, y + PX * 2, PX, h - PX * 4, PAINT_HI);
+  fill(g, x + w - PX * 3, y + PX * 2, PX, h - PX * 4, Pal.kraft);
+  fill(g, x + PX * 2, y + h - PX * 3, w - PX * 4, PX, Pal.kraft);
+}
+
+function drawStreetDoorHours(scene: Phaser.Scene): void {
+  const pane = streetDoorGlass();
+  const cx = pane.x + pane.w / 2;
+  const inset = 12;
+  const maxW = pane.w - inset * 2;
+  addMark(scene, cx, pane.y + Math.floor(pane.h * 0.34), {
+    size: Type.heading,
+    color: Color.inkHex,
+    align: "center",
+    maxWidth: maxW,
+  })
+    .setOrigin(0.5)
+    .setDepth(1);
+  const hours = addUiText(scene, cx, pane.y + Math.floor(pane.h * 0.64), HOURS, {
+    size: Type.caption,
+    color: Color.inkHex,
+    fontStyle: "600",
+    align: "center",
+    lineSpacing: 2,
+    strokeThickness: 0,
+    wordWrap: { width: maxW },
+  })
+    .setOrigin(0.5)
+    .setDepth(1);
+  fitTypeToWidth(hours, maxW, 12);
+}
+
+/** Soft rim on the delivery-window frame — edge only, no pane disc or bench spill. */
+export function paintWindowGlow(g: Phaser.GameObjects.Graphics, gameMs: number): void {
+  g.clear();
+  const look = windowGlowLook(skyAt(gameMs));
+  if (look.alpha < 0.012) return;
+
+  const left = WINDOW.x - WINDOW.w / 2;
+  const top = WINDOW_TOP;
+  const w = WINDOW.w;
+  const h = WINDOW.h;
+  const corner = 8;
+
+  const halo = [
+    { inset: -2, lw: 5, a: 0.72 },
+    { inset: -9, lw: 8, a: 0.34 },
+    { inset: -17, lw: 10, a: 0.15 },
+    { inset: -26, lw: 12, a: 0.06 },
+  ];
+  for (const ring of halo) {
+    g.lineStyle(ring.lw, look.color, look.alpha * ring.a);
+    g.strokeRoundedRect(left + ring.inset, top + ring.inset, w - ring.inset * 2, h - ring.inset * 2, corner);
+  }
+
+  g.lineStyle(3, look.color, look.alpha * 0.48);
+  g.strokeRoundedRect(left + 6, top + 6, w - 12, h - 12, 5);
+
+  g.lineStyle(3, look.color, look.alpha * 0.22);
+  g.lineBetween(WINDOW.x, top + 8, WINDOW.x, top + h - 8);
 }
 
 function clipFill(
@@ -170,84 +738,113 @@ function drawDoor(
 
   if (kind === "glass") {
     const reveal = 8;
+    const threshH = 16;
     fill(g, left - reveal, top - reveal, w + reveal * 2, h + reveal, JAMB_DARK);
     fill(g, left - reveal + 4, top - reveal + 4, w + reveal * 2 - 4, h + reveal - 4, JAMB);
     fill(g, left - reveal, top - reveal, w + reveal * 2, 8, JAMB_HI);
     fill(g, left - reveal, top - reveal, w + reveal * 2, 4, PAINT_HI);
     fill(g, left - reveal, top, 8, h, JAMB_DARK);
     fill(g, left + w, top, 8, h, JAMB);
-    fill(g, left - reveal, floorY - 4, w + reveal * 2, 4, 0x3a3c3e);
 
     fill(g, left + 4, top + 4, w - 8, h - 4, PAINT);
     fill(g, left + 4, top + 4, 6, h - 4, PAINT_HI);
     fill(g, left + w - 10, top + 4, 6, h - 4, PAINT_SHADE);
     fill(g, left + 4, top + 4, w - 8, 6, PAINT_HI);
 
+    fill(g, left - reveal, floorY, w + reveal * 2, threshH, Pal.wood);
+    fill(g, left - reveal, floorY, w + reveal * 2, 4, Pal.woodLight);
+    fill(g, left - reveal, floorY + threshH - 4, w + reveal * 2, 4, Pal.woodDark);
+    fill(g, left - reveal, floorY, 4, threshH, Pal.woodLight);
+    fill(g, left + w + reveal - 4, floorY, 4, threshH, Pal.woodDark);
+
     const glassW = Math.floor(w * 0.62);
     const glassH = Math.floor(h * 0.52);
     const glassX = left + Math.floor((w - glassW) / 2);
     const glassY = top + Math.floor(h * 0.16);
-    fill(g, glassX - 6, glassY - 6, glassW + 12, glassH + 12, JAMB_DARK);
+    fill(g, glassX - 8, glassY - 8, glassW + 16, glassH + 16, JAMB_DARK);
     fill(g, glassX - 4, glassY - 4, glassW + 8, glassH + 8, PAINT_HI);
-    drawNightGlass(g, glassX, glassY, glassW, glassH);
-    fill(g, glassX, glassY, glassW, 4, PAINT_HI);
-    fill(g, glassX, glassY, 4, glassH, PAINT_HI);
-    fill(g, glassX + glassW - 4, glassY, 4, glassH, PAINT_EDGE);
-    fill(g, glassX, glassY + glassH - 4, glassW, 4, PAINT_SHADE);
+    paintDoorHoursPanel(g, glassX, glassY, glassW, glassH);
 
-    fill(g, left + 12, top + h - 44, w - 24, 36, JAMB);
-    fill(g, left + 16, top + h - 40, w - 32, 4, JAMB_HI);
+    fill(g, left + 12, top + h - 40, w - 24, 40, JAMB);
+    fill(g, left + 16, top + h - 36, w - 32, 4, JAMB_HI);
+    fill(g, left + 12, top + h - 8, w - 24, 8, JAMB_DARK);
 
     const handleX = left + w - 22;
     const handleY = top + Math.floor(h * 0.48);
+    fill(g, handleX - 6, handleY - 14, 16, 36, JAMB_DARK);
     fill(g, handleX - 2, handleY - 10, 8, 28, 0x6a6e72);
-    fill(g, handleX, handleY - 8, 4, 24, 0xc8ccd0);
+    fill(g, handleX, handleY - 8, 4, 24, 0xe8eaee);
     fill(g, handleX - 16, handleY - 4, 22, 8, 0xa8acb0);
-    fill(g, handleX - 16, handleY - 4, 22, 3, 0xe8eaee);
-    fill(g, handleX - 18, handleY - 2, 8, 6, 0xd0d4d8);
+    fill(g, handleX - 16, handleY - 4, 22, 3, 0xffffff);
+    fill(g, handleX - 18, handleY - 2, 8, 6, 0xc8ccd0);
     return;
   }
 
-  clipFill(g, left - 8, top - 8, w + 16, h + 8, JAMB_DARK, clipBottom);
-  clipFill(g, left - 4, top - 4, w + 8, 8, JAMB_HI, clipBottom);
-  clipFill(g, left - 4, top, 8, h, JAMB_HI, clipBottom);
-  clipFill(g, left + w - 4, top, 8, h, JAMB_HI, clipBottom);
+  const stile = 24;
+  const topRail = 24;
+  const lockRail = 28;
+  const paneW = w - stile * 2;
+  const paneX = left + stile;
+  const upperH = Math.floor(h * 0.36);
+  const lockY = top + topRail + upperH;
 
-  clipFill(g, left, top, w, h, PAINT, clipBottom);
-  clipFill(g, left, top, 8, h, PAINT_HI, clipBottom);
-  clipFill(g, left, top, w, 8, PAINT_HI, clipBottom);
-  clipFill(g, left + w - 8, top, 8, h, PAINT_SHADE, clipBottom);
+  clipFill(g, left - 8, top - 8, w + 16, h + 8, Pal.ink, clipBottom);
+  clipFill(g, left - 4, top - 4, w + 8, 8, Pal.woodLight, clipBottom);
+  clipFill(g, left - 4, top, 8, h, Pal.woodDark, clipBottom);
+  clipFill(g, left + w - 4, top, 8, h, Pal.shadow, clipBottom);
 
-  for (let x = left + 16; x < left + w - 12; x += 20) {
-    clipFill(g, x, top + 8, PX, h - 16, PAINT_GROOVE, clipBottom);
-    clipFill(g, x + PX, top + 8, PX, h - 16, PAINT_SHADE, clipBottom);
+  clipFill(g, left, top, w, h, Pal.wood, clipBottom);
+  clipFill(g, left, top, 8, h, Pal.woodLight, clipBottom);
+  clipFill(g, left, top, w, 8, Pal.woodLight, clipBottom);
+  clipFill(g, left + w - 8, top, 8, h, Pal.woodDark, clipBottom);
+
+  for (let x = left + 12; x < left + w - 8; x += 16) {
+    clipFill(g, x, top + 8, PX, h - 16, Pal.woodDark, clipBottom);
+    clipFill(g, x + PX, top + 8, PX, h - 16, Pal.woodTrim, clipBottom);
+  }
+
+  clipFill(g, paneX, top + PX, paneW, topRail - PX, Pal.wood, clipBottom);
+  clipFill(g, paneX, top + PX, paneW, PX, Pal.woodLight, clipBottom);
+  for (let y = top + PX * 3; y < top + topRail - PX; y += PX * 2) {
+    clipFill(g, paneX + PX, y, paneW - PX * 2, PX, Pal.woodDark, clipBottom);
   }
 
   const inset = (ix: number, iy: number, iw: number, ih: number) => {
-    clipFill(g, ix, iy, iw, ih, JAMB_DARK, clipBottom);
-    clipFill(g, ix + 4, iy + 4, iw - 8, ih - 8, PAINT_PANEL, clipBottom);
-    clipFill(g, ix + 8, iy + 8, iw - 16, ih - 16, PAINT, clipBottom);
-    clipFill(g, ix + 8, iy + 8, iw - 16, 4, PAINT_HI, clipBottom);
-    clipFill(g, ix + 8, iy + 8, 4, ih - 16, PAINT_HI, clipBottom);
-    for (let x = ix + 20; x < ix + iw - 16; x += 16) {
-      clipFill(g, x, iy + 12, PX, ih - 24, PAINT_GROOVE, clipBottom);
+    clipFill(g, ix, iy, iw, ih, Pal.ink, clipBottom);
+    clipFill(g, ix + PX, iy + PX, iw - PX * 2, ih - PX * 2, Pal.shadow, clipBottom);
+    clipFill(g, ix + PX * 2, iy + PX * 2, iw - PX * 4, ih - PX * 4, Pal.woodDark, clipBottom);
+    clipFill(g, ix + PX, iy + PX, iw - PX * 2, PX, Pal.ink, clipBottom);
+    clipFill(g, ix + PX, iy + PX, PX, ih - PX * 2, Pal.ink, clipBottom);
+    clipFill(g, ix + PX, iy + ih - PX * 2, iw - PX * 2, PX, Pal.woodLight, clipBottom);
+    clipFill(g, ix + iw - PX * 2, iy + PX, PX, ih - PX * 2, Pal.woodTrim, clipBottom);
+    for (let x = ix + PX * 4; x < ix + iw - PX * 3; x += 12) {
+      clipFill(g, x, iy + PX * 3, PX, ih - PX * 6, Pal.ink, clipBottom);
     }
   };
-  const paneW = w - 40;
-  const paneX = left + 20;
-  inset(paneX, top + 20, paneW, Math.floor(h * 0.36));
-  inset(paneX, top + 28 + Math.floor(h * 0.36), paneW, Math.floor(h * 0.38));
+  clipFill(g, paneX - PX, top + topRail, PX, h - topRail - 24, Pal.ink, clipBottom);
+  clipFill(g, paneX + paneW, top + topRail, PX, h - topRail - 24, Pal.ink, clipBottom);
+  inset(paneX, top + topRail, paneW, upperH);
+
+  clipFill(g, left + 8, lockY, w - 16, lockRail, Pal.wood, clipBottom);
+  clipFill(g, left + 8, lockY, w - 16, PX, Pal.woodLight, clipBottom);
+  clipFill(g, left + 8, lockY + lockRail - PX, w - 16, PX, Pal.woodDark, clipBottom);
+  for (let y = lockY + PX * 2; y < lockY + lockRail - PX; y += PX * 2) {
+    clipFill(g, left + 12, y, w - 24, PX, Pal.woodDark, clipBottom);
+  }
+
+  inset(paneX, lockY + lockRail, paneW, Math.floor(h * 0.38));
 
   const leverX = left + w - 22;
   const leverY = top + Math.floor(h * 0.48);
-  clipFill(g, leverX - 2, leverY - 10, 8, 28, 0x6a6e72, clipBottom);
-  clipFill(g, leverX, leverY - 8, 4, 24, 0xc8ccd0, clipBottom);
-  clipFill(g, leverX - 16, leverY - 4, 22, 8, 0xa8acb0, clipBottom);
-  clipFill(g, leverX - 16, leverY - 4, 22, 3, 0xe8eaee, clipBottom);
-  clipFill(g, leverX - 18, leverY - 2, 8, 6, 0xd0d4d8, clipBottom);
+  clipFill(g, leverX - 6, leverY - 12, 16, 32, Pal.ink, clipBottom);
+  clipFill(g, leverX - 2, leverY - 10, 8, 28, Pal.woodDark, clipBottom);
+  clipFill(g, leverX, leverY - 8, 4, 24, Pal.gold, clipBottom);
+  clipFill(g, leverX - 16, leverY - 4, 22, 8, Pal.woodLight, clipBottom);
+  clipFill(g, leverX - 16, leverY - 4, 22, 3, Pal.cream, clipBottom);
+  clipFill(g, leverX - 18, leverY - 2, 8, 6, Pal.gold, clipBottom);
 }
 
-const BOARD = [0x7a4a28, 0x6a3e22, 0x8a522c, Color.woodDark, 0x6a3a20];
+const BOARD = [0xc4a878, 0xb49464, 0xccb080, 0xa07c54, 0xbe9c70];
 
 function drawBoardFloor(g: Phaser.GameObjects.Graphics): void {
   const boardH = 32;
@@ -256,14 +853,43 @@ function drawBoardFloor(g: Phaser.GameObjects.Graphics): void {
   while (y < GAME_HEIGHT) {
     const h = Math.min(boardH, GAME_HEIGHT - y);
     fill(g, 0, y, GAME_WIDTH, h, BOARD[i % BOARD.length]!);
-    fill(g, 0, y, GAME_WIDTH, 4, Color.wood);
-    fill(g, 0, y + h - 4, GAME_WIDTH, 4, 0x3a2214);
+    fill(g, 0, y, GAME_WIDTH, 4, 0xd0b888);
+    fill(g, 0, y + h - 4, GAME_WIDTH, 4, 0x8a6038);
     const stagger = i % 2 === 0 ? 48 : 168;
-    for (let x = stagger; x < GAME_WIDTH; x += 256) fill(g, x, y, PX, h, Color.woodDark);
-    fill(g, 80 + (i % 3) * 120, y + 8, 96, 4, i % 2 === 0 ? 0x8a5a32 : 0x4a2818);
+    for (let x = stagger; x < GAME_WIDTH; x += 256) fill(g, x, y, PX, h, 0xb89068);
+    fill(g, 80 + (i % 3) * 120, y + 8, 96, 4, i % 2 === 0 ? 0xd0b888 : 0x8a6038);
     y += boardH;
     i += 1;
   }
+}
+
+function drawKindlingMat(scene: Phaser.Scene, g: Phaser.GameObjects.Graphics): void {
+  const w = DOOR_W + 28;
+  const h = 148;
+  const x = DOOR.x - w / 2;
+  const y = COUNTER_FRONT + 16;
+  fill(g, x + 6, y + h - 4, w - 4, 10, 0x1a1008, 0.4);
+  fill(g, x, y, w, h, Pal.leafDark);
+  fill(g, x + 4, y + 4, w - 8, h - 8, Pal.leaf);
+  fill(g, x + 8, y + 8, w - 16, h - 16, Color.leafBright);
+  for (let i = y + 12; i < y + h - 12; i += 8) {
+    fill(g, x + 10, i, w - 20, PX, Pal.leaf, 0.45);
+  }
+  fill(g, x + 4, y + 4, w - 8, 4, 0x7ab082);
+  fill(g, x + 4, y + h - 8, w - 8, 4, Pal.leafDark);
+  for (let fy = y + 8; fy < y + h - 8; fy += 8) {
+    fill(g, x, fy, 4, 4, Pal.leaf);
+    fill(g, x + w - 4, fy, 4, 4, Pal.leaf);
+  }
+  addMark(scene, DOOR.x, y + Math.floor(h / 2), {
+    size: Type.title,
+    color: Color.creamHex,
+    stroke: "#2a4a30",
+    strokeThickness: 2,
+    maxWidth: w - 48,
+  })
+    .setOrigin(0.5)
+    .setDepth(1);
 }
 
 function drawStaffDoor(scene: Phaser.Scene): void {
@@ -275,55 +901,59 @@ export function drawShopInterior(scene: Phaser.Scene): void {
   const g = scene.add.graphics();
 
   fill(g, 0, 0, GAME_WIDTH, COUNTER_FRONT, WALL);
-  fill(g, 0, 28, GAME_WIDTH, 48, WALL_SHADE, 0.35);
 
-  fill(g, 0, COUNTER_TOP - 92, GAME_WIDTH, COUNTER_FRONT - (COUNTER_TOP - 92), WAINSCOT);
-  for (let x = 0; x < GAME_WIDTH; x += 48) fill(g, x, COUNTER_TOP - 92, PX, COUNTER_FRONT - (COUNTER_TOP - 92), WAINSCOT_LINE);
-  fill(g, 0, COUNTER_TOP - 96, GAME_WIDTH, 8, WOOD_LO);
-  fill(g, 0, COUNTER_TOP - 88, GAME_WIDTH, 8, WOOD_EDGE);
+  fill(g, 0, COUNTER_TOP - 110, GAME_WIDTH, COUNTER_FRONT - (COUNTER_TOP - 110), WAINSCOT);
+  for (let x = 0; x < GAME_WIDTH; x += 48) fill(g, x, COUNTER_TOP - 110, PX, COUNTER_FRONT - (COUNTER_TOP - 110), WAINSCOT_LINE);
+  fill(g, 0, CHAIR_RAIL_Y, GAME_WIDTH, CHAIR_RAIL_GREY_H, PAINT_EDGE);
+  fill(g, 0, CHAIR_RAIL_Y + CHAIR_RAIL_GREY_H, GAME_WIDTH, CHAIR_RAIL_WHITE_H, PAINT_HI);
 
-  fill(g, 0, 0, GAME_WIDTH, 28, WOOD_LO);
-  fill(g, 0, 28, GAME_WIDTH, 4, WOOD_HI);
+  fill(g, 0, 0, GAME_WIDTH, 28, 0x5a5c5c);
+  fill(g, 0, 28, GAME_WIDTH, 4, 0x8a8c88);
 
-  const pots = [170, 430, 760, 1100, 1440, 1760];
-  for (const x of pots) potLight(g, x);
+  const pots = ceilingPots();
+  for (const x of pots) potWallWash(g, x);
+  for (const x of pots) potCan(g, x);
 
   for (let i = 0; i < TV_COUNT; i++) {
     const p = tvPos(i);
     tvBezel(g, p.x - TV_W / 2, p.y - TV_H / 2, TV_W, TV_H);
   }
 
-  const orders = tabletLayout();
-  tvBezel(g, orders.left, orders.top, orders.w, orders.h);
-  fill(g, orders.screenLeft, orders.screenTop, orders.screenW, orders.headerH, Color.woodLight);
+  drawPassWindow(g);
+  drawSillBench(scene);
+  drawTabletCharger(scene);
+  drawTabletOnSill(scene);
 
   const winLeft = WINDOW.x - WINDOW.w / 2;
-  const winTop = BENCH.y - WINDOW.h;
+  const winTop = WINDOW_TOP;
   const winH = WINDOW.h;
   const reveal = 8;
-  fill(g, winLeft - reveal, winTop - reveal, WINDOW.w + reveal * 2, winH + reveal, WOOD_REVEAL);
-  fill(g, winLeft - reveal + 4, winTop - reveal + 4, WINDOW.w + reveal * 2 - 4, winH + reveal - 4, WOOD_REVEAL_IN);
-  fill(g, winLeft - reveal, winTop - reveal, WINDOW.w + reveal * 2, 8, WOOD_HI);
-  fill(g, winLeft - reveal, winTop - reveal, WINDOW.w + reveal * 2, 4, WOOD_MID);
-  fill(g, winLeft - reveal, winTop, 8, winH, WOOD_LO);
-  fill(g, winLeft + WINDOW.w, winTop, 8, winH, WOOD_MID);
+  fill(g, winLeft - reveal, winTop - reveal, WINDOW.w + reveal * 2, winH + reveal, JAMB_DARK);
+  fill(g, winLeft - reveal + 4, winTop - reveal + 4, WINDOW.w + reveal * 2 - 4, winH + reveal - 4, JAMB);
+  fill(g, winLeft - reveal, winTop - reveal, WINDOW.w + reveal * 2, 8, JAMB_HI);
+  fill(g, winLeft - reveal, winTop - reveal, WINDOW.w + reveal * 2, 4, PAINT_HI);
+  fill(g, winLeft - reveal, winTop, 8, winH, JAMB_DARK);
+  fill(g, winLeft + WINDOW.w, winTop, 8, winH, JAMB);
 
   drawDuskOutside(g, winLeft, winTop, WINDOW.w, winH, "moon");
 
-  fill(g, winLeft, winTop, WINDOW.w, 8, WOOD_HI);
-  fill(g, winLeft, winTop, 8, winH, WOOD_HI);
-  fill(g, winLeft + WINDOW.w - 8, winTop, 8, winH, WOOD_HI);
-  fill(g, WINDOW.x - 4, winTop, 8, winH, WOOD_HI);
-  fill(g, winLeft, winTop + Math.floor(winH / 2) - 4, WINDOW.w, 8, WOOD_HI);
-  fill(g, winLeft, winTop + winH - 8, WINDOW.w, 8, WOOD_MID);
+  fill(g, winLeft, winTop, WINDOW.w, 8, PAINT_HI);
+  fill(g, winLeft, winTop, 8, winH, PAINT_HI);
+  fill(g, winLeft + WINDOW.w - 8, winTop, 8, winH, PAINT_EDGE);
+  fill(g, WINDOW.x - 4, winTop, 8, winH, PAINT_EDGE);
+  fill(g, winLeft, CHAIR_RAIL_Y, WINDOW.w, CHAIR_RAIL_GREY_H, PAINT_EDGE);
+  fill(g, winLeft, CHAIR_RAIL_Y + CHAIR_RAIL_GREY_H, WINDOW.w, CHAIR_RAIL_WHITE_H, PAINT_HI);
 
   drawBoardFloor(g);
+  for (const x of pots) potFloorPool(g, x);
 
   drawDoor(g, DOOR.x, COUNTER_FRONT, DOOR_W, DOOR_H, "glass");
+  drawStreetDoorHours(scene);
+  drawKindlingMat(scene, g);
 
   const seatY = BENCH.y;
-  const benchLeft = COUNTER_RIGHT;
-  const benchW = GAME_WIDTH - 28 - benchLeft;
+  const benchLeft = BENCH_LEFT;
+  const benchW = BENCH_W;
   const benchH = COUNTER_FRONT - seatY;
   fill(g, benchLeft + 8, COUNTER_FRONT, benchW, 12, 0x1a1008, 0.5);
   fill(g, benchLeft - 12, seatY - 8, 12, benchH + 8, 0xc8c4bc);
@@ -341,13 +971,20 @@ export function drawShopInterior(scene: Phaser.Scene): void {
   fill(g, benchLeft + 24, seatY - 26, 48, 4, 0x3a3836);
   fill(g, benchLeft, seatY - 4, benchW, 8, 0x080604);
 
+  const sillY = winTop + winH;
+  const sillH = 12;
+  fill(g, winLeft - 6, sillY + sillH, WINDOW.w + 12, 4, 0x1a1008, 0.25);
+  fill(g, winLeft - 6, sillY, WINDOW.w + 12, sillH, PAINT);
+  fill(g, winLeft - 6, sillY, WINDOW.w + 12, 4, PAINT_HI);
+  fill(g, winLeft - 6, sillY + sillH - 4, WINDOW.w + 12, 4, PAINT_SHADE);
+
   drawStaffDoor(scene);
 }
 
 export function drawShopCounter(scene: Phaser.Scene): Phaser.GameObjects.Graphics {
   const g = scene.add.graphics().setDepth(7);
   const w = COUNTER_RIGHT - COUNTER_LEFT;
-  const depth = 28;
+  const depth = 24;
   const topBack = COUNTER_TOP - depth;
   const grey = 0x8e9090;
   const greyLite = 0xa4a6a6;
@@ -357,6 +994,9 @@ export function drawShopCounter(scene: Phaser.Scene): Phaser.GameObjects.Graphic
   fill(g, COUNTER_LEFT - 16, topBack + 8, 16, COUNTER_FRONT - (topBack + 8), PAINT_SHADE);
 
   fill(g, COUNTER_LEFT, COUNTER_TOP, w, faceH, PAINT);
+  fill(g, COUNTER_LEFT, COUNTER_TOP, 88, faceH, 0x2a2218, 0.08);
+  fill(g, COUNTER_RIGHT - 88, COUNTER_TOP, 88, faceH, 0x2a2218, 0.08);
+  fill(g, COUNTER_LEFT, COUNTER_FRONT - 28, w, 28, 0x1a1410, 0.1);
   fill(g, COUNTER_LEFT, COUNTER_FRONT - 8, w, 8, PAINT_EDGE);
 
   fill(g, COUNTER_LEFT, topBack, w, depth, grey);
@@ -366,19 +1006,19 @@ export function drawShopCounter(scene: Phaser.Scene): Phaser.GameObjects.Graphic
   fill(g, BAG_STACK.x - 24, BAG_STACK.y - 8, 48, 8, greyEdge);
 
   const cx = COUNTER_MID;
-  const plaqueH = 48;
-  const plaqueW = 280;
+  const plaqueH = 56;
+  const plaqueW = 320;
   const plaqueTop = COUNTER_TOP + Math.floor((faceH - plaqueH) / 2);
-  fill(g, cx - plaqueW / 2, plaqueTop, plaqueW, plaqueH, PAINT_SHADE);
-  fill(g, cx - plaqueW / 2 + 8, plaqueTop + 4, plaqueW - 16, plaqueH - 8, PAINT);
-  fill(g, cx - plaqueW / 2 + 8, plaqueTop + plaqueH - 6, plaqueW - 16, 6, PAINT_EDGE);
-  addUiText(scene, cx, plaqueTop + plaqueH / 2, "KINDLING", {
-    size: Type.title,
+  fill(g, cx - plaqueW / 2, plaqueTop, plaqueW, plaqueH, 0xb49464);
+  fill(g, cx - plaqueW / 2 + 8, plaqueTop + 4, plaqueW - 16, plaqueH - 8, 0xccb080);
+  fill(g, cx - plaqueW / 2 + 8, plaqueTop + 4, plaqueW - 16, 4, 0xd0b888);
+  fill(g, cx - plaqueW / 2 + 8, plaqueTop + plaqueH - 6, plaqueW - 16, 6, 0xa07c54);
+  addMark(scene, cx, plaqueTop + plaqueH / 2, {
+    size: "28px",
     color: Color.inkHex,
-    fontStyle: "700",
-    strokeThickness: 0,
+    maxWidth: plaqueW - 40,
   })
-    .setOrigin(0.5, 0.5)
+    .setOrigin(0.5)
     .setDepth(8);
 
   return g;

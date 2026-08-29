@@ -1,24 +1,8 @@
 import Phaser from "phaser";
-import { drawShopCounter, drawShopInterior } from "../art/shopInterior";
-import {
-  BAG_STACK,
-  BAG_SCALE,
-  CUSTOMER_SPOT,
-  CUSTOMER_BUBBLE_Y,
-  DOOR,
-  DRIVER,
-  KEYLEAD,
-  PEOPLE_SCALE,
-  TABLET,
-  TV_W,
-  strainPos,
-  strainSlotH,
-  tabletLayout,
-} from "../maps/shopT0";
-import { GAME_WIDTH } from "../sim/constants";
-import { createCatalog } from "../sim/catalog";
-import { startSession } from "../session";
+import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
+import { beginPlay, shouldShowHowTo } from "../session";
 import { addHudButton, addPanel } from "../ui/chrome";
+import { HOWTO_HINT, PAUSE_HINT, WELCOME_HINT, WELCOME_TITLE } from "../ui/copy";
 import { addUiText } from "../ui/text";
 import { Color, Type } from "../ui/theme";
 
@@ -29,7 +13,7 @@ const STEPS = [
   },
   {
     title: "Tickets",
-    body: "Tap the flashing order, grab a bag, tap the TV, wait, then bag → receipt → bag.",
+    body: "Tap the flashing tablet. Pickups get bagged here. Deliveries send the driver.",
   },
   {
     title: "Hit the road",
@@ -39,77 +23,92 @@ const STEPS = [
 
 export class TitleScene extends Phaser.Scene {
   private started = false;
+  private phase: "welcome" | "howto" | "paused" = "paused";
+  private welcomeLayer: Phaser.GameObjects.GameObject[] = [];
 
   constructor() {
     super("title");
   }
 
   create(): void {
-    this.drawShop();
-    this.drawHowTo();
+    this.scene.bringToTop();
+    this.scene.pause("shop");
+    this.scene.pause("hud");
+    this.input.setTopOnly(true);
 
-    this.input.once("pointerdown", () => this.begin());
-    this.input.keyboard?.once("keydown", () => this.begin());
-  }
+    const showOverlays = shouldShowHowTo();
+    this.phase = showOverlays ? "welcome" : "paused";
 
-  private drawShop(): void {
-    drawShopInterior(this);
+    this.add
+      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, Color.ink, showOverlays ? 0.56 : 0.001)
+      .setDepth(40)
+      .setInteractive()
+      .on("pointerdown", () => this.advance());
 
-    this.add.image(BAG_STACK.x, BAG_STACK.y, "tex-bag").setOrigin(0.5, 1).setScale(BAG_SCALE).setDepth(8);
-
-    this.add.image(KEYLEAD.x, KEYLEAD.y, "tex-keylead").setOrigin(0.5, 1).setScale(PEOPLE_SCALE).setDepth(5);
-    drawShopCounter(this);
-
-    const tab = tabletLayout();
-    addUiText(this, TABLET.x, tab.screenTop + tab.headerH / 2, "ORDERS", {
-      size: Type.heading,
-      color: Color.inkHex,
-      fontStyle: "700",
-      strokeThickness: 0,
-    })
-      .setOrigin(0.5)
-      .setDepth(9);
-    addUiText(this, TABLET.x, tab.screenTop + tab.headerH + (tab.screenH - tab.headerH) / 2, "No pickup or delivery\nWalk-ins use the counter", {
-      size: Type.caption,
-      color: Color.creamHex,
-      align: "center",
-      wordWrap: { width: tab.screenW - 28 },
-      fontStyle: "600",
-      strokeThickness: 0,
-      lineSpacing: 8,
-    })
-      .setOrigin(0.5)
-      .setDepth(9);
-
-    createCatalog(1).forEach((sku, i) => {
-      const p = strainPos(i);
-      const slotH = strainSlotH();
-      this.add.rectangle(p.x, p.y, TV_W - 12, slotH - 4, sku.color, 0.35).setDepth(5);
-      addUiText(this, p.x, p.y, sku.name, {
+    if (showOverlays) this.drawWelcome();
+    else {
+      addUiText(this, GAME_WIDTH / 2, GAME_HEIGHT - 36, PAUSE_HINT, {
         size: Type.caption,
-        color: Color.creamHex,
-        align: "center",
-        wordWrap: { width: TV_W - 20 },
+        color: Color.inkHex,
+        backgroundColor: Color.creamHex,
+        padding: { x: 12, y: 4 },
         fontStyle: "700",
         lineSpacing: 0,
+        strokeThickness: 0,
+      })
+        .setOrigin(0.5, 1)
+        .setDepth(43);
+    }
+
+    this.input.keyboard?.on("keydown", (event: KeyboardEvent) => {
+      if (event.repeat) return;
+      this.advance();
+    });
+  }
+
+  private drawWelcome(): void {
+    const cardW = 920;
+    const cardH = 188;
+    const x = Math.floor((GAME_WIDTH - cardW) / 2);
+    const y = Math.floor((GAME_HEIGHT - cardH) / 2);
+
+    this.welcomeLayer.push(
+      addPanel(this, x, y, cardW, cardH, {
+        radius: 4,
+        alpha: 1,
+        fill: 0xfffaf3,
+        stroke: Color.woodTrim,
+        depth: 41,
+      }),
+    );
+
+    this.welcomeLayer.push(
+      addUiText(this, GAME_WIDTH / 2, GAME_HEIGHT / 2 - 22, WELCOME_TITLE, {
+        size: Type.title,
+        color: Color.inkHex,
+        fontStyle: "700",
+        align: "center",
+        strokeThickness: 0,
       })
         .setOrigin(0.5)
-        .setDepth(6);
-    });
+        .setDepth(42),
+    );
+    this.welcomeLayer.push(
+      addUiText(this, GAME_WIDTH / 2, GAME_HEIGHT / 2 + 28, WELCOME_HINT, {
+        size: Type.body,
+        color: Color.inkHex,
+        fontStyle: "600",
+        align: "center",
+        strokeThickness: 0,
+      })
+        .setOrigin(0.5)
+        .setDepth(42),
+    );
+  }
 
-    this.add.image(DRIVER.x, DRIVER.y, "tex-driver-sit").setOrigin(0.5, 1).setScale(PEOPLE_SCALE).setDepth(5);
-
-    const enterX = DOOR.x + 16;
-    this.add.image(enterX, CUSTOMER_SPOT.y, "tex-customer").setOrigin(0.5, 1).setScale(PEOPLE_SCALE).setDepth(4);
-    addUiText(this, enterX, CUSTOMER_BUBBLE_Y, "Coming in…", {
-      size: Type.caption,
-      color: Color.inkHex,
-      backgroundColor: Color.creamHex,
-      padding: { x: 8, y: 4 },
-      fontStyle: "600",
-    })
-      .setOrigin(0.5)
-      .setDepth(6);
+  private clearWelcome(): void {
+    for (const obj of this.welcomeLayer) obj.destroy();
+    this.welcomeLayer = [];
   }
 
   private drawHowTo(): void {
@@ -117,8 +116,13 @@ export class TitleScene extends Phaser.Scene {
     const cardH = 184;
     const gap = 28;
     const rowW = cardW * 3 + gap * 2;
-    const startX = (GAME_WIDTH - rowW) / 2;
-    const cardY = 744;
+    const btnH = 56;
+    const stackGap = 16;
+    const hintGap = 8;
+    const hintH = 28;
+    const blockH = cardH + stackGap + btnH + hintGap + hintH;
+    const startX = Math.floor((GAME_WIDTH - rowW) / 2);
+    const cardY = Math.floor((GAME_HEIGHT - blockH) / 2);
 
     STEPS.forEach((step, i) => {
       const x = startX + i * (cardW + gap);
@@ -128,7 +132,7 @@ export class TitleScene extends Phaser.Scene {
         alpha: 1,
         fill: 0xfffaf3,
         stroke: Color.woodTrim,
-        depth: 10,
+        depth: 41,
       });
       addUiText(this, cx, cardY + 18, `0${i + 1}  ${step.title}`, {
         size: Type.heading,
@@ -137,7 +141,7 @@ export class TitleScene extends Phaser.Scene {
         strokeThickness: 0,
       })
         .setOrigin(0.5, 0)
-        .setDepth(11);
+        .setDepth(42);
       addUiText(this, cx, cardY + 60, step.body, {
         size: Type.body,
         color: Color.inkHex,
@@ -148,15 +152,15 @@ export class TitleScene extends Phaser.Scene {
         strokeThickness: 0,
       })
         .setOrigin(0.5, 0)
-        .setDepth(11);
+        .setDepth(42);
     });
 
-    const play = addHudButton(this, GAME_WIDTH / 2, 944, "OPEN THE SHOP", () => this.begin(), {
+    const play = addHudButton(this, GAME_WIDTH / 2, cardY + cardH + stackGap, "OPEN THE SHOP", () => this.begin(), {
       originX: 0.5,
       originY: 0,
       variant: "primary",
       minWidth: 380,
-      depth: 12,
+      depth: 43,
     });
 
     this.tweens.add({
@@ -168,23 +172,36 @@ export class TitleScene extends Phaser.Scene {
       ease: "Sine.inOut",
     });
 
-    addUiText(this, GAME_WIDTH / 2, 1012, "tap, click, or press any key", {
+    addUiText(this, GAME_WIDTH / 2, play.y + btnH + hintGap, HOWTO_HINT, {
       size: Type.caption,
       color: Color.inkHex,
       backgroundColor: Color.creamHex,
-      padding: { x: 14, y: 6 },
+      padding: { x: 12, y: 4 },
       fontStyle: "700",
+      lineSpacing: 0,
+      strokeThickness: 0,
     })
       .setOrigin(0.5, 0)
-      .setDepth(12);
+      .setDepth(43);
+  }
+
+  private advance(): void {
+    if (this.started) return;
+    if (this.phase === "welcome") {
+      this.clearWelcome();
+      this.phase = "howto";
+      this.drawHowTo();
+      return;
+    }
+    this.begin();
   }
 
   private begin(): void {
     if (this.started) return;
     this.started = true;
-    startSession();
-    this.scene.launch("shop");
-    this.scene.launch("hud");
+    beginPlay();
+    this.scene.resume("shop");
+    this.scene.resume("hud");
     this.scene.stop();
   }
 }

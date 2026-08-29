@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  MS_PER_GAME_HOUR,
   SCORE_DELIVERY_LATE,
   SCORE_DELIVERY_ON_TIME,
   SCORE_FAIL,
@@ -28,10 +29,10 @@ describe("scoring", () => {
 
   it("scores on-time vs late delivery", () => {
     const delivery = order({ type: "delivery", slaStartGameMs: 0 });
-    expect(isDeliveryLate(delivery, 59_000)).toBe(false);
-    expect(scoreForComplete(delivery, 59_000)).toBe(SCORE_DELIVERY_ON_TIME);
-    expect(isDeliveryLate(delivery, 60_001)).toBe(true);
-    expect(scoreForComplete(delivery, 60_001)).toBe(SCORE_DELIVERY_LATE);
+    expect(isDeliveryLate(delivery, MS_PER_GAME_HOUR - 1)).toBe(false);
+    expect(scoreForComplete(delivery, MS_PER_GAME_HOUR - 1)).toBe(SCORE_DELIVERY_ON_TIME);
+    expect(isDeliveryLate(delivery, MS_PER_GAME_HOUR + 1)).toBe(true);
+    expect(scoreForComplete(delivery, MS_PER_GAME_HOUR + 1)).toBe(SCORE_DELIVERY_LATE);
   });
 
   it("scores walkout / no-show", () => {

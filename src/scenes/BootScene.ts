@@ -1,5 +1,8 @@
 import Phaser from "phaser";
+import { registerDayNightPipeline } from "../art/dayNightPipeline";
 import { generateTextures } from "../pixelArt";
+import { startSession } from "../session";
+import { installTypekit } from "../ui/typekit";
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -7,8 +10,13 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
+    installTypekit(this.game);
+    registerDayNightPipeline(this.game);
     void this.waitForFonts().then(() => {
       generateTextures(this);
+      startSession();
+      this.scene.launch("shop");
+      this.scene.launch("hud");
       this.scene.start("title");
     });
   }
@@ -17,10 +25,15 @@ export class BootScene extends Phaser.Scene {
     if (!document.fonts?.load) return;
     await Promise.race([
       Promise.all([
-        document.fonts.load("700 11px Inter"),
-        document.fonts.load("16px Inter"),
-        document.fonts.load("600 16px Inter"),
-        document.fonts.load("700 16px Inter"),
+        document.fonts.load("400 13px Inter"),
+        document.fonts.load("600 15px Inter"),
+        document.fonts.load("600 20px Inter"),
+        document.fonts.load("700 13px Inter"),
+        document.fonts.load("700 15px Inter"),
+        document.fonts.load("700 20px Inter"),
+        document.fonts.load("700 24px Inter"),
+        document.fonts.load("700 36px Inter"),
+        document.fonts.load("700 48px Inter"),
       ]),
       new Promise<void>((resolve) => this.time.delayedCall(1500, resolve)),
     ]);

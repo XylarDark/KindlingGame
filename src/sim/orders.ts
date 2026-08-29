@@ -38,3 +38,18 @@ export function needsFetch(order: Order): boolean {
 export function isOpen(order: Order): boolean {
   return order.status !== "completed" && order.status !== "failed";
 }
+
+export function isTabletTicket(order: Pick<Order, "type" | "status">): boolean {
+  return order.type !== "inStore" && order.status === "queued";
+}
+
+/** Packed pickup or delivery bags that sit on the shop counter. */
+export function isPackedOnCounter(order: Pick<Order, "status">): boolean {
+  return order.status === "onPickupShelf" || order.status === "readyForHandoff" || order.status === "inBin";
+}
+
+export function tabletQueue<T extends Pick<Order, "type" | "status" | "createdAtGameMs" | "id">>(orders: T[]): T[] {
+  return orders
+    .filter(isTabletTicket)
+    .sort((a, b) => a.createdAtGameMs - b.createdAtGameMs || a.id.localeCompare(b.id));
+}

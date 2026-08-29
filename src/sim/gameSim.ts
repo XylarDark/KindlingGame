@@ -11,14 +11,17 @@ import {
   NPC_INTERACT_COOLDOWN_MS,
   KEYLEAD_WALK_SPEED,
   BACKROOM_MS,
-  ORDER_ARRIVAL_RATE,
-  ORDER_AUTO_SPAWN_MS,
+  TABLET_QUEUE_MAX,
+  TICKET_WAVE_MAX_MS,
+  TICKET_WAVE_MIN_MS,
+  FIRST_TICKET_WAVE_MS,
+  MS_PER_GAME_HOUR,
   PICKUP_ARRIVE_MS,
   PICKUP_HANDOFF_WAIT_MS,
   VEHICLE_SPEED,
 } from "./constants";
 import { emptyDropoff, idCardFor, type DropoffPhase, type DropoffView } from "./dropoff";
-import { destLabel, isOpen, needsFetch, type Order, type OrderType } from "./orders";
+import { destLabel, isOpen, needsFetch, tabletQueue, type Order, type OrderType } from "./orders";
 import { findPath } from "./pathfinding";
 import { generateCustomerName } from "./names";
 import { isDeliveryLate, scoreForComplete, scoreForFail } from "./scoring";
@@ -125,6 +128,13 @@ export interface SimSnapshot {
   serveLine: string;
   highlightSkuId: string | null;
   canHitTheRoad: boolean;
+  tabletTicket: OrderView | null;
+  tabletQueueCount: number;
+  /** After tapping a ticket: "Pickup: [strain] for [customer]". */
+  keyLeadLine: string | null;
+  /** After tapping a delivery: "Ok, off I go." */
+  driverLine: string | null;
+  pendingDepart: boolean;
 }
 
 export interface SimOptions {
@@ -174,6 +184,9 @@ export class GameSim {
   handSkuId: string | null = null;
   selectedOrderId: string | null = null;
   awaitingBag = false;
+  private driverLine: string | null = null;
+  private pendingDepart = false;
+  private packQueue: string[] = [];
 
   private orders: Order[] = [];
   private customers: CustomerState[] = [];
@@ -184,6 +197,7 @@ export class GameSim {
   private npcStep = 0;
   private spawnQueue: SpawnEvent[] = [];
   private lastAutoSpawn = 0;
+  private nextTicketWaveAt = 0;
   private rng: () => number;
   private runOrderIds: string[] = [];
   private counterBag: CounterBag | null = null;
@@ -202,14 +216,19 @@ export class GameSim {
     this.catalog = createCatalog(seed);
     this.rng = mulberryFrom(seed + 17);
     this.nameSeed = seed + 99;
-    if (this.autoSpawn) {
-      this.spawnQueue = [
-        { atMs: 400 / ORDER_ARRIVAL_RATE, type: "inStore" },
-        { atMs: 5000 / ORDER_ARRIVAL_RATE, type: "pickup" },
-        { atMs: 10000 / ORDER_ARRIVAL_RATE, type: "delivery", destinationId: "house-1" },
-        { atMs: 18000 / ORDER_ARRIVAL_RATE, type: "delivery", destinationId: "house-2" },
-      ];
-    }
+    if (this.autoSpawn) this.queueOpeningOrders();
+  }
+
+  /** Start the opening ticket wave after the how-to overlay dismisses. */
+  enableSpawns(): void {
+    if (this.autoSpawn) return;
+    this.autoSpawn = true;
+    this.queueOpeningOrders();
+  }
+
+  private queueOpeningOrders(): void {
+    this.spawnQueue = [{ atMs: this.clock.gameMs + 400, type: "inStore" }];
+    this.nextTicketWaveAt = this.clock.gameMs + FIRST_TICKET_WAVE_MS;
   }
 
   static create(options?: SimOptions): GameSim {
@@ -274,7 +293,14 @@ export class GameSim {
       highlightSkuId: this.focusSkuId(),
       canHitTheRoad:
         this.playerRole === "keyLead" &&
-        (this.orders.some((o) => o.status === "inBin") || this.runOrderIds.length > 0),
+        (this.pendingDepart ||
+          this.orders.some((o) => o.status === "inBin") ||
+          this.runOrderIds.length > 0),
+      tabletTicket: this.toViewOrNull(this.tabletFront()),
+      tabletQueueCount: tabletQueue(this.orders).length,
+      keyLeadLine: this.keyLeadCallout(selected),
+      driverLine: this.playerRole === "keyLead" ? this.driverLine : null,
+      pendingDepart: this.playerRole === "keyLead" && this.pendingDepart,
     };
   }
 
@@ -359,15 +385,26 @@ export class GameSim {
 
   hitTheRoad(): boolean {
     const fresh = this.orders.filter((o) => o.status === "inBin");
-    if (this.playerRole === "keyLead" && fresh.length === 0 && this.runOrderIds.length === 0) {
+    const selected = this.selectedOrderId ? this.orderById(this.selectedOrderId) : undefined;
+    const ticket =
+      selected?.type === "delivery" && selected.status === "queued" ? selected : undefined;
+    if (this.playerRole === "keyLead" && fresh.length === 0 && this.runOrderIds.length === 0 && !ticket) {
       this.toast = "Need a named delivery bag first.";
       return false;
+    }
+    if (ticket) {
+      ticket.status = "onRun";
+      ticket.slaStartGameMs = this.clock.gameMs;
+      this.runOrderIds.push(ticket.id);
+      if (this.selectedOrderId === ticket.id) this.selectedOrderId = null;
     }
     for (const order of fresh) {
       order.status = "onRun";
       this.runOrderIds.push(order.id);
     }
     this.playerRole = "driver";
+    this.pendingDepart = false;
+    this.driverLine = null;
     this.toast = this.runOrderIds.length > 1 ? "Multi-stop run. Follow the GPS." : "Hit the road. Follow the GPS.";
     return true;
   }
@@ -375,6 +412,8 @@ export class GameSim {
   backToShop(): boolean {
     this.clearDropoff();
     this.playerRole = "keyLead";
+    this.pendingDepart = false;
+    this.driverLine = null;
     this.toast = this.runOrderIds.length
       ? "Back at Kindling. Remaining bags stay on the bike."
       : "Back at Kindling. Watch the order screen.";
@@ -426,6 +465,8 @@ export class GameSim {
     }
     this.counterBag = { skuId: null, orderId: order.id, hasItem: false };
     this.receiptHeld = false;
+    this.pendingDepart = false;
+    this.driverLine = null;
     const sku = skuById(this.catalog, order.skuId);
     this.toast = `Receipt for ${order.customerName} — ${sku?.name}. Tap that TV.`;
   }
@@ -591,6 +632,55 @@ export class GameSim {
     this.receiptHeld = false;
     this.awaitingBag = false;
     if (this.selectedOrderId === order.id) this.selectedOrderId = null;
+    this.advancePackQueue();
+  }
+
+  private claimedTicketIds(): Set<string> {
+    const ids = new Set(this.packQueue);
+    if (this.selectedOrderId) ids.add(this.selectedOrderId);
+    if (this.counterBag) ids.add(this.counterBag.orderId);
+    return ids;
+  }
+
+  private ticketInProgress(): boolean {
+    if (this.counterBag) return true;
+    const selected = this.selectedOrderId ? this.orderById(this.selectedOrderId) : undefined;
+    return !!selected && selected.type !== "inStore" && needsFetch(selected);
+  }
+
+  private beginTicket(order: Order): void {
+    this.selectedOrderId = order.id;
+    this.driverLine = null;
+    this.pendingDepart = false;
+    const sku = skuById(this.catalog, order.skuId);
+    this.toast =
+      order.type === "delivery"
+        ? `Delivery to ${destLabel(order)}: ${order.customerName} — ${sku?.name}. Grab a bag.`
+        : `Pickup: ${order.customerName} — ${sku?.name}. Grab a bag.`;
+  }
+
+  private enqueueTicket(order: Order): void {
+    if (this.packQueue.includes(order.id)) {
+      this.toast = `Already queued ${order.customerName}.`;
+      return;
+    }
+    this.packQueue.push(order.id);
+    this.toast = `Queued ${order.customerName}. Finish the bag on the counter first.`;
+  }
+
+  private advancePackQueue(): void {
+    while (this.packQueue.length > 0) {
+      const nextId = this.packQueue.shift()!;
+      const next = this.orderById(nextId);
+      if (next && isOpen(next) && needsFetch(next)) {
+        this.beginTicket(next);
+        return;
+      }
+    }
+  }
+
+  private dropQueuedTicket(orderId: string): void {
+    this.packQueue = this.packQueue.filter((id) => id !== orderId);
   }
 
   private selectTicket(orderId: string): void {
@@ -599,9 +689,23 @@ export class GameSim {
       this.toast = "That ticket is not on the tablet.";
       return;
     }
-    this.selectedOrderId = orderId;
-    const sku = skuById(this.catalog, order.skuId);
-    this.toast = `${order.type === "pickup" ? "Pickup" : "Delivery to " + destLabel(order)}: ${order.customerName} — ${sku?.name}. Grab a bag.`;
+    if (order.status !== "queued") {
+      this.toast = "That ticket is not on the tablet.";
+      return;
+    }
+    if (this.selectedOrderId === order.id || this.counterBag?.orderId === order.id) {
+      this.toast = `Already packing ${order.customerName}.`;
+      return;
+    }
+    if (this.packQueue.includes(order.id)) {
+      this.toast = `Already queued ${order.customerName}.`;
+      return;
+    }
+    if (this.ticketInProgress()) {
+      this.enqueueTicket(order);
+      return;
+    }
+    this.beginTicket(order);
   }
 
   private tryHandoff(): void {
@@ -681,7 +785,7 @@ export class GameSim {
     const sku = skuById(this.catalog, order.skuId);
     let slaRemainingMs: number | null = null;
     if (order.type === "delivery" && order.slaStartGameMs !== undefined) {
-      slaRemainingMs = 60_000 - (this.clock.gameMs - order.slaStartGameMs);
+      slaRemainingMs = MS_PER_GAME_HOUR - (this.clock.gameMs - order.slaStartGameMs);
     } else if (order.type === "pickup" && order.status === "onPickupShelf" && order.slaStartGameMs !== undefined) {
       slaRemainingMs = PICKUP_ARRIVE_MS - (this.clock.gameMs - order.slaStartGameMs);
     } else if (order.type === "pickup" && order.status === "readyForHandoff" && order.arriveAtGameMs !== undefined) {
@@ -830,16 +934,37 @@ export class GameSim {
       }
       return true;
     });
-    if (this.clock.gameMs - this.lastAutoSpawn > ORDER_AUTO_SPAWN_MS && this.openCount() < 6) {
-      const roll = this.rng();
-      const type: OrderType = roll < 0.34 ? "inStore" : roll < 0.67 ? "pickup" : "delivery";
-      this.spawnOrder(type);
-      this.lastAutoSpawn = this.clock.gameMs;
+    if (this.clock.gameMs >= this.nextTicketWaveAt) {
+      this.spawnTicketWave();
+      const wait = TICKET_WAVE_MIN_MS + Math.floor(this.rng() * (TICKET_WAVE_MAX_MS - TICKET_WAVE_MIN_MS + 1));
+      this.nextTicketWaveAt = this.clock.gameMs + wait;
     }
   }
 
-  private openCount(): number {
-    return this.orders.filter(isOpen).length;
+  private spawnTicketWave(): void {
+    const room = TABLET_QUEUE_MAX - tabletQueue(this.orders).length;
+    if (room <= 0) return;
+    const n = Math.min(room, this.rng() < 0.5 ? 1 : 2);
+    for (let i = 0; i < n; i++) {
+      const type: OrderType = this.rng() < 0.5 ? "pickup" : "delivery";
+      this.spawnOrder(type);
+    }
+  }
+
+  private tabletFront(): Order | undefined {
+    const claimed = this.claimedTicketIds();
+    return tabletQueue(this.orders).find((order) => !claimed.has(order.id));
+  }
+
+  private keyLeadCallout(selected: Order | undefined): string | null {
+    if (!selected || selected.type === "inStore") return null;
+    const sku = skuById(this.catalog, selected.skuId);
+    if (!sku) return null;
+    return `${selected.type === "pickup" ? "Pickup" : "Delivery"}: ${sku.name} for ${selected.customerName}`;
+  }
+
+  private toViewOrNull(order: Order | undefined): OrderView | null {
+    return order ? this.toView(order) : null;
   }
 
   private interactDriver(): void {
@@ -1109,17 +1234,29 @@ export class GameSim {
       const packing = this.orderById(this.counterBag.orderId);
       if (packing && isOpen(packing)) return packing;
     }
-    const instore = this.orders.find((o) => o.type === "inStore" && o.status === "atRegister");
-    if (instore) return instore;
     if (this.selectedOrderId) {
       const selected = this.orderById(this.selectedOrderId);
-      if (selected && isOpen(selected)) return selected;
+      if (selected && isOpen(selected) && selected.type !== "inStore") return selected;
     }
-    return this.orders.find((o) => needsFetch(o) || o.status === "readyForHandoff" || o.status === "inBin" || o.status === "onRun");
+    const instore = this.orders.find((o) => o.type === "inStore" && o.status === "atRegister");
+    if (instore) return instore;
+    return this.orders.find((o) => o.status === "readyForHandoff" || o.status === "inBin" || o.status === "onRun");
   }
 
   private focusSkuId(): string | null {
-    return this.focusOrder()?.skuId ?? this.handSkuId;
+    if (this.counterBag?.hasItem) return null;
+    if (this.counterBag) {
+      const packing = this.orderById(this.counterBag.orderId);
+      if (packing && isOpen(packing)) return packing.skuId;
+    }
+    if (this.selectedOrderId) {
+      const selected = this.orderById(this.selectedOrderId);
+      if (selected && needsFetch(selected) && selected.type !== "inStore") return selected.skuId;
+    }
+    const instore = this.orders.find((o) => o.type === "inStore" && o.status === "atRegister");
+    if (instore && this.keyLeadPhase === "idle" && this.handSkuId !== instore.skuId) return instore.skuId;
+    if (instore && this.handSkuId === instore.skuId) return instore.skuId;
+    return null;
   }
 
   private complete(order: Order): void {
@@ -1128,6 +1265,7 @@ export class GameSim {
     this.score += scoreForComplete(order, this.clock.gameMs);
     this.customers = this.customers.filter((c) => c.orderId !== order.id);
     if (this.selectedOrderId === order.id) this.selectedOrderId = null;
+    this.dropQueuedTicket(order.id);
     const sku = skuById(this.catalog, order.skuId);
     if (order.type === "delivery" && order.late) this.toast = `Late drop: ${sku?.name}.`;
     else this.toast = `Sold ${sku?.name ?? "item"} to ${order.customerName}!`;
@@ -1142,6 +1280,8 @@ export class GameSim {
       this.receiptHeld = false;
     }
     if (this.selectedOrderId === order.id) this.selectedOrderId = null;
+    this.dropQueuedTicket(order.id);
+    this.advancePackQueue();
     this.toast = reason;
   }
 

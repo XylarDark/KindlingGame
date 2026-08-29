@@ -1,86 +1,146 @@
+import { GAME_WIDTH } from "../sim/constants";
+
 /** Shop cutaway at 1920×1080. Staff behind the counter; lobby in front. */
-export const FLOOR_Y = 680;
-export const COUNTER_TOP = 548;
-export const COUNTER_FRONT = 668;
-export const COUNTER_LEFT = 268;
-export const COUNTER_RIGHT = 1510;
+export const FLOOR_Y = 830;
+/** Dropped ~5% of the screen so the wall can hold wider TVs. */
+export const COUNTER_TOP = 710;
+export const COUNTER_FRONT = 830;
+/** Original slab 256–1504; left was pushed right 15% to widen the door bay. */
+const SCREEN_5 = Math.round(GAME_WIDTH * 0.05);
+const COUNTER_LEFT_WIDE = 256 + Math.round((1504 - 256) * 0.15);
+const COUNTER_LEFT_PREV = Math.round(COUNTER_LEFT_WIDE * 0.9);
+const COUNTER_RIGHT_PREV = 1504 - SCREEN_5;
+/** Previous 399–1408 slab, grown 5% of the screen on each end. */
+export const COUNTER_LEFT = COUNTER_LEFT_PREV - SCREEN_5;
+export const COUNTER_RIGHT = COUNTER_RIGHT_PREV + SCREEN_5;
 export const COUNTER_MID = Math.floor((COUNTER_LEFT + COUNTER_RIGHT) / 2);
 
 /**
- * Standing people bake at 192×352 (8px cells). Old display was 96×176 @ 1.4 → 134×246.
- * 0.9 keeps them ~29% larger on screen without NEAREST-upscaling the KINDLING stamp.
+ * Standing people bake at 192×352. Scale fits the lobby under the
+ * counter; another 15% up so the models fill the shirt and hat marks.
  */
 export const PERSON_NATIVE_H = 352;
-export const PEOPLE_SCALE = 0.9;
-export const BAG_SCALE = 0.72;
+export const PEOPLE_SCALE = 0.873;
+export const BAG_SCALE = 0.7;
+export const PERSON_DISPLAY_H = Math.round(PERSON_NATIVE_H * PEOPLE_SCALE);
 
-/** Shift back-wall props right so the lobby entrance stays clear. */
-export const BACK_WALL_SHIFT = 100;
+/** HUD text sits in the corners; wall props tuck under the ceiling band. */
+export const WALL_PROP_TOP = 44;
 
-/** Chest clears the slab; head stays under the TV bezels. */
-export const KEYLEAD = { x: COUNTER_MID, y: COUNTER_TOP + 114 };
-/** Staff door, left of the strain grid. */
-export const BACK_DOOR_W = 192;
-export const BACK_DOOR_H = 380;
-export const BACK_DOOR = { x: 430, y: KEYLEAD.y };
-export const BAG_STACK = { x: KEYLEAD.x - 80, y: COUNTER_TOP };
-export const PACK_SPOT = { x: 1216 + BACK_WALL_SHIFT, y: COUNTER_TOP };
-/** Stay on the counter (right edge 1510) instead of sliding into the window. */
-export const RECEIPT_SPOT = { x: 1490, y: COUNTER_TOP - 8 };
+/** Shirt mark sits above the laminate; head stays under the TVs. */
+export const KEYLEAD = { x: COUNTER_MID, y: COUNTER_TOP + 68 };
 
+export const BACK_DOOR_W = 200;
+export const BACK_DOOR_H = 372;
+export const BACK_DOOR = { x: 400 + (COUNTER_LEFT - 256), y: KEYLEAD.y };
+export const BAG_STACK = { x: KEYLEAD.x - 220, y: COUNTER_TOP };
+export const PACK_SPOT = { x: COUNTER_RIGHT - 120, y: COUNTER_TOP };
+export const RECEIPT_SPOT = { x: COUNTER_RIGHT - 48, y: COUNTER_TOP - 8 };
+
+export const BENCH_INSET = 0;
+export const BENCH_LEFT = COUNTER_RIGHT;
+export const BENCH_W = GAME_WIDTH - BENCH_INSET - BENCH_LEFT;
 export const BENCH = {
-  x: 1710,
+  x: BENCH_LEFT + Math.floor(BENCH_W / 2),
   y: COUNTER_TOP + Math.floor((COUNTER_FRONT - COUNTER_TOP) / 2),
 };
-/** Square window whose sill sits on the bench. */
-export const WINDOW = { x: BENCH.x, w: 288, h: 288 };
-export const DRIVER = { x: WINDOW.x, y: BENCH.y + 64 };
+export const DOOR_W = 200;
+export const DOOR_H = 372;
+/** Street door sat in the old bay; shifted left 5%, then nudged back toward the counter. */
+export const DOOR = {
+  x: Math.floor(DOOR_W / 2 + (COUNTER_LEFT_PREV - DOOR_W) / 2) - SCREEN_5 + 36,
+  y: COUNTER_FRONT + PERSON_DISPLAY_H + 2,
+};
+/** Street and staff door lintel — windows no longer share this. */
+export const FRAME_TOP = COUNTER_FRONT - DOOR_H;
 
-export const DOOR = { x: 132, y: 980 };
-export const DOOR_W = 192;
-export const DOOR_H = 380;
-
-export const CUSTOMER_SPOT = { x: 900, y: 980 };
-export const CUSTOMER_BUBBLE_Y = CUSTOMER_SPOT.y - Math.round(PERSON_NATIVE_H * PEOPLE_SCALE) - 10;
+/** Feet on the lobby boards; head stays just below the counter front. */
+export const CUSTOMER_SPOT = { x: COUNTER_MID, y: COUNTER_FRONT + PERSON_DISPLAY_H + 2 };
+/** Speech sits in the lobby, left of the walk-in — not on their head or the plaque. */
+export const CUSTOMER_BUBBLE_DX = -220;
+export const CUSTOMER_BUBBLE_Y = COUNTER_FRONT + 96;
 
 export const TV_COUNT = 3;
 export const TV_COLS = 3;
 export const TV_ROWS = 1;
 export const STRAINS_PER_TV = 3;
-export const TV_W = 184;
-export const TV_H = 228;
-export const TV_GAP_X = 12;
+export const TV_W = 304;
+export const TV_H = 220;
+export const TV_GAP_X = 16;
 export const TV_GAP_Y = 0;
 export const TV_GRID_W = TV_COLS * TV_W + (TV_COLS - 1) * TV_GAP_X;
 export const TV_GRID_H = TV_ROWS * TV_H + Math.max(0, TV_ROWS - 1) * TV_GAP_Y;
-/** Centered over the budtender, clear of the staff door and orders board. */
-export const TV_GRID_LEFT = Math.floor(KEYLEAD.x - TV_GRID_W / 2);
-export const TV_GRID_TOP = 112;
+export const CEILING_POT_LEFT = 150;
+export const CEILING_POT_RIGHT = 1760;
+/** Menu TVs centered over the key-lead. */
+export const TV_GRID_MID = KEYLEAD.x;
+export const TV_GRID_LEFT = Math.floor(TV_GRID_MID - TV_GRID_W / 2);
+/** Menu TVs sit on the wall below the ceiling-can cones. */
+export const TV_GRID_TOP = 152;
 export const TV_Y = TV_GRID_TOP + TV_H / 2;
 
-/** Orders board sits on the right, clear of the TVs and the window. */
-export const TABLET_W = 280;
-export const TABLET_H = 328;
-export const TABLET_INSET = 8;
-export const TABLET_HEADER_H = 40;
+/** Grey-over-white chair rail; the pass-through oak sill sits on this band. */
+export const CHAIR_RAIL_Y = COUNTER_TOP - 114;
+export const CHAIR_RAIL_GREY_H = 8;
+export const CHAIR_RAIL_WHITE_H = 8;
+export const CHAIR_RAIL_H = CHAIR_RAIL_GREY_H + CHAIR_RAIL_WHITE_H;
+
+/** Shared lintel for the pass-through and driver windows, under the TVs. */
+export const WINDOW_TOP = TV_GRID_TOP + TV_H + 40;
+/** Keep the street-window bottom clear of the driver pillow. */
+export const WINDOW_CLEAR = 48;
+/** Wall between the pass-through / counter corner and the delivery glass. */
+export const WINDOW_LEFT_INSET = 24;
+export const WINDOW_RIGHT_INSET = 76;
+export const WINDOW = {
+  x: BENCH_LEFT + WINDOW_LEFT_INSET + Math.floor((GAME_WIDTH - BENCH_LEFT - WINDOW_LEFT_INSET - WINDOW_RIGHT_INSET) / 2),
+  w: GAME_WIDTH - BENCH_LEFT - WINDOW_LEFT_INSET - WINDOW_RIGHT_INSET,
+  h: BENCH.y - WINDOW_CLEAR - WINDOW_TOP,
+};
+export const DRIVER = { x: WINDOW.x, y: BENCH.y + 48 };
+export const WINDOW_MID = WINDOW_TOP + Math.floor(WINDOW.h / 2);
+
+export const TABLET_W = 176;
+export const TABLET_H = 112;
+export const TABLET_INSET = 10;
+export const TABLET_HEADER_H = 16;
+export const TABLET_HOME_H = 0;
+/** Oak shelf flush with the chair rail. */
+export const SILL_H = CHAIR_RAIL_H + 2;
+export const SILL_Y = CHAIR_RAIL_Y;
+/**
+ * Pass-through into the product room. Opening sits under the TVs with a
+ * wider gap from the key-lead, and stops at the oak sill so stock only
+ * shows in the window.
+ */
+export const PASS_WINDOW = {
+  x: KEYLEAD.x + 360,
+  y: WINDOW_TOP,
+  w: 400,
+  h: SILL_Y - WINDOW_TOP,
+};
+/** Landscape iPad sitting on the product-room sill. */
 export const TABLET = {
-  x: WINDOW.x - WINDOW.w / 2 - 68 - TABLET_W / 2,
-  y: TV_GRID_TOP + TABLET_H / 2,
+  x: PASS_WINDOW.x,
+  y: SILL_Y + 2 - TABLET_H / 2,
 };
 
 export function tabletLayout() {
   const left = TABLET.x - TABLET_W / 2;
   const top = TABLET.y - TABLET_H / 2;
+  const side = 16;
+  const cap = 8;
   return {
     left,
     top,
     w: TABLET_W,
     h: TABLET_H,
-    screenLeft: left + TABLET_INSET,
-    screenTop: top + TABLET_INSET,
-    screenW: TABLET_W - TABLET_INSET * 2,
-    screenH: TABLET_H - TABLET_INSET * 2,
+    screenLeft: left + side,
+    screenTop: top + cap,
+    screenW: TABLET_W - side * 2,
+    screenH: TABLET_H - cap * 2,
     headerH: TABLET_HEADER_H,
+    homeH: TABLET_HOME_H,
   };
 }
 
@@ -98,22 +158,27 @@ export function tvX(index: number): number {
 }
 
 export function strainSlotH(): number {
-  return Math.floor((TV_H - 20) / STRAINS_PER_TV);
+  return Math.floor((TV_H - 24) / STRAINS_PER_TV);
 }
 
-/** Screen position of a catalog strain on its TV. */
 export function strainPos(index: number): { x: number; y: number } {
   const tv = Math.floor(index / STRAINS_PER_TV);
   const slot = index % STRAINS_PER_TV;
   const p = tvPos(tv);
   const slotH = strainSlotH();
-  const blockTop = p.y - TV_H / 2 + 10;
+  const blockTop = p.y - TV_H / 2 + 12;
   return { x: p.x, y: blockTop + slot * slotH + slotH / 2 };
 }
 
-/** @deprecated jars are wall TVs now */
 export const JAR_Y = TV_Y;
 export const COUNTER_BAG = PACK_SPOT;
 export function jarX(index: number): number {
   return tvX(index);
+}
+
+/** Five cans, even gaps across the ceiling band. Not locked to TV centers. */
+export function ceilingPots(): number[] {
+  const n = 5;
+  const span = CEILING_POT_RIGHT - CEILING_POT_LEFT;
+  return Array.from({ length: n }, (_, i) => Math.round(CEILING_POT_LEFT + (span * i) / (n - 1)));
 }

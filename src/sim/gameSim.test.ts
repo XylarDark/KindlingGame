@@ -208,4 +208,88 @@ describe("GameSim order loops", () => {
     expect(new Set(names).size).toBe(names.length);
     expect(sim.catalog).toHaveLength(9);
   });
+
+  it("shows one tablet ticket and never auto-queues more than 6", () => {
+    const sim = GameSim.create({ seed: 7, autoSpawn: true });
+    sim.tick(2_400);
+    expect(sim.snapshot().tabletQueueCount).toBeGreaterThanOrEqual(1);
+    expect(sim.snapshot().tabletQueueCount).toBeLessThanOrEqual(2);
+    expect(sim.snapshot().tabletTicket).toBeTruthy();
+    for (let i = 0; i < 240; i++) sim.tick(500);
+    expect(sim.snapshot().tabletQueueCount).toBeLessThanOrEqual(6);
+  });
+
+  it("calls out strain and customer after the tablet is tapped", () => {
+    const sim = GameSim.create({ seed: 1, autoSpawn: false });
+    const order = sim.spawnOrder("pickup");
+    const sku = sim.catalog.find((s) => s.id === order.skuId)!;
+    expect(sim.snapshot().keyLeadLine).toBeNull();
+    sim.shopClick({ type: "tablet", orderId: order.id });
+    expect(sim.snapshot().keyLeadLine).toBe(`Pickup: ${sku.name} for ${order.customerName}`);
+  });
+
+  it("selects a delivery ticket without sending the driver", () => {
+    const sim = GameSim.create({ seed: 3, autoSpawn: false });
+    const order = sim.spawnOrder("delivery", { destinationId: "house-1" });
+    const sku = sim.catalog.find((s) => s.id === order.skuId)!;
+    sim.shopClick({ type: "tablet", orderId: order.id });
+    expect(sim.snapshot().keyLeadLine).toBe(`Delivery: ${sku.name} for ${order.customerName}`);
+    expect(sim.snapshot().highlightSkuId).toBe(order.skuId);
+    expect(sim.snapshot().pendingDepart).toBe(false);
+    expect(sim.snapshot().playerRole).toBe("keyLead");
+    expect(order.status).toBe("queued");
+  });
+
+  it("does not highlight a TV until that ticket is tapped", () => {
+    const sim = GameSim.create({ seed: 1, autoSpawn: false });
+    const order = sim.spawnOrder("pickup");
+    expect(sim.snapshot().highlightSkuId).toBeNull();
+    sim.shopClick({ type: "tablet", orderId: order.id });
+    expect(sim.snapshot().highlightSkuId).toBe(order.skuId);
+    expect(sim.snapshot().selectedOrderId).toBe(order.id);
+  });
+
+  it("queues a second ticket instead of interrupting the current bag", () => {
+    const sim = GameSim.create({ seed: 1, autoSpawn: false });
+    const first = sim.spawnOrder("pickup");
+    const second = sim.spawnOrder("delivery", { destinationId: "house-1" });
+    sim.shopClick({ type: "tablet", orderId: first.id });
+    sim.shopClick({ type: "bagRack" });
+    sim.shopClick({ type: "tablet", orderId: second.id });
+    expect(sim.snapshot().selectedOrderId).toBe(first.id);
+    expect(sim.snapshot().highlightSkuId).toBe(first.skuId);
+    expect(sim.snapshot().counterBag?.customerName).toBe(first.customerName);
+    expect(sim.snapshot().pendingDepart).toBe(false);
+    expect(sim.snapshot().tabletTicket?.id).toBeUndefined();
+  });
+
+  it("starts the next queued ticket after the current bag is sealed", () => {
+    const sim = GameSim.create({ seed: 1, autoSpawn: false });
+    const first = sim.spawnOrder("pickup");
+    const second = sim.spawnOrder("delivery", { destinationId: "house-1" });
+    sim.shopClick({ type: "tablet", orderId: first.id });
+    sim.shopClick({ type: "bagRack" });
+    sim.shopClick({ type: "tablet", orderId: second.id });
+    sim.shopClick({ type: "strain", skuId: first.skuId });
+    waitForFetch(sim);
+    sim.shopClick({ type: "counterBag" });
+    sim.shopClick({ type: "receipt" });
+    sim.shopClick({ type: "counterBag" });
+    expect(first.status).toBe("onPickupShelf");
+    expect(sim.snapshot().selectedOrderId).toBe(second.id);
+    expect(sim.snapshot().highlightSkuId).toBe(second.skuId);
+    expect(sim.snapshot().bagsOnPickup).toContain(first.id);
+  });
+
+  it("leaves each sealed bag on the counter", () => {
+    const sim = GameSim.create({ seed: 5, autoSpawn: false });
+    const a = fillTicket(sim, "pickup");
+    const b = fillTicket(sim, "delivery", { destinationId: "house-1" });
+    const snap = sim.snapshot();
+    expect(a.status).toBe("onPickupShelf");
+    expect(b.status).toBe("inBin");
+    expect(snap.bagsOnPickup).toContain(a.id);
+    expect(snap.bagsInBin).toContain(b.id);
+    expect(snap.counterBag).toBeNull();
+  });
 });

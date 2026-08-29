@@ -40,10 +40,10 @@ export const Color = {
 } as const;
 
 export const Type = {
-  display: "64px",
-  title: "42px",
-  heading: "28px",
-  body: "22px",
-  caption: "18px",
-  micro: "16px",
+  display: "48px",
+  title: "36px",
+  heading: "24px",
+  body: "20px",
+  caption: "15px",
+  micro: "13px",
 } as const;

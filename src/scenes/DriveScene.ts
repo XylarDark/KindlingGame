@@ -1,10 +1,16 @@
 import Phaser from "phaser";
+import { driveGrade } from "../art/dayNightGrade";
+import { applyDayNight, attachDayNight, dayNightFrom, type DayNightPipeline } from "../art/dayNightPipeline";
 import { CITY, MAP_PX_H, MAP_PX_W, TILE, houseTitle, roadTextureKey } from "../maps/cityT0";
 import { PEOPLE_SCALE } from "../maps/shopT0";
-import { getSim } from "../session";
-import { gpsPath } from "../sim/gameSim";
+import { getSim, isTutorialMode } from "../session";
+import { skyAt } from "../sim/dayNight";
+import { gpsPath, type SimSnapshot } from "../sim/gameSim";
+import { tutorialHints } from "../sim/tutorialHints";
 import { addUiText } from "../ui/text";
 import { Color, Type } from "../ui/theme";
+import { addMark, fitTypeToWidth, overlayStroke } from "../ui/typekit";
+import { TutorialArrows } from "../ui/tutorialArrow";
 
 const HOUSE_TEX = ["tex-house", "tex-house-alt", "tex-house-3", "tex-house-4"];
 
@@ -19,6 +25,8 @@ export class DriveScene extends Phaser.Scene {
   private customer!: Phaser.GameObjects.Image;
   private lastX = 0;
   private lastY = 0;
+  private arrows!: TutorialArrows;
+  private lighting?: DayNightPipeline;
 
   constructor() {
     super("drive");
@@ -26,7 +34,10 @@ export class DriveScene extends Phaser.Scene {
 
   create(): void {
     this.cameras.main.setBounds(0, 0, MAP_PX_W, MAP_PX_H);
-    this.cameras.main.setBackgroundColor(0x3a4c32);
+    this.cameras.main.setBackgroundColor(skyAt(0).mapGrass);
+    this.lighting = attachDayNight(this.cameras.main);
+    this.paintDayNight(getSim().snapshot());
+    this.events.on(Phaser.Scenes.Events.PRE_RENDER, () => this.paintDayNight(getSim().snapshot()));
     this.drawCity();
     this.glow = this.add.graphics().setDepth(2);
     this.gps = this.add.graphics().setDepth(3);
@@ -46,6 +57,7 @@ export class DriveScene extends Phaser.Scene {
       padding: { x: 8, y: 4 },
       align: "center",
       fontStyle: "700",
+      strokeThickness: 0,
     })
       .setOrigin(0.5, 1)
       .setDepth(6)
@@ -53,6 +65,7 @@ export class DriveScene extends Phaser.Scene {
     this.vehicle = this.add.image(0, 0, "tex-vehicle").setDepth(6).setScale(1);
     this.walker = this.add.image(0, 0, "tex-driver").setOrigin(0.5, 1).setScale(PEOPLE_SCALE).setDepth(7).setVisible(false);
     this.customer = this.add.image(0, 0, "tex-customer").setOrigin(0.5, 1).setScale(PEOPLE_SCALE).setDepth(6).setVisible(false);
+    this.arrows = new TutorialArrows(this, 8);
   }
 
   update(): void {
@@ -73,6 +86,7 @@ export class DriveScene extends Phaser.Scene {
       this.cameras.main.centerOn(snap.vehicle.x, snap.vehicle.y);
     }
 
+    this.paintDayNight(snap);
     this.drawGps();
     this.glow.clear();
     const stopId = snap.run?.nextStopId;
@@ -104,6 +118,39 @@ export class DriveScene extends Phaser.Scene {
     } else {
       this.customer.setVisible(false);
     }
+
+    this.paintTutorialArrows(snap);
+  }
+
+  private paintDayNight(snap: SimSnapshot): void {
+    const sky = skyAt(snap.gameMs);
+    this.cameras.main.setBackgroundColor(sky.mapGrass);
+    const focus = snap.dropoff.driverOnFoot && snap.dropoff.driver ? snap.dropoff.driver : snap.vehicle;
+    const view = this.cameras.main.worldView;
+    const pipe = this.lighting ?? dayNightFrom(this.cameras.main);
+    this.lighting = pipe;
+    applyDayNight(pipe, driveGrade(sky, focus), {
+      x: view.x,
+      y: view.y,
+      width: view.width || this.scale.width,
+      height: view.height || this.scale.height,
+    });
+  }
+
+  private paintTutorialArrows(snap: SimSnapshot): void {
+    if (!isTutorialMode()) {
+      this.arrows.clear();
+      return;
+    }
+    const spots = [];
+    for (const hint of tutorialHints(snap)) {
+      if (hint.kind === "gpsPin" && this.pin.visible) {
+        spots.push({ id: hint.id, x: this.pin.x, y: this.pin.y - 36 });
+      } else if (hint.kind === "doorCustomer" && this.customer.visible) {
+        spots.push({ id: hint.id, x: this.customer.x, y: this.customer.y - 200 });
+      }
+    }
+    this.arrows.sync(spots);
   }
 
   private drawGps(): void {
@@ -143,21 +190,24 @@ export class DriveScene extends Phaser.Scene {
         this.add.image(x, y, key).setDepth(0);
       }
     }
-    addUiText(this, CITY.shopSpawn.c * TILE + TILE / 2, CITY.shopSpawn.r * TILE + TILE / 2 - 36, "KINDLING", {
-      size: Type.caption,
+    addMark(this, CITY.shopSpawn.c * TILE + TILE / 2, CITY.shopSpawn.r * TILE + TILE / 2 - 36, {
+      size: Type.micro,
       color: Color.creamHex,
-      fontStyle: "700",
+      maxWidth: TILE - 8,
+      ...overlayStroke(13),
     })
       .setOrigin(0.5)
       .setDepth(2);
     for (const house of CITY.houses) {
-      addUiText(this, house.house.c * TILE + TILE / 2, house.house.r * TILE + TILE / 2 - 6, houseTitle(house.id).replace("House ", ""), {
-        size: Type.body,
+      const num = addUiText(this, house.house.c * TILE + TILE / 2, house.house.r * TILE + TILE / 2 - 6, houseTitle(house.id).replace("House ", ""), {
+        size: Type.micro,
         color: Color.creamHex,
         fontStyle: "700",
+        ...overlayStroke(13),
       })
         .setOrigin(0.5)
         .setDepth(2);
+      fitTypeToWidth(num, TILE - 8, 12);
     }
   }
 }
