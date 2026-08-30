@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { clampInput } from "../input/controls";
+import { enableItemHit, syncItemHit } from "../input/hit";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import { getSim, isTutorialMode, setTutorialMode } from "../session";
 import type { SimSnapshot } from "../sim/gameSim";
@@ -81,8 +82,8 @@ export class HudScene extends Phaser.Scene {
       .image(GAME_WIDTH - 380, GAME_HEIGHT - 230, "tex-phone")
       .setDisplaySize(168, 288)
       .setDepth(22)
-      .setInteractive({ useHandCursor: true })
       .setVisible(false);
+    enableItemHit(this.phone);
     this.phone.on("pointerdown", (p: Phaser.Input.Pointer) => {
       p.event.stopPropagation();
       getSim().queueInteract();
@@ -98,6 +99,11 @@ export class HudScene extends Phaser.Scene {
       .setOrigin(0.5, 0)
       .setDepth(22)
       .setVisible(false);
+    enableItemHit(this.phoneCaption);
+    this.phoneCaption.on("pointerdown", (p: Phaser.Input.Pointer) => {
+      p.event.stopPropagation();
+      getSim().queueInteract();
+    });
 
     this.toastText = addUiText(this, GAME_WIDTH / 2, GAME_HEIGHT - 24, "", {
       size: Type.body,
@@ -135,7 +141,8 @@ export class HudScene extends Phaser.Scene {
       fontStyle: "600",
       strokeThickness: 0,
     }).setOrigin(0.5);
-    this.idBg = this.add.rectangle(0, 0, 560, 320, 0xf4e8c1, 0.97).setStrokeStyle(6, 0x3d7a45).setInteractive({ useHandCursor: true });
+    this.idBg = this.add.rectangle(0, 0, 560, 320, 0xf4e8c1, 0.97).setStrokeStyle(6, 0x3d7a45);
+    enableItemHit(this.idBg);
     this.idBg.on("pointerdown", (p: Phaser.Input.Pointer) => {
       p.event.stopPropagation();
       getSim().queueInteract();
@@ -208,6 +215,7 @@ export class HudScene extends Phaser.Scene {
     this.phone.setVisible(showPhone);
     this.phoneCaption.setVisible(showPhone);
     this.phoneCaption.setText(drop.phase === "calling" ? "Phone is ringing…" : "Call the customer");
+    syncItemHit(this.phoneCaption);
     this.phone.setAlpha(drop.phase === "calling" ? 0.85 : 1);
 
     const showId = !!drop.idCard && drop.idAsked;
@@ -319,12 +327,8 @@ export class HudScene extends Phaser.Scene {
 
     const cogX = GAME_WIDTH - 24;
     const cogY = GAME_HEIGHT - 20;
-    this.cog = this.add
-      .image(cogX, cogY, "tex-cog")
-      .setOrigin(1, 1)
-      .setScale(1.55)
-      .setDepth(42)
-      .setInteractive({ useHandCursor: true });
+    this.cog = this.add.image(cogX, cogY, "tex-cog").setOrigin(1, 1).setScale(1.55).setDepth(42);
+    enableItemHit(this.cog);
     const toggleSettings = (p: Phaser.Input.Pointer): void => {
       p.event.stopPropagation();
       if (this.settingsOpen) this.closeSettings();
@@ -339,8 +343,8 @@ export class HudScene extends Phaser.Scene {
       fontStyle: "600",
     })
       .setOrigin(1, 1)
-      .setDepth(42)
-      .setInteractive({ useHandCursor: true });
+      .setDepth(42);
+    enableItemHit(this.cogCaption);
     this.cogCaption.on("pointerdown", toggleSettings);
     this.refreshTutorialToggle();
   }

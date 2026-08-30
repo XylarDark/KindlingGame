@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { paintDoorstep, DOORSTEP_DOOR_X, DOORSTEP_FLOOR_Y } from "../art/doorstep";
+import { enableItemHit } from "../input/hit";
 import { BAG_SCALE, PEOPLE_SCALE, PERSON_DISPLAY_H } from "../maps/shopT0";
 import { getSim, isTutorialMode } from "../session";
 import type { SimSnapshot } from "../sim/gameSim";
@@ -49,25 +50,17 @@ export class DoorScene extends Phaser.Scene {
       .setDepth(4);
 
     const floor = DOORSTEP_FLOOR_Y + 8;
-    this.driver = this.add
-      .image(DRIVER_X, floor, "tex-driver")
-      .setOrigin(0.5, 1)
-      .setScale(PEOPLE_SCALE)
-      .setDepth(5)
-      .setInteractive({ useHandCursor: true, hitArea: new Phaser.Geom.Rectangle(-80, -280, 160, 300), hitAreaCallback: Phaser.Geom.Rectangle.Contains });
-    this.customer = this.add
-      .image(CUSTOMER_X, floor, "tex-customer")
-      .setOrigin(0.5, 1)
-      .setScale(PEOPLE_SCALE)
-      .setDepth(5)
-      .setInteractive({ useHandCursor: true, hitArea: new Phaser.Geom.Rectangle(-90, -300, 180, 320), hitAreaCallback: Phaser.Geom.Rectangle.Contains });
+    this.driver = this.add.image(DRIVER_X, floor, "tex-driver").setOrigin(0.5, 1).setScale(PEOPLE_SCALE).setDepth(5);
+    enableItemHit(this.driver);
+    this.customer = this.add.image(CUSTOMER_X, floor, "tex-customer").setOrigin(0.5, 1).setScale(PEOPLE_SCALE).setDepth(5);
+    enableItemHit(this.customer);
     // Handles sit in the driver's hands; bag hangs in front of the hip.
     this.bag = this.add
       .image(DRIVER_X + 52, floor - PERSON_DISPLAY_H * 0.46, "tex-bag")
       .setOrigin(0.5, 0.22)
       .setScale(DOOR_BAG_SCALE)
       .setDepth(6);
-    wireBagHit(this.bag);
+    enableItemHit(this.bag);
     this.driver.on("pointerdown", () => getSim().queueInteract());
     this.customer.on("pointerdown", () => getSim().queueInteract());
     this.bag.on("pointerdown", () => getSim().queueInteract());
@@ -187,16 +180,6 @@ export class DoorScene extends Phaser.Scene {
     }
     this.arrows.sync(spots);
   }
-}
-
-function wireBagHit(bag: Phaser.GameObjects.Image): void {
-  const w = bag.frame.width;
-  const h = bag.frame.height;
-  bag.setInteractive({
-    useHandCursor: true,
-    hitArea: new Phaser.Geom.Rectangle(-w * bag.originX, -h * bag.originY, w, h),
-    hitAreaCallback: Phaser.Geom.Rectangle.Contains,
-  });
 }
 
 const GAME_PROMPT_Y = 148;

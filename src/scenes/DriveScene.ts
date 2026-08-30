@@ -9,9 +9,9 @@ import {
   houseTitle,
   lotCenter,
   roadTextureKey,
-  shopWorldHit,
   tileToWorld,
 } from "../maps/cityT0";
+import { enableItemHit, syncItemHit } from "../input/hit";
 import { PEOPLE_SCALE } from "../maps/shopT0";
 import { getSim, isTutorialMode } from "../session";
 import { HANDOFF_RADIUS } from "../sim/constants";
@@ -35,7 +35,6 @@ export class DriveScene extends Phaser.Scene {
   private pinPulse!: Phaser.GameObjects.Rectangle;
   private pinLabel!: Phaser.GameObjects.Text;
   private customer!: Phaser.GameObjects.Image;
-  private shopHit!: Phaser.GameObjects.Rectangle;
   private shopImg!: Phaser.GameObjects.Image;
   private shopCaption!: Phaser.GameObjects.Text;
   private shopCenter = { x: 0, y: 0 };
@@ -147,8 +146,6 @@ export class DriveScene extends Phaser.Scene {
     const shop = tileToWorld(CITY.shopSpawn);
     const nearShop = Math.hypot(snap.vehicle.x - shop.x, snap.vehicle.y - shop.y) <= HANDOFF_RADIUS;
     const canTapShop = driving && nearShop;
-    this.shopHit.setVisible(canTapShop);
-    if (this.shopHit.input) this.shopHit.input.enabled = canTapShop;
     if (this.shopImg.input) this.shopImg.input.enabled = driving;
     this.shopCaption.setVisible(driving);
     if (this.shopCaption.input) this.shopCaption.input.enabled = canTapShop;
@@ -159,6 +156,7 @@ export class DriveScene extends Phaser.Scene {
       this.shopCaption.setText(nearShop ? "Tap Kindling to return" : "Drive to Kindling");
       this.shopCaption.setAlpha(nearShop ? 0.7 + 0.3 * (0.5 + 0.5 * Math.sin(snap.gameMs / 200)) : 1);
     }
+    syncItemHit(this.shopCaption);
   }
 
   private paintDayNight(snap: SimSnapshot): void {
@@ -277,8 +275,8 @@ export class DriveScene extends Phaser.Scene {
     this.shopImg = this.add
       .image(shop.x, shop.y, "tex-shop-bldg")
       .setDisplaySize(CITY.shopLot.w * TILE, CITY.shopLot.h * TILE)
-      .setDepth(1)
-      .setInteractive({ useHandCursor: true });
+      .setDepth(1);
+    enableItemHit(this.shopImg);
     this.shopImg.on("pointerdown", (p: Phaser.Input.Pointer) => {
       p.event.stopPropagation();
       this.returnToShop();
@@ -293,15 +291,6 @@ export class DriveScene extends Phaser.Scene {
       .setDepth(2);
     fitTypeToWidth(mark, CITY.shopLot.w * TILE - 32, 20);
 
-    const hit = shopWorldHit();
-    this.shopHit = this.add
-      .rectangle(hit.x, hit.y, hit.w, hit.h, 0x000000, 0.001)
-      .setDepth(8)
-      .setInteractive({ useHandCursor: true });
-    this.shopHit.on("pointerdown", (p: Phaser.Input.Pointer) => {
-      p.event.stopPropagation();
-      this.returnToShop();
-    });
     this.shopCaption = addUiText(this, shop.x, shop.y + CITY.shopLot.h * TILE * 0.42, "Tap Kindling to return", {
       size: Type.body,
       color: Color.inkHex,
@@ -311,8 +300,8 @@ export class DriveScene extends Phaser.Scene {
     })
       .setOrigin(0.5, 0)
       .setDepth(8)
-      .setVisible(false)
-      .setInteractive({ useHandCursor: true });
+      .setVisible(false);
+    enableItemHit(this.shopCaption);
     this.shopCaption.on("pointerdown", (p: Phaser.Input.Pointer) => {
       p.event.stopPropagation();
       this.returnToShop();

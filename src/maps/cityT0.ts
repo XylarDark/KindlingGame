@@ -187,16 +187,15 @@ export function lotWorldRect(origin: TileCell, w: number, h: number): { left: nu
   };
 }
 
-/** Generous tap target over the Kindling building plus the curb in front. */
+/** Kindling building lot — same size as the shop sprite on the map. */
 export function shopWorldHit(): { x: number; y: number; w: number; h: number } {
-  const pad = TILE * 0.7;
   const lot = lotWorldRect(CITY.shopLot.origin, CITY.shopLot.w, CITY.shopLot.h);
-  const spawn = tileToWorld(CITY.shopSpawn);
-  const left = Math.min(lot.left, spawn.x - TILE * 0.7) - pad;
-  const top = Math.min(lot.top, spawn.y - TILE * 0.7) - pad;
-  const right = Math.max(lot.right, spawn.x + TILE * 0.7) + pad;
-  const bottom = Math.max(lot.bottom, spawn.y + TILE * 0.7) + pad;
-  return { x: (left + right) / 2, y: (top + bottom) / 2, w: right - left, h: bottom - top };
+  return {
+    x: (lot.left + lot.right) / 2,
+    y: (lot.top + lot.bottom) / 2,
+    w: lot.right - lot.left,
+    h: lot.bottom - lot.top,
+  };
 }
 
 export function doorstepWorld(house: HouseStop): { x: number; y: number } {

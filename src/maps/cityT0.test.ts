@@ -27,17 +27,14 @@ describe("city map", () => {
     }
   });
 
-  it("covers the Kindling building with a generous return hitbox", () => {
+  it("sizes the Kindling return hit to the shop building lot", () => {
     const hit = shopWorldHit();
     const lot = lotWorldRect(CITY.shopLot.origin, CITY.shopLot.w, CITY.shopLot.h);
     const home = lotCenter(CITY.shopLot.origin, CITY.shopLot.w, CITY.shopLot.h);
-    expect(hit.w).toBeGreaterThan(lot.right - lot.left);
-    expect(hit.h).toBeGreaterThan(lot.bottom - lot.top);
-    expect(Math.abs(hit.x - home.x)).toBeLessThan(TILE);
-    expect(hit.x - hit.w / 2).toBeLessThanOrEqual(lot.left);
-    expect(hit.x + hit.w / 2).toBeGreaterThanOrEqual(lot.right);
-    expect(hit.y - hit.h / 2).toBeLessThanOrEqual(lot.top);
-    expect(hit.y + hit.h / 2).toBeGreaterThanOrEqual(lot.bottom);
+    expect(hit.w).toBe(lot.right - lot.left);
+    expect(hit.h).toBe(lot.bottom - lot.top);
+    expect(hit.x).toBe(home.x);
+    expect(hit.y).toBe(home.y);
     expect(houseById("house-1")).toBeTruthy();
   });
 });

@@ -28,6 +28,7 @@ import {
   strainSlotH,
   tabletLayout,
 } from "../maps/shopT0";
+import { enableItemHit } from "../input/hit";
 import { getSim, isTutorialMode } from "../session";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import { skyAt } from "../sim/dayNight";
@@ -88,6 +89,8 @@ export class ShopScene extends Phaser.Scene {
     this.makeHotspots();
 
     this.bagRack = this.add.image(BAG_STACK.x, BAG_STACK.y, "tex-bag").setOrigin(0.5, 1).setScale(BAG_SCALE).setDepth(8);
+    enableItemHit(this.bagRack);
+    this.bagRack.on("pointerdown", () => getSim().shopClick({ type: "bagRack" }));
     this.bagRackLabel = addUiText(this, BAG_STACK.x, BAG_STACK.y - Math.round(120 * BAG_SCALE) - 8, "BAGS", {
       size: Type.caption,
       color: Color.inkHex,
@@ -117,10 +120,8 @@ export class ShopScene extends Phaser.Scene {
       .setDepth(11);
     fitTypeToWidth(this.tabletLabel, tab.screenW - 16, 12);
 
-    this.tabletHit = this.add
-      .rectangle(TABLET.x, TABLET.y, TABLET_W, TABLET_H, 0x000000, 0.001)
-      .setDepth(12)
-      .setInteractive({ useHandCursor: true });
+    this.tabletHit = this.add.rectangle(TABLET.x, TABLET.y, TABLET_W, TABLET_H, 0x000000, 0.001).setDepth(12);
+    enableItemHit(this.tabletHit);
     this.tabletHit.on("pointerdown", () => {
       const ticket = getSim().snapshot().tabletTicket;
       if (ticket) getSim().shopClick({ type: "tablet", orderId: ticket.id });
@@ -152,12 +153,8 @@ export class ShopScene extends Phaser.Scene {
       .setDepth(12)
       .setVisible(false);
 
-    this.driver = this.add
-      .image(DRIVER.x, DRIVER.y, "tex-driver-sit")
-      .setOrigin(0.5, 1)
-      .setScale(PEOPLE_SCALE)
-      .setDepth(10)
-      .setInteractive({ useHandCursor: true });
+    this.driver = this.add.image(DRIVER.x, DRIVER.y, "tex-driver-sit").setOrigin(0.5, 1).setScale(PEOPLE_SCALE).setDepth(10);
+    enableItemHit(this.driver);
     this.driver.on("pointerdown", () => this.departNow());
     wireHover(this.driver);
 
@@ -174,13 +171,8 @@ export class ShopScene extends Phaser.Scene {
       .setDepth(12)
       .setVisible(false);
 
-    this.packBag = this.add
-      .image(PACK_SPOT.x, PACK_SPOT.y, "tex-bag")
-      .setOrigin(0.5, 1)
-      .setScale(BAG_SCALE)
-      .setDepth(8)
-      .setVisible(false)
-      .setInteractive({ useHandCursor: true });
+    this.packBag = this.add.image(PACK_SPOT.x, PACK_SPOT.y, "tex-bag").setOrigin(0.5, 1).setScale(BAG_SCALE).setDepth(8).setVisible(false);
+    enableItemHit(this.packBag);
     this.packBag.on("pointerdown", () => getSim().shopClick({ type: "counterBag" }));
     wireHover(this.packBag);
     this.bagLabel = addUiText(this, PACK_SPOT.x, PACK_SPOT.y - Math.round(120 * BAG_SCALE) - 16, "", {
@@ -194,12 +186,8 @@ export class ShopScene extends Phaser.Scene {
       .setDepth(9)
       .setVisible(false);
 
-    this.receipt = this.add
-      .image(RECEIPT_SPOT.x, RECEIPT_SPOT.y, "tex-receipt")
-      .setOrigin(0.5, 1)
-      .setDepth(9)
-      .setVisible(false)
-      .setInteractive({ useHandCursor: true });
+    this.receipt = this.add.image(RECEIPT_SPOT.x, RECEIPT_SPOT.y, "tex-receipt").setOrigin(0.5, 1).setDepth(9).setVisible(false);
+    enableItemHit(this.receipt);
     this.receipt.on("pointerdown", () => getSim().shopClick({ type: "receipt" }));
     wireHover(this.receipt);
     this.receiptText = addUiText(this, RECEIPT_SPOT.x, RECEIPT_SPOT.y - 108, "", {
@@ -436,12 +424,8 @@ export class ShopScene extends Phaser.Scene {
     for (const customer of list) {
       let sprite = this.customers.get(customer.orderId);
       if (!sprite) {
-        sprite = this.add
-          .image(customer.x, CUSTOMER_SPOT.y, "tex-customer")
-          .setOrigin(0.5, 1)
-          .setScale(PEOPLE_SCALE)
-          .setDepth(5)
-          .setInteractive({ useHandCursor: true });
+        sprite = this.add.image(customer.x, CUSTOMER_SPOT.y, "tex-customer").setOrigin(0.5, 1).setScale(PEOPLE_SCALE).setDepth(5);
+        enableItemHit(sprite);
         sprite.on("pointerdown", () => getSim().shopClick({ type: "customer", orderId: customer.orderId }));
         wireHover(sprite);
         this.customers.set(customer.orderId, sprite);
@@ -469,21 +453,13 @@ export class ShopScene extends Phaser.Scene {
   }
 
   private makeHotspots(): void {
-    const bagHit = this.add
-      .rectangle(BAG_STACK.x, BAG_STACK.y - Math.round(60 * BAG_SCALE), Math.round(96 * BAG_SCALE), Math.round(120 * BAG_SCALE), 0x000000, 0.001)
-      .setDepth(8)
-      .setInteractive({ useHandCursor: true });
-    bagHit.on("pointerdown", () => getSim().shopClick({ type: "bagRack" }));
-
     const sim = getSim();
     sim.catalog.forEach((sku, i) => {
       const p = strainPos(i);
       const slotH = strainSlotH();
       const glassW = TV_W - TV_BEZEL * 2;
-      const screen = this.add
-        .rectangle(p.x, p.y, glassW - 8, slotH - 4, sku.color, 0.35)
-        .setDepth(5)
-        .setInteractive({ useHandCursor: true });
+      const screen = this.add.rectangle(p.x, p.y, glassW - 8, slotH - 4, sku.color, 0.35).setDepth(5);
+      enableItemHit(screen);
       screen.on("pointerdown", () => getSim().shopClick({ type: "strain", skuId: sku.id }));
       this.tvs.push(screen);
       this.jarSkus.push(sku.id);
