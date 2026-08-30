@@ -21,6 +21,8 @@ export interface Order {
   arriveAtGameMs?: number;
   destinationId?: string;
   customerName: string;
+  /** Frozen at spawn so a drop is not randomly 19+ then underage. */
+  idAge: number;
   late?: boolean;
 }
 

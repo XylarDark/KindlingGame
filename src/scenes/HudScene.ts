@@ -4,8 +4,9 @@ import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import { getSim, isTutorialMode, setTutorialMode } from "../session";
 import type { SimSnapshot } from "../sim/gameSim";
 import { tutorialHints } from "../sim/tutorialHints";
-import { addHudButton, addPanel, setButtonLabel } from "../ui/chrome";
+import { addHudButton, addPanel, setButtonCopy } from "../ui/chrome";
 import { addUiText } from "../ui/text";
+import { roadButtonCopy } from "../ui/copy";
 import { Color, Type } from "../ui/theme";
 import { overlayStroke } from "../ui/typekit";
 import { TutorialArrows } from "../ui/tutorialArrow";
@@ -14,7 +15,6 @@ export class HudScene extends Phaser.Scene {
   private scoreText!: Phaser.GameObjects.Text;
   private clockText!: Phaser.GameObjects.Text;
   private roleBtn!: Phaser.GameObjects.Container;
-  private interactBtn!: Phaser.GameObjects.Container;
   private padRing!: Phaser.GameObjects.Graphics;
   private padKnob!: Phaser.GameObjects.Arc;
   private padLabel!: Phaser.GameObjects.Text;
@@ -22,13 +22,18 @@ export class HudScene extends Phaser.Scene {
   private phoneCaption!: Phaser.GameObjects.Text;
   private idPanel!: Phaser.GameObjects.Container;
   private idName!: Phaser.GameObjects.Text;
+  private idDob!: Phaser.GameObjects.Text;
+  private idHint!: Phaser.GameObjects.Text;
+  private idBg!: Phaser.GameObjects.Rectangle;
   private flash!: Phaser.GameObjects.Rectangle;
+  private toastText!: Phaser.GameObjects.Text;
   private sawPhoto = false;
   private padCenter = { x: 196, y: GAME_HEIGHT - 220 };
   private pointerId: number | null = null;
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
   private arrows!: TutorialArrows;
   private cog!: Phaser.GameObjects.Image;
+  private cogCaption!: Phaser.GameObjects.Text;
   private settingsDim!: Phaser.GameObjects.Rectangle;
   private settingsPanel!: Phaser.GameObjects.Container;
   private tutorialValue!: Phaser.GameObjects.Text;
@@ -63,24 +68,18 @@ export class HudScene extends Phaser.Scene {
       .setOrigin(1, 0)
       .setDepth(20);
 
-    this.roleBtn = addHudButton(this, GAME_WIDTH - 28, 100, "HIT THE ROAD", () => this.onRole(), {
+    this.roleBtn = addHudButton(this, GAME_WIDTH - 28, 108, "HIT THE ROAD", () => this.onRole(), {
       originX: 1,
       originY: 0,
       variant: "primary",
-      minWidth: 250,
-    });
-    this.interactBtn = addHudButton(this, GAME_WIDTH - 108, GAME_HEIGHT - 24, "HANDOFF", () => getSim().queueInteract(), {
-      originX: 1,
-      originY: 1,
-      variant: "amber",
-      minWidth: 260,
+      minWidth: 280,
+      caption: "Leave with this delivery",
     });
     this.roleBtn.setVisible(false);
-    this.interactBtn.setVisible(false);
 
     this.phone = this.add
-      .image(GAME_WIDTH - 150, GAME_HEIGHT - 280, "tex-phone")
-      .setScale(2.35)
+      .image(GAME_WIDTH - 380, GAME_HEIGHT - 230, "tex-phone")
+      .setDisplaySize(168, 288)
       .setDepth(22)
       .setInteractive({ useHandCursor: true })
       .setVisible(false);
@@ -88,46 +87,60 @@ export class HudScene extends Phaser.Scene {
       p.event.stopPropagation();
       getSim().queueInteract();
     });
-    this.phoneCaption = addUiText(this, GAME_WIDTH - 150, GAME_HEIGHT - 188, "Tap to call", {
+    this.phoneCaption = addUiText(this, GAME_WIDTH - 380, GAME_HEIGHT - 70, "Call the customer", {
       size: Type.caption,
       color: Color.neonHex,
       fontStyle: "600",
+      backgroundColor: "#1c1612ee",
+      padding: { x: 10, y: 4 },
       ...overlayStroke(15),
     })
       .setOrigin(0.5, 0)
       .setDepth(22)
       .setVisible(false);
 
-    this.idName = addUiText(this, 0, -20, "", {
+    this.toastText = addUiText(this, GAME_WIDTH / 2, GAME_HEIGHT - 24, "", {
       size: Type.body,
+      color: Color.creamHex,
+      backgroundColor: "#1c1612ee",
+      padding: { x: 16, y: 10 },
+      align: "center",
+      fontStyle: "600",
+      wordWrap: { width: 760 },
+    })
+      .setOrigin(0.5, 1)
+      .setDepth(20);
+
+    this.idName = addUiText(this, 0, -28, "", {
+      size: Type.heading,
       color: Color.inkHex,
       align: "center",
       fontStyle: "600",
       strokeThickness: 0,
     }).setOrigin(0.5);
-    const idTitle = addUiText(this, 0, -88, "CUSTOMER ID", {
-      size: Type.caption,
+    const idTitle = addUiText(this, 0, -118, "CUSTOMER ID", {
+      size: Type.body,
       color: Color.inkHex,
       fontStyle: "700",
       strokeThickness: 0,
     }).setOrigin(0.5);
-    const idDob = addUiText(this, 0, 18, "DOB  14 Mar 1999   ·   21+", {
-      size: Type.caption,
+    this.idDob = addUiText(this, 0, 22, "", {
+      size: Type.body,
       color: "#3a2418",
       strokeThickness: 0,
     }).setOrigin(0.5);
-    const idHint = addUiText(this, 0, 70, "Tap card or Check ID", {
+    this.idHint = addUiText(this, 0, 88, "Tap the card to confirm 19+", {
       size: Type.caption,
       color: "#3d7a45",
       fontStyle: "600",
       strokeThickness: 0,
     }).setOrigin(0.5);
-    const idBg = this.add.rectangle(0, 0, 420, 240, 0xf4e8c1, 0.97).setStrokeStyle(4, 0x3d7a45).setInteractive({ useHandCursor: true });
-    idBg.on("pointerdown", (p: Phaser.Input.Pointer) => {
+    this.idBg = this.add.rectangle(0, 0, 560, 320, 0xf4e8c1, 0.97).setStrokeStyle(6, 0x3d7a45).setInteractive({ useHandCursor: true });
+    this.idBg.on("pointerdown", (p: Phaser.Input.Pointer) => {
       p.event.stopPropagation();
       getSim().queueInteract();
     });
-    this.idPanel = this.add.container(GAME_WIDTH / 2, GAME_HEIGHT / 2, [idBg, idTitle, this.idName, idDob, idHint]);
+    this.idPanel = this.add.container(GAME_WIDTH / 2, GAME_HEIGHT / 2, [this.idBg, idTitle, this.idName, this.idDob, this.idHint]);
     this.idPanel.setDepth(25).setVisible(false);
 
     this.flash = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0xffffff, 0).setDepth(24);
@@ -135,7 +148,7 @@ export class HudScene extends Phaser.Scene {
     this.padRing = this.add.graphics().setDepth(19);
     this.drawPad();
     this.padKnob = this.add.circle(this.padCenter.x, this.padCenter.y, 40, Color.cream, 0.92).setDepth(20);
-    this.padLabel = addUiText(this, this.padCenter.x, this.padCenter.y - 128, "MOVE", {
+    this.padLabel = addUiText(this, this.padCenter.x, this.padCenter.y - 128, "STEER", {
       size: Type.caption,
       color: Color.creamHex,
       backgroundColor: "#1c1612ee",
@@ -177,42 +190,36 @@ export class HudScene extends Phaser.Scene {
   private paintHud(snap: SimSnapshot): void {
     this.scoreText.setText(String(snap.score));
     this.clockText.setText(snap.clockLabel);
-    setButtonLabel(
-      this.roleBtn,
-      snap.playerRole === "keyLead"
-        ? snap.bagsInBin.length > 1
-          ? `HIT THE ROAD  ·  ${snap.bagsInBin.length}`
-          : "HIT THE ROAD"
-        : "BACK TO SHOP",
-    );
-    const showRole = snap.playerRole === "driver" || snap.canHitTheRoad;
+    const next = tutorialHints(snap)[0];
+    if (snap.playerRole === "keyLead") {
+      const road = roadButtonCopy(snap.bagsInBin.length);
+      setButtonCopy(this.roleBtn, road.label, road.caption);
+    }
+    const showRole = snap.playerRole === "keyLead" && snap.canHitTheRoad;
     this.roleBtn.setVisible(showRole);
     if (this.roleBtn.input) this.roleBtn.input.enabled = showRole;
-    const pulseRoad = snap.playerRole === "keyLead" && snap.canHitTheRoad;
+    const pulseRoad = snap.playerRole === "keyLead" && next?.kind === "hitTheRoad";
     this.roleBtn.setAlpha(pulseRoad ? 0.55 + 0.45 * (0.5 + 0.5 * Math.sin(snap.gameMs / 160)) : 1);
 
     const drop = snap.dropoff;
-    const interactLabel =
-      snap.playerRole === "keyLead"
-        ? "HANDOFF"
-        : drop.actionLabel || "PARK";
-    setButtonLabel(this.interactBtn, interactLabel);
-    const showHandoff =
-      snap.playerRole === "driver"
-        ? !!(drop.canAct || drop.actionLabel === "PARK")
-        : snap.serveLine.startsWith("HANDOFF");
-    this.interactBtn.setVisible(showHandoff);
-    if (this.interactBtn.input) this.interactBtn.input.enabled = showHandoff;
-
     const showPhone = snap.playerRole === "driver" && (drop.phase === "atCurb" || drop.phase === "calling");
+    const atDoor = drop.phase === "atDoor";
+
     this.phone.setVisible(showPhone);
     this.phoneCaption.setVisible(showPhone);
-    this.phoneCaption.setText(drop.phase === "calling" ? "Ringing…" : "Tap to call");
+    this.phoneCaption.setText(drop.phase === "calling" ? "Phone is ringing…" : "Call the customer");
     this.phone.setAlpha(drop.phase === "calling" ? 0.85 : 1);
 
-    const showId = !!drop.idCard;
+    const showId = !!drop.idCard && drop.idAsked;
     this.idPanel.setVisible(showId);
-    if (drop.idCard) this.idName.setText(drop.idCard.name);
+    if (drop.idCard) {
+      this.idName.setText(drop.idCard.name);
+      const band = drop.idCard.ageOk ? "19+" : "UNDER 19";
+      this.idDob.setText(`DOB  ${drop.idCard.dob}   ·   ${band}`);
+      this.idHint.setText(drop.idCard.ageOk ? "Tap the card to confirm 19+" : "Under 19 — tap to deny and leave");
+      this.idHint.setColor(drop.idCard.ageOk ? "#3d7a45" : Color.dangerHex);
+      this.idBg.setStrokeStyle(6, drop.idCard.ageOk ? 0x3d7a45 : 0xc45a3a);
+    }
 
     if (drop.photoTaken && !this.sawPhoto) {
       this.sawPhoto = true;
@@ -221,7 +228,9 @@ export class HudScene extends Phaser.Scene {
     }
     if (!drop.photoTaken) this.sawPhoto = false;
 
-    const atDoor = snap.dropoff.phase === "atDoor";
+    this.toastText.setText(snap.toast);
+    this.toastText.setVisible(!!snap.toast && !showId && snap.dropoff.phase !== "atDoor");
+
     const driving = snap.playerRole === "driver" && !atDoor;
     this.padRing.setVisible(driving);
     this.padKnob.setVisible(driving);
@@ -239,8 +248,6 @@ export class HudScene extends Phaser.Scene {
     for (const hint of tutorialHints(snap)) {
       if (hint.kind === "hitTheRoad" && this.roleBtn.visible) {
         spots.push({ id: hint.id, x: this.roleBtn.x - 125, y: this.roleBtn.y - 10 });
-      } else if (hint.kind === "handoff" && this.interactBtn.visible) {
-        spots.push({ id: hint.id, x: this.interactBtn.x - 110, y: this.interactBtn.y - 72 });
       } else if (hint.kind === "phone" && this.phone.visible) {
         spots.push({ id: hint.id, x: this.phone.x, y: this.phone.y - 70 });
       } else if (hint.kind === "idCard" && this.idPanel.visible) {
@@ -267,7 +274,7 @@ export class HudScene extends Phaser.Scene {
     const panelW = 420;
     const panelH = 196;
     const panelX = GAME_WIDTH - 24 - panelW;
-    const panelY = GAME_HEIGHT - 24 - 80 - panelH;
+    const panelY = GAME_HEIGHT - 24 - 168 - panelH;
     const bg = addPanel(this, 0, 0, panelW, panelH, {
       radius: 4,
       fill: 0xfffaf3,
@@ -310,17 +317,31 @@ export class HudScene extends Phaser.Scene {
     this.settingsPanel = this.add.container(panelX, panelY, [bg, title, label, hint, this.tutorialValue, hit]);
     this.settingsPanel.setDepth(41).setVisible(false);
 
+    const cogX = GAME_WIDTH - 24;
+    const cogY = GAME_HEIGHT - 20;
     this.cog = this.add
-      .image(GAME_WIDTH - 56, GAME_HEIGHT - 48, "tex-cog")
+      .image(cogX, cogY, "tex-cog")
       .setOrigin(1, 1)
       .setScale(1.55)
       .setDepth(42)
       .setInteractive({ useHandCursor: true });
-    this.cog.on("pointerdown", (p: Phaser.Input.Pointer) => {
+    const toggleSettings = (p: Phaser.Input.Pointer): void => {
       p.event.stopPropagation();
       if (this.settingsOpen) this.closeSettings();
       else this.openSettings();
-    });
+    };
+    this.cog.on("pointerdown", toggleSettings);
+    this.cogCaption = addUiText(this, cogX - 8, cogY - 64 * 1.55 - 4, "Settings", {
+      size: Type.caption,
+      color: Color.creamHex,
+      backgroundColor: "#1c1612ee",
+      padding: { x: 8, y: 3 },
+      fontStyle: "600",
+    })
+      .setOrigin(1, 1)
+      .setDepth(42)
+      .setInteractive({ useHandCursor: true });
+    this.cogCaption.on("pointerdown", toggleSettings);
     this.refreshTutorialToggle();
   }
 
@@ -373,14 +394,9 @@ export class HudScene extends Phaser.Scene {
 
   private onRole(): void {
     const sim = getSim();
-    const snap = sim.snapshot();
-    if (snap.playerRole === "keyLead") {
-      if (!sim.hitTheRoad()) return;
-      this.showDrive();
-    } else {
-      sim.backToShop();
-      this.showShop();
-    }
+    if (sim.snapshot().playerRole !== "keyLead") return;
+    if (!sim.hitTheRoad()) return;
+    this.showDrive();
   }
 
   private showDrive(): void {

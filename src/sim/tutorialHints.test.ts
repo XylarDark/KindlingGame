@@ -71,7 +71,7 @@ describe("tutorialHints", () => {
 
     expect(first.status).toBe("inBin");
     expect(nextShopHint(sim.snapshot())).toEqual(expect.objectContaining({ kind: "strain", skuId: second.skuId }));
-    expect(tutorialHints(sim.snapshot()).map((h) => h.kind)).toEqual(["strain", "hitTheRoad"]);
+    expect(tutorialHints(sim.snapshot()).map((h) => h.kind)).toEqual(["strain"]);
     expect(sim.snapshot().highlightSkuId).toBe(second.skuId);
     expect(sim.snapshot().canHitTheRoad).toBe(true);
 
@@ -85,5 +85,13 @@ describe("tutorialHints", () => {
     expect(second.status).toBe("inBin");
     expect(nextShopHint(sim.snapshot())?.kind).toBe("hitTheRoad");
     expect(tutorialHints(sim.snapshot())).toEqual([expect.objectContaining({ kind: "hitTheRoad" })]);
+  });
+
+  it("never returns more than one hint", () => {
+    const sim = GameSim.create({ seed: 4, autoSpawn: false });
+    sim.spawnOrder("delivery", { destinationId: "house-1" });
+    sim.spawnOrder("delivery", { destinationId: "house-2" });
+    expect(tutorialHints(sim.snapshot())).toHaveLength(1);
+    expect(tutorialHints(sim.snapshot())[0]?.kind).toBe("tablet");
   });
 });

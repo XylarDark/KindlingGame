@@ -30,10 +30,14 @@ export function generateTextures(scene: Phaser.Scene): void {
   roadCross(scene);
   grass(scene);
   shopTile(scene);
-  houseTile(scene, "tex-house", Pal.kraftLite, Pal.woodDark);
-  houseTile(scene, "tex-house-alt", Pal.creamSoft, Pal.dusk);
-  houseTile(scene, "tex-house-3", 0xb09082, 0x5a3038);
-  houseTile(scene, "tex-house-4", Pal.grassLite, Pal.leafDark);
+  shopBuilding(scene);
+  houseLot(scene, "tex-house", Pal.kraftLite, Pal.woodDark, Pal.wood, "gable");
+  houseLot(scene, "tex-house-alt", Pal.creamSoft, Pal.dusk, 0x8a6a48, "ranch");
+  houseLot(scene, "tex-house-3", 0xb09082, 0x5a3038, Pal.woodTrim, "town");
+  houseLot(scene, "tex-house-4", Pal.grassLite, Pal.leafDark, Pal.leaf, "cottage");
+  houseLot(scene, "tex-house-5", Pal.wall, Pal.rustDark, Pal.kraft, "twoStory");
+  houseLot(scene, "tex-house-6", Pal.cream, 0x3a3858, Pal.denim, "modern");
+  treeTile(scene);
   bag(scene);
   vehicle(scene);
   person(scene, "tex-keylead", "keylead", Pal.skin, Pal.hairBrown, Pal.leaf, Pal.hairBrownLite);
@@ -144,6 +148,155 @@ function houseTile(scene: Phaser.Scene, key: string, wall: number, roof: number)
     cells(g, 10, 8, 2, 1, Pal.sun);
     cells(g, 7, 10, 2, 4, Pal.woodDark);
     cells(g, 8, 12, 1, 1, Pal.gold);
+  });
+}
+
+type HouseStyle = "gable" | "ranch" | "town" | "cottage" | "twoStory" | "modern";
+
+function yard(g: G, w: number, h: number): void {
+  cells(g, 0, 0, w, h, Pal.grass);
+  for (let i = 0; i < 28; i++) {
+    const x = (i * 5 + 2) % w;
+    const y = (i * 7 + 3) % h;
+    cells(g, x, y, 1, 1, i % 2 === 0 ? Pal.grassLite : Pal.grassDark);
+  }
+  cells(g, 2, h - 4, w - 4, 4, Pal.grassDark);
+  cells(g, 3, h - 5, w - 6, 2, Pal.grassLite);
+}
+
+function windowPane(g: G, x: number, y: number, w: number, h: number): void {
+  cells(g, x, y, w, h, Pal.glass);
+  cells(g, x, y, w, 2, Pal.sun);
+  cells(g, x + 1, y + 2, w - 2, h - 4, Pal.dusk);
+}
+
+/** Lot house — 48 logical pixels, Terraria-style block craft, distinct silhouettes. */
+function houseLot(scene: Phaser.Scene, key: string, wall: number, roof: number, trim: number, style: HouseStyle): void {
+  bake(scene, key, 192, 192, (g) => {
+    yard(g, 48, 48);
+    if (style === "ranch") {
+      cells(g, 3, 16, 42, 6, roof);
+      cells(g, 5, 14, 38, 4, roof);
+      cells(g, 8, 12, 32, 3, roof);
+      cells(g, 4, 16, 40, 2, trim);
+      cells(g, 5, 20, 38, 22, wall);
+      cells(g, 40, 21, 3, 21, Pal.shadow);
+      windowPane(g, 8, 24, 7, 7);
+      windowPane(g, 18, 24, 7, 7);
+      windowPane(g, 33, 24, 7, 7);
+      cells(g, 20, 32, 8, 10, Pal.woodDark);
+      cells(g, 21, 34, 6, 8, Pal.wood);
+      cells(g, 24, 36, 1, 2, Pal.gold);
+    } else if (style === "town") {
+      cells(g, 10, 2, 28, 8, roof);
+      cells(g, 8, 8, 32, 6, roof);
+      cells(g, 9, 12, 30, 2, trim);
+      cells(g, 10, 14, 28, 28, wall);
+      cells(g, 35, 15, 3, 27, Pal.shadow);
+      windowPane(g, 13, 17, 6, 8);
+      windowPane(g, 29, 17, 6, 8);
+      windowPane(g, 13, 28, 6, 6);
+      cells(g, 20, 30, 8, 12, Pal.woodDark);
+      cells(g, 21, 32, 6, 10, Pal.wood);
+      cells(g, 24, 35, 1, 2, Pal.gold);
+    } else if (style === "cottage") {
+      cells(g, 16, 4, 16, 8, roof);
+      cells(g, 10, 10, 28, 6, roof);
+      cells(g, 6, 14, 36, 5, roof);
+      cells(g, 7, 17, 34, 2, trim);
+      cells(g, 10, 19, 28, 22, wall);
+      cells(g, 34, 20, 4, 21, Pal.shadow);
+      windowPane(g, 13, 22, 6, 6);
+      windowPane(g, 29, 22, 6, 6);
+      cells(g, 20, 30, 8, 11, Pal.woodDark);
+      cells(g, 21, 32, 6, 9, Pal.wood);
+      cells(g, 6, 36, 8, 5, Pal.leaf);
+      cells(g, 36, 34, 7, 7, Pal.leafDark);
+      cells(g, 24, 34, 1, 2, Pal.gold);
+    } else if (style === "twoStory") {
+      cells(g, 8, 4, 32, 6, roof);
+      cells(g, 6, 8, 36, 5, roof);
+      cells(g, 10, 2, 8, 6, Pal.shadow);
+      cells(g, 11, 1, 6, 5, roof);
+      cells(g, 7, 12, 34, 2, trim);
+      cells(g, 8, 14, 32, 26, wall);
+      cells(g, 36, 15, 4, 25, Pal.shadow);
+      windowPane(g, 11, 17, 6, 6);
+      windowPane(g, 31, 17, 6, 6);
+      cells(g, 18, 16, 12, 6, Pal.wood);
+      cells(g, 19, 17, 10, 4, Pal.dusk);
+      windowPane(g, 11, 28, 6, 6);
+      cells(g, 20, 30, 8, 10, Pal.woodDark);
+      cells(g, 21, 32, 6, 8, Pal.wood);
+      cells(g, 24, 34, 1, 2, Pal.gold);
+    } else if (style === "modern") {
+      cells(g, 6, 8, 36, 6, roof);
+      cells(g, 6, 8, 36, 2, trim);
+      cells(g, 8, 14, 32, 26, wall);
+      cells(g, 36, 14, 4, 26, Pal.shadow);
+      cells(g, 10, 16, 12, 16, Pal.glass);
+      cells(g, 10, 16, 12, 3, Pal.sun);
+      cells(g, 12, 20, 8, 10, Pal.dusk);
+      windowPane(g, 28, 18, 8, 8);
+      cells(g, 26, 32, 10, 8, Pal.woodDark);
+      cells(g, 27, 34, 8, 6, Pal.wood);
+      cells(g, 30, 36, 1, 2, Pal.gold);
+    } else {
+      cells(g, 20, 2, 8, 8, Pal.shadow);
+      cells(g, 21, 1, 6, 6, roof);
+      cells(g, 6, 10, 36, 7, roof);
+      cells(g, 8, 8, 32, 5, roof);
+      cells(g, 12, 6, 24, 4, roof);
+      cells(g, 7, 15, 34, 2, trim);
+      cells(g, 8, 17, 32, 23, wall);
+      cells(g, 36, 18, 4, 22, Pal.shadow);
+      windowPane(g, 11, 20, 7, 7);
+      windowPane(g, 30, 20, 7, 7);
+      cells(g, 20, 28, 8, 12, Pal.woodDark);
+      cells(g, 21, 30, 6, 10, Pal.wood);
+      cells(g, 24, 33, 1, 2, Pal.gold);
+      cells(g, 12, 34, 5, 3, Pal.leaf);
+      cells(g, 31, 34, 5, 3, Pal.leafDark);
+    }
+  });
+}
+
+function shopBuilding(scene: Phaser.Scene): void {
+  bake(scene, "tex-shop-bldg", 320, 240, (g) => {
+    yard(g, 80, 60);
+    cells(g, 6, 10, 68, 42, Pal.wall);
+    cells(g, 6, 10, 68, 8, Pal.wood);
+    cells(g, 6, 10, 68, 3, Pal.woodLight);
+    cells(g, 34, 2, 12, 10, Pal.woodDark);
+    cells(g, 10, 5, 60, 7, Pal.woodDark);
+    cells(g, 16, 5, 48, 7, Pal.wood);
+    cells(g, 10, 20, 14, 12, Pal.glass);
+    cells(g, 30, 20, 20, 12, Pal.glass);
+    cells(g, 56, 20, 14, 12, Pal.glass);
+    cells(g, 10, 20, 14, 3, Pal.cream);
+    cells(g, 30, 20, 20, 3, Pal.cream);
+    cells(g, 56, 20, 14, 3, Pal.cream);
+    cells(g, 12, 24, 10, 7, Pal.dusk);
+    cells(g, 33, 24, 14, 7, Pal.dusk);
+    cells(g, 58, 24, 10, 7, Pal.dusk);
+    cells(g, 34, 36, 12, 16, Pal.woodDark);
+    cells(g, 36, 40, 8, 12, Pal.wood);
+    cells(g, 39, 44, 2, 4, Pal.gold);
+    cells(g, 8, 50, 64, 4, Pal.wood);
+    cells(g, 24, 16, 32, 4, Pal.leaf);
+    cells(g, 70, 12, 4, 40, Pal.shadow);
+  });
+}
+
+function treeTile(scene: Phaser.Scene): void {
+  bake(scene, "tex-tree", 80, 80, (g) => {
+    cells(g, 0, 0, 20, 20, Pal.grass);
+    cells(g, 9, 14, 2, 5, Pal.woodDark);
+    cells(g, 8, 15, 4, 2, Pal.wood);
+    cells(g, 6, 6, 8, 8, Pal.leafDark);
+    cells(g, 7, 5, 6, 7, Pal.leaf);
+    cells(g, 8, 4, 4, 4, Pal.grassLite);
+    cells(g, 9, 7, 2, 2, Pal.leafDark);
   });
 }
 

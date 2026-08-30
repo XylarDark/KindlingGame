@@ -17,6 +17,7 @@ function order(partial: Partial<Order> & Pick<Order, "type">): Order {
     status: "onRun",
     createdAtGameMs: 0,
     customerName: "Ash Park",
+    idAge: 24,
     ...partial,
   };
 }

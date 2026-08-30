@@ -31,9 +31,10 @@ import {
 import { getSim, isTutorialMode } from "../session";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import { skyAt } from "../sim/dayNight";
-import type { CustomerView, SimSnapshot } from "../sim/gameSim";
+import type { CustomerView, OrderView, SimSnapshot } from "../sim/gameSim";
 import { isPackedOnCounter } from "../sim/orders";
 import { nextShopHint, tutorialHints } from "../sim/tutorialHints";
+import { deliveryBagLabel, isSlaUrgent } from "../ui/copy";
 import { wireHover } from "../ui/chrome";
 import { addUiText } from "../ui/text";
 import { Color, Type } from "../ui/theme";
@@ -44,12 +45,14 @@ export class ShopScene extends Phaser.Scene {
   private keyLead!: Phaser.GameObjects.Image;
   private driver!: Phaser.GameObjects.Image;
   private bagRack!: Phaser.GameObjects.Image;
+  private bagRackLabel!: Phaser.GameObjects.Text;
   private packBag!: Phaser.GameObjects.Image;
   private bagLabel!: Phaser.GameObjects.Text;
   private receipt!: Phaser.GameObjects.Image;
   private receiptText!: Phaser.GameObjects.Text;
   private tabletScreen!: Phaser.GameObjects.Graphics;
   private tabletHit!: Phaser.GameObjects.Rectangle;
+  private tabletLabel!: Phaser.GameObjects.Text;
   private queueBadge!: Phaser.GameObjects.Text;
   private keyLeadBubble!: Phaser.GameObjects.Text;
   private driverBubble!: Phaser.GameObjects.Text;
@@ -85,6 +88,15 @@ export class ShopScene extends Phaser.Scene {
     this.makeHotspots();
 
     this.bagRack = this.add.image(BAG_STACK.x, BAG_STACK.y, "tex-bag").setOrigin(0.5, 1).setScale(BAG_SCALE).setDepth(8);
+    this.bagRackLabel = addUiText(this, BAG_STACK.x, BAG_STACK.y - Math.round(120 * BAG_SCALE) - 8, "BAGS", {
+      size: Type.caption,
+      color: Color.inkHex,
+      backgroundColor: Color.creamHex,
+      padding: { x: 6, y: 3 },
+      fontStyle: "700",
+    })
+      .setOrigin(0.5)
+      .setDepth(9);
 
     this.keyLead = this.add
       .image(KEYLEAD.x, KEYLEAD.y, "tex-keylead")
@@ -95,7 +107,7 @@ export class ShopScene extends Phaser.Scene {
 
     const tab = tabletLayout();
     this.tabletScreen = this.add.graphics().setDepth(10);
-    const orders = addUiText(this, TABLET.x, tab.screenTop + tab.screenH / 2, "ORDERS", {
+    this.tabletLabel = addUiText(this, TABLET.x, tab.screenTop + tab.screenH / 2, "ORDERS", {
       size: Type.caption,
       color: Color.creamHex,
       fontStyle: "700",
@@ -103,7 +115,7 @@ export class ShopScene extends Phaser.Scene {
     })
       .setOrigin(0.5)
       .setDepth(11);
-    fitTypeToWidth(orders, tab.screenW - 16, 12);
+    fitTypeToWidth(this.tabletLabel, tab.screenW - 16, 12);
 
     this.tabletHit = this.add
       .rectangle(TABLET.x, TABLET.y, TABLET_W, TABLET_H, 0x000000, 0.001)
@@ -149,7 +161,7 @@ export class ShopScene extends Phaser.Scene {
     this.driver.on("pointerdown", () => this.departNow());
     wireHover(this.driver);
 
-    this.driverBubble = addUiText(this, DRIVER.x - 88, DRIVER.y - 100, "", {
+    this.driverBubble = addUiText(this, DRIVER.x - 24, DRIVER.y - PERSON_DISPLAY_H - 8, "", {
       size: Type.body,
       color: Color.inkHex,
       backgroundColor: Color.creamHex,
@@ -254,12 +266,13 @@ export class ShopScene extends Phaser.Scene {
     const pulse = 0.62 + 0.38 * (0.5 + 0.5 * Math.sin(snap.gameMs / 420));
     const tabletPulse = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(snap.gameMs / 160));
     const canGo = snap.canHitTheRoad && snap.playerRole === "keyLead";
+    const highlightGo = next?.kind === "hitTheRoad";
     const readyLine =
-      snap.bagsInBin.length > 1 ? "Tap me — I'll take those drops." : "Tap me — I'll take that drop.";
-    const driverLine = snap.driverLine ?? (canGo ? readyLine : null);
+      snap.bagsInBin.length > 1 ? "Tap me — take every packed delivery." : "Tap me — take this delivery.";
+    const driverLine = highlightGo ? (snap.driverLine ?? readyLine) : null;
     this.driverBubble.setVisible(!!driverLine && snap.playerRole === "keyLead").setText(driverLine ?? "");
-    this.driver.setAlpha(canGo ? pulse : 1);
-    this.driver.setTint(canGo ? 0xb8ffb0 : 0xffffff);
+    this.driver.setAlpha(highlightGo ? pulse : 1);
+    this.driver.setTint(highlightGo ? 0xb8ffb0 : 0xffffff);
     if (this.driver.input) this.driver.input.enabled = canGo;
 
     this.packBag.setVisible(false);
@@ -269,15 +282,17 @@ export class ShopScene extends Phaser.Scene {
 
     this.bagRack.setAlpha(next?.kind === "bagRack" ? tabletPulse : 1);
     this.bagRack.setTint(next?.kind === "bagRack" ? 0xb8ffb0 : 0xffffff);
+    this.bagRackLabel.setText(next?.kind === "bagRack" ? "Tap to pack" : "BAGS");
 
     this.tvs.forEach((tv, i) => {
-      const sku = this.jarSkus[i];
-      const wanted = sku === snap.highlightSkuId && next?.kind === "strain";
-      tv.setFillStyle(wanted ? 0x3d7a45 : 0x122018, wanted ? pulse : 0.95);
+      const sku = getSim().catalog.find((s) => s.id === this.jarSkus[i]);
+      const wanted = this.jarSkus[i] === snap.highlightSkuId;
+      tv.setFillStyle(sku?.color ?? 0x122018, wanted ? pulse : 0.35);
+      if (wanted) tv.setStrokeStyle(3, Color.lime, 0.95);
+      else tv.setStrokeStyle(0);
     });
     this.tvLabels.forEach((label, i) => {
-      const wanted = this.jarSkus[i] === snap.highlightSkuId && next?.kind === "strain";
-      label.setColor(wanted ? Color.limeHex : Color.creamHex);
+      label.setColor(this.jarSkus[i] === snap.highlightSkuId ? Color.limeHex : Color.creamHex);
     });
 
     const walkIn = snap.orders.find((o) => o.type === "inStore");
@@ -345,8 +360,6 @@ export class ShopScene extends Phaser.Scene {
         spots.push({ id: hint.id, x: who.x, y: CUSTOMER_SPOT.y - PERSON_DISPLAY_H - 8 });
       } else if (hint.kind === "tablet") {
         spots.push({ id: hint.id, x: TABLET.x, y: tabletLayout().top + 8 });
-      } else if (hint.kind === "hitTheRoad") {
-        spots.push({ id: hint.id, x: DRIVER.x, y: DRIVER.y - PERSON_DISPLAY_H - 8 });
       }
     }
     this.arrows.sync(spots);
@@ -365,6 +378,8 @@ export class ShopScene extends Phaser.Scene {
       this.tabletScreen.fillStyle(0x1a3a22, 1);
       this.tabletScreen.fillRect(tab.screenLeft, tab.screenTop, tab.screenW, tab.screenH - tab.homeH);
     }
+    this.tabletLabel.setText("ORDERS");
+    fitTypeToWidth(this.tabletLabel, tab.screenW - 16, 12);
     const count = snap.tabletQueueCount;
     this.queueBadge.setVisible(count > 1);
     this.queueBadge.setText(String(count));
@@ -385,7 +400,7 @@ export class ShopScene extends Phaser.Scene {
       let objs = this.outBags.get(o.id);
       if (!objs) {
         const bag = this.add.image(x, y, "tex-bag").setOrigin(0.5, 1).setScale(BAG_SCALE).setDepth(8);
-        const label = addUiText(this, x, y - Math.round(120 * BAG_SCALE) - 8, `${o.destLabel}\n${o.customerName}`, {
+        const label = addUiText(this, x, y - Math.round(120 * BAG_SCALE) - 8, outgoingBagText(o), {
           size: Type.caption,
           color: Color.inkHex,
           backgroundColor: Color.creamHex,
@@ -399,7 +414,12 @@ export class ShopScene extends Phaser.Scene {
         this.outBags.set(o.id, objs);
       }
       (objs[0] as Phaser.GameObjects.Image).setPosition(x, y);
-      (objs[1] as Phaser.GameObjects.Text).setPosition(x, y - Math.round(120 * BAG_SCALE) - 8);
+      const label = objs[1] as Phaser.GameObjects.Text;
+      label.setPosition(x, y - Math.round(120 * BAG_SCALE) - 8);
+      label.setFontSize(15);
+      label.setText(outgoingBagText(o));
+      label.setColor(o.type === "delivery" && isSlaUrgent(o.slaRemainingMs) ? Color.dangerHex : Color.inkHex);
+      fitTypeToWidth(label, OUT_BAG_GAP - 16, 12);
     });
   }
 
@@ -489,4 +509,9 @@ export class ShopScene extends Phaser.Scene {
       this.tvLabels.push(label);
     });
   }
+}
+
+function outgoingBagText(o: OrderView): string {
+  if (o.type === "delivery") return deliveryBagLabel(o.destLabel, o.customerName, o.slaRemainingMs);
+  return `${o.destLabel}\n${o.customerName}`;
 }

@@ -13,8 +13,8 @@ export const PICKUP_HANDOFF_WAIT_MS = 12_000;
 export const INSTORE_WALKOUT_MS = 18_000;
 
 export const CUSTOMER_SPEED = 220;
-export const VEHICLE_SPEED = 288;
-export const HANDOFF_RADIUS = 112;
+export const VEHICLE_SPEED = 380;
+export const HANDOFF_RADIUS = 160;
 export const DOOR_HAND_RADIUS = 80;
 export const CALL_CONNECT_MS = 1_800;
 export const DROPOFF_WALK_SPEED = 160;

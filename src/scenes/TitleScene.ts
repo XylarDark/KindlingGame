@@ -119,7 +119,7 @@ export class TitleScene extends Phaser.Scene {
     const cardH = 184;
     const gap = 28;
     const rowW = cardW * 3 + gap * 2;
-    const btnH = HUD_BUTTON_MIN_H;
+    const btnH = HUD_BUTTON_MIN_H + 28;
     const stackGap = 16;
     const hintGap = 8;
     const hintH = 28;
@@ -164,6 +164,7 @@ export class TitleScene extends Phaser.Scene {
       variant: "primary",
       minWidth: 380,
       depth: 43,
+      caption: "Begin the 9 AM shift",
     });
 
     this.tweens.add({

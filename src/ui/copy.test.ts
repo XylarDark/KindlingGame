@@ -1,5 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { HOURS, HOWTO_HINT, MARK, PAUSE_HINT, WELCOME_HINT, WELCOME_TITLE } from "./copy";
+import { MS_PER_GAME_HOUR, MS_PER_GAME_MINUTE } from "../sim/constants";
+import {
+  HOURS,
+  HOWTO_HINT,
+  MARK,
+  PAUSE_HINT,
+  WELCOME_HINT,
+  WELCOME_TITLE,
+  deliveryBagLabel,
+  formatSlaClock,
+  interactButtonCopy,
+  isSlaUrgent,
+  roadButtonCopy,
+} from "./copy";
 
 describe("shop copy", () => {
   it("keeps the mark in tracked caps and hours in title case", () => {
@@ -9,5 +22,31 @@ describe("shop copy", () => {
     expect(WELCOME_HINT).toBe("Interact to begin");
     expect(PAUSE_HINT.startsWith("Paused")).toBe(true);
     expect(HOWTO_HINT.startsWith("Tap")).toBe(true);
+  });
+
+  it("labels the road and handoff buttons with what they do", () => {
+    expect(roadButtonCopy(1)).toEqual({
+      label: "HIT THE ROAD",
+      caption: "Leave with this delivery",
+    });
+    expect(roadButtonCopy(2).caption).toContain("every packed");
+    expect(interactButtonCopy("PHOTO")?.caption).toContain("photo");
+    expect(interactButtonCopy("ASK ID")?.label).toBe("ASK FOR ID");
+    expect(interactButtonCopy("CHECK ID")?.caption).toContain("19+");
+    expect(interactButtonCopy("CALL")).toBeNull();
+  });
+
+  it("formats the one-hour delivery SLA next to the bag name", () => {
+    expect(formatSlaClock(null)).toBe("");
+    expect(formatSlaClock(MS_PER_GAME_HOUR)).toBe("60m");
+    expect(formatSlaClock(47 * MS_PER_GAME_MINUTE)).toBe("47m");
+    expect(formatSlaClock(9 * MS_PER_GAME_MINUTE)).toBe("9m");
+    expect(formatSlaClock(0)).toBe("LATE");
+    expect(formatSlaClock(-200)).toBe("LATE");
+    expect(isSlaUrgent(11 * MS_PER_GAME_MINUTE)).toBe(false);
+    expect(isSlaUrgent(10 * MS_PER_GAME_MINUTE)).toBe(true);
+    expect(isSlaUrgent(-1)).toBe(true);
+    expect(deliveryBagLabel("House 1", "Ash Park", 47 * MS_PER_GAME_MINUTE)).toBe("House 1\nAsh Park  ·  47m");
+    expect(deliveryBagLabel("House 1", "Ash Park", 0)).toBe("House 1\nAsh Park  ·  LATE");
   });
 });

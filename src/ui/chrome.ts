@@ -35,6 +35,7 @@ export function addHudButton(
     variant?: "primary" | "amber" | "ghost";
     depth?: number;
     minWidth?: number;
+    caption?: string;
   } = {},
 ): Phaser.GameObjects.Container {
   const originX = opts.originX ?? 1;
@@ -42,10 +43,10 @@ export function addHudButton(
   const variant = opts.variant ?? "primary";
   const palette =
     variant === "primary"
-      ? { fill: Color.leaf, text: Color.creamHex, stroke: 0x2a4a28 }
+      ? { fill: Color.leaf, text: Color.creamHex, stroke: 0x2a4a28, caption: Color.creamSoftHex }
       : variant === "amber"
-        ? { fill: Color.amber, text: "#fff6e8", stroke: 0x6a2a10 }
-        : { fill: 0x241c16, text: Color.creamHex, stroke: Color.panelStroke };
+        ? { fill: Color.amber, text: "#fff6e8", stroke: 0x6a2a10, caption: "#ffe8d0" }
+        : { fill: 0x241c16, text: Color.creamHex, stroke: Color.panelStroke, caption: Color.muteHex };
 
   const text = addUiText(scene, 0, 0, label, {
     size: Type.heading,
@@ -54,10 +55,22 @@ export function addHudButton(
     align: "center",
     strokeThickness: 0,
   }).setOrigin(0.5);
+  const caption = addUiText(scene, 0, 0, opts.caption ?? "", {
+    size: Type.caption,
+    color: palette.caption,
+    fontStyle: "600",
+    align: "center",
+    strokeThickness: 0,
+  }).setOrigin(0.5);
 
   const paint = (pressed: boolean): void => {
-    const w = Math.max(opts.minWidth ?? 260, text.width + 56);
-    const h = Math.max(HUD_BUTTON_MIN_H, text.height + 40);
+    const cap = String(container.getData("caption") ?? "");
+    caption.setText(cap);
+    caption.setVisible(!!cap);
+    const inner = Math.max(text.width, cap ? caption.width : 0);
+    const w = Math.max(opts.minWidth ?? 260, inner + 56);
+    const extra = cap ? caption.height + 10 : 0;
+    const h = Math.max(HUD_BUTTON_MIN_H, text.height + extra + 36);
     const left = -w * originX;
     const top = -h * originY;
     bg.clear();
@@ -65,7 +78,13 @@ export function addHudButton(
     bg.fillRoundedRect(left, top, w, h, 4);
     bg.lineStyle(3, palette.stroke, 1);
     bg.strokeRoundedRect(left, top, w, h, 4);
-    text.setPosition(left + w / 2, top + h / 2);
+    if (cap) {
+      text.setPosition(left + w / 2, top + 18 + text.height / 2);
+      caption.setPosition(left + w / 2, top + h - 16 - caption.height / 2);
+    } else {
+      text.setPosition(left + w / 2, top + h / 2);
+      caption.setPosition(left + w / 2, top + h / 2);
+    }
     container.setSize(w, h);
     container.setInteractive(
       new Phaser.Geom.Rectangle(left, top, w, h),
@@ -75,8 +94,9 @@ export function addHudButton(
   };
 
   const bg = scene.add.graphics();
-  const container = scene.add.container(x, y, [bg, text]);
+  const container = scene.add.container(x, y, [bg, text, caption]);
   container.setDepth(opts.depth ?? 21);
+  container.setData("caption", opts.caption ?? "");
   paint(false);
 
   const hover = !(globalThis.matchMedia?.("(pointer: coarse)")?.matches ?? false);
@@ -91,18 +111,24 @@ export function addHudButton(
   });
   container.on("pointerup", () => paint(false));
 
-  container.setData("setLabel", (next: string) => {
-    if (text.text === next) return;
+  container.setData("setCopy", (next: string, nextCap?: string) => {
+    const cap = nextCap ?? "";
+    if (text.text === next && container.getData("caption") === cap) return;
     text.setText(next);
+    container.setData("caption", cap);
     paint(false);
   });
   container.setData("label", label);
   return container;
 }
 
+export function setButtonCopy(button: Phaser.GameObjects.Container, label: string, caption = ""): void {
+  const fn = button.getData("setCopy") as ((next: string, cap?: string) => void) | undefined;
+  fn?.(label, caption);
+}
+
 export function setButtonLabel(button: Phaser.GameObjects.Container, label: string): void {
-  const fn = button.getData("setLabel") as ((next: string) => void) | undefined;
-  fn?.(label);
+  setButtonCopy(button, label, String(button.getData("caption") ?? ""));
 }
 
 export function wireHover(obj: Phaser.GameObjects.GameObject & { setTint?: (c: number) => unknown; clearTint?: () => unknown }): void {

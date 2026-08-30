@@ -34,7 +34,6 @@ import {
 } from "../maps/shopT0";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import { skyAt, type SkySample } from "../sim/dayNight";
-import { windowGlowLook } from "./dayNightGrade";
 import { addUiText } from "../ui/text";
 import { addMark, fitTypeToWidth } from "../ui/typekit";
 import { HOURS } from "../ui/copy";
@@ -271,11 +270,11 @@ function potCan(g: Phaser.GameObjects.Graphics, x: number): void {
   fill(g, x - 4, 14, 8, 5, 0xfff6d8);
 }
 
-/** Soft tungsten pools on the cream wall — stay above the chair rail / floor. */
+/** Soft tungsten pools on the cream wall — stay above the chair rail / floor. Skip the window bay. */
 function potWallWash(g: Phaser.GameObjects.Graphics, x: number): void {
   const winLeft = WINDOW.x - WINDOW.w / 2;
   const winRight = WINDOW.x + WINDOW.w / 2;
-  const overGlass = x >= winLeft && x <= winRight;
+  if (x >= winLeft && x <= winRight) return;
   const wallBottom = CHAIR_RAIL_Y - 8;
   const rings = [
     { y: 118, w: 200, h: 120, a: 0.15 },
@@ -283,7 +282,6 @@ function potWallWash(g: Phaser.GameObjects.Graphics, x: number): void {
     { y: 128, w: 64, h: 48, a: 0.24 },
   ];
   for (const r of rings) {
-    if (overGlass && r.y > WINDOW_TOP) continue;
     const maxH = Math.max(16, (wallBottom - r.y) * 2);
     const h = Math.min(r.h, maxH);
     if (h < 16) continue;
@@ -692,38 +690,9 @@ function drawStreetDoorHours(scene: Phaser.Scene): void {
   fitTypeToWidth(hours, maxW, 12);
 }
 
-/** Soft rim on the frame plus a gentle wash that comes *into* the shop. */
-export function paintWindowGlow(g: Phaser.GameObjects.Graphics, gameMs: number): void {
+/** No painted window spill — shopGrade uses pots + ambient only. */
+export function paintWindowGlow(g: Phaser.GameObjects.Graphics, _gameMs: number): void {
   g.clear();
-  const look = windowGlowLook(skyAt(gameMs));
-  if (look.alpha < 0.012) return;
-
-  const left = WINDOW.x - WINDOW.w / 2;
-  const top = WINDOW_TOP;
-  const w = WINDOW.w;
-  const h = WINDOW.h;
-  const corner = 8;
-
-  const inwardX = left - 90;
-  const inwardY = top + h * 0.58;
-  g.fillStyle(look.color, look.alpha * 0.18);
-  g.fillEllipse(inwardX, inwardY, w * 2.4, h * 1.45);
-  g.fillStyle(look.color, look.alpha * 0.1);
-  g.fillEllipse(inwardX - 160, COUNTER_FRONT + 36, w * 2.8, 200);
-
-  const halo = [
-    { inset: -2, lw: 5, a: 0.72 },
-    { inset: -9, lw: 8, a: 0.34 },
-    { inset: -17, lw: 10, a: 0.15 },
-    { inset: -26, lw: 12, a: 0.06 },
-  ];
-  for (const ring of halo) {
-    g.lineStyle(ring.lw, look.color, look.alpha * ring.a);
-    g.strokeRoundedRect(left + ring.inset, top + ring.inset, w - ring.inset * 2, h - ring.inset * 2, corner);
-  }
-
-  g.lineStyle(3, look.color, look.alpha * 0.48);
-  g.strokeRoundedRect(left + 6, top + 6, w - 12, h - 12, 5);
 }
 
 function clipFill(

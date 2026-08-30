@@ -1,17 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { GAME_HEIGHT, GAME_WIDTH, MS_PER_GAME_HOUR } from "../sim/constants";
 import { skyAt } from "../sim/dayNight";
-import { CEILING_POT_LEFT, CEILING_POT_RIGHT, COUNTER_FRONT, COUNTER_TOP, ceilingPots, WINDOW } from "../maps/shopT0";
-import { DAY_NIGHT_TUNE, driveGrade, shopGrade, windowGlowLook, worldToUv } from "./dayNightGrade";
+import { CEILING_POT_LEFT, CEILING_POT_RIGHT, COUNTER_FRONT, COUNTER_TOP, ceilingPots } from "../maps/shopT0";
+import { DAY_NIGHT_TUNE, driveGrade, shopGrade, worldToUv } from "./dayNightGrade";
 
 function atHour(hour: number): number {
   return (hour - 9) * MS_PER_GAME_HOUR;
-}
-
-function blueOverRed(hex: number): number {
-  const r = Math.max(1, (hex >> 16) & 255);
-  const b = hex & 255;
-  return b / r;
 }
 
 const SHOP_VIEW = { x: 0, y: 0, width: GAME_WIDTH, height: GAME_HEIGHT };
@@ -31,7 +25,8 @@ describe("shopGrade", () => {
     const nightPots = night.lights.filter((l) => l.kind === "pot");
     expect(noonPots).toHaveLength(5);
     expect(nightPots).toHaveLength(5);
-    expect(noonPots[0]!.intensity).toBe(nightPots[0]!.intensity);
+    expect(noonPots[0]!.intensity).toBeCloseTo(DAY_NIGHT_TUNE.potIntensity);
+    expect(nightPots[0]!.intensity).toBeCloseTo(DAY_NIGHT_TUNE.potIntensity * DAY_NIGHT_TUNE.shopNightIndoorBoost);
     expect(noonPots[0]!.color).toBe(DAY_NIGHT_TUNE.potColor);
     expect(noonPots[0]!.y).toBeGreaterThan(COUNTER_TOP);
     expect(noonPots[0]!.y).toBeGreaterThanOrEqual(COUNTER_FRONT);
@@ -52,43 +47,37 @@ describe("shopGrade", () => {
     expect(noon.ambient[0]).toBeGreaterThanOrEqual(noon.ambient[2]);
   });
 
-  it("softly fills the room from the delivery window, not a frame slash", () => {
+  it("has no interior sun, moon, or window shader source over the pots", () => {
     const noon = shopGrade(skyAt(atHour(12)), ceilingPots());
     const night = shopGrade(skyAt(atHour(20.5)), ceilingPots());
-    const noonWin = noon.lights.filter((l) => l.kind === "window");
-    const nightWin = night.lights.filter((l) => l.kind === "window");
-    const pot = noon.lights.find((l) => l.kind === "pot")!;
-    expect(noon.lights.every((l) => l.kind !== "door")).toBe(true);
-    expect(night.lights.every((l) => l.kind !== "door")).toBe(true);
-    expect(noonWin).toHaveLength(1);
-    expect(noonWin[0]!.x).toBeLessThan(WINDOW.x);
-    expect(noonWin[0]!.radius).toBeGreaterThan(600);
-    expect(noonWin[0]!.scaleX ?? 1).toBeGreaterThan(0.55);
-    expect(noonWin[0]!.scaleX ?? 1).toBeLessThan(1);
-    expect(noonWin[0]!.scaleY ?? 1).toBeLessThan(1.2);
-    expect(noonWin[0]!.intensity).toBeGreaterThan(nightWin[0]!.intensity);
-    expect(noonWin[0]!.intensity).toBeGreaterThanOrEqual(pot.intensity);
-    expect(blueOverRed(noonWin[0]!.color)).toBeGreaterThan(blueOverRed(DAY_NIGHT_TUNE.potColor));
-    expect(blueOverRed(nightWin[0]!.color)).toBeGreaterThan(blueOverRed(noonWin[0]!.color));
+    expect(noon.lights.every((l) => l.kind === "pot")).toBe(true);
+    expect(night.lights.every((l) => l.kind === "pot")).toBe(true);
+    expect(noon.lights).toHaveLength(5);
+    expect(night.lights).toHaveLength(5);
+    expect(noon.ambientMul).toBeGreaterThan(night.ambientMul);
   });
 
-  it("adds a day-only rim kick on the driver bench", () => {
+  it("uses pot keys only and no rim, door, or window glow", () => {
     const noon = shopGrade(skyAt(atHour(12)), ceilingPots());
     const night = shopGrade(skyAt(atHour(20.5)), ceilingPots());
-    expect(noon.lights.some((l) => l.kind === "rim")).toBe(true);
-    expect(night.lights.every((l) => l.kind !== "rim")).toBe(true);
+    expect(noon.lights.filter((l) => l.kind === "window")).toHaveLength(0);
+    expect(night.lights.filter((l) => l.kind === "window")).toHaveLength(0);
+    expect(noon.lights.every((l) => l.kind !== "rim" && l.kind !== "door")).toBe(true);
+    expect(night.lights.every((l) => l.kind !== "rim" && l.kind !== "door")).toBe(true);
   });
 
-  it("glows from the window without hard sun shafts", () => {
-    const noon = windowGlowLook(skyAt(atHour(12)));
-    const night = windowGlowLook(skyAt(atHour(20.5)));
-    const deep = windowGlowLook(skyAt(atHour(23)));
-    expect(noon.alpha).toBeGreaterThan(0.04);
-    expect(noon.alpha).toBeLessThan(0.14);
-    expect(noon.alpha).toBeGreaterThan(night.alpha);
-    expect(night.alpha).toBeLessThan(0.05);
-    expect(deep.alpha).toBeLessThanOrEqual(night.alpha);
-    expect(blueOverRed(night.color)).toBeGreaterThan(blueOverRed(noon.color));
+  it("lifts indoor keys and fill 50% at night", () => {
+    const noon = shopGrade(skyAt(atHour(12)), ceilingPots());
+    const night = shopGrade(skyAt(atHour(20.5)), ceilingPots());
+    const noonPot = noon.lights.find((l) => l.kind === "pot")!;
+    const nightPot = night.lights.find((l) => l.kind === "pot")!;
+    expect(nightPot.intensity / noonPot.intensity).toBeCloseTo(DAY_NIGHT_TUNE.shopNightIndoorBoost);
+    const unboostedNight = Math.max(
+      DAY_NIGHT_TUNE.ambientFloor,
+      1 - skyAt(atHour(20.5)).mapOverlayAlpha * DAY_NIGHT_TUNE.shopAmbientDim,
+    );
+    expect(night.ambientMul).toBeCloseTo(unboostedNight * DAY_NIGHT_TUNE.shopNightIndoorBoost);
+    expect(night.ambientMul).toBeGreaterThan(unboostedNight);
   });
 
   it("does not globally grade the interior as hard at night as the drive map", () => {
@@ -97,7 +86,7 @@ describe("shopGrade", () => {
     expect(night.gradeStrength).toBeLessThan(0.12);
     expect(night.gradeStrength).toBeLessThan(drive.gradeStrength);
     expect(night.ambientMul).toBeGreaterThan(DAY_NIGHT_TUNE.ambientFloor - 0.001);
-    expect(night.ambientMul).toBeLessThan(0.5);
+    expect(night.ambientMul).toBeLessThan(0.7);
   });
 });
 

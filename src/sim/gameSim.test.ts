@@ -12,7 +12,7 @@ import {
   SCORE_PICKUP,
 } from "./constants";
 import { GameSim } from "./gameSim";
-import { houseById, tileToWorld } from "../maps/cityT0";
+import { CITY, houseById, tileToWorld } from "../maps/cityT0";
 
 function finishDropoff(sim: GameSim, houseId: string): void {
   const stop = houseById(houseId)!;
@@ -24,6 +24,16 @@ function finishDropoff(sim: GameSim, houseId: string): void {
   sim.interact();
   sim.interact();
   sim.interact();
+  sim.interact();
+}
+
+function startDoor(sim: GameSim, houseId: string): void {
+  const stop = houseById(houseId)!;
+  const pos = tileToWorld(stop.stop);
+  sim.setVehiclePosition(pos.x, pos.y);
+  sim.tick(32);
+  sim.interact();
+  sim.tick(CALL_CONNECT_MS + 32);
 }
 
 function waitForFetch(sim: GameSim): void {
@@ -34,8 +44,12 @@ function waitForFetch(sim: GameSim): void {
   }
 }
 
-function fillTicket(sim: GameSim, type: "pickup" | "inStore" | "delivery", extra?: { destinationId?: string; skuId?: string }) {
-  const order = sim.spawnOrder(type, extra);
+function fillTicket(
+  sim: GameSim,
+  type: "pickup" | "inStore" | "delivery",
+  extra?: { destinationId?: string; skuId?: string; ageOk?: boolean },
+) {
+  const order = sim.spawnOrder(type, { ...extra, ageOk: extra?.ageOk ?? true });
   if (type === "inStore") {
     sim.shopClick({ type: "strain", skuId: order.skuId });
     waitForFetch(sim);
@@ -58,6 +72,17 @@ describe("GameSim order loops", () => {
     expect(sim.orderById(order.id)?.status).toBe("readyForHandoff");
     sim.tick(4000);
     sim.shopClick({ type: "handoff" });
+    expect(sim.orderById(order.id)?.status).toBe("completed");
+    expect(sim.score).toBe(SCORE_PICKUP);
+  });
+
+  it("completes pickup when the waiting customer is tapped", () => {
+    const sim = GameSim.create({ seed: 1, autoSpawn: false });
+    const order = fillTicket(sim, "pickup");
+    sim.tick(PICKUP_ARRIVE_MS);
+    expect(sim.orderById(order.id)?.status).toBe("readyForHandoff");
+    sim.tick(4000);
+    sim.shopClick({ type: "customer", orderId: order.id });
     expect(sim.orderById(order.id)?.status).toBe("completed");
     expect(sim.score).toBe(SCORE_PICKUP);
   });
@@ -107,9 +132,26 @@ describe("GameSim order loops", () => {
     expect(order.customerName.length).toBeGreaterThan(2);
     expect(sim.snapshot().orders[0]?.destLabel).toBe("House 1");
     expect(order.slaStartGameMs).toBe(sim.clock.gameMs);
+    const packed = sim.snapshot().orders.find((o) => o.id === order.id)!;
+    expect(packed.slaRemainingMs).toBeGreaterThan(MS_PER_GAME_HOUR - 50);
+    expect(packed.slaRemainingMs).toBeLessThanOrEqual(MS_PER_GAME_HOUR);
+    expect(packed.late).toBe(false);
     sim.tick(1000);
     expect(sim.hitTheRoad()).toBe(true);
     expect(sim.orderById(order.id)?.slaStartGameMs).toBe(order.slaStartGameMs);
+    const afterTick = sim.snapshot().orders.find((o) => o.id === order.id)!;
+    expect(afterTick.slaRemainingMs).toBeCloseTo(MS_PER_GAME_HOUR - 1000, -2);
+    expect(afterTick.status).toBe("onRun");
+  });
+
+  it("keeps a packed delivery bag after the one-hour SLA expires", () => {
+    const sim = GameSim.create({ seed: 3, autoSpawn: false });
+    const order = fillTicket(sim, "delivery", { destinationId: "house-1" });
+    sim.tick(MS_PER_GAME_HOUR + 50);
+    const view = sim.snapshot().orders.find((o) => o.id === order.id)!;
+    expect(view.status).toBe("inBin");
+    expect(view.slaRemainingMs).toBeLessThanOrEqual(0);
+    expect(view.late).toBe(true);
   });
 
   it("packs after tablet, strain, then bag — no receipt click", () => {
@@ -157,7 +199,7 @@ describe("GameSim order loops", () => {
     expect(late.score).toBe(SCORE_DELIVERY_LATE);
   });
 
-  it("does not complete a delivery from parking alone — call, photo, and ID are required", () => {
+  it("does not complete a delivery from parking alone — call, ID, bag, and photo are required", () => {
     const sim = GameSim.create({ seed: 4, autoSpawn: false });
     const order = fillTicket(sim, "delivery", { destinationId: "house-1" });
     sim.hitTheRoad();
@@ -182,9 +224,81 @@ describe("GameSim order loops", () => {
     sim.tick(CALL_CONNECT_MS + 32);
     const drop = sim.snapshot().dropoff;
     expect(drop.phase).toBe("atDoor");
-    expect(drop.actionLabel).toBe("PHOTO");
+    expect(drop.actionLabel).toBe("ASK ID");
+    expect(drop.idAsked).toBe(false);
+    expect(drop.idCard).toBeNull();
     expect(drop.customerName).toBe(order.customerName);
     expect(sim.orderById(order.id)?.status).toBe("onRun");
+  });
+
+  it("completes a 19+ stop: ask ID, check ID, hand bag, photo, then returns to the map", () => {
+    const sim = GameSim.create({ seed: 4, autoSpawn: false });
+    const order = fillTicket(sim, "delivery", { destinationId: "house-1", ageOk: true });
+    sim.hitTheRoad();
+    startDoor(sim, "house-1");
+    expect(sim.snapshot().dropoff.actionLabel).toBe("ASK ID");
+    expect(sim.snapshot().dropoff.idCard).toBeNull();
+    sim.interact();
+    expect(sim.snapshot().dropoff.actionLabel).toBe("CHECK ID");
+    expect(sim.snapshot().dropoff.idCard?.ageOk).toBe(true);
+    sim.interact();
+    expect(sim.snapshot().dropoff.actionLabel).toBe("HAND BAG");
+    expect(sim.snapshot().dropoff.idCard).toBeNull();
+    sim.interact();
+    expect(sim.snapshot().dropoff.actionLabel).toBe("PHOTO");
+    sim.interact();
+    expect(sim.orderById(order.id)?.status).toBe("completed");
+    expect(sim.snapshot().dropoff.phase).toBe("none");
+    expect(sim.snapshot().run).toBeNull();
+  });
+
+  it("denies an underage stop, fails the order, and returns to the map", () => {
+    const sim = GameSim.create({ seed: 4, autoSpawn: false });
+    const order = fillTicket(sim, "delivery", { destinationId: "house-1", ageOk: false });
+    sim.hitTheRoad();
+    startDoor(sim, "house-1");
+    expect(sim.snapshot().dropoff.actionLabel).toBe("ASK ID");
+    expect(sim.snapshot().dropoff.idCard).toBeNull();
+    sim.interact();
+    expect(sim.snapshot().dropoff.idCard?.ageOk).toBe(false);
+    sim.interact();
+    expect(sim.orderById(order.id)?.status).toBe("failed");
+    expect(sim.score).toBe(SCORE_FAIL);
+    expect(sim.snapshot().dropoff.phase).toBe("none");
+    expect(sim.snapshot().run).toBeNull();
+  });
+
+  it("after an underage deny, GPS still points at the next bag on the run", () => {
+    const sim = GameSim.create({ seed: 5, autoSpawn: false });
+    const first = fillTicket(sim, "delivery", { destinationId: "house-1", ageOk: false });
+    const second = fillTicket(sim, "delivery", { destinationId: "house-2", ageOk: true });
+    sim.hitTheRoad();
+    startDoor(sim, "house-1");
+    sim.interact();
+    sim.interact();
+    expect(sim.orderById(first.id)?.status).toBe("failed");
+    expect(sim.orderById(second.id)?.status).toBe("onRun");
+    expect(sim.snapshot().run?.nextStopId).toBe("house-2");
+    expect(sim.snapshot().dropoff.phase).toBe("none");
+    finishDropoff(sim, "house-2");
+    expect(sim.orderById(second.id)?.status).toBe("completed");
+    expect(sim.snapshot().dropoff.phase).toBe("none");
+    expect(sim.snapshot().run).toBeNull();
+  });
+
+  it("only returns to the shop when the vehicle is near Kindling", () => {
+    const sim = GameSim.create({ seed: 4, autoSpawn: false });
+    fillTicket(sim, "delivery", { destinationId: "house-1" });
+    sim.hitTheRoad();
+    const house = tileToWorld(houseById("house-1")!.stop);
+    sim.setVehiclePosition(house.x, house.y);
+    expect(sim.backToShop()).toBe(false);
+    expect(sim.snapshot().playerRole).toBe("driver");
+    expect(sim.snapshot().toast).toBe("Drive up to Kindling first.");
+    const shop = tileToWorld(CITY.shopSpawn);
+    sim.setVehiclePosition(shop.x, shop.y);
+    expect(sim.backToShop()).toBe(true);
+    expect(sim.snapshot().playerRole).toBe("keyLead");
   });
 
   it("hands every packed counter bag on one multi-stop run", () => {

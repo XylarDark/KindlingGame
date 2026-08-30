@@ -13,16 +13,13 @@ export type TutorialHint =
   | { id: string; kind: "idCard" }
   | { id: string; kind: "movePad" }
   | { id: string; kind: "gpsPin" }
-  | { id: string; kind: "doorCustomer" };
+  | { id: string; kind: "doorCustomer" }
+  | { id: string; kind: "shop" };
 
-/** Next tap/move. Packing is one step at a time; HIT THE ROAD is also offered once bags are ready. */
+/** Exactly one next tap — never pack and HIT THE ROAD at the same time. */
 export function tutorialHints(snap: SimSnapshot): TutorialHint[] {
-  if (snap.playerRole === "driver") return driverHints(snap);
-  const hints: TutorialHint[] = [];
-  const next = nextShopHint(snap);
-  if (next && next.kind !== "hitTheRoad") hints.push(next);
-  if (snap.canHitTheRoad) hints.push({ id: "hitTheRoad", kind: "hitTheRoad" });
-  return hints;
+  const next = snap.playerRole === "driver" ? nextDriverHint(snap) : nextShopHint(snap);
+  return next ? [next] : [];
 }
 
 /** The single shop click the player should take next. */
@@ -63,23 +60,21 @@ export function nextShopHint(snap: SimSnapshot): TutorialHint | null {
   return null;
 }
 
-function driverHints(snap: SimSnapshot): TutorialHint[] {
+function nextDriverHint(snap: SimSnapshot): TutorialHint | null {
   const drop = snap.dropoff;
   if (drop.phase === "atCurb" || drop.actionLabel === "CALL") {
-    return [{ id: "phone", kind: "phone" }];
+    return { id: "phone", kind: "phone" };
   }
-  if (drop.phase === "calling") return [];
-  if (drop.actionLabel === "PHOTO" || drop.actionLabel === "HAND BAG") {
-    return [{ id: "handoff", kind: "handoff" }];
+  if (drop.phase === "calling") return null;
+  if (drop.actionLabel === "ASK ID") {
+    return { id: "askId", kind: "doorCustomer" };
   }
   if (drop.actionLabel === "CHECK ID" || drop.idCard) {
-    return [{ id: "idCard", kind: "idCard" }];
+    return { id: "idCard", kind: "idCard" };
   }
-  if (snap.run?.nextStopId) {
-    return [
-      { id: "movePad", kind: "movePad" },
-      { id: "gpsPin", kind: "gpsPin" },
-    ];
+  if (drop.actionLabel === "HAND BAG" || drop.actionLabel === "PHOTO") {
+    return { id: "handoff", kind: "handoff" };
   }
-  return [{ id: "hitTheRoad", kind: "hitTheRoad" }];
+  if (snap.run?.nextStopId) return { id: "gpsPin", kind: "gpsPin" };
+  return { id: "shop", kind: "shop" };
 }

@@ -17,7 +17,7 @@ import {
   PICKUP_HANDOFF_WAIT_MS,
   VEHICLE_SPEED,
 } from "./constants";
-import { emptyDropoff, idCardFor, type DropoffPhase, type DropoffView } from "./dropoff";
+import { ageForSeed, emptyDropoff, idCardFor, type DropoffPhase, type DropoffView } from "./dropoff";
 import { destLabel, isOpen, needsFetch, tabletQueue, type Order, type OrderType } from "./orders";
 import { findPath } from "./pathfinding";
 import { generateCustomerName } from "./names";
@@ -159,7 +159,9 @@ interface DropoffState {
   customer: { x: number; y: number; targetX: number; targetY: number } | null;
   driver: { x: number; y: number } | null;
   photoTaken: boolean;
+  idAsked: boolean;
   idChecked: boolean;
+  bagHanded: boolean;
 }
 
 interface CounterBag {
@@ -350,18 +352,23 @@ export class GameSim {
     this.vehicle.y = y;
   }
 
-  spawnOrder(type: OrderType, opts: { skuId?: string; destinationId?: string } = {}): Order {
+  spawnOrder(type: OrderType, opts: { skuId?: string; destinationId?: string; ageOk?: boolean } = {}): Order {
     const sku = opts.skuId
       ? skuById(this.catalog, opts.skuId)
       : this.catalog[Math.floor(this.rng() * this.catalog.length)];
     if (!sku) throw new Error("catalog empty");
+    const id = `ord-${this.nextOrderId++}`;
+    const customerName = generateCustomerName(this.nameSeed++);
+    const seededAge = ageForSeed(`${id}:${customerName}`);
+    const idAge = opts.ageOk === true ? Math.max(19, seededAge) : opts.ageOk === false ? 16 + (seededAge % 3) : seededAge;
     const order: Order = {
-      id: `ord-${this.nextOrderId++}`,
+      id,
       type,
       skuId: sku.id,
       status: type === "inStore" ? "atRegister" : "queued",
       createdAtGameMs: this.clock.gameMs,
-      customerName: generateCustomerName(this.nameSeed++),
+      customerName,
+      idAge,
       destinationId: type === "delivery" ? (opts.destinationId ?? this.nextHouse()) : undefined,
     };
     this.orders.push(order);
@@ -399,6 +406,12 @@ export class GameSim {
   }
 
   backToShop(): boolean {
+    if (this.playerRole !== "driver") return false;
+    const shop = tileToWorld(CITY.shopSpawn);
+    if (dist(this.vehicle.x, this.vehicle.y, shop.x, shop.y) > HANDOFF_RADIUS) {
+      this.toast = "Drive up to Kindling first.";
+      return false;
+    }
     this.clearDropoff();
     this.playerRole = "keyLead";
     this.pendingDepart = false;
@@ -934,33 +947,46 @@ export class GameSim {
     }
 
     if (d.phase === "atDoor") {
-      if (!d.photoTaken) {
-        d.photoTaken = true;
-        this.toast = "Bag photo saved.";
-        return;
-      }
-      if (!d.idChecked) {
-        const order = this.orderById(d.orderId);
-        const card = idCardFor(order?.customerName ?? "Customer");
-        if (!card.ageOk) {
-          this.toast = "ID check failed.";
-          return;
-        }
-        d.idChecked = true;
-        this.toast = `ID checks out — 21+. Hand ${order?.customerName ?? "them"} the bag.`;
-        return;
-      }
       const order = this.runOrderIds
         .map((id) => this.orderById(id))
         .find((o) => o?.destinationId === d.houseId && o.status === "onRun");
       if (!order) return;
-      this.complete(order);
-      this.runOrderIds = this.runOrderIds.filter((id) => id !== order.id);
-      this.clearDropoff();
-      if (this.runOrderIds.length === 0) {
-        this.toast = "Run complete. Back to Kindling.";
-      } else {
-        this.toast = `Dropped. GPS → ${this.nextStopId() ? houseTitle(this.nextStopId()!) : "Kindling"}.`;
+
+      if (!d.idAsked) {
+        d.idAsked = true;
+        this.toast = `${order.customerName} is showing ID. Confirm 19+.`;
+        return;
+      }
+
+      const card = idCardFor(order.customerName, order.idAge);
+      if (!d.idChecked) {
+        if (!card.ageOk) {
+          this.failOrder(order, `ID check failed — ${order.customerName} is under 19.`);
+          this.toast =
+            this.runOrderIds.length === 0
+              ? "Denied. Head back to Kindling."
+              : `Denied. GPS → ${this.nextStopId() ? houseTitle(this.nextStopId()!) : "Kindling"}.`;
+          return;
+        }
+        d.idChecked = true;
+        this.toast = `ID checks out — 19+. Hand ${order.customerName} the bag.`;
+        return;
+      }
+      if (!d.bagHanded) {
+        d.bagHanded = true;
+        this.toast = `Bag handed to ${order.customerName}. Snap the photo.`;
+        return;
+      }
+      if (!d.photoTaken) {
+        d.photoTaken = true;
+        this.complete(order);
+        this.runOrderIds = this.runOrderIds.filter((id) => id !== order.id);
+        this.clearDropoff();
+        if (this.runOrderIds.length === 0) {
+          this.toast = "Run complete. Drive up to Kindling, then tap the shop.";
+        } else {
+          this.toast = `Dropped. GPS → ${this.nextStopId() ? houseTitle(this.nextStopId()!) : "Kindling"}.`;
+        }
       }
       return;
     }
@@ -978,7 +1004,9 @@ export class GameSim {
       customer: null,
       driver: null,
       photoTaken: false,
+      idAsked: false,
       idChecked: false,
+      bagHanded: false,
     };
   }
 
@@ -1034,18 +1062,22 @@ export class GameSim {
     } else if (d.phase === "calling") {
       actionLabel = "RINGING";
       hint = `Calling ${order?.customerName ?? "customer"} at ${order ? destLabel(order) : "the house"}…`;
-    } else if (d.phase === "atDoor" && !d.photoTaken) {
-      actionLabel = "PHOTO";
+    } else if (d.phase === "atDoor" && !d.idAsked) {
+      actionLabel = "ASK ID";
       canAct = true;
-      hint = `Photo the bag for ${order?.customerName ?? "the drop"}.`;
+      hint = `Ask ${order?.customerName ?? "the customer"} for ID.`;
     } else if (d.phase === "atDoor" && !d.idChecked) {
       actionLabel = "CHECK ID";
       canAct = true;
-      hint = `Check ID for ${order?.customerName ?? "the customer"} — must be 21+.`;
-    } else if (d.phase === "atDoor") {
+      hint = `Check ID for ${order?.customerName ?? "the customer"} — must be 19+.`;
+    } else if (d.phase === "atDoor" && !d.bagHanded) {
       actionLabel = "HAND BAG";
       canAct = true;
       hint = `Hand ${order?.customerName ?? "them"} the bag.`;
+    } else if (d.phase === "atDoor") {
+      actionLabel = "PHOTO";
+      canAct = true;
+      hint = `Photo the bag for ${order?.customerName ?? "the drop"}.`;
     }
     return {
       phase: d.phase,
@@ -1058,11 +1090,16 @@ export class GameSim {
       driver: d.driver ? { ...d.driver } : null,
       customer: d.customer ? { x: d.customer.x, y: d.customer.y, arrived } : null,
       photoTaken: d.photoTaken,
+      idAsked: d.idAsked,
       idChecked: d.idChecked,
+      bagHanded: d.bagHanded,
       actionLabel,
       canAct,
       hint,
-      idCard: d.phase === "atDoor" && d.photoTaken && !d.idChecked ? idCardFor(order?.customerName ?? "Customer") : null,
+      idCard:
+        d.phase === "atDoor" && d.idAsked && !d.idChecked && order
+          ? idCardFor(order.customerName, order.idAge)
+          : null,
     };
   }
 
@@ -1149,6 +1186,8 @@ export class GameSim {
     if (this.selectedOrderId === order.id) this.selectedOrderId = null;
     this.dropQueuedTicket(order.id);
     this.advancePackQueue();
+    this.runOrderIds = this.runOrderIds.filter((id) => id !== order.id);
+    if (this.dropoff?.orderId === order.id) this.clearDropoff();
     this.toast = reason;
   }
 
@@ -1173,7 +1212,7 @@ function dist(ax: number, ay: number, bx: number, by: number): number {
 }
 
 function collides(x: number, y: number): boolean {
-  return pointsBlocked(x, y, 24, (t) => !isDriveWalkable(t));
+  return pointsBlocked(x, y, 36, (t) => !isDriveWalkable(t));
 }
 
 function pointsBlocked(

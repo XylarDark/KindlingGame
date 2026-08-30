@@ -4,9 +4,17 @@ import { BAG_SCALE, PEOPLE_SCALE, PERSON_DISPLAY_H } from "../maps/shopT0";
 import { getSim, isTutorialMode } from "../session";
 import type { SimSnapshot } from "../sim/gameSim";
 import { tutorialHints } from "../sim/tutorialHints";
+import { addHudButton } from "../ui/chrome";
+import { formatSlaClock, isSlaUrgent } from "../ui/copy";
 import { addUiText } from "../ui/text";
 import { Color, Type } from "../ui/theme";
+import { fitTypeToWidth } from "../ui/typekit";
 import { TutorialArrows } from "../ui/tutorialArrow";
+
+/** 25% larger than shop bags (BAG_SCALE 0.7). */
+const DOOR_BAG_SCALE = BAG_SCALE * 1.25;
+const DRIVER_X = DOORSTEP_DOOR_X - 160;
+const CUSTOMER_X = DOORSTEP_DOOR_X + 200;
 
 export class DoorScene extends Phaser.Scene {
   private backdrop!: Phaser.GameObjects.Graphics;
@@ -15,6 +23,10 @@ export class DoorScene extends Phaser.Scene {
   private bag!: Phaser.GameObjects.Image;
   private prompt!: Phaser.GameObjects.Text;
   private houseLabel!: Phaser.GameObjects.Text;
+  private bagCaption!: Phaser.GameObjects.Text;
+  private youLabel!: Phaser.GameObjects.Text;
+  private customerCaption!: Phaser.GameObjects.Text;
+  private askIdBtn!: Phaser.GameObjects.Container;
   private arrows!: TutorialArrows;
   private lastHouse = "";
 
@@ -26,7 +38,7 @@ export class DoorScene extends Phaser.Scene {
     this.backdrop = this.add.graphics().setDepth(0);
     paintDoorstep(this.backdrop, 0);
 
-    this.houseLabel = addUiText(this, DOORSTEP_DOOR_X, 120, "", {
+    this.houseLabel = addUiText(this, DOORSTEP_DOOR_X, 56, "", {
       size: Type.title,
       color: Color.creamHex,
       backgroundColor: "#1c1612ee",
@@ -38,26 +50,54 @@ export class DoorScene extends Phaser.Scene {
 
     const floor = DOORSTEP_FLOOR_Y + 8;
     this.driver = this.add
-      .image(DOORSTEP_DOOR_X - 160, floor, "tex-driver")
+      .image(DRIVER_X, floor, "tex-driver")
       .setOrigin(0.5, 1)
       .setScale(PEOPLE_SCALE)
       .setDepth(5)
-      .setInteractive({ useHandCursor: true });
+      .setInteractive({ useHandCursor: true, hitArea: new Phaser.Geom.Rectangle(-80, -280, 160, 300), hitAreaCallback: Phaser.Geom.Rectangle.Contains });
     this.customer = this.add
-      .image(DOORSTEP_DOOR_X + 160, floor, "tex-customer")
+      .image(CUSTOMER_X, floor, "tex-customer")
       .setOrigin(0.5, 1)
       .setScale(PEOPLE_SCALE)
       .setDepth(5)
-      .setInteractive({ useHandCursor: true });
+      .setInteractive({ useHandCursor: true, hitArea: new Phaser.Geom.Rectangle(-90, -300, 180, 320), hitAreaCallback: Phaser.Geom.Rectangle.Contains });
+    // Handles sit in the driver's hands; bag hangs in front of the hip.
     this.bag = this.add
-      .image(DOORSTEP_DOOR_X - 230, floor - 8, "tex-bag")
-      .setOrigin(0.5, 1)
-      .setScale(BAG_SCALE)
-      .setDepth(6)
-      .setInteractive({ useHandCursor: true });
+      .image(DRIVER_X + 52, floor - PERSON_DISPLAY_H * 0.46, "tex-bag")
+      .setOrigin(0.5, 0.22)
+      .setScale(DOOR_BAG_SCALE)
+      .setDepth(6);
+    wireBagHit(this.bag);
     this.driver.on("pointerdown", () => getSim().queueInteract());
     this.customer.on("pointerdown", () => getSim().queueInteract());
     this.bag.on("pointerdown", () => getSim().queueInteract());
+    this.youLabel = addUiText(this, DRIVER_X, floor + 16, "You", {
+      size: Type.caption,
+      color: Color.creamHex,
+      backgroundColor: "#1c1612ee",
+      padding: { x: 8, y: 3 },
+      fontStyle: "700",
+    })
+      .setOrigin(0.5, 0)
+      .setDepth(7);
+    this.customerCaption = addUiText(this, CUSTOMER_X, floor + 16, "Customer", {
+      size: Type.caption,
+      color: Color.creamHex,
+      backgroundColor: "#1c1612ee",
+      padding: { x: 8, y: 3 },
+      fontStyle: "700",
+    })
+      .setOrigin(0.5, 0)
+      .setDepth(7);
+    this.bagCaption = addUiText(this, this.bag.x, this.bag.y - this.bag.displayHeight * this.bag.originY - 8, "Bag", {
+      size: Type.caption,
+      color: Color.inkHex,
+      backgroundColor: Color.limeHex,
+      padding: { x: 8, y: 3 },
+      fontStyle: "700",
+    })
+      .setOrigin(0.5, 1)
+      .setDepth(7);
 
     this.prompt = addUiText(this, DOORSTEP_DOOR_X, GAME_PROMPT_Y, "", {
       size: Type.body,
@@ -70,6 +110,16 @@ export class DoorScene extends Phaser.Scene {
     })
       .setOrigin(0.5)
       .setDepth(8);
+
+    this.askIdBtn = addHudButton(this, CUSTOMER_X, floor - PERSON_DISPLAY_H - 16, "ASK FOR ID", () => getSim().queueInteract(), {
+      originX: 0.5,
+      originY: 1,
+      variant: "primary",
+      minWidth: 360,
+      caption: "They must show ID first",
+      depth: 9,
+    });
+    this.askIdBtn.setVisible(false);
 
     this.arrows = new TutorialArrows(this, 12);
   }
@@ -86,36 +136,51 @@ export class DoorScene extends Phaser.Scene {
       const n = Number(houseKey.replace("house-", "")) || 1;
       paintDoorstep(this.backdrop, n - 1);
     }
+    const destOrder = snap.orders.find((o) => o.destinationId === drop.houseId && o.status === "onRun");
+    const sla = destOrder ? formatSlaClock(destOrder.slaRemainingMs) : "";
     const title = drop.houseId
-      ? `${drop.customerName ?? "Customer"}  ·  ${houseLabel(drop.houseId)}${runNote(snap)}`
+      ? `${drop.customerName ?? "Customer"}  ·  ${houseLabel(drop.houseId)}${sla ? `  ·  ${sla}` : ""}${runNote(snap)}`
       : "";
+    this.houseLabel.setFontSize(36);
     this.houseLabel.setText(title);
+    this.houseLabel.setColor(destOrder && isSlaUrgent(destOrder.slaRemainingMs) ? Color.dangerHex : Color.creamHex);
+    fitTypeToWidth(this.houseLabel, 900, 18);
 
     const pulse = 0.7 + 0.3 * (0.5 + 0.5 * Math.sin(snap.gameMs / 180));
     const nextPhoto = drop.actionLabel === "PHOTO";
     const nextId = drop.actionLabel === "CHECK ID";
     const nextHand = drop.actionLabel === "HAND BAG";
-    this.bag.setVisible(!drop.idChecked || nextHand);
+    const nextAsk = drop.actionLabel === "ASK ID";
+    this.bag.setVisible(true);
     this.bag.setAlpha(nextPhoto || nextHand ? pulse : 1);
-    this.bag.setTint(nextPhoto || nextHand ? 0xb8ffb0 : 0xffffff);
-    this.customer.setAlpha(nextHand || nextId ? pulse : 1);
-    this.customer.setTint(nextHand ? 0xb8ffb0 : 0xffffff);
+    this.bag.clearTint();
+    this.customer.setAlpha(nextAsk || nextHand || nextId ? pulse : 1);
+    this.customer.clearTint();
     this.prompt.setText(drop.hint || "They're at the door.");
+    this.customerCaption.setText(drop.customerName ?? "Customer");
+    this.bagCaption.setVisible(nextPhoto || nextHand);
+    this.bagCaption.setText(nextPhoto ? "Tap to photo" : "Tap to hand over");
+    this.bagCaption.setPosition(this.bag.x, this.bag.y - this.bag.displayHeight * this.bag.originY - 8);
+    this.customerCaption.setBackgroundColor(nextAsk || nextId || nextHand ? Color.limeHex : "#1c1612ee");
+    this.customerCaption.setColor(nextAsk || nextId || nextHand ? Color.inkHex : Color.creamHex);
+    this.askIdBtn.setVisible(nextAsk);
+    if (this.askIdBtn.input) this.askIdBtn.input.enabled = nextAsk;
+    this.askIdBtn.setAlpha(nextAsk ? pulse : 1);
 
-    this.paintArrows(snap, nextPhoto, nextHand, nextId);
+    this.paintArrows(snap, nextPhoto, nextHand, nextId, nextAsk);
   }
 
-  private paintArrows(snap: SimSnapshot, nextPhoto: boolean, nextHand: boolean, nextId: boolean): void {
+  private paintArrows(snap: SimSnapshot, nextPhoto: boolean, nextHand: boolean, nextId: boolean, nextAsk: boolean): void {
     if (!isTutorialMode()) {
       this.arrows.clear();
       return;
     }
     const spots = [];
     for (const hint of tutorialHints(snap)) {
-      if (hint.kind === "handoff" && nextPhoto) {
-        spots.push({ id: hint.id, x: this.bag.x, y: this.bag.y - 48 });
-      } else if (hint.kind === "handoff" && nextHand) {
-        spots.push({ id: hint.id, x: this.customer.x, y: this.customer.y - PERSON_DISPLAY_H - 8 });
+      if (hint.kind === "handoff" && (nextPhoto || nextHand)) {
+        spots.push({ id: hint.id, x: this.bag.x, y: this.bag.y - this.bag.displayHeight * 0.5 });
+      } else if (hint.kind === "doorCustomer" && nextAsk) {
+        spots.push({ id: hint.id, x: this.askIdBtn.x, y: this.askIdBtn.y - 56 });
       } else if (hint.kind === "idCard" && nextId) {
         spots.push({ id: hint.id, x: this.customer.x, y: this.customer.y - PERSON_DISPLAY_H - 8 });
       }
@@ -124,7 +189,17 @@ export class DoorScene extends Phaser.Scene {
   }
 }
 
-const GAME_PROMPT_Y = 72;
+function wireBagHit(bag: Phaser.GameObjects.Image): void {
+  const w = bag.frame.width;
+  const h = bag.frame.height;
+  bag.setInteractive({
+    useHandCursor: true,
+    hitArea: new Phaser.Geom.Rectangle(-w * bag.originX, -h * bag.originY, w, h),
+    hitAreaCallback: Phaser.Geom.Rectangle.Contains,
+  });
+}
+
+const GAME_PROMPT_Y = 148;
 
 function houseLabel(id: string): string {
   return `House ${id.replace("house-", "")}`;
