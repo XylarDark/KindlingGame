@@ -1058,6 +1058,12 @@ export class GameSim {
   }
 
   private interactDriver(): void {
+    // Stay locked on an in-progress curb/door stop — never rebind mid-handoff.
+    if (this.dropoff && this.dropoff.phase !== "atCurb") {
+      this.continueDropoff();
+      return;
+    }
+
     const stopId = this.nextStopId();
     if (!stopId) {
       this.toast = "Nothing on the bike. Head back to Kindling.";
@@ -1076,6 +1082,10 @@ export class GameSim {
       this.beginCurb(stopId);
     }
 
+    this.continueDropoff();
+  }
+
+  private continueDropoff(): void {
     const d = this.dropoff;
     if (!d) return;
 
@@ -1090,51 +1100,52 @@ export class GameSim {
       return;
     }
 
-    if (d.phase === "atDoor") {
-      const order = this.runOrderIds
-        .map((id) => this.orderById(id))
-        .find((o) => o?.destinationId === d.houseId && o.status === "onRun");
-      if (!order) return;
+    if (d.phase !== "atDoor") return;
 
-      if (!d.idAsked) {
-        d.idAsked = true;
-        this.toast = `${order.customerName} is showing ID. Confirm 19+.`;
-        return;
-      }
-
-      const card = idCardFor(order.customerName, order.idAge);
-      if (!d.idChecked) {
-        if (!card.ageOk) {
-          this.failOrder(order, `ID check failed — ${order.customerName} is under 19.`);
-          this.refreshDriveRoute();
-          this.toast =
-            this.runOrderIds.length === 0
-              ? "Denied. Van is heading back to Kindling."
-              : `Denied. Next → ${this.nextStopId() ? houseTitle(this.nextStopId()!) : "Kindling"}.`;
-          return;
-        }
-        d.idChecked = true;
-        this.toast = `ID checks out — 19+. Hand ${order.customerName} the bag.`;
-        return;
-      }
-      if (!d.bagHanded) {
-        d.bagHanded = true;
-        this.toast = `Bag handed to ${order.customerName}. Snap the photo.`;
-        return;
-      }
-      if (!d.photoTaken) {
-        d.photoTaken = true;
-        this.complete(order);
-        this.runOrderIds = this.runOrderIds.filter((id) => id !== order.id);
-        this.clearDropoff();
-        this.refreshDriveRoute();
-        if (this.runOrderIds.length === 0) {
-          this.toast = "Run complete. Van is heading to Kindling — tap the shop when you arrive.";
-        } else {
-          this.toast = `Dropped. Next → ${this.nextStopId() ? houseTitle(this.nextStopId()!) : "Kindling"}.`;
-        }
-      }
+    const order = this.orderById(d.orderId);
+    if (!order || order.status !== "onRun") {
+      this.clearDropoff();
+      this.refreshDriveRoute();
       return;
+    }
+
+    if (!d.idAsked) {
+      d.idAsked = true;
+      this.toast = `${order.customerName} is showing ID. Confirm 19+.`;
+      return;
+    }
+
+    const card = idCardFor(order.customerName, order.idAge);
+    if (!d.idChecked) {
+      if (!card.ageOk) {
+        this.failOrder(order, `ID check failed — ${order.customerName} is under 19.`);
+        this.refreshDriveRoute();
+        this.toast =
+          this.runOrderIds.length === 0
+            ? "Denied. Van is heading back to Kindling."
+            : `Denied. Next → ${this.nextStopId() ? houseTitle(this.nextStopId()!) : "Kindling"}.`;
+        return;
+      }
+      d.idChecked = true;
+      this.toast = `ID checks out — 19+. Hand ${order.customerName} the bag.`;
+      return;
+    }
+    if (!d.bagHanded) {
+      d.bagHanded = true;
+      this.toast = `Bag handed to ${order.customerName}. Snap the photo.`;
+      return;
+    }
+    if (!d.photoTaken) {
+      d.photoTaken = true;
+      this.complete(order);
+      this.runOrderIds = this.runOrderIds.filter((id) => id !== order.id);
+      this.clearDropoff();
+      this.refreshDriveRoute();
+      if (this.runOrderIds.length === 0) {
+        this.toast = "Run complete. Van is heading to Kindling — tap the shop when you arrive.";
+      } else {
+        this.toast = `Dropped. Next → ${this.nextStopId() ? houseTitle(this.nextStopId()!) : "Kindling"}.`;
+      }
     }
   }
 

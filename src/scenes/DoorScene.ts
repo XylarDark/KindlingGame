@@ -20,7 +20,7 @@ const DOOR_BAG_SCALE = BAG_SCALE * 1.25;
 const DRIVER_X = DOORSTEP_DOOR_X - 160;
 const CUSTOMER_X = DOORSTEP_DOOR_X + 200;
 /** Extra pad so tapping the customer for HAND BAG always registers. */
-const PERSON_HIT_PAD = 56;
+const PERSON_HIT_PAD = 72;
 
 export class DoorScene extends Phaser.Scene {
   private backdrop!: Phaser.GameObjects.Graphics;
@@ -33,7 +33,7 @@ export class DoorScene extends Phaser.Scene {
   private youLabel!: Phaser.GameObjects.Text;
   private customerCaption!: Phaser.GameObjects.Text;
   private askIdBtn!: Phaser.GameObjects.Container;
-  private photoBtn!: Phaser.GameObjects.Container;
+  private handBagBtn!: Phaser.GameObjects.Container;
   private lastHouse = "";
   private lastSkyKey = "";
   private lighting?: DayNightPipeline;
@@ -43,6 +43,7 @@ export class DoorScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.input.setTopOnly(true);
     this.lighting = attachDayNight(this.cameras.main);
     this.backdrop = this.add.graphics().setDepth(0);
     paintDoorstep(this.backdrop, 0, skyAt(0));
@@ -62,19 +63,21 @@ export class DoorScene extends Phaser.Scene {
     enableItemHit(this.driver);
     this.customer = this.add.image(CUSTOMER_X, floor, "tex-customer").setOrigin(0.5, 1).setScale(PEOPLE_SCALE).setDepth(5);
     enableWidePersonHit(this.customer);
-    // Handles sit in the driver's hands; bag hangs in front of the hip.
     this.bag = this.add
       .image(DRIVER_X + 52, floor - PERSON_DISPLAY_H * 0.46, "tex-bag")
       .setOrigin(0.5, 0.22)
       .setScale(DOOR_BAG_SCALE)
       .setDepth(6);
     enableItemHit(this.bag);
-    this.driver.on("pointerdown", () => getSim().queueInteract());
+    this.driver.disableInteractive();
     this.customer.on("pointerdown", (p: Phaser.Input.Pointer) => {
       p.event.stopPropagation();
       getSim().queueInteract();
     });
-    this.bag.on("pointerdown", () => getSim().queueInteract());
+    this.bag.on("pointerdown", (p: Phaser.Input.Pointer) => {
+      p.event.stopPropagation();
+      getSim().queueInteract();
+    });
     this.youLabel = addUiText(this, DRIVER_X, floor + 16, "You", {
       size: Type.caption,
       color: Color.creamHex,
@@ -121,25 +124,27 @@ export class DoorScene extends Phaser.Scene {
       .setDepth(8);
 
     const btnY = floor - PERSON_DISPLAY_H - 16;
-    this.askIdBtn = addHudButton(this, CUSTOMER_X, btnY, "ASK FOR ID", () => getSim().queueInteract(), {
+    const act = (): void => getSim().queueInteract();
+    this.askIdBtn = addHudButton(this, CUSTOMER_X, btnY, "ASK FOR ID", act, {
       originX: 0.5,
       originY: 1,
       variant: "primary",
       minWidth: 360,
       caption: "They must show ID first",
-      depth: 9,
+      depth: 12,
     });
-    this.askIdBtn.setVisible(false);
-
-    this.photoBtn = addHudButton(this, CUSTOMER_X, btnY, "TAKE PHOTO", () => getSim().queueInteract(), {
+    this.handBagBtn = addHudButton(this, CUSTOMER_X, btnY, "HAND BAG", act, {
       originX: 0.5,
       originY: 1,
-      variant: "amber",
+      variant: "primary",
       minWidth: 360,
-      caption: "Snap a photo of the bag",
-      depth: 9,
+      caption: "Hand over the order",
+      depth: 12,
     });
-    this.photoBtn.setVisible(false);
+    this.askIdBtn.setVisible(false);
+    if (this.askIdBtn.input) this.askIdBtn.input.enabled = false;
+    this.handBagBtn.setVisible(false);
+    if (this.handBagBtn.input) this.handBagBtn.input.enabled = false;
 
     this.layoutDoorHud();
     const relayout = (): void => this.layoutDoorHud();
@@ -193,32 +198,53 @@ export class DoorScene extends Phaser.Scene {
     const nextId = drop.actionLabel === "CHECK ID";
     const nextHand = drop.actionLabel === "HAND BAG";
     const nextAsk = drop.actionLabel === "ASK ID";
-    // While the ID card modal is up, door hits must not steal the tap.
     const idModal = nextId;
 
     this.bag.setVisible(true);
-    this.bag.setAlpha(nextPhoto ? pulse : 1);
-    this.bag.clearTint();
-    this.customer.setAlpha(nextAsk || nextHand ? pulse : 1);
+    this.bag.setDepth(nextPhoto ? 12 : 6);
+    if (nextPhoto) {
+      this.bag.setAlpha(pulse);
+      this.bag.setTint(0xb8ffb0);
+    } else {
+      this.bag.setAlpha(1);
+      this.bag.clearTint();
+    }
+    // ASK FOR ID: only the button flashes — customer stays steady.
+    this.customer.setAlpha(nextHand ? pulse : 1);
     this.customer.clearTint();
     this.customer.setDepth(nextHand ? 11 : 5);
-    // HAND BAG: only the customer (person). PHOTO: bag / photo button. ASK: button + person.
-    if (this.bag.input) this.bag.input.enabled = !idModal && nextPhoto;
-    if (this.customer.input) this.customer.input.enabled = !idModal && (nextAsk || nextHand);
-    if (this.driver.input) this.driver.input.enabled = false;
-    if (this.customerCaption.input) this.customerCaption.input.enabled = !idModal && (nextAsk || nextHand);
-    syncItemHit(this.customerCaption);
+
+    const canPerson = !idModal && nextHand;
+    const canBag = !idModal && nextPhoto;
+    if (canBag) {
+      if (!this.bag.input) enableWideBagHit(this.bag);
+      else this.bag.input.enabled = true;
+    } else {
+      this.bag.disableInteractive();
+    }
+    if (canPerson) {
+      if (!this.customer.input) enableWidePersonHit(this.customer);
+      else this.customer.input.enabled = true;
+      if (!this.customerCaption.input) enableItemHit(this.customerCaption);
+      else this.customerCaption.input.enabled = true;
+      syncItemHit(this.customerCaption);
+    } else {
+      this.customer.disableInteractive();
+      this.customerCaption.disableInteractive();
+    }
 
     this.prompt.setText(
       nextHand
         ? `Tap ${drop.customerName ?? "the customer"} to hand over the bag.`
-        : drop.hint || "They're at the door.",
+        : nextPhoto
+          ? `Tap the bag to photo the drop for ${drop.customerName ?? "the customer"}.`
+          : drop.hint || "They're at the door.",
     );
     this.prompt.setAlpha(1);
     this.customerCaption.setText(nextHand ? "Tap to hand bag" : drop.customerName ?? "Customer");
     this.customerCaption.setAlpha(1);
     this.bagCaption.setVisible(nextPhoto);
-    this.bagCaption.setText("Or tap the bag");
+    this.bagCaption.setText("Tap bag for photo");
     this.bagCaption.setAlpha(1);
     this.bagCaption.setPosition(this.bag.x, this.bag.y - this.bag.displayHeight * this.bag.originY - 8);
     if (nextPhoto) {
@@ -226,16 +252,14 @@ export class DoorScene extends Phaser.Scene {
       this.bagCaption.setBackgroundColor(`rgb(${bright},${Math.min(255, bright + 40)},${Math.round(bright * 0.55)})`);
       this.bagCaption.setColor(Color.inkHex);
     }
-    this.customerCaption.setBackgroundColor(nextAsk || nextHand ? Color.limeHex : "#1c1612ee");
-    this.customerCaption.setColor(nextAsk || nextHand ? Color.inkHex : Color.creamHex);
+    this.customerCaption.setBackgroundColor(nextHand ? Color.limeHex : "#1c1612ee");
+    this.customerCaption.setColor(nextHand ? Color.inkHex : Color.creamHex);
 
-    this.askIdBtn.setVisible(nextAsk);
-    if (this.askIdBtn.input) this.askIdBtn.input.enabled = nextAsk;
+    setDoorButton(this.askIdBtn, nextAsk);
     setButtonPulse(this.askIdBtn, pulse, nextAsk);
 
-    this.photoBtn.setVisible(nextPhoto);
-    if (this.photoBtn.input) this.photoBtn.input.enabled = nextPhoto;
-    setButtonPulse(this.photoBtn, pulse, nextPhoto);
+    setDoorButton(this.handBagBtn, nextHand);
+    setButtonPulse(this.handBagBtn, pulse, nextHand);
   }
 }
 
@@ -259,4 +283,20 @@ function enableWidePersonHit(obj: Phaser.GameObjects.Image): void {
     hitArea: new Phaser.Geom.Rectangle(-pad, -pad, width + pad * 2, height + pad * 2),
     hitAreaCallback: Phaser.Geom.Rectangle.Contains,
   });
+}
+
+function enableWideBagHit(obj: Phaser.GameObjects.Image): void {
+  const { width, height } = itemHitSize(obj);
+  const pad = 48;
+  obj.setInteractive({
+    useHandCursor: true,
+    hitArea: new Phaser.Geom.Rectangle(-pad, -pad, width + pad * 2, height + pad * 2),
+    hitAreaCallback: Phaser.Geom.Rectangle.Contains,
+  });
+}
+
+function setDoorButton(button: Phaser.GameObjects.Container, on: boolean): void {
+  button.setVisible(on);
+  // Keep the chrome hit area from addHudButton — only toggle enabled.
+  if (button.input) button.input.enabled = on;
 }

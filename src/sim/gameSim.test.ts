@@ -294,6 +294,25 @@ describe("GameSim order loops", () => {
     expect(sim.snapshot().run).toBeNull();
   });
 
+  it("keeps hand-bag and photo working on the first stop of a multi-stop run", () => {
+    const sim = GameSim.create({ seed: 4, autoSpawn: false });
+    const first = fillTicket(sim, "delivery", { destinationId: "house-1", ageOk: true });
+    fillTicket(sim, "delivery", { destinationId: "house-2", ageOk: true });
+    sim.hitTheRoad();
+    startDoor(sim, "house-1");
+    sim.interact(); // ask
+    sim.interact(); // check
+    expect(sim.snapshot().dropoff.actionLabel).toBe("HAND BAG");
+    // Vehicle nearer the other house must not break the locked door flow.
+    const other = tileToWorld(houseById("house-2")!.stop);
+    sim.setVehiclePosition(other.x, other.y);
+    sim.interact();
+    expect(sim.snapshot().dropoff.actionLabel).toBe("PHOTO");
+    sim.interact();
+    expect(sim.orderById(first.id)?.status).toBe("completed");
+    expect(sim.snapshot().run?.nextStopId).toBe("house-2");
+  });
+
   it("denies an underage stop, fails the order, and returns to the map", () => {
     const sim = GameSim.create({ seed: 4, autoSpawn: false });
     const order = fillTicket(sim, "delivery", { destinationId: "house-1", ageOk: false });

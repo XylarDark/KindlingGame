@@ -260,8 +260,17 @@ export class HudScene extends Phaser.Scene {
 
     this.phone.setVisible(showPhone);
     this.phoneCaption.setVisible(showPhone);
+    if (showPhone) {
+      if (!this.phone.input) enableItemHit(this.phone);
+      else this.phone.input.enabled = true;
+      if (!this.phoneCaption.input) enableItemHit(this.phoneCaption);
+      else this.phoneCaption.input.enabled = true;
+      syncItemHit(this.phoneCaption);
+    } else {
+      this.phone.disableInteractive();
+      this.phoneCaption.disableInteractive();
+    }
     this.phoneCaption.setText(drop.phase === "calling" ? "Phone is ringing…" : "Call the customer");
-    syncItemHit(this.phoneCaption);
     if (showPhone) {
       this.phone.setAlpha(drop.phase === "calling" ? 0.85 : flashPhone ? pulse : 1);
       this.phone.setTint(flashPhone && drop.phase !== "calling" ? 0xb8ffb0 : 0xffffff);
@@ -278,10 +287,20 @@ export class HudScene extends Phaser.Scene {
     const showId = !!drop.idCard && drop.idAsked;
     const flashId = flashNext?.kind === "idCard";
     this.idDim.setVisible(showId);
-    if (this.idDim.input) this.idDim.input.enabled = showId;
+    if (showId) {
+      if (!this.idDim.input) this.idDim.setInteractive({ useHandCursor: false });
+      else this.idDim.input.enabled = true;
+    } else {
+      this.idDim.disableInteractive();
+    }
     this.idPanel.setVisible(showId);
     this.idPanel.setAlpha(1);
-    if (this.idBg.input) this.idBg.input.enabled = showId;
+    if (showId) {
+      if (!this.idBg.input) enableItemHit(this.idBg);
+      else this.idBg.input.enabled = true;
+    } else {
+      this.idBg.disableInteractive();
+    }
     // Pulse border only — keep ID text fully readable.
     this.idFlashRing.setVisible(showId && flashId);
     if (showId && flashId) {
