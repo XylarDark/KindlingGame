@@ -370,6 +370,27 @@ describe("GameSim order loops", () => {
     expect(run?.nextStopId).toBeTruthy();
   });
 
+  it("auto-drives toward the next GPS stop without steer input", () => {
+    const sim = GameSim.create({ seed: 5, autoSpawn: false });
+    fillTicket(sim, "delivery", { destinationId: "house-1" });
+    sim.hitTheRoad();
+    const start = { ...sim.snapshot().vehicle };
+    expect(sim.snapshot().autoDriving).toBe(true);
+    for (let i = 0; i < 400; i++) sim.tick(50);
+    const after = sim.snapshot().vehicle;
+    expect(Math.hypot(after.x - start.x, after.y - start.y)).toBeGreaterThan(120);
+  });
+
+  it("auto-parks at the GPS curb so the phone call can start", () => {
+    const sim = GameSim.create({ seed: 5, autoSpawn: false });
+    fillTicket(sim, "delivery", { destinationId: "house-1" });
+    sim.hitTheRoad();
+    for (let i = 0; i < 2_000 && sim.snapshot().autoDriving; i++) sim.tick(50);
+    expect(sim.snapshot().autoDriving).toBe(false);
+    expect(sim.snapshot().dropoff.phase).toBe("atCurb");
+    expect(sim.snapshot().dropoff.actionLabel).toBe("CALL");
+  });
+
   it("lets the driver leave with packed deliveries while more tickets wait", () => {
     const sim = GameSim.create({ seed: 4, autoSpawn: false });
     const packed = fillTicket(sim, "delivery", { destinationId: "house-1" });

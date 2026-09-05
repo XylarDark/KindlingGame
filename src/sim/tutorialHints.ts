@@ -11,7 +11,6 @@ export type TutorialHint =
   | { id: string; kind: "handoff" }
   | { id: string; kind: "phone" }
   | { id: string; kind: "idCard" }
-  | { id: string; kind: "movePad" }
   | { id: string; kind: "gpsPin" }
   | { id: string; kind: "doorCustomer" }
   | { id: string; kind: "shop" };
@@ -81,6 +80,7 @@ function nextDriverHint(snap: SimSnapshot): TutorialHint | null {
   if (drop.actionLabel === "HAND BAG" || drop.actionLabel === "PHOTO") {
     return { id: "handoff", kind: "handoff" };
   }
+  if (snap.autoDriving) return null;
   if (snap.run?.nextStopId) return { id: "gpsPin", kind: "gpsPin" };
   return { id: "shop", kind: "shop" };
 }

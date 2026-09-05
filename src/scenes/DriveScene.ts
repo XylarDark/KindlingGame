@@ -12,6 +12,7 @@ import {
   tileToWorld,
 } from "../maps/cityT0";
 import { cityProps, cityStreetLamps, type CityLamp } from "../maps/cityDecor";
+import { buildTrafficLoops, trafficCars, type TrafficLoop } from "../maps/traffic";
 import { enableItemHit, syncItemHit } from "../input/hit";
 import { PEOPLE_SCALE } from "../maps/shopT0";
 import { getSim } from "../session";
@@ -43,6 +44,8 @@ export class DriveScene extends Phaser.Scene {
   private lighting?: DayNightPipeline;
   private streetLamps: CityLamp[] = [];
   private nightGlow!: Phaser.GameObjects.Graphics;
+  private trafficLoops: TrafficLoop[] = [];
+  private trafficSprites: Phaser.GameObjects.Image[] = [];
 
   constructor() {
     super("drive");
@@ -82,17 +85,34 @@ export class DriveScene extends Phaser.Scene {
     this.vehicle = this.add.image(0, 0, "tex-vehicle").setDepth(6).setDisplaySize(168, 104);
     this.walker = this.add.image(0, 0, "tex-driver").setOrigin(0.5, 1).setScale(PEOPLE_SCALE).setDepth(7).setVisible(false);
     this.customer = this.add.image(0, 0, "tex-customer").setOrigin(0.5, 1).setScale(PEOPLE_SCALE).setDepth(6).setVisible(false);
+    this.spawnTraffic();
+  }
+
+  private spawnTraffic(): void {
+    this.trafficLoops = buildTrafficLoops(6);
+    this.trafficSprites = this.trafficLoops.map((loop, i) =>
+      this.add
+        .image(0, 0, i % 2 === 0 ? "tex-car" : "tex-car-2")
+        .setDepth(5)
+        .setDisplaySize(120, 72)
+        .setAlpha(0.92),
+    );
   }
 
   update(): void {
     const snap = getSim().snapshot();
-    const dx = snap.vehicle.x - this.lastX;
-    const dy = snap.vehicle.y - this.lastY;
     this.vehicle.setPosition(snap.vehicle.x, snap.vehicle.y);
     this.vehicle.setAlpha(snap.dropoff.driverOnFoot ? 0.7 : 1);
-    if (Math.hypot(dx, dy) > 0.4) this.vehicle.setRotation(Math.atan2(dy, dx) + Math.PI);
+    this.vehicle.setRotation(snap.vehicle.heading + Math.PI);
     this.lastX = snap.vehicle.x;
     this.lastY = snap.vehicle.y;
+
+    const traffic = trafficCars(snap.gameMs, this.trafficLoops);
+    traffic.forEach((car, i) => {
+      const sprite = this.trafficSprites[i];
+      if (!sprite) return;
+      sprite.setPosition(car.x, car.y).setRotation(car.angle + Math.PI).setVisible(true);
+    });
 
     if (snap.dropoff.driverOnFoot && snap.dropoff.driver) {
       this.walker.setVisible(true).setPosition(snap.dropoff.driver.x, snap.dropoff.driver.y + 18);
@@ -156,7 +176,7 @@ export class DriveScene extends Phaser.Scene {
       this.shopCaption.setText("Kindling");
       this.shopCaption.setAlpha(1);
     } else {
-      this.shopCaption.setText(nearShop ? "Tap Kindling to return" : "Drive to Kindling");
+      this.shopCaption.setText(nearShop ? "Tap Kindling to return" : snap.autoDriving ? "Van heading to Kindling" : "Drive to Kindling");
       this.shopCaption.setAlpha(
         flashShop && nearShop ? 0.7 + 0.3 * (0.5 + 0.5 * Math.sin(snap.gameMs / 200)) : nearShop ? 0.85 : 1,
       );

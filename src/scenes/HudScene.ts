@@ -165,11 +165,11 @@ export class HudScene extends Phaser.Scene {
     this.padRing = this.add.graphics().setDepth(19);
     this.drawPad();
     this.padKnob = this.add.circle(this.padCenter.x, this.padCenter.y, 40, Color.cream, 0.92).setDepth(20);
-    this.padLabel = addUiText(this, this.padCenter.x, this.padCenter.y - 128, "STEER", {
+    this.padLabel = addUiText(this, this.padCenter.x, this.padCenter.y - 128, "Following GPS…", {
       size: Type.caption,
       color: Color.creamHex,
       backgroundColor: "#1c1612ee",
-      padding: { x: 8, y: 4 },
+      padding: { x: 10, y: 6 },
       fontStyle: "600",
     })
       .setOrigin(0.5, 1)
@@ -202,8 +202,13 @@ export class HudScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     const sim = getSim();
-    const { dx, dy } = this.readInput();
-    sim.setPlayerInput(dx, dy);
+    const snap = sim.snapshot();
+    if (!snap.autoDriving) {
+      const { dx, dy } = this.readInput();
+      sim.setPlayerInput(dx, dy);
+    } else {
+      sim.setPlayerInput(0, 0);
+    }
     sim.tick(delta);
     this.paintHud(sim.snapshot());
   }
@@ -289,14 +294,17 @@ export class HudScene extends Phaser.Scene {
     this.toastText.setVisible(!!snap.toast && !showId && snap.dropoff.phase !== "atDoor");
 
     const driving = snap.playerRole === "driver" && !atDoor;
-    const flashPad = flashNext?.kind === "movePad" && driving;
-    this.padRing.setVisible(driving);
-    this.padKnob.setVisible(driving);
+    this.padRing.setVisible(false);
+    this.padKnob.setVisible(false);
     this.padLabel.setVisible(driving);
-    this.drawPad(flashPad);
-    this.padKnob.setAlpha(flashPad ? pulse : 0.92);
-    this.padLabel.setBackgroundColor(flashPad ? Color.limeHex : "#1c1612ee");
-    this.padLabel.setColor(flashPad ? Color.inkHex : Color.creamHex);
+    if (driving) {
+      this.padLabel
+        .setText(snap.autoDriving ? "Following GPS…" : snap.run?.nextStopId ? "At the curb — call" : "At Kindling — tap the shop")
+        .setPosition(this.padCenter.x, this.padCenter.y - 40)
+        .setOrigin(0.5, 1)
+        .setBackgroundColor(flashNext?.kind === "phone" || flashNext?.kind === "shop" ? Color.limeHex : "#1c1612ee")
+        .setColor(flashNext?.kind === "phone" || flashNext?.kind === "shop" ? Color.inkHex : Color.creamHex);
+    }
     this.syncDoorScene(snap);
     syncMusicToClock(snap.gameMs);
   }

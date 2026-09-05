@@ -21,6 +21,7 @@ import {
 } from "./constants";
 import { ageForSeed, emptyDropoff, idCardFor, type DropoffPhase, type DropoffView } from "./dropoff";
 import { destLabel, isOpen, needsFetch, tabletQueue, type Order, type OrderType } from "./orders";
+import { advanceRoute, routeWorldPoints, type WorldPoint } from "./driveRoute";
 import { findPath } from "./pathfinding";
 import { generateCustomerName } from "./names";
 import { isDeliveryLate, scoreForComplete, scoreForFail } from "./scoring";
@@ -29,7 +30,6 @@ import {
   doorstepWorld,
   houseById,
   houseTitle,
-  isDriveWalkable,
   MAP_PX_H,
   MAP_PX_W,
   TILE,
@@ -115,7 +115,8 @@ export interface SimSnapshot {
   awaitingBag: boolean;
   keyLead: KeyLeadView;
   receipt: ReceiptView | null;
-  vehicle: { x: number; y: number };
+  vehicle: { x: number; y: number; heading: number };
+  autoDriving: boolean;
   customers: CustomerView[];
   orders: OrderView[];
   bagsOnPickup: string[];
@@ -203,6 +204,10 @@ export class GameSim {
   private counterBag: CounterBag | null = null;
   private nameSeed: number;
   private dropoff: DropoffState | null = null;
+  private driveRoute: WorldPoint[] = [];
+  private driveWaypoint = 0;
+  private driveArrived = false;
+  private vehicleHeading = Math.PI;
   private keyLeadX = KEYLEAD.x;
   private keyLeadPhase: KeyLeadPhase = "idle";
   private keyLeadFacing = 1;
@@ -308,7 +313,8 @@ export class GameSim {
             held: this.receiptHeld,
           }
         : null,
-      vehicle: { ...this.vehicle },
+      vehicle: { ...this.vehicle, heading: this.vehicleHeading },
+      autoDriving: this.playerRole === "driver" && this.dropoff?.phase !== "atDoor" && !this.driveArrived,
       customers: this.customers.map((c) => ({
         orderId: c.orderId,
         x: c.x,
@@ -380,6 +386,7 @@ export class GameSim {
   setVehiclePosition(x: number, y: number): void {
     this.vehicle.x = x;
     this.vehicle.y = y;
+    if (this.playerRole === "driver") this.refreshDriveRoute();
   }
 
   spawnOrder(type: OrderType, opts: { skuId?: string; destinationId?: string; ageOk?: boolean } = {}): Order {
@@ -431,7 +438,8 @@ export class GameSim {
     this.playerRole = "driver";
     this.pendingDepart = false;
     this.driverLine = null;
-    this.toast = this.runOrderIds.length > 1 ? "Multi-stop run. Follow the GPS." : "Hit the road. Follow the GPS.";
+    this.refreshDriveRoute();
+    this.toast = this.runOrderIds.length > 1 ? "Multi-stop run. Van follows the GPS." : "Hit the road. Van follows the GPS.";
     return true;
   }
 
@@ -454,8 +462,8 @@ export class GameSim {
 
   tick(dtMs: number): void {
     this.clock.tick(dtMs);
+    if (this.playerRole === "driver" && this.dropoff?.phase !== "atDoor") this.tickAutoDrive(dtMs / 1000);
     this.syncCurb();
-    if (this.playerRole === "driver" && this.dropoff?.phase !== "atDoor") this.moveVehicle(this.input.dx, this.input.dy, dtMs / 1000);
     this.moveCustomers(dtMs);
     this.tickKeyLead(dtMs);
     this.tickCall();
@@ -823,18 +831,72 @@ export class GameSim {
     return `I want ${sku.name}`;
   }
 
-  private moveVehicle(dx: number, dy: number, dt: number): void {
-    const len = Math.hypot(dx, dy);
-    if (len < 0.05) return;
-    const nx = dx / len;
-    const ny = dy / len;
-    const speed = VEHICLE_SPEED * dt;
-    const tryX = this.vehicle.x + nx * speed;
-    const tryY = this.vehicle.y + ny * speed;
-    if (!collides(tryX, this.vehicle.y)) this.vehicle.x = tryX;
-    if (!collides(this.vehicle.x, tryY)) this.vehicle.y = tryY;
-    this.vehicle.x = clamp(this.vehicle.x, TILE, MAP_PX_W - TILE);
-    this.vehicle.y = clamp(this.vehicle.y, TILE, MAP_PX_H - TILE);
+  private driveTargetWorld(): { x: number; y: number } | null {
+    const stopId = this.nextStopId();
+    if (stopId) {
+      const house = houseById(stopId);
+      return house ? tileToWorld(house.stop) : null;
+    }
+    if (this.playerRole === "driver") return tileToWorld(CITY.shopSpawn);
+    return null;
+  }
+
+  private refreshDriveRoute(): void {
+    const target = this.driveTargetWorld();
+    if (!target) {
+      this.driveRoute = [];
+      this.driveWaypoint = 0;
+      this.driveArrived = false;
+      return;
+    }
+    const from = worldToTile(this.vehicle.x, this.vehicle.y);
+    const start = CITY.walkable[from.r]?.[from.c] ? from : CITY.shopSpawn;
+    const goal = worldToTile(target.x, target.y);
+    const cells = findPath(CITY.walkable, start, goal);
+    this.driveRoute = routeWorldPoints(cells);
+    this.driveWaypoint = 0;
+    this.driveArrived = false;
+  }
+
+  private tickAutoDrive(dt: number): void {
+    if (this.driveArrived) return;
+    const target = this.driveTargetWorld();
+    if (!target) return;
+    if (this.driveRoute.length === 0) this.refreshDriveRoute();
+    if (this.driveRoute.length === 0) return;
+
+    if (dist(this.vehicle.x, this.vehicle.y, target.x, target.y) <= HANDOFF_RADIUS) {
+      this.arriveAtDriveTarget(target);
+      return;
+    }
+
+    // Route points are already on walkable tiles (right-lane offset); trust the path.
+    const step = advanceRoute(this.vehicle.x, this.vehicle.y, this.driveWaypoint, this.driveRoute, VEHICLE_SPEED, dt);
+    this.vehicle.x = clamp(step.x, TILE, MAP_PX_W - TILE);
+    this.vehicle.y = clamp(step.y, TILE, MAP_PX_H - TILE);
+    this.driveWaypoint = step.waypoint;
+    this.vehicleHeading = step.heading;
+    if (step.arrived || dist(this.vehicle.x, this.vehicle.y, target.x, target.y) <= HANDOFF_RADIUS) {
+      this.arriveAtDriveTarget(target);
+    }
+  }
+
+  private arriveAtDriveTarget(target: { x: number; y: number }): void {
+    if (this.driveArrived) return;
+    this.driveArrived = true;
+    const stopId = this.nextStopId();
+    if (stopId) {
+      const order = this.runOrderIds
+        .map((id) => this.orderById(id))
+        .find((o) => o?.destinationId === stopId && o.status === "onRun");
+      this.toast = order
+        ? `Arrived at ${destLabel(order)}. Call ${order.customerName} from your phone.`
+        : "Arrived. Call from your phone.";
+      return;
+    }
+    if (dist(this.vehicle.x, this.vehicle.y, target.x, target.y) <= HANDOFF_RADIUS) {
+      this.toast = "Back at Kindling. Tap the shop to return.";
+    }
   }
 
   private moveCustomers(dtMs: number): void {
@@ -1025,9 +1087,10 @@ export class GameSim {
       if (!d.idChecked) {
         if (!card.ageOk) {
           this.failOrder(order, `ID check failed — ${order.customerName} is under 19.`);
+          this.refreshDriveRoute();
           this.toast =
             this.runOrderIds.length === 0
-              ? "Denied. Head back to Kindling."
+              ? "Denied. Van is heading back to Kindling."
               : `Denied. GPS → ${this.nextStopId() ? houseTitle(this.nextStopId()!) : "Kindling"}.`;
           return;
         }
@@ -1045,8 +1108,9 @@ export class GameSim {
         this.complete(order);
         this.runOrderIds = this.runOrderIds.filter((id) => id !== order.id);
         this.clearDropoff();
+        this.refreshDriveRoute();
         if (this.runOrderIds.length === 0) {
-          this.toast = "Run complete. Drive up to Kindling, then tap the shop.";
+          this.toast = "Run complete. Van is heading to Kindling — tap the shop when you arrive.";
         } else {
           this.toast = `Dropped. GPS → ${this.nextStopId() ? houseTitle(this.nextStopId()!) : "Kindling"}.`;
         }
@@ -1280,25 +1344,6 @@ function dist(ax: number, ay: number, bx: number, by: number): number {
   return Math.hypot(ax - bx, ay - by);
 }
 
-function collides(x: number, y: number): boolean {
-  return pointsBlocked(x, y, 36, (t) => !isDriveWalkable(t));
-}
-
-function pointsBlocked(
-  x: number,
-  y: number,
-  half: number,
-  blocked: (t: { c: number; r: number }) => boolean,
-): boolean {
-  const points = [
-    { x: x - half, y: y - half },
-    { x: x + half, y: y - half },
-    { x: x - half, y: y + half },
-    { x: x + half, y: y + half },
-  ];
-  return points.some((p) => blocked(worldToTile(p.x, p.y)));
-}
-
 function mulberryFrom(seed: number): () => number {
   let t = seed >>> 0;
   return () => {
@@ -1309,18 +1354,18 @@ function mulberryFrom(seed: number): () => number {
   };
 }
 
-export function gpsPath(sim: GameSim): { x: number; y: number }[] {
+export function gpsPath(sim: GameSim): WorldPoint[] {
   const snap = sim.snapshot();
-  const stopId = snap.run?.nextStopId;
-  if (!stopId) return [];
-  const house = houseById(stopId);
-  if (!house) return [];
   const from = worldToTile(snap.vehicle.x, snap.vehicle.y);
-  if (!CITY.walkable[from.r]?.[from.c]) {
-    const spawn = CITY.shopSpawn;
-    return findPath(CITY.walkable, spawn, house.stop).map(tileToWorld);
+  const start = CITY.walkable[from.r]?.[from.c] ? from : CITY.shopSpawn;
+  const stopId = snap.run?.nextStopId;
+  if (stopId) {
+    const house = houseById(stopId);
+    if (!house) return [];
+    return routeWorldPoints(findPath(CITY.walkable, start, house.stop));
   }
-  return findPath(CITY.walkable, from, house.stop).map(tileToWorld);
+  if (snap.playerRole !== "driver") return [];
+  return routeWorldPoints(findPath(CITY.walkable, start, CITY.shopSpawn));
 }
 
 export type { HouseStop };
