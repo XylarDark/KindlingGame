@@ -1,4 +1,6 @@
 import type Phaser from "phaser";
+import { GAME_HEIGHT, GAME_WIDTH } from "./sim/constants";
+import { notifyViewfit, phaserDisplayScale, readCssSafeArea } from "./ui/viewFit";
 
 /** Phone-sized portrait: shop is 16:9 landscape, so ask them to turn. */
 export function isPortraitPhone(
@@ -33,7 +35,19 @@ export function tryLockLandscape(orientation: Pick<ScreenOrientation, "lock"> | 
   return true;
 }
 
-/** Keep the canvas in the visual viewport, clear of browser chrome and the home indicator. */
+/** Keep Phaser pointer mapping in 1920×1080 after CSS stretches the canvas. */
+export function applyCanvasDisplayScale(game: Phaser.Game): void {
+  const canvas = game.canvas;
+  if (!canvas) return;
+  game.scale.updateBounds();
+  const w = game.scale.canvasBounds?.width || canvas.clientWidth;
+  const h = game.scale.canvasBounds?.height || canvas.clientHeight;
+  if (w <= 0 || h <= 0) return;
+  const scale = phaserDisplayScale({ width: w, height: h }, GAME_WIDTH, GAME_HEIGHT);
+  game.scale.displayScale.set(scale.x, scale.y);
+}
+
+/** Keep the canvas in the visual viewport so CSS can stretch 1920×1080 to the whole screen. */
 export function installMobileShell(game: Phaser.Game): void {
   const root = document.getElementById("game-root");
   const gate = document.getElementById("rotate-gate");
@@ -53,6 +67,8 @@ export function installMobileShell(game: Phaser.Game): void {
       gate.setAttribute("aria-hidden", portrait ? "false" : "true");
     }
     game.scale.refresh();
+    applyCanvasDisplayScale(game);
+    notifyViewfit(game, { width, height }, readCssSafeArea(root));
   };
 
   const blockScroll = (event: Event): void => {

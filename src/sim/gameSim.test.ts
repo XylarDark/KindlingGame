@@ -439,6 +439,25 @@ describe("GameSim order loops", () => {
     expect(sim.snapshot().highlightSkuId).toBeNull();
   });
 
+  it("resets the clock to 9:00 and clears a door stop so leftover SLAs are not LATE", () => {
+    const sim = GameSim.create({ seed: 4, autoSpawn: false });
+    const order = fillTicket(sim, "delivery", { destinationId: "house-1" });
+    sim.hitTheRoad();
+    startDoor(sim, "house-1");
+    sim.tick(MS_PER_GAME_HOUR + 50);
+    expect(sim.snapshot().clockLabel).not.toBe("09:00");
+    expect(sim.snapshot().dropoff.phase).toBe("atDoor");
+    expect(sim.snapshot().orders.find((o) => o.id === order.id)?.late).toBe(true);
+    sim.resetToMorning();
+    const snap = sim.snapshot();
+    expect(snap.clockLabel).toBe("09:00");
+    expect(snap.dropoff.phase).toBe("none");
+    expect(sim.orderById(order.id)?.status).toBe("onRun");
+    const view = snap.orders.find((o) => o.id === order.id)!;
+    expect(view.late).toBe(false);
+    expect(view.slaRemainingMs).toBeGreaterThan(MS_PER_GAME_HOUR - 50);
+  });
+
   it("leaves each sealed bag on the counter", () => {
     const sim = GameSim.create({ seed: 5, autoSpawn: false });
     const a = fillTicket(sim, "pickup");

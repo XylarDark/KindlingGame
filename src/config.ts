@@ -27,15 +27,13 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
     default: "arcade",
     arcade: { gravity: { x: 0, y: 0 }, debug: false },
   },
-  audio: {
-    noAudio: true,
-  },
   scale: {
-    mode: Phaser.Scale.FIT,
-    autoCenter: Phaser.Scale.CENTER_BOTH,
+    // Game stays 1920×1080. CSS stretches #game-root canvas (object-fit: fill).
+    mode: Phaser.Scale.NONE,
+    autoCenter: Phaser.Scale.NO_CENTER,
     parent: "game-root",
     expandParent: false,
-    autoRound: true,
+    autoRound: false,
   },
   input: {
     activePointers: 3,

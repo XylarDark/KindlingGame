@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { isPortraitPhone, isStandaloneDisplay, tryLockLandscape } from "./shell";
+import { applyCanvasDisplayScale, isPortraitPhone, isStandaloneDisplay, tryLockLandscape } from "./shell";
+import { GAME_HEIGHT, GAME_WIDTH } from "./sim/constants";
 
 describe("isPortraitPhone", () => {
   it("asks a phone in portrait to rotate", () => {
@@ -45,5 +46,29 @@ describe("isStandaloneDisplay", () => {
 
   it("is false in a normal browser tab", () => {
     expect(isStandaloneDisplay(() => ({ matches: false }), false)).toBe(false);
+  });
+});
+
+describe("applyCanvasDisplayScale", () => {
+  it("maps CSS canvas size onto Phaser displayScale in 1920×1080 space", () => {
+    const displayScale = {
+      x: 1,
+      y: 1,
+      set(x: number, y: number) {
+        this.x = x;
+        this.y = y;
+      },
+    };
+    const game = {
+      canvas: { clientWidth: 844, clientHeight: 390 },
+      scale: {
+        canvasBounds: { width: 844, height: 390 },
+        displayScale,
+        updateBounds() {},
+      },
+    };
+    applyCanvasDisplayScale(game as never);
+    expect(displayScale.x).toBeCloseTo(GAME_WIDTH / 844);
+    expect(displayScale.y).toBeCloseTo(GAME_HEIGHT / 390);
   });
 });

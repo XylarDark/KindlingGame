@@ -233,6 +233,25 @@ export class GameSim {
     return new GameSim(options);
   }
 
+  /** Jump the shift back to 09:00 and clear a door stop so leftover SLAs cannot pin the player LATE. */
+  resetToMorning(): void {
+    this.clock.gameMs = 0;
+    this.clearDropoff();
+    for (const order of this.orders) {
+      if (!isOpen(order)) continue;
+      if (order.slaStartGameMs !== undefined) {
+        order.slaStartGameMs = 0;
+        order.late = false;
+      }
+      if (order.arriveAtGameMs !== undefined) order.arriveAtGameMs = 0;
+    }
+    this.lastAutoSpawn = 0;
+    this.nextTicketWaveAt = this.autoSpawn ? FIRST_TICKET_WAVE_MS : 0;
+    const hasWalkIn = this.orders.some((o) => o.type === "inStore" && isOpen(o));
+    this.spawnQueue = this.autoSpawn && !hasWalkIn ? [{ atMs: 400, type: "inStore" }] : [];
+    this.toast = "New day. Clock is 9:00 AM.";
+  }
+
   snapshot(): SimSnapshot {
     const bagSku = this.counterBag?.skuId ? skuById(this.catalog, this.counterBag.skuId) : undefined;
     const bagOrder = this.counterBag ? this.orderById(this.counterBag.orderId) : undefined;

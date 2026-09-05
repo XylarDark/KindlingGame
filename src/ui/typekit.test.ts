@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { capsTracking, isAllCaps, overlayStroke, parseFontPx, typeResolution } from "./typeMetrics";
 
 describe("typeResolution", () => {
-  it("never drops below 2x even on a small FIT canvas", () => {
+  it("never drops below 2x even on a small stretched canvas", () => {
     expect(typeResolution({ dpr: 1, fit: 0.4, objectScale: 1 })).toBe(2);
   });
 
-  it("scales with device pixel ratio and FIT zoom", () => {
+  it("scales with device pixel ratio and CSS stretch", () => {
     expect(typeResolution({ dpr: 2, fit: 1, objectScale: 1 })).toBe(4);
     expect(typeResolution({ dpr: 2, fit: 2, objectScale: 1 })).toBe(8);
   });

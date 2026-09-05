@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { startSessionMusic, unlockAudio } from "../audio/music";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import { beginPlay, shouldShowHowTo } from "../session";
 import { addHudButton, addPanel, HUD_BUTTON_MIN_H } from "../ui/chrome";
@@ -6,6 +7,7 @@ import { HOWTO_HINT, PAUSE_HINT, WELCOME_HINT, WELCOME_TITLE } from "../ui/copy"
 import { addUiText } from "../ui/text";
 import { Color, Type } from "../ui/theme";
 import { fitTypeToWidth } from "../ui/typekit";
+import { designSafeInset, readCssSafeArea, VIEWFIT_EVENT, viewFromScale } from "../ui/viewFit";
 
 const STEPS = [
   {
@@ -26,6 +28,7 @@ export class TitleScene extends Phaser.Scene {
   private started = false;
   private phase: "welcome" | "howto" | "paused" = "paused";
   private welcomeLayer: Phaser.GameObjects.GameObject[] = [];
+  private pauseHint?: Phaser.GameObjects.Text;
 
   constructor() {
     super("title");
@@ -44,12 +47,14 @@ export class TitleScene extends Phaser.Scene {
       .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, Color.ink, showOverlays ? 0.56 : 0.001)
       .setDepth(40)
       .setInteractive()
-      .on("pointerdown", () => this.advance());
+      .on("pointerdown", () => {
+        unlockAudio(this.game);
+        this.advance();
+      });
 
     if (showOverlays) this.drawWelcome();
     else {
-      const pauseInset = 48;
-      const pause = addUiText(this, GAME_WIDTH / 2, GAME_HEIGHT - 48, PAUSE_HINT, {
+      this.pauseHint = addUiText(this, GAME_WIDTH / 2, GAME_HEIGHT - 48, PAUSE_HINT, {
         size: Type.title,
         color: Color.inkHex,
         backgroundColor: Color.creamHex,
@@ -60,13 +65,26 @@ export class TitleScene extends Phaser.Scene {
       })
         .setOrigin(0.5, 1)
         .setDepth(43);
-      fitTypeToWidth(pause, GAME_WIDTH - pauseInset * 2);
+      this.layoutPauseHint();
+      const relayout = (): void => this.layoutPauseHint();
+      this.scale.on(Phaser.Scale.Events.RESIZE, relayout);
+      this.game.events.on(VIEWFIT_EVENT, relayout);
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.game.events.off(VIEWFIT_EVENT, relayout));
     }
 
     this.input.keyboard?.on("keydown", (event: KeyboardEvent) => {
       if (event.repeat) return;
+      unlockAudio(this.game);
       this.advance();
     });
+  }
+
+  private layoutPauseHint(): void {
+    if (!this.pauseHint) return;
+    const inset = designSafeInset(viewFromScale(this.scale), readCssSafeArea(document.getElementById("game-root")));
+    const pauseInset = 48 + Math.max(inset.left, inset.right);
+    this.pauseHint.setPosition(GAME_WIDTH / 2, GAME_HEIGHT - 48 - inset.bottom);
+    fitTypeToWidth(this.pauseHint, GAME_WIDTH - pauseInset * 2);
   }
 
   private drawWelcome(): void {
@@ -204,6 +222,7 @@ export class TitleScene extends Phaser.Scene {
     if (this.started) return;
     this.started = true;
     beginPlay();
+    startSessionMusic(this.game);
     this.scene.resume("shop");
     this.scene.resume("hud");
     this.scene.stop();

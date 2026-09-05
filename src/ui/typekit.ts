@@ -10,6 +10,7 @@ import {
   typeResolution,
   UI_FONT,
 } from "./typeMetrics";
+import { VIEWFIT_EVENT } from "./viewFit";
 
 export { capsTracking, currentDpr, displayFit, isAllCaps, overlayStroke, parseFontPx, typeResolution, UI_FONT };
 export type { TypeResolutionInput } from "./typeMetrics";
@@ -180,9 +181,10 @@ export function refreshTypekit(game: Phaser.Game): void {
   }
 }
 
-/** Keep raster density in sync when Scale.FIT changes the canvas CSS size. */
+/** Keep raster density in sync when CSS stretch changes the canvas size. */
 export function installTypekit(game: Phaser.Game): void {
   if (game.registry.get("kindlingTypekitInstalled")) return;
   game.registry.set("kindlingTypekitInstalled", true);
   game.scale.on(Phaser.Scale.Events.RESIZE, () => refreshTypekit(game));
+  game.events.on(VIEWFIT_EVENT, () => refreshTypekit(game));
 }

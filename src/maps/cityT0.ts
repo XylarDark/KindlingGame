@@ -40,13 +40,13 @@ function isBorder(r: number, c: number): boolean {
   return r === 0 || c === 0 || r === MAP_ROWS - 1 || c === MAP_COLS - 1;
 }
 
-function isEWStreet(r: number): boolean {
+export function isEWStreet(r: number): boolean {
   if (isBorder(r, 1)) return false;
   const m = (r - 1) % BLOCK_H;
   return m === 0 || m === 1;
 }
 
-function isNSStreet(c: number): boolean {
+export function isNSStreet(c: number): boolean {
   if (isBorder(1, c)) return false;
   const m = (c - 1) % BLOCK_W;
   return m === 0 || m === 1;

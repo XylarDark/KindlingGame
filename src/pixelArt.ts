@@ -38,6 +38,14 @@ export function generateTextures(scene: Phaser.Scene): void {
   houseLot(scene, "tex-house-5", Pal.wall, Pal.rustDark, Pal.kraft, "twoStory");
   houseLot(scene, "tex-house-6", Pal.cream, 0x3a3858, Pal.denim, "modern");
   treeTile(scene);
+  treeTileAlt(scene, "tex-tree-2", Pal.leaf, Pal.leafDark);
+  treeTileAlt(scene, "tex-tree-3", Pal.grassLite, Pal.leaf);
+  streetLamp(scene);
+  parkedCar(scene, "tex-car", Pal.rustDark, Pal.rust);
+  parkedCar(scene, "tex-car-2", Pal.denimDark, Pal.denim);
+  hydrant(scene);
+  mailbox(scene);
+  bench(scene);
   bag(scene);
   vehicle(scene);
   person(scene, "tex-keylead", "keylead", Pal.skin, Pal.hairBrown, Pal.leaf, Pal.hairBrownLite);
@@ -297,6 +305,67 @@ function treeTile(scene: Phaser.Scene): void {
     cells(g, 7, 5, 6, 7, Pal.leaf);
     cells(g, 8, 4, 4, 4, Pal.grassLite);
     cells(g, 9, 7, 2, 2, Pal.leafDark);
+  });
+}
+
+function treeTileAlt(scene: Phaser.Scene, key: string, leaf: number, dark: number): void {
+  bake(scene, key, 80, 80, (g) => {
+    cells(g, 0, 0, 20, 20, Pal.grass);
+    cells(g, 9, 13, 2, 6, Pal.woodDark);
+    cells(g, 8, 14, 4, 2, Pal.wood);
+    cells(g, 5, 5, 10, 8, dark);
+    cells(g, 6, 4, 8, 7, leaf);
+    cells(g, 8, 3, 4, 3, Pal.grassLite);
+  });
+}
+
+function streetLamp(scene: Phaser.Scene): void {
+  bake(scene, "tex-lamp", 32, 80, (g) => {
+    cells(g, 3, 16, 2, 4, Pal.asphaltDark);
+    cells(g, 3, 4, 2, 13, Pal.ink);
+    cells(g, 2, 2, 4, 3, Pal.gold);
+    cells(g, 2, 1, 4, 1, Pal.cream);
+  });
+}
+
+function parkedCar(scene: Phaser.Scene, key: string, body: number, roof: number): void {
+  bake(scene, key, 96, 56, (g) => {
+    cells(g, 1, 8, 22, 6, Pal.shadow);
+    cells(g, 2, 4, 20, 8, body);
+    cells(g, 5, 3, 12, 4, roof);
+    cells(g, 6, 3, 4, 3, Pal.glass);
+    cells(g, 13, 3, 4, 3, Pal.glass);
+    cells(g, 3, 10, 4, 3, Pal.shoe);
+    cells(g, 17, 10, 4, 3, Pal.shoe);
+    cells(g, 2, 6, 1, 2, Pal.cream);
+    cells(g, 21, 6, 1, 2, Pal.amber);
+  });
+}
+
+function hydrant(scene: Phaser.Scene): void {
+  bake(scene, "tex-hydrant", 32, 56, (g) => {
+    cells(g, 2, 10, 4, 4, Pal.rustDark);
+    cells(g, 3, 3, 2, 8, Pal.rust);
+    cells(g, 2, 2, 4, 2, Pal.gold);
+    cells(g, 1, 5, 6, 2, Pal.rustDark);
+  });
+}
+
+function mailbox(scene: Phaser.Scene): void {
+  bake(scene, "tex-mailbox", 32, 64, (g) => {
+    cells(g, 3, 10, 2, 6, Pal.ink);
+    cells(g, 1, 4, 6, 6, Pal.denim);
+    cells(g, 2, 5, 4, 3, Pal.denimDark);
+    cells(g, 6, 6, 1, 2, Pal.gold);
+  });
+}
+
+function bench(scene: Phaser.Scene): void {
+  bake(scene, "tex-bench", 64, 44, (g) => {
+    cells(g, 1, 5, 14, 2, Pal.wood);
+    cells(g, 1, 3, 14, 2, Pal.woodLight);
+    cells(g, 2, 7, 2, 3, Pal.woodDark);
+    cells(g, 12, 7, 2, 3, Pal.woodDark);
   });
 }
 

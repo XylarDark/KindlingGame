@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { registerDayNightPipeline } from "../art/dayNightPipeline";
+import { installMusicUnlock, preloadMusic } from "../audio/music";
 import { generateTextures } from "../pixelArt";
 import { startSession } from "../session";
 import { installTypekit } from "../ui/typekit";
@@ -9,9 +10,14 @@ export class BootScene extends Phaser.Scene {
     super("boot");
   }
 
+  preload(): void {
+    preloadMusic(this);
+  }
+
   create(): void {
     installTypekit(this.game);
     registerDayNightPipeline(this.game);
+    installMusicUnlock(this.game);
     void this.waitForFonts().then(() => {
       generateTextures(this);
       startSession();

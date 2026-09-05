@@ -40,6 +40,7 @@ import { HOURS } from "../ui/copy";
 import { Color, Type } from "../ui/theme";
 import { Pal } from "./palette";
 import { PX, fill, snap } from "./px";
+import { paintSky } from "./skyPaint";
 
 const WALL = 0xe6dfd4;
 const WAINSCOT = 0xddd4c8;
@@ -260,7 +261,6 @@ function tvBezel(g: Phaser.GameObjects.Graphics, left: number, top: number, w: n
 }
 
 const POT_HOT = 0xffe8b0;
-const MOON = 0x6a88b0;
 
 function potCan(g: Phaser.GameObjects.Graphics, x: number): void {
   fill(g, x - 18, 4, 36, 22, 0x1a1410);
@@ -570,43 +570,11 @@ function paintOutside(
   gameMs = 0,
 ): void {
   const clip = { x, y, w, h };
-  fill(g, x, y, w, Math.floor(h * 0.34), sky.zenith);
-  fill(g, x, y + Math.floor(h * 0.28), w, Math.floor(h * 0.18), sky.haze);
-  fill(g, x, y + Math.floor(h * 0.44), w, Math.floor(h * 0.18), sky.glow);
-  fill(g, x, y + Math.floor(h * 0.6), w, Math.floor(h * 0.16), sky.earth);
-  fill(g, x, y + Math.floor(h * 0.74), w, h - Math.floor(h * 0.74), sky.earth);
-
-  if (sky.starAlpha > 0.04) {
-    const stars = [
-      [0.08, 0.1],
-      [0.22, 0.22],
-      [0.4, 0.08],
-      [0.62, 0.18],
-      [0.82, 0.12],
-      [0.3, 0.3],
-    ];
-    for (const [sx, sy] of stars) {
-      fill(g, x + Math.floor(w * sx!), y + Math.floor(h * sy!), PX, PX, Color.cream, sky.starAlpha * 0.7);
-    }
-  }
-
-  if (kind === "wide" && sky.sunAlpha > 0.05) {
-    const sunX = x + Math.floor(w * sky.sunX);
-    const sunY = y + Math.floor(h * sky.sunY);
-    const r = kind === "wide" ? 22 : 10;
-    fill(g, sunX - r - 8, sunY - r - 6, r * 2 + 16, r * 2 + 12, sky.sunColor, 0.18 * sky.sunAlpha);
-    fill(g, sunX - r, sunY - r, r * 2, r * 2, sky.sunColor, sky.sunAlpha);
-    fill(g, sunX - Math.floor(r * 0.45), sunY - Math.floor(r * 0.45), Math.floor(r * 0.9), Math.floor(r * 0.9), 0xfff6d8, sky.sunAlpha);
-  }
-
-  if (sky.moonAlpha > 0.05) {
-    const moonX = x + Math.floor(w * sky.moonX);
-    const moonY = y + Math.floor(h * sky.moonY);
-    const r = kind === "wide" ? 12 : 6;
-    fill(g, moonX - r - 8, moonY - r - 8, r * 2 + 16, r * 2 + 16, MOON, 0.16 * sky.moonAlpha);
-    fill(g, moonX - r, moonY - r, r * 2, r * 2, 0xd8c898, sky.moonAlpha);
-    fill(g, moonX - Math.floor(r * 0.35), moonY - Math.floor(r * 0.35), Math.floor(r * 0.7), Math.floor(r * 0.7), 0xf0e8c8, sky.moonAlpha);
-  }
+  paintSky(g, x, y, w, h, sky, {
+    showSun: kind === "wide",
+    sunRadius: kind === "wide" ? 22 : 10,
+    moonRadius: kind === "wide" ? 12 : 6,
+  });
 
   const originX = streetOriginX(x, w, kind);
   paintBoutiqueBlock(g, originX, y, h, sky, clip);

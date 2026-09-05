@@ -1,8 +1,11 @@
 import Phaser from "phaser";
-import { paintDoorstep, DOORSTEP_DOOR_X, DOORSTEP_FLOOR_Y } from "../art/doorstep";
+import { doorGrade } from "../art/dayNightGrade";
+import { applyDayNight, attachDayNight, dayNightFrom, type DayNightPipeline } from "../art/dayNightPipeline";
+import { paintDoorstep, DOORSTEP_DOOR_X, DOORSTEP_FLOOR_Y, DOORSTEP_PORCH } from "../art/doorstep";
 import { enableItemHit } from "../input/hit";
 import { BAG_SCALE, PEOPLE_SCALE, PERSON_DISPLAY_H } from "../maps/shopT0";
 import { getSim, isTutorialMode } from "../session";
+import { skyAt } from "../sim/dayNight";
 import type { SimSnapshot } from "../sim/gameSim";
 import { tutorialHints } from "../sim/tutorialHints";
 import { addHudButton } from "../ui/chrome";
@@ -10,6 +13,7 @@ import { formatSlaClock, isSlaUrgent } from "../ui/copy";
 import { addUiText } from "../ui/text";
 import { Color, Type } from "../ui/theme";
 import { fitTypeToWidth } from "../ui/typekit";
+import { designSafeInset, readCssSafeArea, VIEWFIT_EVENT, viewFromScale } from "../ui/viewFit";
 import { TutorialArrows } from "../ui/tutorialArrow";
 
 /** 25% larger than shop bags (BAG_SCALE 0.7). */
@@ -30,14 +34,17 @@ export class DoorScene extends Phaser.Scene {
   private askIdBtn!: Phaser.GameObjects.Container;
   private arrows!: TutorialArrows;
   private lastHouse = "";
+  private lastSkyKey = "";
+  private lighting?: DayNightPipeline;
 
   constructor() {
     super("door");
   }
 
   create(): void {
+    this.lighting = attachDayNight(this.cameras.main);
     this.backdrop = this.add.graphics().setDepth(0);
-    paintDoorstep(this.backdrop, 0);
+    paintDoorstep(this.backdrop, 0, skyAt(0));
 
     this.houseLabel = addUiText(this, DOORSTEP_DOOR_X, 56, "", {
       size: Type.title,
@@ -115,6 +122,17 @@ export class DoorScene extends Phaser.Scene {
     this.askIdBtn.setVisible(false);
 
     this.arrows = new TutorialArrows(this, 12);
+    this.layoutDoorHud();
+    const relayout = (): void => this.layoutDoorHud();
+    this.scale.on(Phaser.Scale.Events.RESIZE, relayout);
+    this.game.events.on(VIEWFIT_EVENT, relayout);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.game.events.off(VIEWFIT_EVENT, relayout));
+  }
+
+  private layoutDoorHud(): void {
+    const inset = designSafeInset(viewFromScale(this.scale), readCssSafeArea(document.getElementById("game-root")));
+    this.houseLabel.setPosition(DOORSTEP_DOOR_X, 56 + inset.top);
+    this.prompt.setPosition(DOORSTEP_DOOR_X, GAME_PROMPT_Y + inset.top);
   }
 
   update(): void {
@@ -124,11 +142,23 @@ export class DoorScene extends Phaser.Scene {
   private sync(snap: SimSnapshot): void {
     const drop = snap.dropoff;
     const houseKey = drop.houseId ?? "house-1";
-    if (houseKey !== this.lastHouse) {
+    const sky = skyAt(snap.gameMs);
+    const skyKey = `${sky.zenith}:${sky.haze}:${sky.lampAlpha.toFixed(2)}:${sky.windowGlow.toFixed(2)}`;
+    if (houseKey !== this.lastHouse || skyKey !== this.lastSkyKey) {
       this.lastHouse = houseKey;
+      this.lastSkyKey = skyKey;
       const n = Number(houseKey.replace("house-", "")) || 1;
-      paintDoorstep(this.backdrop, n - 1);
+      paintDoorstep(this.backdrop, n - 1, sky);
     }
+    const view = this.cameras.main.worldView;
+    const pipe = this.lighting ?? dayNightFrom(this.cameras.main);
+    this.lighting = pipe;
+    applyDayNight(pipe, doorGrade(sky, DOORSTEP_PORCH), {
+      x: view.x,
+      y: view.y,
+      width: view.width || this.scale.width,
+      height: view.height || this.scale.height,
+    });
     const destOrder = snap.orders.find((o) => o.destinationId === drop.houseId && o.status === "onRun");
     const sla = destOrder ? formatSlaClock(destOrder.slaRemainingMs) : "";
     const title = drop.houseId

@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { Color, Type } from "./theme";
 import { addUiText } from "./text";
+import { HUD_TOUCH_MIN_DESIGN } from "./viewFit";
 
 export function addPanel(
   scene: Phaser.Scene,
@@ -20,8 +21,8 @@ export function addPanel(
   return g;
 }
 
-/** Tall enough that FIT-scaled 16:9 still hits ~44pt on iPhone landscape. */
-export const HUD_BUTTON_MIN_H = 112;
+/** Tall enough that a stretched phone canvas still hits ~44 CSS px. */
+export const HUD_BUTTON_MIN_H = HUD_TOUCH_MIN_DESIGN;
 
 export function addHudButton(
   scene: Phaser.Scene,

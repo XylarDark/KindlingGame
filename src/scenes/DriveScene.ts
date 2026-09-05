@@ -11,6 +11,7 @@ import {
   roadTextureKey,
   tileToWorld,
 } from "../maps/cityT0";
+import { cityProps, cityStreetLamps, type CityLamp } from "../maps/cityDecor";
 import { enableItemHit, syncItemHit } from "../input/hit";
 import { PEOPLE_SCALE } from "../maps/shopT0";
 import { getSim, isTutorialMode } from "../session";
@@ -42,6 +43,8 @@ export class DriveScene extends Phaser.Scene {
   private lastY = 0;
   private arrows!: TutorialArrows;
   private lighting?: DayNightPipeline;
+  private streetLamps: CityLamp[] = [];
+  private nightGlow!: Phaser.GameObjects.Graphics;
 
   constructor() {
     super("drive");
@@ -54,8 +57,9 @@ export class DriveScene extends Phaser.Scene {
     this.paintDayNight(getSim().snapshot());
     this.events.on(Phaser.Scenes.Events.PRE_RENDER, () => this.paintDayNight(getSim().snapshot()));
     this.drawCity();
-    this.glow = this.add.graphics().setDepth(2);
-    this.gps = this.add.graphics().setDepth(3);
+    this.nightGlow = this.add.graphics().setDepth(2);
+    this.glow = this.add.graphics().setDepth(3);
+    this.gps = this.add.graphics().setDepth(4);
     this.pinPulse = this.add.rectangle(0, 0, 88, 88, Color.neon, 0.28).setDepth(4);
     this.pin = this.add.image(0, 0, "tex-pin").setDepth(5).setDisplaySize(96, 120);
     this.tweens.add({
@@ -166,12 +170,32 @@ export class DriveScene extends Phaser.Scene {
     const view = this.cameras.main.worldView;
     const pipe = this.lighting ?? dayNightFrom(this.cameras.main);
     this.lighting = pipe;
-    applyDayNight(pipe, driveGrade(sky, focus), {
+    applyDayNight(pipe, driveGrade(sky, focus, this.streetLamps), {
       x: view.x,
       y: view.y,
       width: view.width || this.scale.width,
       height: view.height || this.scale.height,
     });
+    this.paintNightGlow(sky);
+  }
+
+  private paintNightGlow(sky: ReturnType<typeof skyAt>): void {
+    this.nightGlow.clear();
+    if (sky.windowGlow < 0.04 && sky.lampAlpha < 0.04) return;
+    for (const house of CITY.houses) {
+      const home = lotCenter(house.house, house.lotW, house.lotH);
+      this.nightGlow.fillStyle(0xffd080, 0.12 + 0.4 * sky.windowGlow);
+      this.nightGlow.fillRect(home.x - 22, home.y - 16, 18, 14);
+      this.nightGlow.fillRect(home.x + 6, home.y - 16, 18, 14);
+    }
+    const shop = lotCenter(CITY.shopLot.origin, CITY.shopLot.w, CITY.shopLot.h);
+    this.nightGlow.fillStyle(0xffe0a0, 0.1 + 0.35 * sky.windowGlow);
+    this.nightGlow.fillRect(shop.x - 70, shop.y - 18, 36, 20);
+    this.nightGlow.fillRect(shop.x + 8, shop.y - 18, 44, 20);
+    for (const lamp of this.streetLamps) {
+      this.nightGlow.fillStyle(0xffc070, 0.06 + 0.28 * sky.lampAlpha);
+      this.nightGlow.fillCircle(lamp.x, lamp.y - 18, 26 + 16 * sky.lampAlpha);
+    }
   }
 
   private paintTutorialArrows(snap: SimSnapshot): void {
@@ -306,6 +330,16 @@ export class DriveScene extends Phaser.Scene {
       p.event.stopPropagation();
       this.returnToShop();
     });
+
+    this.streetLamps = cityStreetLamps();
+    for (const lamp of this.streetLamps) {
+      this.add.image(lamp.x, lamp.y, "tex-lamp").setDisplaySize(36, 88).setDepth(2);
+    }
+    for (const prop of cityProps()) {
+      const img = this.add.image(prop.x, prop.y, prop.key).setDepth(prop.depth);
+      if (prop.display) img.setDisplaySize(prop.display.w, prop.display.h);
+      else img.setDisplaySize(TILE, TILE);
+    }
   }
 }
 

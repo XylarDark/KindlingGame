@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { getMusicPrefs, setMusicEnabled, setMusicVolume, syncMusicToClock } from "../audio/music";
 import { clampInput } from "../input/controls";
 import { enableItemHit, syncItemHit } from "../input/hit";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
@@ -11,9 +12,15 @@ import { roadButtonCopy } from "../ui/copy";
 import { Color, Type } from "../ui/theme";
 import { overlayStroke } from "../ui/typekit";
 import { TutorialArrows } from "../ui/tutorialArrow";
+import { designSafeInset, HUD_TOUCH_MIN_DESIGN, readCssSafeArea, VIEWFIT_EVENT, viewFromScale } from "../ui/viewFit";
+
+const SETTINGS_W = 420;
+const SETTINGS_H = 448;
+const VOL_TRACK = { x: 24, y: 268, w: 292, h: 16 };
 
 export class HudScene extends Phaser.Scene {
   private scoreText!: Phaser.GameObjects.Text;
+  private scoreCaption!: Phaser.GameObjects.Text;
   private clockText!: Phaser.GameObjects.Text;
   private roleBtn!: Phaser.GameObjects.Container;
   private padRing!: Phaser.GameObjects.Graphics;
@@ -38,6 +45,12 @@ export class HudScene extends Phaser.Scene {
   private settingsDim!: Phaser.GameObjects.Rectangle;
   private settingsPanel!: Phaser.GameObjects.Container;
   private tutorialValue!: Phaser.GameObjects.Text;
+  private musicValue!: Phaser.GameObjects.Text;
+  private volumeFill!: Phaser.GameObjects.Rectangle;
+  private volumeKnob!: Phaser.GameObjects.Arc;
+  private volumePct!: Phaser.GameObjects.Text;
+  private volumeHit!: Phaser.GameObjects.Rectangle;
+  private draggingVol = false;
   private settingsOpen = false;
 
   constructor() {
@@ -53,7 +66,7 @@ export class HudScene extends Phaser.Scene {
       fontStyle: "700",
       strokeThickness: 0,
     }).setDepth(20);
-    addUiText(this, 28, 92, "SCORE", {
+    this.scoreCaption = addUiText(this, 28, 92, "SCORE", {
       size: Type.caption,
       color: Color.muteHex,
       fontStyle: "700",
@@ -182,6 +195,11 @@ export class HudScene extends Phaser.Scene {
 
     this.makeSettings();
     this.arrows = new TutorialArrows(this, 28);
+    this.layoutHud();
+    const relayout = (): void => this.layoutHud();
+    this.scale.on(Phaser.Scale.Events.RESIZE, relayout);
+    this.game.events.on(VIEWFIT_EVENT, relayout);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.game.events.off(VIEWFIT_EVENT, relayout));
 
     this.paintHud(getSim().snapshot());
   }
@@ -192,6 +210,33 @@ export class HudScene extends Phaser.Scene {
     sim.setPlayerInput(dx, dy);
     sim.tick(delta);
     this.paintHud(sim.snapshot());
+  }
+
+  private layoutHud(): void {
+    const inset = designSafeInset(viewFromScale(this.scale), readCssSafeArea(document.getElementById("game-root")));
+    const left = 28 + inset.left;
+    const right = GAME_WIDTH - 28 - inset.right;
+    const top = 36 + inset.top;
+    const bottom = GAME_HEIGHT - 24 - inset.bottom;
+    this.scoreText.setPosition(left, top);
+    this.scoreCaption.setPosition(left, top + 56);
+    this.clockText.setPosition(right, top);
+    this.roleBtn.setPosition(right, top + 72);
+    this.phone.setPosition(GAME_WIDTH - 380 - inset.right, GAME_HEIGHT - 230 - inset.bottom);
+    this.phoneCaption.setPosition(GAME_WIDTH - 380 - inset.right, GAME_HEIGHT - 70 - inset.bottom);
+    this.toastText.setPosition(GAME_WIDTH / 2, bottom);
+    this.padCenter = { x: 196 + inset.left, y: GAME_HEIGHT - 220 - inset.bottom };
+    this.drawPad();
+    this.padKnob.setPosition(this.padCenter.x, this.padCenter.y);
+    this.padLabel.setPosition(this.padCenter.x, this.padCenter.y - 128);
+    const cogSize = HUD_TOUCH_MIN_DESIGN;
+    const cogX = GAME_WIDTH - 24 - inset.right;
+    const cogY = GAME_HEIGHT - 20 - inset.bottom;
+    this.cog.setPosition(cogX, cogY);
+    this.cog.setDisplaySize(cogSize, cogSize);
+    syncItemHit(this.cog);
+    this.cogCaption.setPosition(cogX - 8, cogY - cogSize - 4);
+    this.settingsPanel.setPosition(cogX - SETTINGS_W, cogY - cogSize - 32 - SETTINGS_H);
   }
 
   private paintHud(snap: SimSnapshot): void {
@@ -245,6 +290,7 @@ export class HudScene extends Phaser.Scene {
     this.padLabel.setVisible(driving);
     this.paintTutorialArrows(snap);
     this.syncDoorScene(snap);
+    syncMusicToClock(snap.gameMs);
   }
 
   private paintTutorialArrows(snap: SimSnapshot): void {
@@ -279,55 +325,142 @@ export class HudScene extends Phaser.Scene {
       this.closeSettings();
     });
 
-    const panelW = 420;
-    const panelH = 196;
-    const panelX = GAME_WIDTH - 24 - panelW;
-    const panelY = GAME_HEIGHT - 24 - 168 - panelH;
-    const bg = addPanel(this, 0, 0, panelW, panelH, {
+    const panelX = GAME_WIDTH - 24 - SETTINGS_W;
+    const panelY = GAME_HEIGHT - 24 - 168 - SETTINGS_H;
+    const bg = addPanel(this, 0, 0, SETTINGS_W, SETTINGS_H, {
       radius: 4,
       fill: 0xfffaf3,
       stroke: Color.woodTrim,
       depth: 41,
     });
-    const title = addUiText(this, 24, 18, "SETTINGS", {
+    const title = addUiText(this, 24, 16, "SETTINGS", {
       size: Type.heading,
       color: Color.inkHex,
       fontStyle: "700",
       strokeThickness: 0,
     });
-    const label = addUiText(this, 24, 78, "Tutorial arrows", {
+    const label = addUiText(this, 24, 64, "Tutorial arrows", {
       size: Type.body,
       color: Color.inkHex,
       fontStyle: "600",
       strokeThickness: 0,
     });
-    const hint = addUiText(this, 24, 112, "A bouncing arrow marks every tap\nthe shop needs from you next.", {
+    const hint = addUiText(this, 24, 96, "A bouncing arrow marks every tap\nthe shop needs from you next.", {
       size: Type.caption,
       color: Color.muteHex,
       fontStyle: "600",
       strokeThickness: 0,
       lineSpacing: 4,
     });
-    this.tutorialValue = addUiText(this, panelW - 28, 86, "", {
+    this.tutorialValue = addUiText(this, SETTINGS_W - 28, 72, "", {
       size: Type.heading,
       color: Color.inkHex,
       fontStyle: "700",
       strokeThickness: 0,
     }).setOrigin(1, 0.5);
-    const hit = this.add
-      .rectangle(panelW / 2, 96, panelW - 24, 88, 0x000000, 0.001)
+    const tutorialHit = this.add
+      .rectangle(SETTINGS_W / 2, 88, SETTINGS_W - 24, 72, 0x000000, 0.001)
       .setInteractive({ useHandCursor: true });
-    hit.on("pointerdown", (p: Phaser.Input.Pointer) => {
+    tutorialHit.on("pointerdown", (p: Phaser.Input.Pointer) => {
       p.event.stopPropagation();
       setTutorialMode(!isTutorialMode());
       this.refreshTutorialToggle();
     });
-    this.settingsPanel = this.add.container(panelX, panelY, [bg, title, label, hint, this.tutorialValue, hit]);
+
+    const musicLabel = addUiText(this, 24, 168, "Music", {
+      size: Type.body,
+      color: Color.inkHex,
+      fontStyle: "600",
+      strokeThickness: 0,
+    });
+    this.musicValue = addUiText(this, SETTINGS_W - 28, 176, "", {
+      size: Type.heading,
+      color: Color.inkHex,
+      fontStyle: "700",
+      strokeThickness: 0,
+    }).setOrigin(1, 0.5);
+    const musicHit = this.add
+      .rectangle(SETTINGS_W / 2, 180, SETTINGS_W - 24, 48, 0x000000, 0.001)
+      .setInteractive({ useHandCursor: true });
+    musicHit.on("pointerdown", (p: Phaser.Input.Pointer) => {
+      p.event.stopPropagation();
+      setMusicEnabled(!getMusicPrefs().enabled, this.game);
+      this.refreshMusicControls();
+    });
+
+    const volumeLabel = addUiText(this, 24, 228, "Volume", {
+      size: Type.body,
+      color: Color.inkHex,
+      fontStyle: "600",
+      strokeThickness: 0,
+    });
+    this.volumePct = addUiText(this, SETTINGS_W - 28, 236, "", {
+      size: Type.body,
+      color: Color.inkHex,
+      fontStyle: "700",
+      strokeThickness: 0,
+    }).setOrigin(1, 0.5);
+    const track = this.add.rectangle(VOL_TRACK.x, VOL_TRACK.y, VOL_TRACK.w, VOL_TRACK.h, 0xd8c8b0).setOrigin(0, 0.5);
+    this.volumeFill = this.add.rectangle(VOL_TRACK.x, VOL_TRACK.y, 8, VOL_TRACK.h, Color.leaf).setOrigin(0, 0.5);
+    this.volumeKnob = this.add.circle(VOL_TRACK.x, VOL_TRACK.y, 12, Color.woodTrim);
+    this.volumeHit = this.add
+      .rectangle(VOL_TRACK.x + VOL_TRACK.w / 2, VOL_TRACK.y, VOL_TRACK.w, 44, 0x000000, 0.001)
+      .setInteractive({ useHandCursor: true });
+    this.volumeHit.on("pointerdown", (p: Phaser.Input.Pointer) => {
+      p.event.stopPropagation();
+      this.draggingVol = true;
+      this.setVolumeFromPointer(p);
+    });
+    this.input.on("pointermove", (p: Phaser.Input.Pointer) => {
+      if (this.draggingVol) this.setVolumeFromPointer(p);
+    });
+    this.input.on("pointerup", () => {
+      this.draggingVol = false;
+    });
+    this.input.on("pointerupoutside", () => {
+      this.draggingVol = false;
+    });
+
+    const reset = addHudButton(this, 24, 332, "RESET DAY TO 9:00 AM", () => this.resetDayToNine(), {
+      originX: 0,
+      originY: 0,
+      variant: "amber",
+      minWidth: SETTINGS_W - 48,
+      caption: "Clock back to 9 AM · clears the door stop",
+      depth: 41,
+    });
+    const resetHint = addUiText(this, 24, 404, "Packed bags stay. Late timers start over.", {
+      size: Type.caption,
+      color: Color.muteHex,
+      fontStyle: "600",
+      strokeThickness: 0,
+    });
+
+    this.settingsPanel = this.add.container(panelX, panelY, [
+      bg,
+      title,
+      label,
+      hint,
+      this.tutorialValue,
+      tutorialHit,
+      musicLabel,
+      this.musicValue,
+      musicHit,
+      volumeLabel,
+      this.volumePct,
+      track,
+      this.volumeFill,
+      this.volumeKnob,
+      this.volumeHit,
+      reset,
+      resetHint,
+    ]);
     this.settingsPanel.setDepth(41).setVisible(false);
 
     const cogX = GAME_WIDTH - 24;
     const cogY = GAME_HEIGHT - 20;
-    this.cog = this.add.image(cogX, cogY, "tex-cog").setOrigin(1, 1).setScale(1.55).setDepth(42);
+    const cogSize = HUD_TOUCH_MIN_DESIGN;
+    this.cog = this.add.image(cogX, cogY, "tex-cog").setOrigin(1, 1).setDisplaySize(cogSize, cogSize).setDepth(42);
     enableItemHit(this.cog);
     const toggleSettings = (p: Phaser.Input.Pointer): void => {
       p.event.stopPropagation();
@@ -335,7 +468,7 @@ export class HudScene extends Phaser.Scene {
       else this.openSettings();
     };
     this.cog.on("pointerdown", toggleSettings);
-    this.cogCaption = addUiText(this, cogX - 8, cogY - 64 * 1.55 - 4, "Settings", {
+    this.cogCaption = addUiText(this, cogX - 8, cogY - cogSize - 4, "Settings", {
       size: Type.caption,
       color: Color.creamHex,
       backgroundColor: "#1c1612ee",
@@ -347,6 +480,7 @@ export class HudScene extends Phaser.Scene {
     enableItemHit(this.cogCaption);
     this.cogCaption.on("pointerdown", toggleSettings);
     this.refreshTutorialToggle();
+    this.refreshMusicControls();
   }
 
   private openSettings(): void {
@@ -354,6 +488,7 @@ export class HudScene extends Phaser.Scene {
     this.settingsDim.setVisible(true).setInteractive();
     this.settingsPanel.setVisible(true);
     this.refreshTutorialToggle();
+    this.refreshMusicControls();
     this.arrows.clear();
   }
 
@@ -367,6 +502,29 @@ export class HudScene extends Phaser.Scene {
     const on = isTutorialMode();
     this.tutorialValue.setText(on ? "ON" : "OFF");
     this.tutorialValue.setColor(on ? "#3d6a44" : Color.muteHex);
+  }
+
+  private refreshMusicControls(): void {
+    const prefs = getMusicPrefs();
+    this.musicValue.setText(prefs.enabled ? "ON" : "OFF");
+    this.musicValue.setColor(prefs.enabled ? "#3d6a44" : Color.muteHex);
+    const t = prefs.volume;
+    this.volumeFill.width = Math.max(8, VOL_TRACK.w * t);
+    this.volumeKnob.setPosition(VOL_TRACK.x + VOL_TRACK.w * t, VOL_TRACK.y);
+    this.volumePct.setText(`${Math.round(t * 100)}%`);
+  }
+
+  private setVolumeFromPointer(p: Phaser.Input.Pointer): void {
+    const bounds = this.volumeHit.getBounds();
+    const t = Phaser.Math.Clamp((p.x - bounds.left) / Math.max(1, bounds.width), 0, 1);
+    setMusicVolume(t, this.game);
+    this.refreshMusicControls();
+  }
+
+  private resetDayToNine(): void {
+    getSim().resetToMorning();
+    syncMusicToClock(0);
+    this.refreshMusicControls();
   }
 
   private drawPad(): void {
@@ -443,7 +601,7 @@ export class HudScene extends Phaser.Scene {
   private onPointerDown(p: Phaser.Input.Pointer): void {
     if (!this.padRing.visible) return;
     const d = Phaser.Math.Distance.Between(p.x, p.y, this.padCenter.x, this.padCenter.y);
-    if (d <= 120) this.pointerId = p.id;
+    if (d <= HUD_TOUCH_MIN_DESIGN) this.pointerId = p.id;
   }
 
   private onPointerUp(p: Phaser.Input.Pointer): void {

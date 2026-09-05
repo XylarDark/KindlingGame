@@ -6,7 +6,7 @@ const MAX_RES = 8;
 
 export type TypeResolutionInput = {
   dpr?: number;
-  /** Canvas CSS width / game width (Scale.FIT). */
+  /** Canvas CSS width / game width (NONE + CSS stretch). */
   fit?: number;
   /** Display scale on the Text object itself. */
   objectScale?: number;
@@ -31,7 +31,7 @@ export function displayFit(scale?: ScaleFitInput): number {
 }
 
 /**
- * Backing-store multiplier so canvas text stays sharp under DPR, FIT zoom,
+ * Backing-store multiplier so canvas text stays sharp under DPR, CSS stretch,
  * and object scale. Pixel-art NEAREST on the game does not apply here.
  */
 export function typeResolution(input: TypeResolutionInput = {}): number {

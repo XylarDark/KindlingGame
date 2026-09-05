@@ -135,7 +135,11 @@ export function shopGrade(sky: SkySample, potXs: number[]): GradeFrame {
   };
 }
 
-export function driveGrade(sky: SkySample, focus?: { x: number; y: number }): GradeFrame {
+export function driveGrade(
+  sky: SkySample,
+  focus?: { x: number; y: number },
+  lamps: { x: number; y: number }[] = [],
+): GradeFrame {
   const lights: PointLight[] = [];
   if (focus && sky.lampAlpha > DAY_NIGHT_TUNE.lampMin) {
     lights.push({
@@ -147,11 +151,67 @@ export function driveGrade(sky: SkySample, focus?: { x: number; y: number }): Gr
       intensity: DAY_NIGHT_TUNE.lampIntensityBase + DAY_NIGHT_TUNE.lampIntensityGain * sky.lampAlpha,
     });
   }
+  if (sky.lampAlpha > DAY_NIGHT_TUNE.lampMin && lamps.length > 0) {
+    const origin = focus ?? lamps[0]!;
+    const nearest = lamps
+      .map((lamp) => ({ lamp, d: (lamp.x - origin.x) ** 2 + (lamp.y - origin.y) ** 2 }))
+      .sort((a, b) => a.d - b.d);
+    for (const { lamp } of nearest) {
+      if (lights.length >= MAX_LIGHTS) break;
+      lights.push({
+        kind: "lamp",
+        x: lamp.x,
+        y: lamp.y,
+        color: 0xffd080,
+        radius: 300,
+        intensity: 0.18 + 0.4 * sky.lampAlpha,
+      });
+    }
+  }
   return {
     tint: rgb01(sky.mapOverlay),
     gradeStrength: Math.min(0.72, sky.mapOverlayAlpha * DAY_NIGHT_TUNE.driveGradeBoost),
     ambient: ambientColor(sky),
     ambientMul: ambientMul(sky, DAY_NIGHT_TUNE.ambientDim, DAY_NIGHT_TUNE.driveAmbientFloor),
+    lights,
+  };
+}
+
+export function doorGrade(sky: SkySample, porch: { x: number; y: number }): GradeFrame {
+  const lights: PointLight[] = [];
+  if (sky.lampAlpha > DAY_NIGHT_TUNE.lampMin) {
+    lights.push({
+      kind: "lamp",
+      x: porch.x,
+      y: porch.y,
+      color: 0xffe0a0,
+      radius: 420,
+      intensity: 0.3 + 0.48 * sky.lampAlpha,
+    });
+  }
+  if (sky.windowGlow > 0.2) {
+    lights.push({
+      kind: "window",
+      x: porch.x - 220,
+      y: porch.y - 160,
+      color: 0xffc070,
+      radius: 210,
+      intensity: 0.16 + 0.28 * sky.windowGlow,
+    });
+    lights.push({
+      kind: "window",
+      x: porch.x + 220,
+      y: porch.y - 160,
+      color: 0xffc070,
+      radius: 210,
+      intensity: 0.16 + 0.28 * sky.windowGlow,
+    });
+  }
+  return {
+    tint: rgb01(sky.mapOverlay),
+    gradeStrength: Math.min(0.55, sky.mapOverlayAlpha * 1.05),
+    ambient: ambientColor(sky),
+    ambientMul: ambientMul(sky, DAY_NIGHT_TUNE.ambientDim, 0.38),
     lights,
   };
 }

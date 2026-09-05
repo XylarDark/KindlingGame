@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { GAME_HEIGHT, GAME_WIDTH, MS_PER_GAME_HOUR } from "../sim/constants";
 import { skyAt } from "../sim/dayNight";
 import { CEILING_POT_LEFT, CEILING_POT_RIGHT, COUNTER_FRONT, COUNTER_TOP, ceilingPots } from "../maps/shopT0";
-import { DAY_NIGHT_TUNE, driveGrade, shopGrade, worldToUv } from "./dayNightGrade";
+import { DAY_NIGHT_TUNE, doorGrade, driveGrade, shopGrade, worldToUv } from "./dayNightGrade";
 
 function atHour(hour: number): number {
   return (hour - 9) * MS_PER_GAME_HOUR;
@@ -103,5 +103,28 @@ describe("driveGrade", () => {
     const noon = driveGrade(skyAt(atHour(12)));
     expect(noon.lights).toHaveLength(0);
     expect(noon.ambientMul).toBeGreaterThan(0.9);
+  });
+
+  it("adds nearby street lamps at night and ignores them at noon", () => {
+    const lamps = [
+      { x: 420, y: 310 },
+      { x: 900, y: 800 },
+    ];
+    const night = driveGrade(skyAt(atHour(20.5)), { x: 400, y: 300 }, lamps);
+    const noon = driveGrade(skyAt(atHour(12)), { x: 400, y: 300 }, lamps);
+    expect(night.lights.length).toBeGreaterThan(1);
+    expect(noon.lights).toHaveLength(0);
+  });
+});
+
+describe("doorGrade", () => {
+  it("lights the porch at night and stays quiet at noon", () => {
+    const porch = { x: 960, y: 630 };
+    const night = doorGrade(skyAt(atHour(20.5)), porch);
+    const noon = doorGrade(skyAt(atHour(12)), porch);
+    expect(night.lights.some((l) => l.kind === "lamp")).toBe(true);
+    expect(night.lights.some((l) => l.kind === "window")).toBe(true);
+    expect(night.gradeStrength).toBeGreaterThan(noon.gradeStrength);
+    expect(noon.lights).toHaveLength(0);
   });
 });
