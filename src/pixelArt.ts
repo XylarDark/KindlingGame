@@ -74,24 +74,25 @@ export function generateTextures(scene: Phaser.Scene): void {
 }
 
 function roadH(scene: Phaser.Scene): void {
-  // North lane of a 2-tile EW street — curb only on the outer (top) edge.
-  // Dashes use period 8 so seams tile into one continuous center line.
+  // North lane of a 2-tile EW street — curb + fog line on the outer (top) edge;
+  // dashed yellow center line on the inner (bottom) edge meets the south lane.
   bake(scene, "tex-road-hn", 64, 64, (g) => {
     cells(g, 0, 0, 16, 16, Pal.asphalt);
     cells(g, 0, 0, 16, 1, Pal.curb);
-    for (let x = 0; x < 16; x += 8) cells(g, x, 15, 4, 1, Pal.dash);
+    cells(g, 0, 1, 16, 1, Pal.creamSoft);
+    for (let x = 0; x < 16; x += 8) cells(g, x + 1, 15, 5, 1, Pal.dash);
   });
-  // South lane — curb on outer (bottom) edge; dashes meet the north lane.
   bake(scene, "tex-road-hs", 64, 64, (g) => {
     cells(g, 0, 0, 16, 16, Pal.asphalt);
     cells(g, 0, 15, 16, 1, Pal.curb);
-    for (let x = 0; x < 16; x += 8) cells(g, x, 0, 4, 1, Pal.dash);
+    cells(g, 0, 14, 16, 1, Pal.creamSoft);
+    for (let x = 0; x < 16; x += 8) cells(g, x + 1, 0, 5, 1, Pal.dash);
   });
-  // Legacy alias.
   bake(scene, "tex-road", 64, 64, (g) => {
     cells(g, 0, 0, 16, 16, Pal.asphalt);
     cells(g, 0, 0, 16, 1, Pal.curb);
-    for (let x = 0; x < 16; x += 8) cells(g, x, 8, 4, 1, Pal.dash);
+    cells(g, 0, 1, 16, 1, Pal.creamSoft);
+    for (let x = 0; x < 16; x += 8) cells(g, x + 1, 8, 5, 1, Pal.dash);
   });
 }
 
@@ -99,33 +100,66 @@ function roadV(scene: Phaser.Scene): void {
   bake(scene, "tex-road-vw", 64, 64, (g) => {
     cells(g, 0, 0, 16, 16, Pal.asphalt);
     cells(g, 0, 0, 1, 16, Pal.curb);
-    for (let y = 0; y < 16; y += 8) cells(g, 15, y, 1, 4, Pal.dash);
+    cells(g, 1, 0, 1, 16, Pal.creamSoft);
+    for (let y = 0; y < 16; y += 8) cells(g, 15, y + 1, 1, 5, Pal.dash);
   });
   bake(scene, "tex-road-ve", 64, 64, (g) => {
     cells(g, 0, 0, 16, 16, Pal.asphalt);
     cells(g, 15, 0, 1, 16, Pal.curb);
-    for (let y = 0; y < 16; y += 8) cells(g, 0, y, 1, 4, Pal.dash);
+    cells(g, 14, 0, 1, 16, Pal.creamSoft);
+    for (let y = 0; y < 16; y += 8) cells(g, 0, y + 1, 1, 5, Pal.dash);
   });
   bake(scene, "tex-road-v", 64, 64, (g) => {
     cells(g, 0, 0, 16, 16, Pal.asphalt);
     cells(g, 0, 0, 1, 16, Pal.curb);
     cells(g, 15, 0, 1, 16, Pal.curb);
-    for (let y = 0; y < 16; y += 8) cells(g, 8, y, 1, 4, Pal.dash);
+    for (let y = 0; y < 16; y += 8) cells(g, 8, y + 1, 1, 5, Pal.dash);
   });
 }
 
 function roadCross(scene: Phaser.Scene): void {
-  // 2×2 intersection: continuous asphalt only. No per-tile curb boxes — those
-  // read as a grid. Lane dashes meet at the junction center.
+  // 2×2 junction: zebra crosswalks on outer approaches, curb corners at lots,
+  // stop bars — no center dashes through the intersection pad.
   const quad = (key: string, north: boolean, west: boolean): void => {
     bake(scene, key, 64, 64, (g) => {
       cells(g, 0, 0, 16, 16, Pal.asphalt);
-      for (let i = 0; i < 16; i += 8) {
-        if (north) cells(g, i, 15, 4, 1, Pal.dash);
-        else cells(g, i, 0, 4, 1, Pal.dash);
-        if (west) cells(g, 15, i, 1, 4, Pal.dash);
-        else cells(g, 0, i, 1, 4, Pal.dash);
+      // Lot-facing curb corner.
+      if (north && west) {
+        cells(g, 0, 0, 4, 1, Pal.curb);
+        cells(g, 0, 0, 1, 4, Pal.curb);
+        cells(g, 1, 1, 2, 1, Pal.creamSoft);
+        cells(g, 1, 1, 1, 2, Pal.creamSoft);
       }
+      if (north && !west) {
+        cells(g, 12, 0, 4, 1, Pal.curb);
+        cells(g, 15, 0, 1, 4, Pal.curb);
+        cells(g, 13, 1, 2, 1, Pal.creamSoft);
+        cells(g, 14, 1, 1, 2, Pal.creamSoft);
+      }
+      if (!north && west) {
+        cells(g, 0, 15, 4, 1, Pal.curb);
+        cells(g, 0, 12, 1, 4, Pal.curb);
+        cells(g, 1, 14, 2, 1, Pal.creamSoft);
+        cells(g, 1, 13, 1, 2, Pal.creamSoft);
+      }
+      if (!north && !west) {
+        cells(g, 12, 15, 4, 1, Pal.curb);
+        cells(g, 15, 12, 1, 4, Pal.curb);
+        cells(g, 13, 14, 2, 1, Pal.creamSoft);
+        cells(g, 14, 13, 1, 2, Pal.creamSoft);
+      }
+      // Zebra crosswalks on outer edges.
+      for (let i = 3; i <= 12; i += 2) {
+        if (north) cells(g, i, 1, 1, 2, Pal.cream);
+        if (!north) cells(g, i, 13, 1, 2, Pal.cream);
+        if (west) cells(g, 1, i, 2, 1, Pal.cream);
+        if (!west) cells(g, 13, i, 2, 1, Pal.cream);
+      }
+      // Stop bars just inside the zebra.
+      if (north) cells(g, 3, 3, 10, 1, Pal.creamSoft);
+      if (!north) cells(g, 3, 12, 10, 1, Pal.creamSoft);
+      if (west) cells(g, 3, 3, 1, 10, Pal.creamSoft);
+      if (!west) cells(g, 12, 3, 1, 10, Pal.creamSoft);
     });
   };
   quad("tex-road-x-nw", true, true);

@@ -12,7 +12,7 @@ import {
   tileToWorld,
 } from "../maps/cityT0";
 import { cityProps, cityStreetLamps, type CityLamp } from "../maps/cityDecor";
-import { buildTrafficLoops, trafficCars, type TrafficLoop } from "../maps/traffic";
+import { cityTrafficLoops, trafficCars, type TrafficLoop } from "../maps/traffic";
 import { enableItemHit } from "../input/hit";
 import { PEOPLE_SCALE } from "../maps/shopT0";
 import { getSim } from "../session";
@@ -87,7 +87,7 @@ export class DriveScene extends Phaser.Scene {
   }
 
   private spawnTraffic(): void {
-    this.trafficLoops = buildTrafficLoops(6);
+    this.trafficLoops = cityTrafficLoops();
     const sample = trafficCars(0, this.trafficLoops);
     this.trafficSprites = sample.map((car) =>
       this.add.image(0, 0, car.key).setDepth(5).setDisplaySize(120, 72).setAlpha(0.92),
@@ -102,7 +102,11 @@ export class DriveScene extends Phaser.Scene {
     this.lastX = snap.vehicle.x;
     this.lastY = snap.vehicle.y;
 
-    const traffic = trafficCars(snap.gameMs, this.trafficLoops);
+    const traffic = trafficCars(snap.gameMs, this.trafficLoops, {
+      x: snap.vehicle.x,
+      y: snap.vehicle.y,
+      heading: snap.vehicle.heading,
+    });
     while (this.trafficSprites.length < traffic.length) {
       this.trafficSprites.push(this.add.image(0, 0, "tex-car").setDepth(5).setDisplaySize(120, 72).setAlpha(0.92));
     }

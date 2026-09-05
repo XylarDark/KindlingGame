@@ -15,12 +15,40 @@ export interface TrafficCarView {
   key: string;
   depth: number;
   angle: number;
+  /** Travel speed along the loop in px/s. */
+  speed: number;
 }
+
+export type TrafficObstacle = {
+  x: number;
+  y: number;
+  heading: number;
+};
 
 const CAR_KEYS = ["tex-car", "tex-car-2"] as const;
 
-/** Minimum center-to-center gap so cars never stack through each other. */
+/** Minimum center-to-center gap so cars never stack through each other (or the van). */
 export const TRAFFIC_MIN_SEP = 110;
+
+/** How far ahead the delivery van looks for a slower lead car. */
+export const TRAFFIC_LOOK_AHEAD = 180;
+
+/** Lateral lane tolerance when deciding a car is “in front”. */
+export const TRAFFIC_LANE_WIDTH = 72;
+
+/** Spawn density vs a full loop fill — 0.75 = 25% fewer cars on the road. */
+export const TRAFFIC_DENSITY = 0.75;
+
+/** Shared ambient loop budget (routes stay dense; cars are thinned by TRAFFIC_DENSITY). */
+export const TRAFFIC_LOOP_MAX = 6;
+
+let cachedLoops: TrafficLoop[] | null = null;
+
+/** Shared city loops so DriveScene and the sim use the same cars. */
+export function cityTrafficLoops(): TrafficLoop[] {
+  if (!cachedLoops) cachedLoops = buildTrafficLoops(TRAFFIC_LOOP_MAX);
+  return cachedLoops;
+}
 
 function isRoad(cell: TileCell): boolean {
   return CITY.kinds[cell.r]?.[cell.c] === "road";
@@ -48,7 +76,7 @@ function rectangleLoop(c0: number, r0: number, c1: number, r1: number): TileCell
 }
 
 /** Ambient cars on closed road loops (roads only — not parking stalls). */
-export function buildTrafficLoops(max = 6): TrafficLoop[] {
+export function buildTrafficLoops(max = TRAFFIC_LOOP_MAX): TrafficLoop[] {
   const loops: TrafficLoop[] = [];
   const seen = new Set<string>();
   const ewRows = CITY.kinds.map((_, r) => r).filter((r) => isEWStreet(r));
@@ -87,13 +115,18 @@ type CarState = {
   t: number;
   key: string;
   depth: number;
+  speed: number;
 };
 
 /**
- * Moving traffic that yields so cars keep a minimum gap — they do not pass through each other.
- * Still cosmetic vs the player van (no physics).
+ * Moving traffic that yields so cars keep a minimum gap — they do not pass through
+ * each other or the delivery van when `obstacle` is provided.
  */
-export function trafficCars(gameMs: number, loops: readonly TrafficLoop[]): TrafficCarView[] {
+export function trafficCars(
+  gameMs: number,
+  loops: readonly TrafficLoop[],
+  obstacle?: TrafficObstacle | null,
+): TrafficCarView[] {
   if (loops.length === 0) return [];
 
   const states: CarState[] = [];
@@ -101,6 +134,7 @@ export function trafficCars(gameMs: number, loops: readonly TrafficLoop[]): Traf
     const speed = 115 + (i % 3) * 22;
     const stagger = i * 2_800 + (i % 2) * 1_400;
     const dist = ((gameMs + stagger) * speed) / 1000;
+    // Long loops can carry a second car; density trim below removes ~25% overall.
     const carsOnLoop = loop.length > TILE * 14 ? 2 : 1;
     for (let k = 0; k < carsOnLoop; k++) {
       const spaced = dist / loop.length + k / carsOnLoop;
@@ -110,13 +144,23 @@ export function trafficCars(gameMs: number, loops: readonly TrafficLoop[]): Traf
         t: ((spaced % 1) + 1) % 1,
         key: CAR_KEYS[(i + k) % CAR_KEYS.length]!,
         depth: 5,
+        speed,
       });
     }
   });
 
-  // Same-loop cars already share speed + even spacing. Resolve cross-loop overlaps
-  // by holding the later-indexed car back along its path until gaps clear.
-  for (let pass = 0; pass < 10; pass++) {
+  // Thin the fleet by TRAFFIC_DENSITY while keeping even coverage across loops.
+  const keep = Math.max(1, Math.round(states.length * TRAFFIC_DENSITY));
+  if (states.length > keep) {
+    const picked: CarState[] = [];
+    for (let i = 0; i < keep; i++) {
+      picked.push(states[Math.floor((i + 0.5) * (states.length / keep))]!);
+    }
+    states.length = 0;
+    states.push(...picked);
+  }
+  // Resolve overlaps (car↔car and car↔van) by holding followers back along their path.
+  for (let pass = 0; pass < 12; pass++) {
     let moved = false;
     for (let a = 0; a < states.length; a++) {
       for (let b = a + 1; b < states.length; b++) {
@@ -127,11 +171,25 @@ export function trafficCars(gameMs: number, loops: readonly TrafficLoop[]): Traf
         const gap = Math.hypot(pa.x - pb.x, pa.y - pb.y);
         if (gap >= TRAFFIC_MIN_SEP) continue;
         const need = TRAFFIC_MIN_SEP - gap + 4;
-        // Prefer backing the car that is "behind" relative to the other along heading;
-        // fall back to higher index for a stable deterministic order.
         const follower = pickFollower(ca, cb, pa, pb) === ca ? ca : cb;
         const retreat = need / Math.max(TILE, follower.loop.length);
         follower.t = ((follower.t - retreat) % 1 + 1) % 1;
+        moved = true;
+      }
+    }
+    if (obstacle) {
+      for (const car of states) {
+        const p = pointAlongLoop(car.loop.points, car.t);
+        const gap = Math.hypot(p.x - obstacle.x, p.y - obstacle.y);
+        if (gap >= TRAFFIC_MIN_SEP) continue;
+        const heading = headingAlongLoop(car.loop.points, car.t);
+        const toward =
+          Math.cos(heading) * (obstacle.x - p.x) + Math.sin(heading) * (obstacle.y - p.y);
+        const need = TRAFFIC_MIN_SEP - gap + 6;
+        const step = need / Math.max(TILE, car.loop.length);
+        // Cars driving into the van hold back; cars the van is eating from behind nudge forward.
+        if (toward >= 0) car.t = ((car.t - step) % 1 + 1) % 1;
+        else car.t = (car.t + step) % 1;
         moved = true;
       }
     }
@@ -148,8 +206,57 @@ export function trafficCars(gameMs: number, loops: readonly TrafficLoop[]): Traf
       key: car.key,
       depth: car.depth,
       angle,
+      speed: car.speed,
     };
   });
+}
+
+/** Speed of the nearest same-lane car ahead of the delivery van, or null if clear. */
+export function leadTrafficSpeed(
+  player: TrafficObstacle,
+  cars: readonly TrafficCarView[],
+  lookAhead = TRAFFIC_LOOK_AHEAD,
+): number | null {
+  const lead = findLeadCar(player, cars, lookAhead);
+  return lead ? lead.car.speed : null;
+}
+
+/** Cruise speed for the van: match a lead car, and ease off if nose-to-tail. */
+export function driveSpeedForTraffic(
+  player: TrafficObstacle,
+  cars: readonly TrafficCarView[],
+  cruise: number,
+  lookAhead = TRAFFIC_LOOK_AHEAD,
+): number {
+  const lead = findLeadCar(player, cars, lookAhead);
+  if (!lead) return cruise;
+  if (lead.dist < TRAFFIC_MIN_SEP * 0.92) return Math.min(cruise * 0.15, lead.car.speed * 0.4);
+  if (lead.dist < TRAFFIC_MIN_SEP * 1.2) return Math.min(cruise, lead.car.speed);
+  return Math.min(cruise, lead.car.speed + 20);
+}
+
+function findLeadCar(
+  player: TrafficObstacle,
+  cars: readonly TrafficCarView[],
+  lookAhead: number,
+): { car: TrafficCarView; dist: number } | null {
+  let best: TrafficCarView | null = null;
+  let bestDist = lookAhead;
+  const cos = Math.cos(player.heading);
+  const sin = Math.sin(player.heading);
+  for (const car of cars) {
+    const dx = car.x - player.x;
+    const dy = car.y - player.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 24 || dist >= bestDist) continue;
+    const forward = cos * dx + sin * dy;
+    if (forward < 36) continue;
+    const lateral = Math.abs(-sin * dx + cos * dy);
+    if (lateral > TRAFFIC_LANE_WIDTH) continue;
+    best = car;
+    bestDist = dist;
+  }
+  return best ? { car: best, dist: bestDist } : null;
 }
 
 function pickFollower(
@@ -160,7 +267,6 @@ function pickFollower(
 ): CarState {
   const ha = headingAlongLoop(a.loop.points, a.t);
   const hb = headingAlongLoop(b.loop.points, b.t);
-  // Vector from a→b; if a is driving toward b, a is the follower (should yield).
   const abx = pb.x - pa.x;
   const aby = pb.y - pa.y;
   const aToward = Math.cos(ha) * abx + Math.sin(ha) * aby;

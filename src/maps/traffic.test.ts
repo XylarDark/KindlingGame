@@ -1,11 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { buildTrafficLoops, trafficCars, TRAFFIC_MIN_SEP } from "./traffic";
+import { TILE } from "./cityT0";
+import {
+  TRAFFIC_DENSITY,
+  TRAFFIC_LOOP_MAX,
+  TRAFFIC_MIN_SEP,
+  buildTrafficLoops,
+  leadTrafficSpeed,
+  trafficCars,
+} from "./traffic";
 
 describe("city traffic", () => {
   it("builds ambient road loops for cosmetic cars", () => {
-    const loops = buildTrafficLoops(6);
+    const loops = buildTrafficLoops(TRAFFIC_LOOP_MAX);
     expect(loops.length).toBeGreaterThan(0);
     expect(loops.every((loop) => loop.points.length >= 3 && loop.length > 0)).toBe(true);
+  });
+
+  it("spawns about 25% fewer cars than a full loop fill", () => {
+    const loops = buildTrafficLoops(TRAFFIC_LOOP_MAX);
+    const full = trafficCars(0, loops);
+    let slots = 0;
+    for (const loop of loops) slots += loop.length > TILE * 14 ? 2 : 1;
+    expect(full.length).toBe(Math.max(1, Math.round(slots * TRAFFIC_DENSITY)));
   });
 
   it("moves cars along loops over time", () => {
@@ -19,7 +35,7 @@ describe("city traffic", () => {
   });
 
   it("keeps cars from overlapping each other", () => {
-    const loops = buildTrafficLoops(6);
+    const loops = buildTrafficLoops(TRAFFIC_LOOP_MAX);
     for (const t of [0, 1_500, 4_200, 9_000, 16_000, 28_500]) {
       const cars = trafficCars(t, loops);
       for (let i = 0; i < cars.length; i++) {
@@ -29,5 +45,34 @@ describe("city traffic", () => {
         }
       }
     }
+  });
+
+  it("never lets cars pass through the delivery van", () => {
+    const loops = buildTrafficLoops(TRAFFIC_LOOP_MAX);
+    for (const t of [0, 2_000, 7_500, 14_000, 22_000]) {
+      const raw = trafficCars(t, loops);
+      if (raw.length === 0) continue;
+      const van = { x: raw[0]!.x, y: raw[0]!.y, heading: raw[0]!.angle };
+      const cars = trafficCars(t, loops, van);
+      for (const car of cars) {
+        const gap = Math.hypot(car.x - van.x, car.y - van.y);
+        expect(gap, `t=${t} ${car.id}`).toBeGreaterThanOrEqual(TRAFFIC_MIN_SEP - 1);
+      }
+    }
+  });
+
+  it("reports lead speed when a car is ahead in the same lane", () => {
+    const loops = buildTrafficLoops(TRAFFIC_LOOP_MAX);
+    const cars = trafficCars(3_000, loops);
+    expect(cars.length).toBeGreaterThan(0);
+    const lead = cars[0]!;
+    const player = {
+      x: lead.x - Math.cos(lead.angle) * 90,
+      y: lead.y - Math.sin(lead.angle) * 90,
+      heading: lead.angle,
+    };
+    const speed = leadTrafficSpeed(player, cars);
+    expect(speed).toBe(lead.speed);
+    expect(leadTrafficSpeed({ x: lead.x + 400, y: lead.y + 400, heading: 0 }, cars)).toBeNull();
   });
 });

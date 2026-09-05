@@ -39,6 +39,7 @@ import {
   worldToTile,
   type HouseStop,
 } from "../maps/cityT0";
+import { cityTrafficLoops, driveSpeedForTraffic, trafficCars } from "../maps/traffic";
 import { BACK_DOOR, CUSTOMER_SPOT, DOOR, KEYLEAD } from "../maps/shopT0";
 
 export type PlayerRole = "keyLead" | "driver";
@@ -877,7 +878,18 @@ export class GameSim {
     }
 
     // Route points are already on walkable tiles (right-lane offset); trust the path.
-    const step = advanceRoute(this.vehicle.x, this.vehicle.y, this.driveWaypoint, this.driveRoute, VEHICLE_SPEED, dt);
+    // Match a slower lead car's speed until it clears the lane ahead.
+    const traffic = trafficCars(this.clock.gameMs, cityTrafficLoops(), {
+      x: this.vehicle.x,
+      y: this.vehicle.y,
+      heading: this.vehicleHeading,
+    });
+    const speed = driveSpeedForTraffic(
+      { x: this.vehicle.x, y: this.vehicle.y, heading: this.vehicleHeading },
+      traffic,
+      VEHICLE_SPEED,
+    );
+    const step = advanceRoute(this.vehicle.x, this.vehicle.y, this.driveWaypoint, this.driveRoute, speed, dt);
     this.vehicle.x = clamp(step.x, TILE, MAP_PX_W - TILE);
     this.vehicle.y = clamp(step.y, TILE, MAP_PX_H - TILE);
     this.driveWaypoint = step.waypoint;
