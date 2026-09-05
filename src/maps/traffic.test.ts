@@ -62,6 +62,29 @@ describe("city traffic", () => {
     }
   });
 
+  it("keeps one-way lane directions — no oncoming traffic in the same corridor", () => {
+    const loops = buildTrafficLoops(TRAFFIC_LOOP_MAX);
+    expect(loops.length).toBeGreaterThan(0);
+    for (const t of [0, 3_000, 9_000, 18_000]) {
+      const cars = trafficCars(t, loops);
+      for (let i = 0; i < cars.length; i++) {
+        for (let j = i + 1; j < cars.length; j++) {
+          const a = cars[i]!;
+          const b = cars[j]!;
+          const gap = Math.hypot(a.x - b.x, a.y - b.y);
+          if (gap > 160) continue;
+          const facing =
+            Math.cos(a.angle) * Math.cos(b.angle) + Math.sin(a.angle) * Math.sin(b.angle);
+          // Opposing headings in close proximity must sit in different lanes (wide lateral gap).
+          if (facing > -0.5) continue;
+          const midAngle = Math.atan2(a.y - b.y, a.x - b.x);
+          const lateral = Math.abs(-Math.sin(a.angle) * (b.x - a.x) + Math.cos(a.angle) * (b.y - a.y));
+          expect(lateral, `oncoming ${a.id}/${b.id} t=${t} mid=${midAngle}`).toBeGreaterThan(40);
+        }
+      }
+    }
+  });
+
   it("swings around or holds when the delivery van is ahead in lane", () => {
     const loops = buildTrafficLoops(TRAFFIC_LOOP_MAX);
     const base = trafficCars(4_000, loops);

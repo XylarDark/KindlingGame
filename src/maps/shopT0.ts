@@ -40,6 +40,12 @@ export const RECEIPT_SPOT = { x: COUNTER_RIGHT - 48, y: COUNTER_TOP - 8 };
 export const OUT_BAG_GAP = 160;
 export const OUT_BAG_RIGHT = COUNTER_RIGHT - 64;
 
+/** Label sits 10% of bag height above the sprite top. */
+export function bagCaptionY(footY: number): number {
+  const bagH = Math.round(120 * BAG_SCALE);
+  return footY - bagH - Math.round(bagH * 0.1) - 8;
+}
+
 export const BENCH_INSET = 0;
 export const BENCH_LEFT = COUNTER_RIGHT;
 export const BENCH_W = GAME_WIDTH - BENCH_INSET - BENCH_LEFT;
@@ -103,9 +109,12 @@ export const WINDOW_CLEAR = 48;
 /** Wall between the pass-through / counter corner and the delivery glass. */
 export const WINDOW_LEFT_INSET = 24;
 export const WINDOW_RIGHT_INSET = 76;
+const WINDOW_BASE_W = GAME_WIDTH - BENCH_LEFT - WINDOW_LEFT_INSET - WINDOW_RIGHT_INSET;
+const WINDOW_BASE_MID = BENCH_LEFT + WINDOW_LEFT_INSET + Math.floor(WINDOW_BASE_W / 2);
 export const WINDOW = {
-  x: BENCH_LEFT + WINDOW_LEFT_INSET + Math.floor((GAME_WIDTH - BENCH_LEFT - WINDOW_LEFT_INSET - WINDOW_RIGHT_INSET) / 2),
-  w: GAME_WIDTH - BENCH_LEFT - WINDOW_LEFT_INSET - WINDOW_RIGHT_INSET,
+  x: WINDOW_BASE_MID,
+  /** 2% wider for easier driver taps on mobile. */
+  w: Math.round(WINDOW_BASE_W * 1.02),
   h: BENCH.y - WINDOW_CLEAR - WINDOW_TOP,
 };
 export const DRIVER = { x: WINDOW.x, y: BENCH.y + 48 };

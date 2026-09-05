@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { advanceRoute, laneWorldPoint, routeIsOrthogonal, routeWorldPoints, rightOffset } from "./driveRoute";
+import {
+  advanceRoute,
+  headingAlongRoute,
+  laneWorldPoint,
+  lerpAngle,
+  routeIsOrthogonal,
+  routeWorldPoints,
+  rightOffset,
+} from "./driveRoute";
 
 describe("driveRoute", () => {
   it("offsets eastbound travel to the southern lane", () => {
@@ -46,5 +54,26 @@ describe("driveRoute", () => {
     ]);
     expect(route.length).toBeGreaterThan(4);
     expect(routeIsOrthogonal(route)).toBe(true);
+  });
+
+  it("turns the heading gradually through corners via look-ahead", () => {
+    const route = routeWorldPoints([
+      { c: 2, r: 4 },
+      { c: 5, r: 4 },
+      { c: 5, r: 7 },
+    ]);
+    const start = headingAlongRoute(route, route[0]!.x, route[0]!.y, 1, false, 20);
+    const late = headingAlongRoute(
+      route,
+      route[route.length - 2]!.x,
+      route[route.length - 2]!.y,
+      route.length - 2,
+      false,
+      80,
+    );
+    // Early stretch faces east (~0); near the southbound leg look-ahead rotates toward +π/2.
+    expect(Math.abs(start)).toBeLessThan(0.4);
+    expect(Math.abs(late)).toBeGreaterThan(0.6);
+    expect(lerpAngle(0, Math.PI, 0.5)).toBeCloseTo(Math.PI / 2, 5);
   });
 });

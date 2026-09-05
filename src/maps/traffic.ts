@@ -48,8 +48,8 @@ export const TRAFFIC_LOOK_AHEAD = 180;
 /** How far traffic looks for the delivery van to stop / go around. */
 export const TRAFFIC_VAN_DETECT = 240;
 
-/** Lateral offset when traffic swings around the van. */
-export const TRAFFIC_BYPASS = 52;
+/** Lateral curb nudge when yielding (right of travel — never into oncoming). */
+export const TRAFFIC_BYPASS = 28;
 
 /** Lateral lane tolerance when deciding a car is “in front”. */
 export const TRAFFIC_LANE_WIDTH = 72;
@@ -82,12 +82,42 @@ function loopLength(points: readonly WorldPoint[]): number {
   return Math.max(TILE * 2, length);
 }
 
-function rectangleLoop(c0: number, r0: number, c1: number, r1: number): TileCell[] | null {
+type EwPair = { north: number; south: number };
+type NsPair = { west: number; east: number };
+
+function ewStreetPairs(): EwPair[] {
+  const pairs: EwPair[] = [];
+  for (let r = 0; r < CITY.kinds.length - 1; r++) {
+    if (isEWStreet(r) && isEWStreet(r + 1)) pairs.push({ north: r, south: r + 1 });
+  }
+  return pairs;
+}
+
+function nsStreetPairs(): NsPair[] {
+  const pairs: NsPair[] = [];
+  const cols = CITY.kinds[0]?.length ?? 0;
+  for (let c = 0; c < cols - 1; c++) {
+    if (isNSStreet(c) && isNSStreet(c + 1)) pairs.push({ west: c, east: c + 1 });
+  }
+  return pairs;
+}
+
+/**
+ * Clockwise one-way loop on the legal curb lanes of two EW + two NS street pairs.
+ * Eastbound uses the south tile, westbound the north, southbound the west, northbound the east —
+ * so opposing traffic never shares a lane.
+ */
+function oneWayBlockLoop(north: EwPair, south: EwPair, west: NsPair, east: NsPair): TileCell[] | null {
+  const topR = north.south;
+  const botR = south.north;
+  const leftC = west.east;
+  const rightC = east.west;
+  if (botR - topR < 3 || rightC - leftC < 4) return null;
   const cells: TileCell[] = [];
-  for (let c = c0; c <= c1; c++) cells.push({ c, r: r0 });
-  for (let r = r0 + 1; r <= r1; r++) cells.push({ c: c1, r });
-  for (let c = c1 - 1; c >= c0; c--) cells.push({ c, r: r1 });
-  for (let r = r1 - 1; r > r0; r--) cells.push({ c: c0, r });
+  for (let c = leftC; c <= rightC; c++) cells.push({ c, r: topR });
+  for (let r = topR + 1; r <= botR; r++) cells.push({ c: rightC, r });
+  for (let c = rightC - 1; c >= leftC; c--) cells.push({ c, r: botR });
+  for (let r = botR - 1; r > topR; r--) cells.push({ c: leftC, r });
   if (cells.length < 8) return null;
   if (!cells.every(isRoad)) return null;
   return cells;
@@ -97,26 +127,27 @@ function rectangleLoop(c0: number, r0: number, c1: number, r1: number): TileCell
 export function buildTrafficLoops(max = TRAFFIC_LOOP_MAX): TrafficLoop[] {
   const loops: TrafficLoop[] = [];
   const seen = new Set<string>();
-  const ewRows = CITY.kinds.map((_, r) => r).filter((r) => isEWStreet(r));
-  const nsCols = CITY.kinds[0] ? CITY.kinds[0].map((_, c) => c).filter((c) => isNSStreet(c)) : [];
+  const ew = ewStreetPairs();
+  const ns = nsStreetPairs();
 
-  for (let i = 0; i < ewRows.length && loops.length < max; i++) {
-    for (let j = i + 1; j < ewRows.length && loops.length < max; j++) {
-      const r0 = ewRows[i]!;
-      const r1 = ewRows[j]!;
-      if (r1 - r0 < 4) continue;
-      for (let a = 0; a < nsCols.length && loops.length < max; a++) {
-        for (let b = a + 1; b < nsCols.length && loops.length < max; b++) {
-          const c0 = nsCols[a]!;
-          const c1 = nsCols[b]!;
-          if (c1 - c0 < 5) continue;
+  for (let i = 0; i < ew.length && loops.length < max; i++) {
+    for (let j = i + 1; j < ew.length && loops.length < max; j++) {
+      const north = ew[i]!;
+      const south = ew[j]!;
+      if (south.north - north.south < 3) continue;
+      for (let a = 0; a < ns.length && loops.length < max; a++) {
+        for (let b = a + 1; b < ns.length && loops.length < max; b++) {
+          const west = ns[a]!;
+          const east = ns[b]!;
+          if (east.west - west.east < 4) continue;
           if ((a + b + i + j) % 3 !== 0) continue;
-          const cells = rectangleLoop(c0, r0, c1, r1);
+          const cells = oneWayBlockLoop(north, south, west, east);
           if (!cells) continue;
-          const key = `${c0},${r0}-${c1},${r1}`;
+          const key = `${north.south},${west.east}-${south.north},${east.west}`;
           if (seen.has(key)) continue;
           seen.add(key);
-          const points = routeWorldPoints(cells);
+          // Tiles are already the legal one-way lanes — keep a light curb bias only.
+          const points = routeWorldPoints(cells, 12);
           loops.push({ id: `loop-${loops.length}`, points, length: loopLength(points) });
         }
       }
@@ -207,7 +238,7 @@ export function trafficCars(
       if (gap < TRAFFIC_VAN_DETECT && Math.abs(lateral) < TRAFFIC_LANE_WIDTH * 1.35) {
         const closing = forward > 24 || (vanToward > 24 && forward > -40);
         if (closing) {
-          // Swing into the adjacent lane (left of travel) while yielding.
+          // Nudge toward the curb (right of travel); never into the oncoming lane.
           car.bypass = TRAFFIC_BYPASS;
           if (forward > 16 && gap < TRAFFIC_VAN_DETECT * 0.85) {
             // Stop / hold back when the van is ahead in our lane.
@@ -216,7 +247,6 @@ export function trafficCars(
             car.t = ((car.t - step) % 1 + 1) % 1;
             car.speed = 0;
           } else if (vanToward > 30 && gap < TRAFFIC_VAN_DETECT * 0.7) {
-            // Van bearing down from behind/side — clear the lane and ease forward a touch.
             car.bypass = TRAFFIC_BYPASS;
           }
         }
@@ -234,13 +264,14 @@ export function trafficCars(
 
   return states.map((car) => {
     const pos = pointAlongLoop(car.loop.points, car.t);
-    const angle = headingAlongLoop(car.loop.points, car.t);
-    const leftX = -Math.sin(angle);
-    const leftY = Math.cos(angle);
+    const angle = headingAlongLoop(car.loop.points, car.t, car.loop.length);
+    // Right of travel = curb side on one-way lanes.
+    const rightX = Math.sin(angle);
+    const rightY = -Math.cos(angle);
     return {
       id: car.id,
-      x: pos.x + leftX * car.bypass,
-      y: pos.y + leftY * car.bypass,
+      x: pos.x + rightX * car.bypass,
+      y: pos.y + rightY * car.bypass,
       key: car.key,
       depth: car.depth,
       angle,
@@ -339,9 +370,21 @@ function pointAlongLoop(points: readonly WorldPoint[], t: number): WorldPoint {
   return closed[closed.length - 1]!;
 }
 
-function headingAlongLoop(points: readonly WorldPoint[], t: number): number {
-  const eps = 0.01;
+function headingAlongLoop(points: readonly WorldPoint[], t: number, loopLen?: number): number {
+  const lookPx = 64;
+  const len = Math.max(TILE, loopLen ?? approxLoopLen(points));
+  const dt = lookPx / len;
   const a = pointAlongLoop(points, t);
-  const b = pointAlongLoop(points, (t + eps) % 1);
+  const b = pointAlongLoop(points, (t + dt) % 1);
   return Math.atan2(b.y - a.y, b.x - a.x);
+}
+
+function approxLoopLen(points: readonly WorldPoint[]): number {
+  if (points.length < 2) return TILE;
+  let length = 0;
+  for (let i = 1; i < points.length; i++) {
+    length += Math.hypot(points[i]!.x - points[i - 1]!.x, points[i]!.y - points[i - 1]!.y);
+  }
+  length += Math.hypot(points[0]!.x - points[points.length - 1]!.x, points[0]!.y - points[points.length - 1]!.y);
+  return Math.max(TILE, length);
 }

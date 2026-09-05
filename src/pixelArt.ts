@@ -719,13 +719,30 @@ function jar(scene: Phaser.Scene, key: string, fillCol: number, lid: number, bud
 }
 
 function pin(scene: Phaser.Scene): void {
+  // Floating destination chevron — tip points down at the stall.
   bake(scene, "tex-pin", 64, 80, (g) => {
-    cells(g, 6, 18, 4, 2, Pal.shadow);
-    cells(g, 7, 10, 2, 9, Pal.leaf);
-    cells(g, 5, 3, 6, 8, Pal.leaf);
-    cells(g, 6, 4, 4, 6, Pal.leafDark);
-    cells(g, 7, 5, 2, 3, Pal.cream);
-    cells(g, 6, 4, 1, 1, 0xffffff);
+    const fill = Pal.amber;
+    const deep = Pal.rustDark;
+    const hi = Pal.sun;
+    // Soft ground shadow under the tip
+    cells(g, 5, 18, 6, 2, Pal.shadow);
+    // Shaft
+    cells(g, 6, 2, 4, 8, fill);
+    cells(g, 7, 2, 2, 8, hi);
+    cells(g, 6, 2, 4, 1, hi);
+    // Broad arrow head pointing down
+    cells(g, 2, 10, 12, 2, fill);
+    cells(g, 3, 12, 10, 2, fill);
+    cells(g, 4, 14, 8, 2, fill);
+    cells(g, 5, 16, 6, 2, fill);
+    cells(g, 6, 18, 4, 1, fill);
+    cells(g, 7, 19, 2, 1, deep);
+    // Edge / depth
+    cells(g, 2, 10, 1, 2, deep);
+    cells(g, 13, 10, 1, 2, deep);
+    cells(g, 3, 12, 1, 2, deep);
+    cells(g, 12, 12, 1, 2, deep);
+    cells(g, 7, 11, 2, 5, hi);
   });
 }
 

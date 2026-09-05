@@ -23,6 +23,7 @@ import {
   TABLET_W,
   TV_BEZEL,
   TV_W,
+  bagCaptionY,
   ceilingPots,
   strainPos,
   strainSlotH,
@@ -88,7 +89,7 @@ export class ShopScene extends Phaser.Scene {
     this.bagRack = this.add.image(BAG_STACK.x, BAG_STACK.y, "tex-bag").setOrigin(0.5, 1).setScale(BAG_SCALE).setDepth(8);
     enableItemHit(this.bagRack);
     this.bagRack.on("pointerdown", () => getSim().shopClick({ type: "bagRack" }));
-    this.bagRackLabel = addUiText(this, BAG_STACK.x, BAG_STACK.y - Math.round(120 * BAG_SCALE) - 8, "BAGS", {
+    this.bagRackLabel = addUiText(this, BAG_STACK.x, bagCaptionY(BAG_STACK.y), "BAGS", {
       size: Type.caption,
       color: Color.inkHex,
       backgroundColor: Color.creamHex,
@@ -172,7 +173,7 @@ export class ShopScene extends Phaser.Scene {
     enableItemHit(this.packBag);
     this.packBag.on("pointerdown", () => getSim().shopClick({ type: "counterBag" }));
     wireHover(this.packBag);
-    this.bagLabel = addUiText(this, PACK_SPOT.x, PACK_SPOT.y - Math.round(120 * BAG_SCALE) - 16, "", {
+    this.bagLabel = addUiText(this, PACK_SPOT.x, bagCaptionY(PACK_SPOT.y), "", {
       size: Type.caption,
       color: Color.inkHex,
       backgroundColor: Color.limeHex,
@@ -358,7 +359,7 @@ export class ShopScene extends Phaser.Scene {
       let objs = this.outBags.get(o.id);
       if (!objs) {
         const bag = this.add.image(x, y, "tex-bag").setOrigin(0.5, 1).setScale(BAG_SCALE).setDepth(8);
-        const label = addUiText(this, x, y - Math.round(120 * BAG_SCALE) - 8, outgoingBagText(o), {
+        const label = addUiText(this, x, bagCaptionY(y), outgoingBagText(o), {
           size: Type.caption,
           color: Color.inkHex,
           backgroundColor: Color.creamHex,
@@ -373,7 +374,7 @@ export class ShopScene extends Phaser.Scene {
       }
       (objs[0] as Phaser.GameObjects.Image).setPosition(x, y);
       const label = objs[1] as Phaser.GameObjects.Text;
-      label.setPosition(x, y - Math.round(120 * BAG_SCALE) - 8);
+      label.setPosition(x, bagCaptionY(y));
       label.setFontSize(15);
       label.setText(outgoingBagText(o));
       label.setColor(o.type === "delivery" && isSlaUrgent(o.slaRemainingMs) ? Color.dangerHex : Color.inkHex);

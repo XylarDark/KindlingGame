@@ -18,6 +18,7 @@ import { PEOPLE_SCALE } from "../maps/shopT0";
 import { getSim } from "../session";
 import { HANDOFF_RADIUS } from "../sim/constants";
 import { skyAt } from "../sim/dayNight";
+import { lerpAngle } from "../sim/driveRoute";
 import type { SimSnapshot } from "../sim/gameSim";
 import { tutorialHints } from "../sim/tutorialHints";
 import { formatSlaClock, isSlaUrgent } from "../ui/copy";
@@ -32,8 +33,10 @@ export class DriveScene extends Phaser.Scene {
   private walker!: Phaser.GameObjects.Image;
   private glow!: Phaser.GameObjects.Graphics;
   private pin!: Phaser.GameObjects.Image;
-  private pinPulse!: Phaser.GameObjects.Rectangle;
+  private pinPulse!: Phaser.GameObjects.Ellipse;
   private pinLabel!: Phaser.GameObjects.Text;
+  private pinBob = 0;
+  private pinBase = { x: 0, y: 0 };
   private vanBanner!: Phaser.GameObjects.Text;
   private customer!: Phaser.GameObjects.Image;
   private shopImg!: Phaser.GameObjects.Image;
@@ -46,6 +49,7 @@ export class DriveScene extends Phaser.Scene {
   private nightGlow!: Phaser.GameObjects.Graphics;
   private trafficLoops: TrafficLoop[] = [];
   private trafficSprites: Phaser.GameObjects.Image[] = [];
+  private trafficAngles = new Map<string, number>();
 
   constructor() {
     super("drive");
@@ -60,19 +64,35 @@ export class DriveScene extends Phaser.Scene {
     this.glow = this.add.graphics().setDepth(3);
     this.paintDayNight(getSim().snapshot());
     this.events.on(Phaser.Scenes.Events.PRE_RENDER, () => this.paintDayNight(getSim().snapshot()));
-    this.pinPulse = this.add.rectangle(0, 0, 88, 88, Color.neon, 0.28).setDepth(4);
-    this.pin = this.add.image(0, 0, "tex-pin").setDepth(5).setDisplaySize(96, 120);
+    this.pinPulse = this.add.ellipse(0, 0, 56, 22, Color.amber, 0.35).setDepth(4);
+    this.pin = this.add
+      .image(0, 0, "tex-pin")
+      .setOrigin(0.5, 1)
+      .setDepth(5)
+      .setDisplaySize(72, 96)
+      .setVisible(false);
     this.tweens.add({
-      targets: [this.pin, this.pinPulse],
-      alpha: { from: 1, to: 0.55 },
+      targets: this,
+      pinBob: { from: 0, to: 18 },
       yoyo: true,
       repeat: -1,
-      duration: 700,
+      duration: 720,
+      ease: "Sine.easeInOut",
+    });
+    this.tweens.add({
+      targets: this.pinPulse,
+      alpha: { from: 0.45, to: 0.18 },
+      scaleX: { from: 1, to: 1.25 },
+      scaleY: { from: 1, to: 1.15 },
+      yoyo: true,
+      repeat: -1,
+      duration: 720,
+      ease: "Sine.easeInOut",
     });
     this.pinLabel = addUiText(this, 0, 0, "", {
       size: Type.heading,
       color: Color.inkHex,
-      backgroundColor: Color.limeHex,
+      backgroundColor: Color.amberHex,
       padding: { x: 14, y: 8 },
       align: "center",
       fontStyle: "700",
@@ -121,6 +141,8 @@ export class DriveScene extends Phaser.Scene {
       y: snap.vehicle.y,
       heading: snap.vehicle.heading,
     });
+    const turnT = 1 - Math.exp(-(this.game.loop.delta / 1000) * 6);
+    const seen = new Set<string>();
     while (this.trafficSprites.length < traffic.length) {
       this.trafficSprites.push(this.add.image(0, 0, "tex-car").setDepth(5).setDisplaySize(120, 72).setAlpha(0.92));
     }
@@ -130,8 +152,15 @@ export class DriveScene extends Phaser.Scene {
         sprite.setVisible(false);
         return;
       }
-      sprite.setTexture(car.key).setPosition(car.x, car.y).setRotation(car.angle + Math.PI).setVisible(true);
+      seen.add(car.id);
+      const prev = this.trafficAngles.get(car.id) ?? car.angle;
+      const angle = lerpAngle(prev, car.angle, turnT);
+      this.trafficAngles.set(car.id, angle);
+      sprite.setTexture(car.key).setPosition(car.x, car.y).setRotation(angle + Math.PI).setVisible(true);
     });
+    for (const id of this.trafficAngles.keys()) {
+      if (!seen.has(id)) this.trafficAngles.delete(id);
+    }
 
     const driving = snap.playerRole === "driver" && snap.dropoff.phase !== "atDoor";
     if (driving && snap.toast) {
@@ -168,15 +197,18 @@ export class DriveScene extends Phaser.Scene {
         this.glow.fillRect(home.x - hw / 2 - 8, home.y - hh / 2 - 8, hw + 16, hh + 16);
         this.glow.lineStyle(5, Color.lime, 0.95);
         this.glow.strokeRect(home.x - hw / 2 - 8, home.y - hh / 2 - 8, hw + 16, hh + 16);
-        this.pin.setPosition(x, y - 28).setVisible(true);
-        this.pinPulse.setPosition(x, y).setVisible(true);
+        this.pinBase.x = x;
+        this.pinBase.y = y - 6;
+        this.pin.setPosition(this.pinBase.x, this.pinBase.y - this.pinBob).setVisible(true);
+        this.pinPulse.setPosition(x, y + 6).setVisible(true);
         const clock = destOrder ? formatSlaClock(destOrder.slaRemainingMs) : "";
         const who = destOrder
           ? `${houseTitle(stopId)}\n${destOrder.customerName}${clock ? `  ·  ${clock}` : ""}`
           : houseTitle(stopId);
-        this.pinLabel.setVisible(true).setPosition(x, y - 72).setText(who);
+        this.pinLabel.setVisible(true).setPosition(x, this.pinBase.y - this.pinBob - 12).setText(who);
         this.pinLabel.setFontSize(24);
         this.pinLabel.setColor(destOrder && isSlaUrgent(destOrder.slaRemainingMs) ? Color.dangerHex : Color.inkHex);
+        this.pinLabel.setBackgroundColor(Color.amberHex);
         fitTypeToWidth(this.pinLabel, 280, 18);
       }
     } else {

@@ -22,7 +22,7 @@ import {
 } from "./constants";
 import { ageForSeed, emptyDropoff, idCardFor, type DropoffPhase, type DropoffView } from "./dropoff";
 import { destLabel, isOpen, needsFetch, tabletQueue, type Order, type OrderType } from "./orders";
-import { advanceRoute, routeWorldPoints, type WorldPoint } from "./driveRoute";
+import { advanceRoute, lerpAngle, routeWorldPoints, type WorldPoint } from "./driveRoute";
 import { findPath } from "./pathfinding";
 import { generateCustomerName } from "./names";
 import { isDeliveryLate, scoreForComplete, scoreForFail } from "./scoring";
@@ -460,7 +460,7 @@ export class GameSim {
     this.pendingDepart = false;
     this.driverLine = null;
     this.toast = this.runOrderIds.length
-      ? "Back at Kindling. Remaining bags stay on the bike."
+      ? "Back at Kindling. Remaining bags stay in the car."
       : "Back at Kindling. Watch the order screen.";
     return true;
   }
@@ -895,7 +895,9 @@ export class GameSim {
     this.vehicle.x = clamp(step.x, TILE, MAP_PX_W - TILE);
     this.vehicle.y = clamp(step.y, TILE, MAP_PX_H - TILE);
     this.driveWaypoint = step.waypoint;
-    this.vehicleHeading = step.heading;
+    // Ease the van model through corners instead of snapping the heading.
+    const turn = 1 - Math.exp(-dt * 5.5);
+    this.vehicleHeading = lerpAngle(this.vehicleHeading, step.heading, turn);
     if (step.arrived || dist(this.vehicle.x, this.vehicle.y, target.x, target.y) <= PARK_ARRIVE_RADIUS) {
       this.parkAt(target);
     }
@@ -1080,7 +1082,7 @@ export class GameSim {
 
     const stopId = this.nextStopId();
     if (!stopId) {
-      this.toast = "Nothing on the bike. Head back to Kindling.";
+      this.toast = "Nothing in the car. Head back to Kindling.";
       return;
     }
     const house = houseById(stopId);

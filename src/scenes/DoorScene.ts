@@ -253,7 +253,7 @@ function houseLabel(id: string): string {
 function runNote(snap: SimSnapshot): string {
   const n = snap.run?.orderIds.length ?? 0;
   if (n <= 1) return "";
-  return `  ·  ${n} bags on the bike`;
+  return `  ·  ${n} bags in the car`;
 }
 
 function enableWideHit(obj: Phaser.GameObjects.Image, pad: number): void {

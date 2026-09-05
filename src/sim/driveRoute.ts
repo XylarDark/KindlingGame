@@ -33,7 +33,7 @@ export function laneWorldPoint(cell: TileCell, prev?: TileCell, next?: TileCell)
  * Build a right-lane world path. Each grid step keeps a shared offset so straights
  * stay axis-aligned; turns insert an L-shaped elbow instead of cutting diagonally.
  */
-export function routeWorldPoints(cells: readonly TileCell[]): WorldPoint[] {
+export function routeWorldPoints(cells: readonly TileCell[], laneOffset = LANE_OFFSET_PX): WorldPoint[] {
   if (cells.length === 0) return [];
   if (cells.length === 1) return [tileToWorld(cells[0]!)];
 
@@ -48,7 +48,7 @@ export function routeWorldPoints(cells: readonly TileCell[]): WorldPoint[] {
     const a = cells[i]!;
     const b = cells[i + 1]!;
     const { dc, dr } = segmentDir(a, b);
-    const off = rightOffset(dc, dr);
+    const off = rightOffset(dc, dr, laneOffset);
     const wa = { x: tileToWorld(a).x + off.x, y: tileToWorld(a).y + off.y };
     const wb = { x: tileToWorld(b).x + off.x, y: tileToWorld(b).y + off.y };
 
@@ -115,10 +115,71 @@ export function advanceRoute(
   }
 
   const arrived = wp >= route.length;
-  const next = route[Math.min(wp, route.length - 1)]!;
-  const prev = route[Math.max(0, wp - 1)]!;
-  const heading = Math.atan2((arrived ? py : next.y) - prev.y, (arrived ? px : next.x) - prev.x);
+  const heading = headingAlongRoute(route, px, py, wp, arrived);
   return { x: px, y: py, waypoint: wp, heading, arrived };
+}
+
+/** Blend toward the next stretch so the van/car model eases through corners. */
+export function headingAlongRoute(
+  route: readonly WorldPoint[],
+  x: number,
+  y: number,
+  waypoint: number,
+  arrived = false,
+  lookAhead = 56,
+): number {
+  if (route.length === 0) return 0;
+  if (arrived || route.length === 1) {
+    const last = route[route.length - 1]!;
+    const prev = route[Math.max(0, route.length - 2)]!;
+    return Math.atan2(last.y - prev.y, last.x - prev.x);
+  }
+  const look = pointAheadOnRoute(route, x, y, waypoint, lookAhead);
+  return Math.atan2(look.y - y, look.x - x);
+}
+
+export function pointAheadOnRoute(
+  route: readonly WorldPoint[],
+  x: number,
+  y: number,
+  waypoint: number,
+  distPx: number,
+): WorldPoint {
+  let remaining = distPx;
+  let cx = x;
+  let cy = y;
+  let wp = Math.min(Math.max(0, waypoint), route.length);
+  while (remaining > 0 && wp < route.length) {
+    const target = route[wp]!;
+    const dx = target.x - cx;
+    const dy = target.y - cy;
+    const seg = Math.hypot(dx, dy);
+    if (seg <= 0.5) {
+      cx = target.x;
+      cy = target.y;
+      wp += 1;
+      continue;
+    }
+    if (seg <= remaining) {
+      remaining -= seg;
+      cx = target.x;
+      cy = target.y;
+      wp += 1;
+      continue;
+    }
+    return { x: cx + (dx / seg) * remaining, y: cy + (dy / seg) * remaining };
+  }
+  return route[route.length - 1] ?? { x, y };
+}
+
+/** Shortest-path lerp for headings in (-π, π]. */
+export function lerpAngle(from: number, to: number, t: number): number {
+  const fromN = Math.atan2(Math.sin(from), Math.cos(from));
+  const toN = Math.atan2(Math.sin(to), Math.cos(to));
+  let delta = toN - fromN;
+  while (delta > Math.PI) delta -= Math.PI * 2;
+  while (delta < -Math.PI) delta += Math.PI * 2;
+  return fromN + delta * Math.max(0, Math.min(1, t));
 }
 
 export function routeLength(route: readonly WorldPoint[]): number {
