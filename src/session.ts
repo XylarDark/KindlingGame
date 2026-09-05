@@ -2,9 +2,6 @@ import { GameSim } from "./sim/gameSim";
 import { GAME_END_HOUR, GAME_START_HOUR, MS_PER_GAME_HOUR } from "./sim/constants";
 
 let sim: GameSim | null = null;
-let tutorialMode = loadTutorialMode();
-
-const TUTORIAL_KEY = "kindling.tutorialMode";
 
 /** Production / preview builds. Vite `npm run dev` is not live. */
 export function isLiveBuild(): boolean {
@@ -39,34 +36,6 @@ function hourQuery(): number | null {
     return Math.min(GAME_END_HOUR, Math.max(GAME_START_HOUR, n));
   } catch {
     return null;
-  }
-}
-
-function defaultTutorialMode(): boolean {
-  return isLiveBuild();
-}
-
-function loadTutorialMode(): boolean {
-  try {
-    const raw = globalThis.localStorage?.getItem(TUTORIAL_KEY);
-    if (raw === "1") return true;
-    if (raw === "0") return false;
-  } catch {
-    /* ignore quota / private mode */
-  }
-  return defaultTutorialMode();
-}
-
-export function isTutorialMode(): boolean {
-  return tutorialMode;
-}
-
-export function setTutorialMode(on: boolean): void {
-  tutorialMode = on;
-  try {
-    globalThis.localStorage?.setItem(TUTORIAL_KEY, on ? "1" : "0");
-  } catch {
-    /* ignore quota / private mode */
   }
 }
 

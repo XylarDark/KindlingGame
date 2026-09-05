@@ -3,7 +3,7 @@ import { getMusicPrefs, setMusicEnabled, setMusicVolume, syncMusicToClock } from
 import { clampInput } from "../input/controls";
 import { enableItemHit, syncItemHit } from "../input/hit";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
-import { getSim, isTutorialMode, setTutorialMode } from "../session";
+import { getSim } from "../session";
 import type { SimSnapshot } from "../sim/gameSim";
 import { tutorialHints } from "../sim/tutorialHints";
 import { addHudButton, addPanel, setButtonCopy } from "../ui/chrome";
@@ -11,12 +11,11 @@ import { addUiText } from "../ui/text";
 import { roadButtonCopy } from "../ui/copy";
 import { Color, Type } from "../ui/theme";
 import { overlayStroke } from "../ui/typekit";
-import { TutorialArrows } from "../ui/tutorialArrow";
 import { designSafeInset, HUD_TOUCH_MIN_DESIGN, readCssSafeArea, VIEWFIT_EVENT, viewFromScale } from "../ui/viewFit";
 
 const SETTINGS_W = 420;
-const SETTINGS_H = 448;
-const VOL_TRACK = { x: 24, y: 268, w: 292, h: 16 };
+const SETTINGS_H = 352;
+const VOL_TRACK = { x: 24, y: 168, w: 292, h: 16 };
 
 export class HudScene extends Phaser.Scene {
   private scoreText!: Phaser.GameObjects.Text;
@@ -39,12 +38,10 @@ export class HudScene extends Phaser.Scene {
   private padCenter = { x: 196, y: GAME_HEIGHT - 220 };
   private pointerId: number | null = null;
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
-  private arrows!: TutorialArrows;
   private cog!: Phaser.GameObjects.Image;
   private cogCaption!: Phaser.GameObjects.Text;
   private settingsDim!: Phaser.GameObjects.Rectangle;
   private settingsPanel!: Phaser.GameObjects.Container;
-  private tutorialValue!: Phaser.GameObjects.Text;
   private musicValue!: Phaser.GameObjects.Text;
   private volumeFill!: Phaser.GameObjects.Rectangle;
   private volumeKnob!: Phaser.GameObjects.Arc;
@@ -194,7 +191,6 @@ export class HudScene extends Phaser.Scene {
     this.input.on("pointerupoutside", (p: Phaser.Input.Pointer) => this.onPointerUp(p));
 
     this.makeSettings();
-    this.arrows = new TutorialArrows(this, 28);
     this.layoutHud();
     const relayout = (): void => this.layoutHud();
     this.scale.on(Phaser.Scale.Events.RESIZE, relayout);
@@ -250,21 +246,29 @@ export class HudScene extends Phaser.Scene {
     const showRole = snap.playerRole === "keyLead" && snap.canHitTheRoad;
     this.roleBtn.setVisible(showRole);
     if (this.roleBtn.input) this.roleBtn.input.enabled = showRole;
-    const pulseRoad = snap.playerRole === "keyLead" && next?.kind === "hitTheRoad";
-    this.roleBtn.setAlpha(pulseRoad ? 0.55 + 0.45 * (0.5 + 0.5 * Math.sin(snap.gameMs / 160)) : 1);
+    const pulse = 0.55 + 0.45 * (0.5 + 0.5 * Math.sin(snap.gameMs / 160));
+    const flashNext = this.settingsOpen ? null : next;
+    const pulseRoad = snap.playerRole === "keyLead" && flashNext?.kind === "hitTheRoad";
+    this.roleBtn.setAlpha(pulseRoad ? pulse : 1);
 
     const drop = snap.dropoff;
     const showPhone = snap.playerRole === "driver" && (drop.phase === "atCurb" || drop.phase === "calling");
     const atDoor = drop.phase === "atDoor";
+    const flashPhone = flashNext?.kind === "phone";
 
     this.phone.setVisible(showPhone);
     this.phoneCaption.setVisible(showPhone);
     this.phoneCaption.setText(drop.phase === "calling" ? "Phone is ringing…" : "Call the customer");
     syncItemHit(this.phoneCaption);
-    this.phone.setAlpha(drop.phase === "calling" ? 0.85 : 1);
+    if (showPhone) {
+      this.phone.setAlpha(drop.phase === "calling" ? 0.85 : flashPhone ? pulse : 1);
+      this.phone.setTint(flashPhone && drop.phase !== "calling" ? 0xb8ffb0 : 0xffffff);
+    }
 
     const showId = !!drop.idCard && drop.idAsked;
+    const flashId = flashNext?.kind === "idCard";
     this.idPanel.setVisible(showId);
+    this.idPanel.setAlpha(flashId ? pulse : 1);
     if (drop.idCard) {
       this.idName.setText(drop.idCard.name);
       const band = drop.idCard.ageOk ? "19+" : "UNDER 19";
@@ -285,32 +289,16 @@ export class HudScene extends Phaser.Scene {
     this.toastText.setVisible(!!snap.toast && !showId && snap.dropoff.phase !== "atDoor");
 
     const driving = snap.playerRole === "driver" && !atDoor;
+    const flashPad = flashNext?.kind === "movePad" && driving;
     this.padRing.setVisible(driving);
     this.padKnob.setVisible(driving);
     this.padLabel.setVisible(driving);
-    this.paintTutorialArrows(snap);
+    this.drawPad(flashPad);
+    this.padKnob.setAlpha(flashPad ? pulse : 0.92);
+    this.padLabel.setBackgroundColor(flashPad ? Color.limeHex : "#1c1612ee");
+    this.padLabel.setColor(flashPad ? Color.inkHex : Color.creamHex);
     this.syncDoorScene(snap);
     syncMusicToClock(snap.gameMs);
-  }
-
-  private paintTutorialArrows(snap: SimSnapshot): void {
-    if (!isTutorialMode() || this.settingsOpen) {
-      this.arrows.clear();
-      return;
-    }
-    const spots = [];
-    for (const hint of tutorialHints(snap)) {
-      if (hint.kind === "hitTheRoad" && this.roleBtn.visible) {
-        spots.push({ id: hint.id, x: this.roleBtn.x - 125, y: this.roleBtn.y - 10 });
-      } else if (hint.kind === "phone" && this.phone.visible) {
-        spots.push({ id: hint.id, x: this.phone.x, y: this.phone.y - 70 });
-      } else if (hint.kind === "idCard" && this.idPanel.visible) {
-        spots.push({ id: hint.id, x: this.idPanel.x, y: this.idPanel.y - 140 });
-      } else if (hint.kind === "movePad" && this.padRing.visible) {
-        spots.push({ id: hint.id, x: this.padCenter.x, y: this.padCenter.y - 140 });
-      }
-    }
-    this.arrows.sync(spots);
   }
 
   private makeSettings(): void {
@@ -339,48 +327,20 @@ export class HudScene extends Phaser.Scene {
       fontStyle: "700",
       strokeThickness: 0,
     });
-    const label = addUiText(this, 24, 64, "Tutorial arrows", {
+    const musicLabel = addUiText(this, 24, 64, "Music", {
       size: Type.body,
       color: Color.inkHex,
       fontStyle: "600",
       strokeThickness: 0,
     });
-    const hint = addUiText(this, 24, 96, "A bouncing arrow marks every tap\nthe shop needs from you next.", {
-      size: Type.caption,
-      color: Color.muteHex,
-      fontStyle: "600",
-      strokeThickness: 0,
-      lineSpacing: 4,
-    });
-    this.tutorialValue = addUiText(this, SETTINGS_W - 28, 72, "", {
-      size: Type.heading,
-      color: Color.inkHex,
-      fontStyle: "700",
-      strokeThickness: 0,
-    }).setOrigin(1, 0.5);
-    const tutorialHit = this.add
-      .rectangle(SETTINGS_W / 2, 88, SETTINGS_W - 24, 72, 0x000000, 0.001)
-      .setInteractive({ useHandCursor: true });
-    tutorialHit.on("pointerdown", (p: Phaser.Input.Pointer) => {
-      p.event.stopPropagation();
-      setTutorialMode(!isTutorialMode());
-      this.refreshTutorialToggle();
-    });
-
-    const musicLabel = addUiText(this, 24, 168, "Music", {
-      size: Type.body,
-      color: Color.inkHex,
-      fontStyle: "600",
-      strokeThickness: 0,
-    });
-    this.musicValue = addUiText(this, SETTINGS_W - 28, 176, "", {
+    this.musicValue = addUiText(this, SETTINGS_W - 28, 72, "", {
       size: Type.heading,
       color: Color.inkHex,
       fontStyle: "700",
       strokeThickness: 0,
     }).setOrigin(1, 0.5);
     const musicHit = this.add
-      .rectangle(SETTINGS_W / 2, 180, SETTINGS_W - 24, 48, 0x000000, 0.001)
+      .rectangle(SETTINGS_W / 2, 76, SETTINGS_W - 24, 48, 0x000000, 0.001)
       .setInteractive({ useHandCursor: true });
     musicHit.on("pointerdown", (p: Phaser.Input.Pointer) => {
       p.event.stopPropagation();
@@ -388,13 +348,13 @@ export class HudScene extends Phaser.Scene {
       this.refreshMusicControls();
     });
 
-    const volumeLabel = addUiText(this, 24, 228, "Volume", {
+    const volumeLabel = addUiText(this, 24, 124, "Volume", {
       size: Type.body,
       color: Color.inkHex,
       fontStyle: "600",
       strokeThickness: 0,
     });
-    this.volumePct = addUiText(this, SETTINGS_W - 28, 236, "", {
+    this.volumePct = addUiText(this, SETTINGS_W - 28, 132, "", {
       size: Type.body,
       color: Color.inkHex,
       fontStyle: "700",
@@ -421,7 +381,7 @@ export class HudScene extends Phaser.Scene {
       this.draggingVol = false;
     });
 
-    const reset = addHudButton(this, 24, 332, "RESET DAY TO 9:00 AM", () => this.resetDayToNine(), {
+    const reset = addHudButton(this, 24, 232, "RESET DAY TO 9:00 AM", () => this.resetDayToNine(), {
       originX: 0,
       originY: 0,
       variant: "amber",
@@ -429,7 +389,7 @@ export class HudScene extends Phaser.Scene {
       caption: "Clock back to 9 AM · clears the door stop",
       depth: 41,
     });
-    const resetHint = addUiText(this, 24, 404, "Packed bags stay. Late timers start over.", {
+    const resetHint = addUiText(this, 24, 304, "Packed bags stay. Late timers start over.", {
       size: Type.caption,
       color: Color.muteHex,
       fontStyle: "600",
@@ -439,10 +399,6 @@ export class HudScene extends Phaser.Scene {
     this.settingsPanel = this.add.container(panelX, panelY, [
       bg,
       title,
-      label,
-      hint,
-      this.tutorialValue,
-      tutorialHit,
       musicLabel,
       this.musicValue,
       musicHit,
@@ -479,7 +435,6 @@ export class HudScene extends Phaser.Scene {
       .setDepth(42);
     enableItemHit(this.cogCaption);
     this.cogCaption.on("pointerdown", toggleSettings);
-    this.refreshTutorialToggle();
     this.refreshMusicControls();
   }
 
@@ -487,21 +442,13 @@ export class HudScene extends Phaser.Scene {
     this.settingsOpen = true;
     this.settingsDim.setVisible(true).setInteractive();
     this.settingsPanel.setVisible(true);
-    this.refreshTutorialToggle();
     this.refreshMusicControls();
-    this.arrows.clear();
   }
 
   private closeSettings(): void {
     this.settingsOpen = false;
     this.settingsDim.setVisible(false).disableInteractive();
     this.settingsPanel.setVisible(false);
-  }
-
-  private refreshTutorialToggle(): void {
-    const on = isTutorialMode();
-    this.tutorialValue.setText(on ? "ON" : "OFF");
-    this.tutorialValue.setColor(on ? "#3d6a44" : Color.muteHex);
   }
 
   private refreshMusicControls(): void {
@@ -527,14 +474,14 @@ export class HudScene extends Phaser.Scene {
     this.refreshMusicControls();
   }
 
-  private drawPad(): void {
+  private drawPad(flash = false): void {
     const { x, y } = this.padCenter;
     this.padRing.clear();
     this.padRing.fillStyle(Color.ink, 0.4);
     this.padRing.fillCircle(x, y, 108);
-    this.padRing.lineStyle(5, Color.lime, 0.85);
+    this.padRing.lineStyle(flash ? 6 : 5, Color.lime, flash ? 1 : 0.85);
     this.padRing.strokeCircle(x, y, 108);
-    this.padRing.lineStyle(3, Color.cream, 0.35);
+    this.padRing.lineStyle(3, flash ? Color.cream : Color.cream, flash ? 0.7 : 0.35);
     this.padRing.strokeCircle(x, y, 76);
   }
 

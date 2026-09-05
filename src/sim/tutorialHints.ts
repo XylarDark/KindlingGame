@@ -16,7 +16,7 @@ export type TutorialHint =
   | { id: string; kind: "doorCustomer" }
   | { id: string; kind: "shop" };
 
-/** Exactly one next tap — never pack and HIT THE ROAD at the same time. */
+/** Exactly one next tap — flashing UI marks it; never pack and HIT THE ROAD at once. */
 export function tutorialHints(snap: SimSnapshot): TutorialHint[] {
   const next = snap.playerRole === "driver" ? nextDriverHint(snap) : nextShopHint(snap);
   return next ? [next] : [];
@@ -27,7 +27,10 @@ export function nextShopHint(snap: SimSnapshot): TutorialHint | null {
   const busy = snap.keyLead.phase !== "idle";
 
   const walkIn = snap.orders.find((o) => o.type === "inStore" && o.status === "atRegister");
-  if (walkIn && !busy) {
+  const walkInAtCounter =
+    walkIn &&
+    snap.customers.some((c) => c.orderId === walkIn.id && c.bubble !== "Coming in…" && c.bubble !== "On the way…");
+  if (walkIn && walkInAtCounter && !busy) {
     if (snap.handSkuId === walkIn.skuId) {
       return { id: `customer:${walkIn.id}`, kind: "customer", orderId: walkIn.id };
     }
@@ -45,7 +48,10 @@ export function nextShopHint(snap: SimSnapshot): TutorialHint | null {
   }
 
   const pickup = snap.orders.find((o) => o.type === "pickup" && o.status === "readyForHandoff");
-  if (pickup) {
+  const pickupAtCounter =
+    pickup &&
+    snap.customers.some((c) => c.orderId === pickup.id && c.bubble === "Tap me — pickup");
+  if (pickup && pickupAtCounter) {
     return { id: `customer:${pickup.id}`, kind: "customer", orderId: pickup.id };
   }
 

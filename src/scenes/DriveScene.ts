@@ -14,7 +14,7 @@ import {
 import { cityProps, cityStreetLamps, type CityLamp } from "../maps/cityDecor";
 import { enableItemHit, syncItemHit } from "../input/hit";
 import { PEOPLE_SCALE } from "../maps/shopT0";
-import { getSim, isTutorialMode } from "../session";
+import { getSim } from "../session";
 import { HANDOFF_RADIUS } from "../sim/constants";
 import { skyAt } from "../sim/dayNight";
 import { gpsPath, type SimSnapshot } from "../sim/gameSim";
@@ -23,7 +23,6 @@ import { formatSlaClock, isSlaUrgent } from "../ui/copy";
 import { addUiText } from "../ui/text";
 import { Color, Type } from "../ui/theme";
 import { addMark, fitTypeToWidth, overlayStroke } from "../ui/typekit";
-import { TutorialArrows } from "../ui/tutorialArrow";
 
 const HOUSE_TEX = ["tex-house", "tex-house-alt", "tex-house-3", "tex-house-4", "tex-house-5", "tex-house-6"];
 
@@ -41,7 +40,6 @@ export class DriveScene extends Phaser.Scene {
   private shopCenter = { x: 0, y: 0 };
   private lastX = 0;
   private lastY = 0;
-  private arrows!: TutorialArrows;
   private lighting?: DayNightPipeline;
   private streetLamps: CityLamp[] = [];
   private nightGlow!: Phaser.GameObjects.Graphics;
@@ -84,7 +82,6 @@ export class DriveScene extends Phaser.Scene {
     this.vehicle = this.add.image(0, 0, "tex-vehicle").setDepth(6).setDisplaySize(168, 104);
     this.walker = this.add.image(0, 0, "tex-driver").setOrigin(0.5, 1).setScale(PEOPLE_SCALE).setDepth(7).setVisible(false);
     this.customer = this.add.image(0, 0, "tex-customer").setOrigin(0.5, 1).setScale(PEOPLE_SCALE).setDepth(6).setVisible(false);
-    this.arrows = new TutorialArrows(this, 8);
   }
 
   update(): void {
@@ -145,12 +142,14 @@ export class DriveScene extends Phaser.Scene {
       this.customer.setVisible(false);
     }
 
-    this.paintTutorialArrows(snap);
+    const next = tutorialHints(snap)[0];
     const driving = snap.playerRole === "driver" && snap.dropoff.phase !== "atDoor";
     const shop = tileToWorld(CITY.shopSpawn);
     const nearShop = Math.hypot(snap.vehicle.x - shop.x, snap.vehicle.y - shop.y) <= HANDOFF_RADIUS;
     const canTapShop = driving && nearShop;
+    const flashShop = next?.kind === "shop";
     if (this.shopImg.input) this.shopImg.input.enabled = driving;
+    this.shopImg.setTint(flashShop && canTapShop ? 0xb8ffb0 : 0xffffff);
     this.shopCaption.setVisible(driving);
     if (this.shopCaption.input) this.shopCaption.input.enabled = canTapShop;
     if (snap.run?.nextStopId) {
@@ -158,7 +157,9 @@ export class DriveScene extends Phaser.Scene {
       this.shopCaption.setAlpha(1);
     } else {
       this.shopCaption.setText(nearShop ? "Tap Kindling to return" : "Drive to Kindling");
-      this.shopCaption.setAlpha(nearShop ? 0.7 + 0.3 * (0.5 + 0.5 * Math.sin(snap.gameMs / 200)) : 1);
+      this.shopCaption.setAlpha(
+        flashShop && nearShop ? 0.7 + 0.3 * (0.5 + 0.5 * Math.sin(snap.gameMs / 200)) : nearShop ? 0.85 : 1,
+      );
     }
     syncItemHit(this.shopCaption);
   }
@@ -196,24 +197,6 @@ export class DriveScene extends Phaser.Scene {
       this.nightGlow.fillStyle(0xffc070, 0.06 + 0.28 * sky.lampAlpha);
       this.nightGlow.fillCircle(lamp.x, lamp.y - 18, 26 + 16 * sky.lampAlpha);
     }
-  }
-
-  private paintTutorialArrows(snap: SimSnapshot): void {
-    if (!isTutorialMode()) {
-      this.arrows.clear();
-      return;
-    }
-    const spots = [];
-    for (const hint of tutorialHints(snap)) {
-      if (hint.kind === "gpsPin" && this.pin.visible) {
-        spots.push({ id: hint.id, x: this.pin.x, y: this.pin.y - 36 });
-      } else if (hint.kind === "shop") {
-        spots.push({ id: hint.id, x: this.shopCenter.x, y: this.shopCenter.y - 80 });
-      } else if (hint.kind === "doorCustomer" && this.customer.visible) {
-        spots.push({ id: hint.id, x: this.customer.x, y: this.customer.y - 200 });
-      }
-    }
-    this.arrows.sync(spots);
   }
 
   private drawGps(): void {

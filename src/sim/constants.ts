@@ -23,11 +23,14 @@ export const NPC_INTERACT_COOLDOWN_MS = 360;
 export const KEYLEAD_WALK_SPEED = 620;
 export const BACKROOM_MS = 420;
 
-/** Incoming tablet tickets arrive in waves of 1–2, 10–60s apart. */
+/** Incoming tablet tickets arrive in waves of 1–2, 10–58s apart. */
 export const TABLET_QUEUE_MAX = 6;
 export const TICKET_WAVE_MIN_MS = 10_000;
-export const TICKET_WAVE_MAX_MS = 60_000;
+export const TICKET_WAVE_MAX_MS = 58_000;
 export const FIRST_TICKET_WAVE_MS = 2_000;
+/** Scripted opening beats: walk-in, pickup, then two deliveries — one gap apart. */
+export const OPENING_ORDER_GAP_MS = 8_000;
+export const OPENING_FIRST_AT_MS = 400;
 
 export const SCORE_INSTORE = 10;
 export const SCORE_PICKUP = 10;

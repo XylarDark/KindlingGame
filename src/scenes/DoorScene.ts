@@ -4,17 +4,15 @@ import { applyDayNight, attachDayNight, dayNightFrom, type DayNightPipeline } fr
 import { paintDoorstep, DOORSTEP_DOOR_X, DOORSTEP_FLOOR_Y, DOORSTEP_PORCH } from "../art/doorstep";
 import { enableItemHit } from "../input/hit";
 import { BAG_SCALE, PEOPLE_SCALE, PERSON_DISPLAY_H } from "../maps/shopT0";
-import { getSim, isTutorialMode } from "../session";
+import { getSim } from "../session";
 import { skyAt } from "../sim/dayNight";
 import type { SimSnapshot } from "../sim/gameSim";
-import { tutorialHints } from "../sim/tutorialHints";
 import { addHudButton } from "../ui/chrome";
 import { formatSlaClock, isSlaUrgent } from "../ui/copy";
 import { addUiText } from "../ui/text";
 import { Color, Type } from "../ui/theme";
 import { fitTypeToWidth } from "../ui/typekit";
 import { designSafeInset, readCssSafeArea, VIEWFIT_EVENT, viewFromScale } from "../ui/viewFit";
-import { TutorialArrows } from "../ui/tutorialArrow";
 
 /** 25% larger than shop bags (BAG_SCALE 0.7). */
 const DOOR_BAG_SCALE = BAG_SCALE * 1.25;
@@ -32,7 +30,6 @@ export class DoorScene extends Phaser.Scene {
   private youLabel!: Phaser.GameObjects.Text;
   private customerCaption!: Phaser.GameObjects.Text;
   private askIdBtn!: Phaser.GameObjects.Container;
-  private arrows!: TutorialArrows;
   private lastHouse = "";
   private lastSkyKey = "";
   private lighting?: DayNightPipeline;
@@ -121,7 +118,6 @@ export class DoorScene extends Phaser.Scene {
     });
     this.askIdBtn.setVisible(false);
 
-    this.arrows = new TutorialArrows(this, 12);
     this.layoutDoorHud();
     const relayout = (): void => this.layoutDoorHud();
     this.scale.on(Phaser.Scale.Events.RESIZE, relayout);
@@ -189,26 +185,6 @@ export class DoorScene extends Phaser.Scene {
     this.askIdBtn.setVisible(nextAsk);
     if (this.askIdBtn.input) this.askIdBtn.input.enabled = nextAsk;
     this.askIdBtn.setAlpha(nextAsk ? pulse : 1);
-
-    this.paintArrows(snap, nextPhoto, nextHand, nextId, nextAsk);
-  }
-
-  private paintArrows(snap: SimSnapshot, nextPhoto: boolean, nextHand: boolean, nextId: boolean, nextAsk: boolean): void {
-    if (!isTutorialMode()) {
-      this.arrows.clear();
-      return;
-    }
-    const spots = [];
-    for (const hint of tutorialHints(snap)) {
-      if (hint.kind === "handoff" && (nextPhoto || nextHand)) {
-        spots.push({ id: hint.id, x: this.bag.x, y: this.bag.y - this.bag.displayHeight * 0.5 });
-      } else if (hint.kind === "doorCustomer" && nextAsk) {
-        spots.push({ id: hint.id, x: this.askIdBtn.x, y: this.askIdBtn.y - 56 });
-      } else if (hint.kind === "idCard" && nextId) {
-        spots.push({ id: hint.id, x: this.customer.x, y: this.customer.y - PERSON_DISPLAY_H - 8 });
-      }
-    }
-    this.arrows.sync(spots);
   }
 }
 

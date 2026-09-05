@@ -6,6 +6,10 @@ describe("tutorialHints", () => {
   it("points at the walk-in strain, then the customer", () => {
     const sim = GameSim.create({ seed: 2, autoSpawn: false });
     const order = sim.spawnOrder("inStore");
+    for (let i = 0; i < 240; i++) {
+      if (sim.orderById(order.id)?.arriveAtGameMs !== undefined) break;
+      sim.tick(50);
+    }
     expect(tutorialHints(sim.snapshot())).toEqual([
       expect.objectContaining({ kind: "strain", skuId: order.skuId }),
     ]);

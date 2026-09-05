@@ -29,19 +29,17 @@ import {
   tabletLayout,
 } from "../maps/shopT0";
 import { enableItemHit } from "../input/hit";
-import { getSim, isTutorialMode } from "../session";
+import { getSim } from "../session";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import { skyAt } from "../sim/dayNight";
 import type { CustomerView, OrderView, SimSnapshot } from "../sim/gameSim";
 import { isPackedOnCounter } from "../sim/orders";
-import { nextShopHint, tutorialHints } from "../sim/tutorialHints";
+import { nextShopHint } from "../sim/tutorialHints";
 import { deliveryBagLabel, isSlaUrgent } from "../ui/copy";
 import { wireHover } from "../ui/chrome";
 import { addUiText } from "../ui/text";
 import { Color, Type } from "../ui/theme";
 import { fitTypeToWidth, parseFontPx, polishText } from "../ui/typekit";
-import { TutorialArrows } from "../ui/tutorialArrow";
-
 export class ShopScene extends Phaser.Scene {
   private keyLead!: Phaser.GameObjects.Image;
   private driver!: Phaser.GameObjects.Image;
@@ -65,7 +63,6 @@ export class ShopScene extends Phaser.Scene {
   private tvs: Phaser.GameObjects.Rectangle[] = [];
   private tvLabels: Phaser.GameObjects.Text[] = [];
   private jarSkus: string[] = [];
-  private arrows!: TutorialArrows;
   private sky!: Phaser.GameObjects.Graphics;
   private windowGlow!: Phaser.GameObjects.Graphics;
   private lighting?: DayNightPipeline;
@@ -213,8 +210,6 @@ export class ShopScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(8)
       .setVisible(false);
-
-    this.arrows = new TutorialArrows(this, 18);
   }
 
   update(): void {
@@ -299,7 +294,6 @@ export class ShopScene extends Phaser.Scene {
     this.syncTablet(snap, tabletPulse, next?.kind === "tablet");
     this.syncCustomers(snap.customers, pulse, next?.kind === "customer" ? next.orderId : null);
     this.syncOutgoing(snap);
-    this.paintTutorialArrows(snap);
   }
 
   private tryDepart(snap: SimSnapshot): void {
@@ -322,35 +316,6 @@ export class ShopScene extends Phaser.Scene {
     if (this.scene.isSleeping("drive")) this.scene.wake("drive");
     else if (!this.scene.isActive("drive")) this.scene.launch("drive");
     this.scene.bringToTop("hud");
-  }
-
-  private paintTutorialArrows(snap: SimSnapshot): void {
-    if (!isTutorialMode() || snap.playerRole !== "keyLead") {
-      this.arrows.clear();
-      return;
-    }
-    const spots = [];
-    for (const hint of tutorialHints(snap)) {
-      if (hint.kind === "strain") {
-        const i = this.jarSkus.indexOf(hint.skuId);
-        if (i < 0) continue;
-        const p = strainPos(i);
-        spots.push({ id: hint.id, x: p.x, y: p.y - strainSlotH() / 2 - 8 });
-      } else if (hint.kind === "bagRack") {
-        spots.push({ id: hint.id, x: BAG_STACK.x, y: BAG_STACK.y - Math.round(120 * BAG_SCALE) - 8 });
-      } else if (hint.kind === "counterBag") {
-        spots.push({ id: hint.id, x: PACK_SPOT.x, y: PACK_SPOT.y - Math.round(120 * BAG_SCALE) - 8 });
-      } else if (hint.kind === "receipt") {
-        spots.push({ id: hint.id, x: RECEIPT_SPOT.x, y: RECEIPT_SPOT.y - 88 });
-      } else if (hint.kind === "customer") {
-        const who = this.customers.get(hint.orderId);
-        if (!who) continue;
-        spots.push({ id: hint.id, x: who.x, y: CUSTOMER_SPOT.y - PERSON_DISPLAY_H - 8 });
-      } else if (hint.kind === "tablet") {
-        spots.push({ id: hint.id, x: TABLET.x, y: tabletLayout().top + 8 });
-      }
-    }
-    this.arrows.sync(spots);
   }
 
   private syncTablet(snap: SimSnapshot, pulse: number, flash: boolean): void {

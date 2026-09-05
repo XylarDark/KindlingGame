@@ -13,6 +13,11 @@ import {
 } from "./constants";
 import { GameSim } from "./gameSim";
 import { CITY, houseById, tileToWorld } from "../maps/cityT0";
+import {
+  OPENING_FIRST_AT_MS,
+  OPENING_ORDER_GAP_MS,
+  TICKET_WAVE_MAX_MS,
+} from "./constants";
 
 function finishDropoff(sim: GameSim, houseId: string): void {
   const stop = houseById(houseId)!;
@@ -44,6 +49,13 @@ function waitForFetch(sim: GameSim): void {
   }
 }
 
+function waitForCustomerAtCounter(sim: GameSim, orderId: string): void {
+  for (let i = 0; i < 240; i++) {
+    if (sim.orderById(orderId)?.arriveAtGameMs !== undefined) return;
+    sim.tick(50);
+  }
+}
+
 function fillTicket(
   sim: GameSim,
   type: "pickup" | "inStore" | "delivery",
@@ -51,6 +63,7 @@ function fillTicket(
 ) {
   const order = sim.spawnOrder(type, { ...extra, ageOk: extra?.ageOk ?? true });
   if (type === "inStore") {
+    waitForCustomerAtCounter(sim, order.id);
     sim.shopClick({ type: "strain", skuId: order.skuId });
     waitForFetch(sim);
     sim.shopClick({ type: "customer", orderId: order.id });
@@ -90,7 +103,9 @@ describe("GameSim order loops", () => {
   it("fails pickup as a no-show if nobody hands it off", () => {
     const sim = GameSim.create({ seed: 1, autoSpawn: false });
     const order = fillTicket(sim, "pickup");
-    sim.tick(PICKUP_ARRIVE_MS + PICKUP_HANDOFF_WAIT_MS + 16);
+    sim.tick(PICKUP_ARRIVE_MS);
+    waitForCustomerAtCounter(sim, order.id);
+    sim.tick(PICKUP_HANDOFF_WAIT_MS + 16);
     expect(sim.orderById(order.id)?.status).toBe("failed");
     expect(sim.score).toBe(SCORE_FAIL);
   });
@@ -113,6 +128,10 @@ describe("GameSim order loops", () => {
     const order = sim.spawnOrder("inStore");
     const other = sim.catalog.find((s) => s.id !== order.skuId)!;
     sim.shopClick({ type: "strain", skuId: other.id });
+    expect(sim.orderById(order.id)?.status).toBe("atRegister");
+    expect(sim.score).toBe(0);
+    waitForCustomerAtCounter(sim, order.id);
+    sim.shopClick({ type: "strain", skuId: other.id });
     sim.shopClick({ type: "customer", orderId: order.id });
     expect(sim.orderById(order.id)?.status).toBe("atRegister");
     expect(sim.score).toBe(0);
@@ -123,6 +142,29 @@ describe("GameSim order loops", () => {
     sim.shopClick({ type: "customer", orderId: order.id });
     expect(sim.orderById(order.id)?.status).toBe("completed");
     expect(sim.score).toBe(SCORE_INSTORE);
+  });
+
+  it("blocks walk-in TV taps until the customer reaches the counter", () => {
+    const sim = GameSim.create({ seed: 2, autoSpawn: false });
+    const order = sim.spawnOrder("inStore");
+    sim.shopClick({ type: "strain", skuId: order.skuId });
+    expect(sim.snapshot().handSkuId).toBeNull();
+    expect(sim.snapshot().toast).toContain("walking in");
+    waitForCustomerAtCounter(sim, order.id);
+    sim.shopClick({ type: "strain", skuId: order.skuId });
+    waitForFetch(sim);
+    expect(sim.snapshot().handSkuId).toBe(order.skuId);
+  });
+
+  it("blocks pickup handoff until the customer reaches the counter", () => {
+    const sim = GameSim.create({ seed: 1, autoSpawn: false });
+    const order = fillTicket(sim, "pickup");
+    sim.tick(PICKUP_ARRIVE_MS);
+    sim.shopClick({ type: "customer", orderId: order.id });
+    expect(sim.orderById(order.id)?.status).toBe("readyForHandoff");
+    waitForCustomerAtCounter(sim, order.id);
+    sim.shopClick({ type: "customer", orderId: order.id });
+    expect(sim.orderById(order.id)?.status).toBe("completed");
   });
 
   it("starts delivery SLA when the named bag is filled, not when leaving", () => {
@@ -362,12 +404,28 @@ describe("GameSim order loops", () => {
 
   it("shows one tablet ticket and never auto-queues more than 6", () => {
     const sim = GameSim.create({ seed: 7, autoSpawn: true });
-    sim.tick(2_400);
+    sim.tick(OPENING_FIRST_AT_MS + OPENING_ORDER_GAP_MS + 400);
     expect(sim.snapshot().tabletQueueCount).toBeGreaterThanOrEqual(1);
     expect(sim.snapshot().tabletQueueCount).toBeLessThanOrEqual(2);
     expect(sim.snapshot().tabletTicket).toBeTruthy();
     for (let i = 0; i < 240; i++) sim.tick(500);
     expect(sim.snapshot().tabletQueueCount).toBeLessThanOrEqual(6);
+  });
+
+  it("scripts the first beats as walk-in, pickup, then two deliveries", () => {
+    const sim = GameSim.create({ seed: 7, autoSpawn: true });
+    sim.tick(OPENING_FIRST_AT_MS + 50);
+    expect(sim.snapshot().orders.map((o) => o.type)).toEqual(["inStore"]);
+    sim.tick(OPENING_ORDER_GAP_MS);
+    expect(sim.snapshot().orders.map((o) => o.type)).toEqual(["inStore", "pickup"]);
+    sim.tick(OPENING_ORDER_GAP_MS);
+    const types = sim.snapshot().orders.map((o) => o.type);
+    expect(types.filter((t) => t === "delivery")).toHaveLength(2);
+    expect(types).toHaveLength(4);
+  });
+
+  it("caps random ticket waves at 58 seconds apart", () => {
+    expect(TICKET_WAVE_MAX_MS).toBe(58_000);
   });
 
   it("calls out strain and customer after the tablet is tapped", () => {

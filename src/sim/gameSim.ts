@@ -12,6 +12,8 @@ import {
   TICKET_WAVE_MAX_MS,
   TICKET_WAVE_MIN_MS,
   FIRST_TICKET_WAVE_MS,
+  OPENING_FIRST_AT_MS,
+  OPENING_ORDER_GAP_MS,
   MS_PER_GAME_HOUR,
   PICKUP_ARRIVE_MS,
   PICKUP_HANDOFF_WAIT_MS,
@@ -225,8 +227,16 @@ export class GameSim {
   }
 
   private queueOpeningOrders(): void {
-    this.spawnQueue = [{ atMs: this.clock.gameMs + 400, type: "inStore" }];
-    this.nextTicketWaveAt = this.clock.gameMs + FIRST_TICKET_WAVE_MS;
+    const base = this.clock.gameMs;
+    const pickupAt = base + OPENING_FIRST_AT_MS + OPENING_ORDER_GAP_MS;
+    const deliveryAt = pickupAt + OPENING_ORDER_GAP_MS;
+    this.spawnQueue = [
+      { atMs: base + OPENING_FIRST_AT_MS, type: "inStore" },
+      { atMs: pickupAt, type: "pickup" },
+      { atMs: deliveryAt, type: "delivery" },
+      { atMs: deliveryAt, type: "delivery" },
+    ];
+    this.nextTicketWaveAt = deliveryAt + OPENING_ORDER_GAP_MS + FIRST_TICKET_WAVE_MS;
   }
 
   static create(options?: SimOptions): GameSim {
@@ -243,12 +253,13 @@ export class GameSim {
         order.slaStartGameMs = 0;
         order.late = false;
       }
-      if (order.arriveAtGameMs !== undefined) order.arriveAtGameMs = 0;
+      if (order.arriveAtGameMs !== undefined) delete order.arriveAtGameMs;
     }
     this.lastAutoSpawn = 0;
     this.nextTicketWaveAt = this.autoSpawn ? FIRST_TICKET_WAVE_MS : 0;
     const hasWalkIn = this.orders.some((o) => o.type === "inStore" && isOpen(o));
-    this.spawnQueue = this.autoSpawn && !hasWalkIn ? [{ atMs: 400, type: "inStore" }] : [];
+    this.spawnQueue =
+      this.autoSpawn && !hasWalkIn ? [{ atMs: OPENING_FIRST_AT_MS, type: "inStore" }] : [];
     this.toast = "New day. Clock is 9:00 AM.";
   }
 
@@ -523,6 +534,10 @@ export class GameSim {
       return;
     }
     if (walkIn) {
+      if (!this.customerAtCounter(walkIn.id)) {
+        this.toast = `${walkIn.customerName} is still walking in.`;
+        return;
+      }
       if (skuId !== walkIn.skuId) {
         this.toast = `Wrong TV. ${walkIn.customerName} wants ${skuById(this.catalog, walkIn.skuId)?.name}.`;
         return;
@@ -686,8 +701,7 @@ export class GameSim {
   private tryHandoff(): void {
     if (this.tryServeWalkIn()) return;
     const waiting = this.orders.find((o) => o.type === "pickup" && o.status === "readyForHandoff");
-    const here = waiting && Math.abs((this.customerX(waiting.id) ?? 0) - CUSTOMER_SPOT.x) < 40;
-    if (waiting && here) {
+    if (waiting && this.customerAtCounter(waiting.id)) {
       this.complete(waiting);
       return;
     }
@@ -698,11 +712,19 @@ export class GameSim {
     const order = this.orderById(orderId);
     if (!order || !isOpen(order)) return;
     if (order.type === "inStore") {
+      if (!this.customerAtCounter(orderId)) {
+        this.toast = `${order.customerName} is still walking in.`;
+        return;
+      }
       this.selectedOrderId = orderId;
       this.tryServeWalkIn(order);
       return;
     }
     if (order.status === "readyForHandoff") {
+      if (!this.customerAtCounter(orderId)) {
+        this.toast = "Wait for them at the counter.";
+        return;
+      }
       this.complete(order);
       return;
     }
@@ -713,6 +735,10 @@ export class GameSim {
     const target =
       order ?? this.orders.find((o) => o.type === "inStore" && o.status === "atRegister");
     if (!target) return false;
+    if (!this.customerAtCounter(target.id)) {
+      this.toast = `Wait for ${target.customerName} at the counter.`;
+      return true;
+    }
     const sku = skuById(this.catalog, target.skuId);
     if (!this.handSkuId) {
       this.toast = `Tap the ${sku?.name ?? "strain"} TV, then tap ${target.customerName}.`;
@@ -786,7 +812,11 @@ export class GameSim {
     const order = this.orderById(customer.orderId);
     const sku = order ? skuById(this.catalog, order.skuId) : undefined;
     if (!order || !sku) return "";
-    if (customer.kind === "pickup") return order.status === "readyForHandoff" ? "Tap me — pickup" : "Pickup";
+    if (customer.kind === "pickup") {
+      if (order.status !== "readyForHandoff") return "Pickup";
+      if (!this.customerAtCounter(customer.orderId)) return "On the way…";
+      return "Tap me — pickup";
+    }
     if (Math.abs(customer.x - customer.targetX) > 24) return "Coming in…";
     if (order.status === "readyForHandoff") return `Tap me — ${sku.name}`;
     if (this.handSkuId === order.skuId) return `Tap me — ${sku.name}`;
@@ -820,6 +850,13 @@ export class GameSim {
           if (!this.selectedOrderId) this.selectedOrderId = order.id;
           const sku = skuById(this.catalog, order.skuId);
           this.toast = `${order.customerName} is at the counter and wants ${sku?.name ?? "a strain"}. Tap that TV, then tap them.`;
+        } else if (
+          order?.type === "pickup" &&
+          order.status === "readyForHandoff" &&
+          order.arriveAtGameMs === undefined
+        ) {
+          order.arriveAtGameMs = this.clock.gameMs;
+          this.toast = `${order.customerName} is at the counter for pickup.`;
         }
         continue;
       }
@@ -835,14 +872,16 @@ export class GameSim {
       return;
     }
     const instore = this.orders.find((o) => o.type === "inStore" && o.status === "atRegister");
-    if (instore) {
+    if (instore && this.customerAtCounter(instore.id)) {
       if (this.handSkuId !== instore.skuId) this.shopClick({ type: "strain", skuId: instore.skuId });
       else this.shopClick({ type: "customer", orderId: instore.id });
       this.npcCooldown = NPC_INTERACT_COOLDOWN_MS;
       return;
     }
     const open = this.orders.find((o) => needsFetch(o) && o.type !== "inStore");
-    const pickupWait = this.orders.find((o) => o.status === "readyForHandoff");
+    const pickupWait = this.orders.find(
+      (o) => o.status === "readyForHandoff" && this.customerAtCounter(o.id),
+    );
     if (pickupWait) {
       this.shopClick({ type: "handoff" });
       this.npcCooldown = NPC_INTERACT_COOLDOWN_MS;
@@ -858,27 +897,32 @@ export class GameSim {
 
   private tickTimers(): void {
     for (const order of [...this.orders]) {
-      if (
-        (order.status === "onPickupShelf" || order.status === "readyForHandoff") &&
-        order.slaStartGameMs !== undefined
-      ) {
+      if (order.type === "pickup" && order.slaStartGameMs !== undefined && isOpen(order)) {
         const elapsed = this.clock.gameMs - order.slaStartGameMs;
-        if (elapsed >= PICKUP_ARRIVE_MS + PICKUP_HANDOFF_WAIT_MS) {
-          this.failOrder(order, "Pickup no-show.");
-          continue;
-        }
-        if (elapsed >= PICKUP_ARRIVE_MS && order.status === "onPickupShelf") {
-          order.status = "readyForHandoff";
-          order.arriveAtGameMs = order.slaStartGameMs + PICKUP_ARRIVE_MS;
-          if (!this.customers.some((c) => c.orderId === order.id)) {
-            this.customers.push({
-              orderId: order.id,
-              x: DOOR.x,
-              targetX: CUSTOMER_SPOT.x,
-              kind: "pickup",
-            });
+        if (order.status === "onPickupShelf") {
+          if (elapsed >= PICKUP_ARRIVE_MS) {
+            order.status = "readyForHandoff";
+            if (!this.customers.some((c) => c.orderId === order.id)) {
+              this.customers.push({
+                orderId: order.id,
+                x: DOOR.x,
+                targetX: CUSTOMER_SPOT.x,
+                kind: "pickup",
+              });
+            }
+            this.toast = `${order.customerName} is here for pickup.`;
           }
-          this.toast = `${order.customerName} is here for pickup.`;
+        } else if (order.status === "readyForHandoff") {
+          if (order.arriveAtGameMs === undefined) {
+            const walkStarted = order.slaStartGameMs + PICKUP_ARRIVE_MS;
+            if (this.clock.gameMs - walkStarted >= INSTORE_WALKOUT_MS) {
+              this.failOrder(order, "Pickup no-show.");
+              continue;
+            }
+          } else if (this.clock.gameMs - order.arriveAtGameMs >= PICKUP_HANDOFF_WAIT_MS) {
+            this.failOrder(order, "Pickup no-show.");
+            continue;
+          }
         }
       }
       if (order.type === "inStore" && order.status === "atRegister" && order.arriveAtGameMs !== undefined) {
@@ -1176,7 +1220,7 @@ export class GameSim {
     if (this.keyLeadPhase !== "idle") return null;
     if (this.handSkuId) return null;
     const instore = this.orders.find((o) => o.type === "inStore" && o.status === "atRegister");
-    if (instore) return instore.skuId;
+    if (instore && this.customerAtCounter(instore.id)) return instore.skuId;
     const ticket = this.selectedTicket();
     if (ticket) return ticket.skuId;
     return null;
@@ -1212,6 +1256,12 @@ export class GameSim {
 
   private customerX(orderId: string): number | undefined {
     return this.customers.find((c) => c.orderId === orderId)?.x;
+  }
+
+  private customerAtCounter(orderId: string): boolean {
+    const customer = this.customers.find((c) => c.orderId === orderId);
+    if (!customer) return false;
+    return Math.abs(customer.x - customer.targetX) <= 24;
   }
 
   private nextHouse(): string {
