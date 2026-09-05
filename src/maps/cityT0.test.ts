@@ -18,6 +18,13 @@ describe("city map", () => {
     expect(CITY.houses.every((h) => h.parking.length >= 1)).toBe(true);
     expect(CITY.shopLot.parking.length).toBeGreaterThanOrEqual(3);
     expect(CITY.houses.some((h) => h.lotW >= 2 && h.lotH >= 2)).toBe(true);
+    expect(CITY.kinds[CITY.shopSpawn.r]![CITY.shopSpawn.c]).toBe("parking");
+    expect(CITY.walkable[CITY.shopSpawn.r]![CITY.shopSpawn.c]).toBe(true);
+    for (const house of CITY.houses) {
+      expect(CITY.kinds[house.stop.r]![house.stop.c], house.id).toBe("parking");
+      expect(CITY.walkable[house.stop.r]![house.stop.c], house.id).toBe(true);
+      expect(house.parking.some((p) => p.c === house.stop.c && p.r === house.stop.r)).toBe(true);
+    }
   });
 
   it("keeps every house reachable from Kindling", () => {

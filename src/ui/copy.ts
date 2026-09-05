@@ -53,7 +53,7 @@ export function interactButtonCopy(
     case "HAND BAG":
       return { label: "HAND BAG", caption: "Hand over the order" };
     case "PARK":
-      return { label: "PARK", caption: "Stop on the GPS pin" };
+      return { label: "PARK", caption: "Park in the driveway" };
     default:
       return null;
   }

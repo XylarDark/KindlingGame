@@ -2,7 +2,8 @@ import Phaser from "phaser";
 import { doorGrade } from "../art/dayNightGrade";
 import { applyDayNight, attachDayNight, dayNightFrom, type DayNightPipeline } from "../art/dayNightPipeline";
 import { paintDoorstep, DOORSTEP_DOOR_X, DOORSTEP_FLOOR_Y, DOORSTEP_PORCH } from "../art/doorstep";
-import { enableItemHit } from "../input/hit";
+import { enableItemHit, syncItemHit } from "../input/hit";
+import { itemHitSize } from "../input/hitRect";
 import { BAG_SCALE, PEOPLE_SCALE, PERSON_DISPLAY_H } from "../maps/shopT0";
 import { getSim } from "../session";
 import { skyAt } from "../sim/dayNight";
@@ -18,6 +19,8 @@ import { designSafeInset, readCssSafeArea, VIEWFIT_EVENT, viewFromScale } from "
 const DOOR_BAG_SCALE = BAG_SCALE * 1.25;
 const DRIVER_X = DOORSTEP_DOOR_X - 160;
 const CUSTOMER_X = DOORSTEP_DOOR_X + 200;
+/** Extra pad so tapping the customer for HAND BAG always registers. */
+const PERSON_HIT_PAD = 56;
 
 export class DoorScene extends Phaser.Scene {
   private backdrop!: Phaser.GameObjects.Graphics;
@@ -30,7 +33,6 @@ export class DoorScene extends Phaser.Scene {
   private youLabel!: Phaser.GameObjects.Text;
   private customerCaption!: Phaser.GameObjects.Text;
   private askIdBtn!: Phaser.GameObjects.Container;
-  private handBagBtn!: Phaser.GameObjects.Container;
   private photoBtn!: Phaser.GameObjects.Container;
   private lastHouse = "";
   private lastSkyKey = "";
@@ -59,7 +61,7 @@ export class DoorScene extends Phaser.Scene {
     this.driver = this.add.image(DRIVER_X, floor, "tex-driver").setOrigin(0.5, 1).setScale(PEOPLE_SCALE).setDepth(5);
     enableItemHit(this.driver);
     this.customer = this.add.image(CUSTOMER_X, floor, "tex-customer").setOrigin(0.5, 1).setScale(PEOPLE_SCALE).setDepth(5);
-    enableItemHit(this.customer);
+    enableWidePersonHit(this.customer);
     // Handles sit in the driver's hands; bag hangs in front of the hip.
     this.bag = this.add
       .image(DRIVER_X + 52, floor - PERSON_DISPLAY_H * 0.46, "tex-bag")
@@ -68,7 +70,10 @@ export class DoorScene extends Phaser.Scene {
       .setDepth(6);
     enableItemHit(this.bag);
     this.driver.on("pointerdown", () => getSim().queueInteract());
-    this.customer.on("pointerdown", () => getSim().queueInteract());
+    this.customer.on("pointerdown", (p: Phaser.Input.Pointer) => {
+      p.event.stopPropagation();
+      getSim().queueInteract();
+    });
     this.bag.on("pointerdown", () => getSim().queueInteract());
     this.youLabel = addUiText(this, DRIVER_X, floor + 16, "You", {
       size: Type.caption,
@@ -87,7 +92,12 @@ export class DoorScene extends Phaser.Scene {
       fontStyle: "700",
     })
       .setOrigin(0.5, 0)
-      .setDepth(7);
+      .setDepth(10);
+    enableItemHit(this.customerCaption);
+    this.customerCaption.on("pointerdown", (p: Phaser.Input.Pointer) => {
+      p.event.stopPropagation();
+      getSim().queueInteract();
+    });
     this.bagCaption = addUiText(this, this.bag.x, this.bag.y - this.bag.displayHeight * this.bag.originY - 8, "Bag", {
       size: Type.caption,
       color: Color.inkHex,
@@ -120,16 +130,6 @@ export class DoorScene extends Phaser.Scene {
       depth: 9,
     });
     this.askIdBtn.setVisible(false);
-
-    this.handBagBtn = addHudButton(this, CUSTOMER_X, btnY, "HAND BAG", () => getSim().queueInteract(), {
-      originX: 0.5,
-      originY: 1,
-      variant: "primary",
-      minWidth: 360,
-      caption: "Hand over the order",
-      depth: 9,
-    });
-    this.handBagBtn.setVisible(false);
 
     this.photoBtn = addHudButton(this, CUSTOMER_X, btnY, "TAKE PHOTO", () => getSim().queueInteract(), {
       originX: 0.5,
@@ -195,27 +195,33 @@ export class DoorScene extends Phaser.Scene {
     const nextAsk = drop.actionLabel === "ASK ID";
     // While the ID card modal is up, door hits must not steal the tap.
     const idModal = nextId;
-    const canDoorHit = !idModal && (nextAsk || nextHand || nextPhoto);
 
     this.bag.setVisible(true);
-    this.bag.setAlpha(nextPhoto || nextHand ? pulse : 1);
+    this.bag.setAlpha(nextPhoto ? pulse : 1);
     this.bag.clearTint();
     this.customer.setAlpha(nextAsk || nextHand ? pulse : 1);
     this.customer.clearTint();
-    if (this.bag.input) this.bag.input.enabled = canDoorHit && (nextHand || nextPhoto);
-    if (this.customer.input) this.customer.input.enabled = canDoorHit && (nextAsk || nextHand);
-    if (this.driver.input) this.driver.input.enabled = canDoorHit && (nextHand || nextPhoto);
+    this.customer.setDepth(nextHand ? 11 : 5);
+    // HAND BAG: only the customer (person). PHOTO: bag / photo button. ASK: button + person.
+    if (this.bag.input) this.bag.input.enabled = !idModal && nextPhoto;
+    if (this.customer.input) this.customer.input.enabled = !idModal && (nextAsk || nextHand);
+    if (this.driver.input) this.driver.input.enabled = false;
+    if (this.customerCaption.input) this.customerCaption.input.enabled = !idModal && (nextAsk || nextHand);
+    syncItemHit(this.customerCaption);
 
-    this.prompt.setText(drop.hint || "They're at the door.");
+    this.prompt.setText(
+      nextHand
+        ? `Tap ${drop.customerName ?? "the customer"} to hand over the bag.`
+        : drop.hint || "They're at the door.",
+    );
     this.prompt.setAlpha(1);
-    this.customerCaption.setText(drop.customerName ?? "Customer");
+    this.customerCaption.setText(nextHand ? "Tap to hand bag" : drop.customerName ?? "Customer");
     this.customerCaption.setAlpha(1);
-    this.bagCaption.setVisible(nextPhoto || nextHand);
+    this.bagCaption.setVisible(nextPhoto);
     this.bagCaption.setText("Or tap the bag");
     this.bagCaption.setAlpha(1);
     this.bagCaption.setPosition(this.bag.x, this.bag.y - this.bag.displayHeight * this.bag.originY - 8);
-    // Pulse caption background only — keep ink text steady.
-    if (nextPhoto || nextHand) {
+    if (nextPhoto) {
       const bright = Math.round(180 + 60 * pulse);
       this.bagCaption.setBackgroundColor(`rgb(${bright},${Math.min(255, bright + 40)},${Math.round(bright * 0.55)})`);
       this.bagCaption.setColor(Color.inkHex);
@@ -226,10 +232,6 @@ export class DoorScene extends Phaser.Scene {
     this.askIdBtn.setVisible(nextAsk);
     if (this.askIdBtn.input) this.askIdBtn.input.enabled = nextAsk;
     setButtonPulse(this.askIdBtn, pulse, nextAsk);
-
-    this.handBagBtn.setVisible(nextHand);
-    if (this.handBagBtn.input) this.handBagBtn.input.enabled = nextHand;
-    setButtonPulse(this.handBagBtn, pulse, nextHand);
 
     this.photoBtn.setVisible(nextPhoto);
     if (this.photoBtn.input) this.photoBtn.input.enabled = nextPhoto;
@@ -247,4 +249,14 @@ function runNote(snap: SimSnapshot): string {
   const n = snap.run?.orderIds.length ?? 0;
   if (n <= 1) return "";
   return `  ·  ${n} bags on the bike`;
+}
+
+function enableWidePersonHit(obj: Phaser.GameObjects.Image): void {
+  const { width, height } = itemHitSize(obj);
+  const pad = PERSON_HIT_PAD;
+  obj.setInteractive({
+    useHandCursor: true,
+    hitArea: new Phaser.Geom.Rectangle(-pad, -pad, width + pad * 2, height + pad * 2),
+    hitAreaCallback: Phaser.Geom.Rectangle.Contains,
+  });
 }

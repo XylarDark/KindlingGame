@@ -18,7 +18,7 @@ import { PEOPLE_SCALE } from "../maps/shopT0";
 import { getSim } from "../session";
 import { HANDOFF_RADIUS } from "../sim/constants";
 import { skyAt } from "../sim/dayNight";
-import { gpsPath, type SimSnapshot } from "../sim/gameSim";
+import type { SimSnapshot } from "../sim/gameSim";
 import { tutorialHints } from "../sim/tutorialHints";
 import { formatSlaClock, isSlaUrgent } from "../ui/copy";
 import { addUiText } from "../ui/text";
@@ -30,7 +30,6 @@ const HOUSE_TEX = ["tex-house", "tex-house-alt", "tex-house-3", "tex-house-4", "
 export class DriveScene extends Phaser.Scene {
   private vehicle!: Phaser.GameObjects.Image;
   private walker!: Phaser.GameObjects.Image;
-  private gps!: Phaser.GameObjects.Graphics;
   private glow!: Phaser.GameObjects.Graphics;
   private pin!: Phaser.GameObjects.Image;
   private pinPulse!: Phaser.GameObjects.Rectangle;
@@ -58,7 +57,6 @@ export class DriveScene extends Phaser.Scene {
     this.drawCity();
     this.nightGlow = this.add.graphics().setDepth(2);
     this.glow = this.add.graphics().setDepth(3);
-    this.gps = this.add.graphics().setDepth(4);
     this.paintDayNight(getSim().snapshot());
     this.events.on(Phaser.Scenes.Events.PRE_RENDER, () => this.paintDayNight(getSim().snapshot()));
     this.pinPulse = this.add.rectangle(0, 0, 88, 88, Color.neon, 0.28).setDepth(4);
@@ -89,15 +87,11 @@ export class DriveScene extends Phaser.Scene {
   }
 
   private spawnTraffic(): void {
-    this.trafficLoops = buildTrafficLoops(5);
-    this.trafficSprites = this.trafficLoops.map((loop, i) =>
-      this.add
-        .image(0, 0, i % 2 === 0 ? "tex-car" : "tex-car-2")
-        .setDepth(5)
-        .setDisplaySize(120, 72)
-        .setAlpha(0.92),
+    this.trafficLoops = buildTrafficLoops(6);
+    const sample = trafficCars(0, this.trafficLoops);
+    this.trafficSprites = sample.map((car) =>
+      this.add.image(0, 0, car.key).setDepth(5).setDisplaySize(120, 72).setAlpha(0.92),
     );
-    // Traffic is cosmetic — never interactive, never collides with the van or other cars.
   }
 
   update(): void {
@@ -109,10 +103,16 @@ export class DriveScene extends Phaser.Scene {
     this.lastY = snap.vehicle.y;
 
     const traffic = trafficCars(snap.gameMs, this.trafficLoops);
-    traffic.forEach((car, i) => {
-      const sprite = this.trafficSprites[i];
-      if (!sprite) return;
-      sprite.setPosition(car.x, car.y).setRotation(car.angle + Math.PI).setVisible(true);
+    while (this.trafficSprites.length < traffic.length) {
+      this.trafficSprites.push(this.add.image(0, 0, "tex-car").setDepth(5).setDisplaySize(120, 72).setAlpha(0.92));
+    }
+    this.trafficSprites.forEach((sprite, i) => {
+      const car = traffic[i];
+      if (!car) {
+        sprite.setVisible(false);
+        return;
+      }
+      sprite.setTexture(car.key).setPosition(car.x, car.y).setRotation(car.angle + Math.PI).setVisible(true);
     });
 
     if (snap.dropoff.driverOnFoot && snap.dropoff.driver) {
@@ -124,7 +124,6 @@ export class DriveScene extends Phaser.Scene {
     }
 
     this.paintDayNight(snap);
-    this.drawGps();
     this.glow.clear();
     const stopId = snap.run?.nextStopId;
     const destOrder = snap.orders.find((o) => o.destinationId === stopId && o.status === "onRun");
@@ -228,25 +227,6 @@ export class DriveScene extends Phaser.Scene {
     }
   }
 
-  private drawGps(): void {
-    this.gps.clear();
-    const sim = getSim();
-    if (sim.snapshot().dropoff.driverOnFoot) return;
-    const path = gpsPath(sim);
-    if (path.length < 2) return;
-    this.gps.lineStyle(10, 0x1a120c, 0.45);
-    this.strokePath(path);
-    this.gps.lineStyle(6, Color.neon, 0.92);
-    this.strokePath(path);
-  }
-
-  private strokePath(path: { x: number; y: number }[]): void {
-    this.gps.beginPath();
-    this.gps.moveTo(path[0]!.x, path[0]!.y);
-    for (let i = 1; i < path.length; i++) this.gps.lineTo(path[i]!.x, path[i]!.y);
-    this.gps.strokePath();
-  }
-
   private returnToShop(): void {
     const sim = getSim();
     if (sim.snapshot().playerRole !== "driver") return;
@@ -262,7 +242,6 @@ export class DriveScene extends Phaser.Scene {
     const kinds = CITY.kinds;
     const houseTiles = new Set(CITY.houses.flatMap((h) => lotTileKeys(h.house, h.lotW, h.lotH)));
     const shopTiles = new Set(lotTileKeys(CITY.shopLot.origin, CITY.shopLot.w, CITY.shopLot.h));
-    shopTiles.add(`${CITY.shopSpawn.c},${CITY.shopSpawn.r}`);
 
     for (let r = 0; r < kinds.length; r++) {
       for (let c = 0; c < kinds[r]!.length; c++) {

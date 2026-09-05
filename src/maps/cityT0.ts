@@ -17,6 +17,7 @@ export type TileKind = "wall" | "road" | "shop" | "house" | "parking";
 export interface HouseStop {
   id: string;
   house: TileCell;
+  /** Delivery / return parking stall (driveable pad, not the street). */
   stop: TileCell;
   lotW: number;
   lotH: number;
@@ -101,7 +102,8 @@ const BUILD_SIZES = [
 function paintParking(kinds: TileKind[][], walkable: boolean[][], cells: TileCell[]): void {
   for (const cell of cells) {
     kinds[cell.r]![cell.c] = "parking";
-    walkable[cell.r]![cell.c] = false;
+    // Driveable so the van can pull into the stall.
+    walkable[cell.r]![cell.c] = true;
   }
 }
 
@@ -119,7 +121,7 @@ function drivewayTowardRoad(
     for (const n of neighbors4(cell)) {
       if (!inBounds(n.r, n.c)) continue;
       if (kinds[n.r]![n.c] !== "wall") continue;
-      const road = neighbors4(n).find((r) => walkable[r.r]?.[r.c]);
+      const road = neighbors4(n).find((r) => kinds[r.r]?.[r.c] === "road");
       if (!road) continue;
       // Prefer a 1×2 pad along the curb when space allows.
       const along =
@@ -134,7 +136,8 @@ function drivewayTowardRoad(
             ].filter((p) => inBounds(p.r, p.c) && kinds[p.r]![p.c] === "wall");
       const parking = along.length >= 2 ? along.slice(0, 2) : [n];
       if (parking.some((p) => buildCells.some((b) => b.c === p.c && b.r === p.r))) continue;
-      candidates.push({ parking, stop: road, score: parking.length * 10 + (road.c + road.r) % 3 });
+      // Delivery stop is the stall itself (first pad cell, curb-side).
+      candidates.push({ parking, stop: parking[0]!, score: parking.length * 10 + (road.c + road.r) % 3 });
     }
   }
 
@@ -163,9 +166,13 @@ function placeShop(kinds: TileKind[][], walkable: boolean[][]): { shopLot: ShopL
   }
   paintParking(kinds, walkable, parking);
 
-  const shopSpawn: TileCell = { c: 2, r: 4 };
-  kinds[shopSpawn.r]![shopSpawn.c] = "shop";
-  walkable[shopSpawn.r]![shopSpawn.c] = true;
+  // Park at Kindling in the west strip (opens onto the street), not in the road.
+  const shopSpawn =
+    parking.find((p) => neighbors4(p).some((n) => kinds[n.r]?.[n.c] === "road")) ?? parking[0] ?? { c: 3, r: 4 };
+  if (!parking.some((p) => p.c === shopSpawn.c && p.r === shopSpawn.r)) {
+    parking.unshift(shopSpawn);
+    paintParking(kinds, walkable, [shopSpawn]);
+  }
 
   return { shopLot: { origin, w, h, parking }, shopSpawn };
 }
@@ -277,7 +284,7 @@ export function doorstepWorld(house: HouseStop): { x: number; y: number } {
 export function roadTextureKey(kinds: TileKind[][], r: number, c: number): string {
   const road = (rr: number, cc: number) => {
     const k = kinds[rr]?.[cc];
-    return k === "road" || (k === "shop" && CITY.walkable[rr]?.[cc]);
+    return k === "road" || k === "parking" || (k === "shop" && CITY.walkable[rr]?.[cc]);
   };
   const h = road(r, c - 1) || road(r, c + 1);
   const v = road(r - 1, c) || road(r + 1, c);

@@ -172,7 +172,7 @@ export class HudScene extends Phaser.Scene {
     this.padRing = this.add.graphics().setDepth(19);
     this.drawPad();
     this.padKnob = this.add.circle(this.padCenter.x, this.padCenter.y, 40, Color.cream, 0.92).setDepth(20);
-    this.padLabel = addUiText(this, this.padCenter.x, this.padCenter.y - 128, "Following GPS…", {
+    this.padLabel = addUiText(this, this.padCenter.x, this.padCenter.y - 128, "Heading to stop…", {
       size: Type.caption,
       color: Color.creamHex,
       backgroundColor: "#1c1612ee",
@@ -318,7 +318,7 @@ export class HudScene extends Phaser.Scene {
     this.padLabel.setVisible(driving);
     if (driving) {
       this.padLabel
-        .setText(snap.autoDriving ? "Following GPS…" : snap.run?.nextStopId ? "At the curb — call" : "At Kindling — tap the shop")
+        .setText(snap.autoDriving ? "Heading to stop…" : snap.run?.nextStopId ? "Parked — call from phone" : "Parked at Kindling — tap shop")
         .setPosition(this.padCenter.x, this.padCenter.y - 40)
         .setOrigin(0.5, 1)
         .setAlpha(1)

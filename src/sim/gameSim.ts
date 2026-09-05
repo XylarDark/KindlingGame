@@ -4,6 +4,7 @@ import {
   CALL_CONNECT_MS,
   CUSTOMER_SPEED,
   HANDOFF_RADIUS,
+  PARK_ARRIVE_RADIUS,
   INSTORE_WALKOUT_MS,
   NPC_INTERACT_COOLDOWN_MS,
   KEYLEAD_WALK_SPEED,
@@ -30,6 +31,7 @@ import {
   doorstepWorld,
   houseById,
   houseTitle,
+  lotCenter,
   MAP_PX_H,
   MAP_PX_W,
   TILE,
@@ -439,7 +441,7 @@ export class GameSim {
     this.pendingDepart = false;
     this.driverLine = null;
     this.refreshDriveRoute();
-    this.toast = this.runOrderIds.length > 1 ? "Multi-stop run. Van follows the GPS." : "Hit the road. Van follows the GPS.";
+    this.toast = this.runOrderIds.length > 1 ? "Multi-stop run. Van is heading out." : "Hit the road. Van is heading to the stop.";
     return true;
   }
 
@@ -854,6 +856,10 @@ export class GameSim {
     const goal = worldToTile(target.x, target.y);
     const cells = findPath(CITY.walkable, start, goal);
     this.driveRoute = routeWorldPoints(cells);
+    // Final point is the parking stall center — no lane offset.
+    if (this.driveRoute.length > 0) {
+      this.driveRoute[this.driveRoute.length - 1] = { x: target.x, y: target.y };
+    }
     this.driveWaypoint = 0;
     this.driveArrived = false;
   }
@@ -865,8 +871,8 @@ export class GameSim {
     if (this.driveRoute.length === 0) this.refreshDriveRoute();
     if (this.driveRoute.length === 0) return;
 
-    if (dist(this.vehicle.x, this.vehicle.y, target.x, target.y) <= HANDOFF_RADIUS) {
-      this.arriveAtDriveTarget(target);
+    if (dist(this.vehicle.x, this.vehicle.y, target.x, target.y) <= PARK_ARRIVE_RADIUS) {
+      this.parkAt(target);
       return;
     }
 
@@ -876,9 +882,15 @@ export class GameSim {
     this.vehicle.y = clamp(step.y, TILE, MAP_PX_H - TILE);
     this.driveWaypoint = step.waypoint;
     this.vehicleHeading = step.heading;
-    if (step.arrived || dist(this.vehicle.x, this.vehicle.y, target.x, target.y) <= HANDOFF_RADIUS) {
-      this.arriveAtDriveTarget(target);
+    if (step.arrived || dist(this.vehicle.x, this.vehicle.y, target.x, target.y) <= PARK_ARRIVE_RADIUS) {
+      this.parkAt(target);
     }
+  }
+
+  private parkAt(target: { x: number; y: number }): void {
+    this.vehicle.x = target.x;
+    this.vehicle.y = target.y;
+    this.arriveAtDriveTarget(target);
   }
 
   private arriveAtDriveTarget(target: { x: number; y: number }): void {
@@ -886,16 +898,23 @@ export class GameSim {
     this.driveArrived = true;
     const stopId = this.nextStopId();
     if (stopId) {
+      const house = houseById(stopId);
+      if (house) {
+        const home = lotCenter(house.house, house.lotW, house.lotH);
+        this.vehicleHeading = Math.atan2(home.y - this.vehicle.y, home.x - this.vehicle.x);
+      }
       const order = this.runOrderIds
         .map((id) => this.orderById(id))
         .find((o) => o?.destinationId === stopId && o.status === "onRun");
       this.toast = order
-        ? `Arrived at ${destLabel(order)}. Call ${order.customerName} from your phone.`
-        : "Arrived. Call from your phone.";
+        ? `Parked at ${destLabel(order)}. Call ${order.customerName} from your phone.`
+        : "Parked. Call from your phone.";
       return;
     }
     if (dist(this.vehicle.x, this.vehicle.y, target.x, target.y) <= HANDOFF_RADIUS) {
-      this.toast = "Back at Kindling. Tap the shop to return.";
+      const shop = lotCenter(CITY.shopLot.origin, CITY.shopLot.w, CITY.shopLot.h);
+      this.vehicleHeading = Math.atan2(shop.y - this.vehicle.y, shop.x - this.vehicle.x);
+      this.toast = "Parked at Kindling. Tap the shop to return.";
     }
   }
 
@@ -1091,7 +1110,7 @@ export class GameSim {
           this.toast =
             this.runOrderIds.length === 0
               ? "Denied. Van is heading back to Kindling."
-              : `Denied. GPS → ${this.nextStopId() ? houseTitle(this.nextStopId()!) : "Kindling"}.`;
+              : `Denied. Next → ${this.nextStopId() ? houseTitle(this.nextStopId()!) : "Kindling"}.`;
           return;
         }
         d.idChecked = true;
@@ -1112,7 +1131,7 @@ export class GameSim {
         if (this.runOrderIds.length === 0) {
           this.toast = "Run complete. Van is heading to Kindling — tap the shop when you arrive.";
         } else {
-          this.toast = `Dropped. GPS → ${this.nextStopId() ? houseTitle(this.nextStopId()!) : "Kindling"}.`;
+          this.toast = `Dropped. Next → ${this.nextStopId() ? houseTitle(this.nextStopId()!) : "Kindling"}.`;
         }
       }
       return;
@@ -1238,7 +1257,7 @@ export class GameSim {
         .find((o) => o?.destinationId === stopId && o.status === "onRun");
       if (order) {
         const sku = skuById(this.catalog, order.skuId);
-        return `GPS  →  ${destLabel(order)}   ·   ${order.customerName}   ·   ${sku?.name ?? ""}   ·   ${this.runOrderIds.length} bag${this.runOrderIds.length === 1 ? "" : "s"}`;
+        return `→  ${destLabel(order)}   ·   ${order.customerName}   ·   ${sku?.name ?? ""}   ·   ${this.runOrderIds.length} bag${this.runOrderIds.length === 1 ? "" : "s"}`;
       }
       return "Head back to Kindling";
     }

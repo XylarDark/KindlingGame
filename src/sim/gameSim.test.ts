@@ -370,7 +370,7 @@ describe("GameSim order loops", () => {
     expect(run?.nextStopId).toBeTruthy();
   });
 
-  it("auto-drives toward the next GPS stop without steer input", () => {
+  it("auto-drives toward the next parking stop without steer input", () => {
     const sim = GameSim.create({ seed: 5, autoSpawn: false });
     fillTicket(sim, "delivery", { destinationId: "house-1" });
     sim.hitTheRoad();
@@ -381,7 +381,7 @@ describe("GameSim order loops", () => {
     expect(Math.hypot(after.x - start.x, after.y - start.y)).toBeGreaterThan(120);
   });
 
-  it("auto-parks at the GPS curb so the phone call can start", () => {
+  it("auto-parks in the driveway so the phone call can start", () => {
     const sim = GameSim.create({ seed: 5, autoSpawn: false });
     fillTicket(sim, "delivery", { destinationId: "house-1" });
     sim.hitTheRoad();
@@ -389,6 +389,10 @@ describe("GameSim order loops", () => {
     expect(sim.snapshot().autoDriving).toBe(false);
     expect(sim.snapshot().dropoff.phase).toBe("atCurb");
     expect(sim.snapshot().dropoff.actionLabel).toBe("CALL");
+    const stop = houseById("house-1")!;
+    const pad = tileToWorld(stop.stop);
+    const v = sim.snapshot().vehicle;
+    expect(Math.hypot(v.x - pad.x, v.y - pad.y)).toBeLessThan(2);
   });
 
   it("lets the driver leave with packed deliveries while more tickets wait", () => {

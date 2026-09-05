@@ -1,6 +1,6 @@
 import { CITY, TILE, isEWStreet, isNSStreet } from "./cityT0";
 import type { TileCell } from "../sim/pathfinding";
-import { LANE_OFFSET_PX, routeWorldPoints, type WorldPoint } from "../sim/driveRoute";
+import { routeWorldPoints, type WorldPoint } from "../sim/driveRoute";
 
 export interface TrafficLoop {
   id: string;
@@ -19,8 +19,11 @@ export interface TrafficCarView {
 
 const CAR_KEYS = ["tex-car", "tex-car-2"] as const;
 
+/** Minimum center-to-center gap so cars never stack through each other. */
+export const TRAFFIC_MIN_SEP = 110;
+
 function isRoad(cell: TileCell): boolean {
-  return !!CITY.walkable[cell.r]?.[cell.c];
+  return CITY.kinds[cell.r]?.[cell.c] === "road";
 }
 
 function loopLength(points: readonly WorldPoint[]): number {
@@ -44,8 +47,8 @@ function rectangleLoop(c0: number, r0: number, c1: number, r1: number): TileCell
   return cells;
 }
 
-/** Ambient cars on closed road loops. Cosmetic only — no collision with each other or the van. */
-export function buildTrafficLoops(max = 5): TrafficLoop[] {
+/** Ambient cars on closed road loops (roads only — not parking stalls). */
+export function buildTrafficLoops(max = 6): TrafficLoop[] {
   const loops: TrafficLoop[] = [];
   const seen = new Set<string>();
   const ewRows = CITY.kinds.map((_, r) => r).filter((r) => isEWStreet(r));
@@ -61,7 +64,7 @@ export function buildTrafficLoops(max = 5): TrafficLoop[] {
           const c0 = nsCols[a]!;
           const c1 = nsCols[b]!;
           if (c1 - c0 < 5) continue;
-          if ((a + b + i + j) % 4 !== 0) continue;
+          if ((a + b + i + j) % 3 !== 0) continue;
           const cells = rectangleLoop(c0, r0, c1, r1);
           if (!cells) continue;
           const key = `${c0},${r0}-${c1},${r1}`;
@@ -77,32 +80,94 @@ export function buildTrafficLoops(max = 5): TrafficLoop[] {
   return loops;
 }
 
+type CarState = {
+  id: string;
+  loop: TrafficLoop;
+  /** Progress 0–1 around the loop. */
+  t: number;
+  key: string;
+  depth: number;
+};
+
 /**
- * Positions for decorative traffic. Cars never collide — they are drawn ghosts with
- * staggered timing and opposite-lane offsets so they do not stack on one path.
+ * Moving traffic that yields so cars keep a minimum gap — they do not pass through each other.
+ * Still cosmetic vs the player van (no physics).
  */
 export function trafficCars(gameMs: number, loops: readonly TrafficLoop[]): TrafficCarView[] {
-  return loops.map((loop, i) => {
-    const speed = 120 + (i % 3) * 28;
-    const stagger = i * 3_600 + (i % 2) * 1_800;
+  if (loops.length === 0) return [];
+
+  const states: CarState[] = [];
+  loops.forEach((loop, i) => {
+    const speed = 115 + (i % 3) * 22;
+    const stagger = i * 2_800 + (i % 2) * 1_400;
     const dist = ((gameMs + stagger) * speed) / 1000;
-    const t = (dist % loop.length) / loop.length;
-    const pos = pointAlongLoop(loop.points, t);
-    const angle = headingAlongLoop(loop.points, t);
-    // Alternate curb side so cars on nearby loops do not sit on top of each other.
-    const side = i % 2 === 0 ? 1 : -1;
-    const lateral = side * (LANE_OFFSET_PX * 0.55);
-    const x = pos.x + Math.cos(angle + Math.PI / 2) * lateral;
-    const y = pos.y + Math.sin(angle + Math.PI / 2) * lateral;
+    const carsOnLoop = loop.length > TILE * 14 ? 2 : 1;
+    for (let k = 0; k < carsOnLoop; k++) {
+      const spaced = dist / loop.length + k / carsOnLoop;
+      states.push({
+        id: `${loop.id}-${k}`,
+        loop,
+        t: ((spaced % 1) + 1) % 1,
+        key: CAR_KEYS[(i + k) % CAR_KEYS.length]!,
+        depth: 5,
+      });
+    }
+  });
+
+  // Same-loop cars already share speed + even spacing. Resolve cross-loop overlaps
+  // by holding the later-indexed car back along its path until gaps clear.
+  for (let pass = 0; pass < 10; pass++) {
+    let moved = false;
+    for (let a = 0; a < states.length; a++) {
+      for (let b = a + 1; b < states.length; b++) {
+        const ca = states[a]!;
+        const cb = states[b]!;
+        const pa = pointAlongLoop(ca.loop.points, ca.t);
+        const pb = pointAlongLoop(cb.loop.points, cb.t);
+        const gap = Math.hypot(pa.x - pb.x, pa.y - pb.y);
+        if (gap >= TRAFFIC_MIN_SEP) continue;
+        const need = TRAFFIC_MIN_SEP - gap + 4;
+        // Prefer backing the car that is "behind" relative to the other along heading;
+        // fall back to higher index for a stable deterministic order.
+        const follower = pickFollower(ca, cb, pa, pb) === ca ? ca : cb;
+        const retreat = need / Math.max(TILE, follower.loop.length);
+        follower.t = ((follower.t - retreat) % 1 + 1) % 1;
+        moved = true;
+      }
+    }
+    if (!moved) break;
+  }
+
+  return states.map((car) => {
+    const pos = pointAlongLoop(car.loop.points, car.t);
+    const angle = headingAlongLoop(car.loop.points, car.t);
     return {
-      id: loop.id,
-      x,
-      y,
-      key: CAR_KEYS[i % CAR_KEYS.length]!,
-      depth: 5,
+      id: car.id,
+      x: pos.x,
+      y: pos.y,
+      key: car.key,
+      depth: car.depth,
       angle,
     };
   });
+}
+
+function pickFollower(
+  a: CarState,
+  b: CarState,
+  pa: WorldPoint,
+  pb: WorldPoint,
+): CarState {
+  const ha = headingAlongLoop(a.loop.points, a.t);
+  const hb = headingAlongLoop(b.loop.points, b.t);
+  // Vector from a→b; if a is driving toward b, a is the follower (should yield).
+  const abx = pb.x - pa.x;
+  const aby = pb.y - pa.y;
+  const aToward = Math.cos(ha) * abx + Math.sin(ha) * aby;
+  const bToward = Math.cos(hb) * -abx + Math.sin(hb) * -aby;
+  if (aToward > 8 && aToward >= bToward) return a;
+  if (bToward > 8 && bToward > aToward) return b;
+  return a.id < b.id ? b : a;
 }
 
 function pointAlongLoop(points: readonly WorldPoint[], t: number): WorldPoint {
@@ -116,7 +181,7 @@ function pointAlongLoop(points: readonly WorldPoint[], t: number): WorldPoint {
     segLens.push(len);
     total += len;
   }
-  let target = t * total;
+  let target = ((t % 1) + 1) % 1 * total;
   for (let i = 0; i < segLens.length; i++) {
     const len = segLens[i]!;
     if (target <= len) {

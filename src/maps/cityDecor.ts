@@ -118,15 +118,18 @@ export function cityProps(): CityProp[] {
         depth: 2,
       });
     }
-    const pad = house.parking[0];
+    const pad = house.parking[1] ?? null;
     if (pad && i % 3 !== 2) {
-      const ns = isNSStreet(house.stop.c);
+      const ns = isNSStreet(house.stop.c) || Math.abs(pad.c - house.stop.c) === 0;
       parkCarOnPad(props, pad, i % 2 === 0 ? "tex-car" : "tex-car-2", ns);
     }
   });
 
+  // Leave Kindling's curb-side stall empty for the van; decorate farther pads only.
+  const shopStall = `${CITY.shopSpawn.c},${CITY.shopSpawn.r}`;
   CITY.shopLot.parking.forEach((pad, i) => {
-    if (i % 2 === 1) return;
+    if (`${pad.c},${pad.r}` === shopStall) return;
+    if (i % 2 === 0) return;
     parkCarOnPad(props, pad, i % 4 === 0 ? "tex-car" : "tex-car-2", isNSStreet(pad.c + 1) || isNSStreet(pad.c - 1));
   });
 
