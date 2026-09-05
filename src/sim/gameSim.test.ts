@@ -333,18 +333,22 @@ describe("GameSim order loops", () => {
     expect(sim.snapshot().run?.nextStopId).toBe("house-2");
   });
 
-  it("holds a bag tap through the post-ID interact lock instead of dropping it", () => {
+  it("does not auto-skip bag/photo when ID click-through arrives during the lock", () => {
     const sim = GameSim.create({ seed: 4, autoSpawn: false });
     fillTicket(sim, "delivery", { destinationId: "house-1", ageOk: true });
     sim.hitTheRoad();
     startDoor(sim, "house-1");
     stepDropoff(sim); // ask
-    sim.interact(); // check ID — arms short lock
+    sim.interact(); // check ID — arms full click-through lock
     expect(sim.snapshot().dropoff.actionLabel).toBe("HAND BAG");
-    sim.queueInteract(); // bag tap while still locked
+    expect(sim.snapshot().dropoff.interactArmed).toBe(false);
+    sim.queueInteract(); // click-through / double-tap during lock — must discard
     sim.tick(16);
     expect(sim.snapshot().dropoff.actionLabel).toBe("HAND BAG");
     sim.tick(NPC_INTERACT_COOLDOWN_MS);
+    expect(sim.snapshot().dropoff.actionLabel).toBe("HAND BAG");
+    expect(sim.snapshot().dropoff.interactArmed).toBe(true);
+    stepDropoff(sim);
     expect(sim.snapshot().dropoff.actionLabel).toBe("PHOTO");
   });
 

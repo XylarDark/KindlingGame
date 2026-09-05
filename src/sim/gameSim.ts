@@ -22,7 +22,7 @@ import {
 } from "./constants";
 import { ageForSeed, emptyDropoff, idCardFor, type DropoffPhase, type DropoffView } from "./dropoff";
 import { destLabel, isOpen, needsFetch, tabletQueue, type Order, type OrderType } from "./orders";
-import { advanceRoute, lerpAngle, routeWorldPoints, type WorldPoint } from "./driveRoute";
+import { advanceRoute, lerpAngle, routeWorldPoints, snapPathToDriveLanes, type WorldPoint } from "./driveRoute";
 import { findPath } from "./pathfinding";
 import { generateCustomerName } from "./names";
 import { isDeliveryLate, scoreForComplete, scoreForFail } from "./scoring";
@@ -858,7 +858,7 @@ export class GameSim {
     const start = CITY.walkable[from.r]?.[from.c] ? from : CITY.shopSpawn;
     const goal = worldToTile(target.x, target.y);
     const cells = findPath(CITY.walkable, start, goal);
-    this.driveRoute = routeWorldPoints(cells);
+    this.driveRoute = routeWorldPoints(snapPathToDriveLanes(cells));
     // Final point is the parking stall center — no lane offset.
     if (this.driveRoute.length > 0) {
       this.driveRoute[this.driveRoute.length - 1] = { x: target.x, y: target.y };
@@ -895,8 +895,8 @@ export class GameSim {
     this.vehicle.x = clamp(step.x, TILE, MAP_PX_W - TILE);
     this.vehicle.y = clamp(step.y, TILE, MAP_PX_H - TILE);
     this.driveWaypoint = step.waypoint;
-    // Ease the van model through corners instead of snapping the heading.
-    const turn = 1 - Math.exp(-dt * 5.5);
+    // Ease through 90° corners like ambient traffic — segment heading, short lerp (no spin).
+    const turn = 1 - Math.exp(-dt * 8);
     this.vehicleHeading = lerpAngle(this.vehicleHeading, step.heading, turn);
     if (step.arrived || dist(this.vehicle.x, this.vehicle.y, target.x, target.y) <= PARK_ARRIVE_RADIUS) {
       this.parkAt(target);
@@ -1104,11 +1104,8 @@ export class GameSim {
   private continueDropoff(): void {
     const d = this.dropoff;
     if (!d) return;
-    if (this.clock.gameMs < this.dropoffInteractReadyAt) {
-      // Keep the tap — otherwise post-ID bag/photo presses vanish during the short lock.
-      this.queuedInteract = true;
-      return;
-    }
+    // Drop taps during the lock — re-queuing auto-skipped bag/photo after ID click-through.
+    if (this.clock.gameMs < this.dropoffInteractReadyAt) return;
 
     if (d.phase === "atCurb") {
       d.phase = "calling";
@@ -1152,7 +1149,8 @@ export class GameSim {
       }
       d.idChecked = true;
       this.toast = `ID checks out — 19+. Hand ${order.customerName} the bag.`;
-      this.armDropoffInteract();
+      // Full cooldown so the ID tap cannot click through into bag/photo.
+      this.armDropoffInteract(NPC_INTERACT_COOLDOWN_MS);
       return;
     }
     if (!d.bagHanded) {
@@ -1176,9 +1174,8 @@ export class GameSim {
     }
   }
 
-  private armDropoffInteract(): void {
-    // Short lock so one tap can't double-advance; long enough to survive ID modal arming.
-    this.dropoffInteractReadyAt = this.clock.gameMs + Math.min(220, NPC_INTERACT_COOLDOWN_MS);
+  private armDropoffInteract(ms = Math.min(220, NPC_INTERACT_COOLDOWN_MS)): void {
+    this.dropoffInteractReadyAt = this.clock.gameMs + ms;
   }
 
   private beginCurb(stopId: string): void {
@@ -1268,6 +1265,8 @@ export class GameSim {
       canAct = true;
       hint = `Tap the bag in their hands to take the photo.`;
     }
+    const interactArmed = this.clock.gameMs >= this.dropoffInteractReadyAt;
+    if (!interactArmed) canAct = false;
     return {
       phase: d.phase,
       orderId: d.orderId,
@@ -1289,6 +1288,7 @@ export class GameSim {
         d.phase === "atDoor" && d.idAsked && !d.idChecked && order
           ? idCardFor(order.customerName, order.idAge)
           : null,
+      interactArmed,
     };
   }
 

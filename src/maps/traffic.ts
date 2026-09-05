@@ -1,6 +1,6 @@
 import { CITY, TILE, isEWStreet, isNSStreet } from "./cityT0";
 import type { TileCell } from "../sim/pathfinding";
-import { routeWorldPoints, type WorldPoint } from "../sim/driveRoute";
+import { orthogonalLanePath, routeIsOrthogonal, type WorldPoint } from "../sim/driveRoute";
 
 export interface TrafficLoop {
   id: string;
@@ -27,8 +27,6 @@ type CarState = {
   key: string;
   depth: number;
   speed: number;
-  /** Lateral bypass offset in world px (left of travel). */
-  bypass: number;
 };
 
 export type TrafficObstacle = {
@@ -47,9 +45,6 @@ export const TRAFFIC_LOOK_AHEAD = 180;
 
 /** How far traffic looks for the delivery van to stop / go around. */
 export const TRAFFIC_VAN_DETECT = 240;
-
-/** Lateral curb nudge when yielding (right of travel — never into oncoming). */
-export const TRAFFIC_BYPASS = 28;
 
 /** Lateral lane tolerance when deciding a car is “in front”. */
 export const TRAFFIC_LANE_WIDTH = 72;
@@ -146,8 +141,8 @@ export function buildTrafficLoops(max = TRAFFIC_LOOP_MAX): TrafficLoop[] {
           const key = `${north.south},${west.east}-${south.north},${east.west}`;
           if (seen.has(key)) continue;
           seen.add(key);
-          // Tiles are already the legal one-way lanes — keep a light curb bias only.
-          const points = routeWorldPoints(cells, 12);
+          // Tile centers on legal one-way lanes — orthogonal only, no corner cutting.
+          const points = orthogonalLanePath(cells);
           loops.push({ id: `loop-${loops.length}`, points, length: loopLength(points) });
         }
       }
@@ -184,7 +179,6 @@ export function trafficCars(
         key: CAR_KEYS[(i + k) % CAR_KEYS.length]!,
         depth: 5,
         speed,
-        bypass: 0,
       });
     }
   });
@@ -220,7 +214,7 @@ export function trafficCars(
     if (!moved) break;
   }
 
-  // Van awareness: stop if too close ahead, swing around if the van is coming, never overlap.
+  // Van awareness: stop if too close ahead — stay in lane (no swing into oncoming).
   if (obstacle) {
     for (const car of states) {
       const p = pointAlongLoop(car.loop.points, car.t);
@@ -237,18 +231,12 @@ export function trafficCars(
 
       if (gap < TRAFFIC_VAN_DETECT && Math.abs(lateral) < TRAFFIC_LANE_WIDTH * 1.35) {
         const closing = forward > 24 || (vanToward > 24 && forward > -40);
-        if (closing) {
-          // Nudge toward the curb (right of travel); never into the oncoming lane.
-          car.bypass = TRAFFIC_BYPASS;
-          if (forward > 16 && gap < TRAFFIC_VAN_DETECT * 0.85) {
-            // Stop / hold back when the van is ahead in our lane.
-            const hold = Math.max(4, (TRAFFIC_MIN_SEP * 1.35 - Math.min(gap, TRAFFIC_MIN_SEP * 1.35)) + 8);
-            const step = hold / Math.max(TILE, car.loop.length);
-            car.t = ((car.t - step) % 1 + 1) % 1;
-            car.speed = 0;
-          } else if (vanToward > 30 && gap < TRAFFIC_VAN_DETECT * 0.7) {
-            car.bypass = TRAFFIC_BYPASS;
-          }
+        if (closing && forward > 8) {
+          // Hold back in-lane when the van is ahead or closing — never change lanes.
+          const hold = Math.max(4, (TRAFFIC_MIN_SEP * 1.35 - Math.min(gap, TRAFFIC_MIN_SEP * 1.35)) + 8);
+          const step = hold / Math.max(TILE, car.loop.length);
+          car.t = ((car.t - step) % 1 + 1) % 1;
+          car.speed = 0;
         }
       }
 
@@ -257,7 +245,6 @@ export function trafficCars(
         const step = need / Math.max(TILE, car.loop.length);
         if (forward >= 0) car.t = ((car.t - step) % 1 + 1) % 1;
         else car.t = (car.t + step) % 1;
-        car.bypass = Math.max(car.bypass, TRAFFIC_BYPASS);
       }
     }
   }
@@ -265,13 +252,10 @@ export function trafficCars(
   return states.map((car) => {
     const pos = pointAlongLoop(car.loop.points, car.t);
     const angle = headingAlongLoop(car.loop.points, car.t, car.loop.length);
-    // Right of travel = curb side on one-way lanes.
-    const rightX = Math.sin(angle);
-    const rightY = -Math.cos(angle);
     return {
       id: car.id,
-      x: pos.x + rightX * car.bypass,
-      y: pos.y + rightY * car.bypass,
+      x: pos.x,
+      y: pos.y,
       key: car.key,
       depth: car.depth,
       angle,
@@ -370,12 +354,30 @@ function pointAlongLoop(points: readonly WorldPoint[], t: number): WorldPoint {
   return closed[closed.length - 1]!;
 }
 
-function headingAlongLoop(points: readonly WorldPoint[], t: number, loopLen?: number): number {
-  const lookPx = 64;
-  const len = Math.max(TILE, loopLen ?? approxLoopLen(points));
-  const dt = lookPx / len;
-  const a = pointAlongLoop(points, t);
-  const b = pointAlongLoop(points, (t + dt) % 1);
+function headingAlongLoop(points: readonly WorldPoint[], t: number, _loopLen?: number): number {
+  if (points.length < 2) return 0;
+  const closed = [...points, points[0]!];
+  let total = 0;
+  const segLens: number[] = [];
+  for (let i = 1; i < closed.length; i++) {
+    const len = Math.hypot(closed[i]!.x - closed[i - 1]!.x, closed[i]!.y - closed[i - 1]!.y);
+    segLens.push(len);
+    total += len;
+  }
+  if (total <= 0) return 0;
+  let target = ((t % 1) + 1) % 1 * total;
+  for (let i = 0; i < segLens.length; i++) {
+    const len = segLens[i]!;
+    if (target <= len || i === segLens.length - 1) {
+      const a = closed[i]!;
+      const b = closed[i + 1]!;
+      // Face along this segment only — matching ambient cars, no cross-corner aim.
+      return Math.atan2(b.y - a.y, b.x - a.x);
+    }
+    target -= len;
+  }
+  const a = closed[closed.length - 2]!;
+  const b = closed[closed.length - 1]!;
   return Math.atan2(b.y - a.y, b.x - a.x);
 }
 

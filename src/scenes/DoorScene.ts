@@ -205,8 +205,8 @@ export class DoorScene extends Phaser.Scene {
     }
     this.customer.setDepth(nextAsk ? 11 : 5);
 
-    const canAsk = !idModal && nextAsk;
-    const canBag = !idModal && (nextHand || nextPhoto);
+    const canAsk = !idModal && nextAsk && drop.interactArmed;
+    const canBag = !idModal && (nextHand || nextPhoto) && drop.interactArmed;
     armHit(this.customer, canAsk, PERSON_HIT_PAD);
     armHit(this.bag, canBag, BAG_HIT_PAD);
 

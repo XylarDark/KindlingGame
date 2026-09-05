@@ -9,12 +9,22 @@ import {
   leadTrafficSpeed,
   trafficCars,
 } from "./traffic";
+import { routeIsOrthogonal } from "../sim/driveRoute";
 
 describe("city traffic", () => {
-  it("builds ambient road loops for cosmetic cars", () => {
+  it("keeps every traffic loop strictly in-lane — no diagonal corner cuts", () => {
     const loops = buildTrafficLoops(TRAFFIC_LOOP_MAX);
     expect(loops.length).toBeGreaterThan(0);
-    expect(loops.every((loop) => loop.points.length >= 3 && loop.length > 0)).toBe(true);
+    for (const loop of loops) {
+      expect(routeIsOrthogonal(loop.points), loop.id).toBe(true);
+      // Closed loop last→first must also be axis-aligned.
+      const a = loop.points[loop.points.length - 1]!;
+      const b = loop.points[0]!;
+      expect(
+        Math.abs(a.x - b.x) <= 1.5 || Math.abs(a.y - b.y) <= 1.5,
+        `${loop.id} close`,
+      ).toBe(true);
+    }
   });
 
   it("spawns about 25% fewer cars than a full loop fill", () => {
@@ -85,7 +95,7 @@ describe("city traffic", () => {
     }
   });
 
-  it("swings around or holds when the delivery van is ahead in lane", () => {
+  it("holds back for the delivery van without leaving the lane", () => {
     const loops = buildTrafficLoops(TRAFFIC_LOOP_MAX);
     const base = trafficCars(4_000, loops);
     expect(base.length).toBeGreaterThan(0);
@@ -100,13 +110,11 @@ describe("city traffic", () => {
     expect(reacted).toBeTruthy();
     const gap = Math.hypot(reacted!.x - van.x, reacted!.y - van.y);
     expect(gap).toBeGreaterThanOrEqual(TRAFFIC_MIN_SEP - 1);
-    // Either stopped behind (same-ish lane) or laterally offset away from the van.
+    // Stay in-lane: little lateral drift from the pre-react pose.
     const lateral = Math.abs(
       -(Math.sin(lead.angle) * (reacted!.x - lead.x)) + Math.cos(lead.angle) * (reacted!.y - lead.y),
     );
-    const retreated =
-      Math.cos(lead.angle) * (reacted!.x - lead.x) + Math.sin(lead.angle) * (reacted!.y - lead.y) < -2;
-    expect(lateral > 20 || retreated || gap > TRAFFIC_MIN_SEP + 10).toBe(true);
+    expect(lateral).toBeLessThan(12);
   });
 
   it("reports lead speed when a car is ahead in the same lane", () => {

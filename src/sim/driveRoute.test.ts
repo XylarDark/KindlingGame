@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   advanceRoute,
-  headingAlongRoute,
+  driveLaneCell,
   laneWorldPoint,
   lerpAngle,
+  orthogonalLanePath,
   routeIsOrthogonal,
   routeWorldPoints,
   rightOffset,
+  segmentHeading,
 } from "./driveRoute";
 
 describe("driveRoute", () => {
@@ -56,24 +58,42 @@ describe("driveRoute", () => {
     expect(routeIsOrthogonal(route)).toBe(true);
   });
 
-  it("turns the heading gradually through corners via look-ahead", () => {
+  it("builds orthogonal lane-center paths that never chord a corner", () => {
+    const path = orthogonalLanePath([
+      { c: 2, r: 4 },
+      { c: 3, r: 4 },
+      { c: 4, r: 4 },
+      { c: 4, r: 5 },
+      { c: 4, r: 6 },
+    ]);
+    expect(routeIsOrthogonal(path)).toBe(true);
+    expect(path.length).toBeGreaterThanOrEqual(5);
+  });
+
+  it("snaps eastbound travel onto the south lane of a two-tile street", () => {
+    const snapped = driveLaneCell({ c: 5, r: 1 }, { c: 6, r: 1 });
+    expect(snapped.c).toBe(5);
+    // Eastbound must prefer the southern tile when a pair exists.
+    expect(snapped.r).toBeGreaterThanOrEqual(1);
+  });
+
+  it("faces along the current leg only so corners are 90° turns, not spins", () => {
     const route = routeWorldPoints([
       { c: 2, r: 4 },
       { c: 5, r: 4 },
       { c: 5, r: 7 },
     ]);
-    const start = headingAlongRoute(route, route[0]!.x, route[0]!.y, 1, false, 20);
-    const late = headingAlongRoute(
-      route,
-      route[route.length - 2]!.x,
-      route[route.length - 2]!.y,
-      route.length - 2,
-      false,
-      80,
-    );
-    // Early stretch faces east (~0); near the southbound leg look-ahead rotates toward +π/2.
+    const start = segmentHeading(route, route[0]!.x, route[0]!.y, 1);
     expect(Math.abs(start)).toBeLessThan(0.4);
-    expect(Math.abs(late)).toBeGreaterThan(0.6);
-    expect(lerpAngle(0, Math.PI, 0.5)).toBeCloseTo(Math.PI / 2, 5);
+    // Last leg is southbound.
+    const last = route[route.length - 1]!;
+    const prev = route[route.length - 2]!;
+    const onSouth = segmentHeading(route, prev.x, prev.y, route.length - 1);
+    expect(Math.abs(onSouth - Math.atan2(last.y - prev.y, last.x - prev.x))).toBeLessThan(0.05);
+    // 90° lerp takes the short way — never a full spin.
+    const mid = lerpAngle(0, Math.PI / 2, 0.5);
+    expect(mid).toBeGreaterThan(0.2);
+    expect(mid).toBeLessThan(1.4);
+    expect(Math.abs(lerpAngle(0, Math.PI, 0.5))).toBeCloseTo(Math.PI / 2, 5);
   });
 });

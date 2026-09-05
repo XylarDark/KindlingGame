@@ -25,6 +25,8 @@ export interface DropoffView {
   canAct: boolean;
   hint: string;
   idCard: IdCard | null;
+  /** False while the post-step lock is active (blocks click-through after ID). */
+  interactArmed: boolean;
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -51,6 +53,7 @@ export function emptyDropoff(): DropoffView {
     canAct: false,
     hint: "",
     idCard: null,
+    interactArmed: true,
   };
 }
 
