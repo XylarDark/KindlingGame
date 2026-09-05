@@ -74,64 +74,91 @@ export function generateTextures(scene: Phaser.Scene): void {
 }
 
 function roadH(scene: Phaser.Scene): void {
-  bake(scene, "tex-road", 64, 64, (g) => {
-    cells(g, 0, 0, 16, 16, Pal.asphaltDark);
-    cells(g, 0, 2, 16, 12, Pal.asphalt);
-    cells(g, 0, 3, 16, 10, Pal.asphaltLite);
+  // North lane of a 2-tile EW street — curb only on the outer (top) edge.
+  // Dashes use period 8 so seams tile into one continuous center line.
+  bake(scene, "tex-road-hn", 64, 64, (g) => {
+    cells(g, 0, 0, 16, 16, Pal.asphalt);
     cells(g, 0, 0, 16, 1, Pal.curb);
+    for (let x = 0; x < 16; x += 8) cells(g, x, 15, 4, 1, Pal.dash);
+  });
+  // South lane — curb on outer (bottom) edge; dashes meet the north lane.
+  bake(scene, "tex-road-hs", 64, 64, (g) => {
+    cells(g, 0, 0, 16, 16, Pal.asphalt);
     cells(g, 0, 15, 16, 1, Pal.curb);
-    for (let x = 1; x < 16; x += 5) cells(g, x, 7, 3, 1, Pal.dash);
-    cells(g, 4, 5, 1, 1, Pal.asphaltDark);
-    cells(g, 11, 10, 1, 1, Pal.asphaltDark);
+    for (let x = 0; x < 16; x += 8) cells(g, x, 0, 4, 1, Pal.dash);
+  });
+  // Legacy alias.
+  bake(scene, "tex-road", 64, 64, (g) => {
+    cells(g, 0, 0, 16, 16, Pal.asphalt);
+    cells(g, 0, 0, 16, 1, Pal.curb);
+    for (let x = 0; x < 16; x += 8) cells(g, x, 8, 4, 1, Pal.dash);
   });
 }
 
 function roadV(scene: Phaser.Scene): void {
+  bake(scene, "tex-road-vw", 64, 64, (g) => {
+    cells(g, 0, 0, 16, 16, Pal.asphalt);
+    cells(g, 0, 0, 1, 16, Pal.curb);
+    for (let y = 0; y < 16; y += 8) cells(g, 15, y, 1, 4, Pal.dash);
+  });
+  bake(scene, "tex-road-ve", 64, 64, (g) => {
+    cells(g, 0, 0, 16, 16, Pal.asphalt);
+    cells(g, 15, 0, 1, 16, Pal.curb);
+    for (let y = 0; y < 16; y += 8) cells(g, 0, y, 1, 4, Pal.dash);
+  });
   bake(scene, "tex-road-v", 64, 64, (g) => {
-    cells(g, 0, 0, 16, 16, Pal.asphaltDark);
-    cells(g, 2, 0, 12, 16, Pal.asphalt);
-    cells(g, 3, 0, 10, 16, Pal.asphaltLite);
+    cells(g, 0, 0, 16, 16, Pal.asphalt);
     cells(g, 0, 0, 1, 16, Pal.curb);
     cells(g, 15, 0, 1, 16, Pal.curb);
-    for (let y = 1; y < 16; y += 5) cells(g, 7, y, 1, 3, Pal.dash);
+    for (let y = 0; y < 16; y += 8) cells(g, 8, y, 1, 4, Pal.dash);
   });
 }
 
 function roadCross(scene: Phaser.Scene): void {
+  // 2×2 intersection: continuous asphalt only. No per-tile curb boxes — those
+  // read as a grid. Lane dashes meet at the junction center.
+  const quad = (key: string, north: boolean, west: boolean): void => {
+    bake(scene, key, 64, 64, (g) => {
+      cells(g, 0, 0, 16, 16, Pal.asphalt);
+      for (let i = 0; i < 16; i += 8) {
+        if (north) cells(g, i, 15, 4, 1, Pal.dash);
+        else cells(g, i, 0, 4, 1, Pal.dash);
+        if (west) cells(g, 15, i, 1, 4, Pal.dash);
+        else cells(g, 0, i, 1, 4, Pal.dash);
+      }
+    });
+  };
+  quad("tex-road-x-nw", true, true);
+  quad("tex-road-x-ne", true, false);
+  quad("tex-road-x-sw", false, true);
+  quad("tex-road-x-se", false, false);
   bake(scene, "tex-road-x", 64, 64, (g) => {
-    cells(g, 0, 0, 16, 16, Pal.asphaltDark);
-    cells(g, 2, 2, 12, 12, Pal.asphalt);
-    cells(g, 3, 3, 10, 10, Pal.asphaltLite);
-    cells(g, 0, 7, 16, 1, Pal.dash);
-    cells(g, 7, 0, 1, 16, Pal.dash);
+    cells(g, 0, 0, 16, 16, Pal.asphalt);
   });
 }
 
 function parkingStall(scene: Phaser.Scene): void {
+  // Soft driveway pad — asphalt that meets the street, not a framed parking box.
   bake(scene, "tex-parking", 64, 64, (g) => {
-    cells(g, 0, 0, 16, 16, Pal.asphaltDark);
-    cells(g, 1, 1, 14, 14, Pal.asphalt);
-    cells(g, 2, 2, 12, 12, Pal.asphaltLite);
-    cells(g, 0, 0, 16, 1, Pal.curb);
-    cells(g, 0, 15, 16, 1, Pal.curb);
-    cells(g, 0, 0, 1, 16, Pal.curb);
-    cells(g, 15, 0, 1, 16, Pal.curb);
-    cells(g, 3, 7, 10, 1, Pal.dash);
-    cells(g, 7, 3, 1, 10, 0x6a6860);
+    cells(g, 0, 0, 16, 16, Pal.grass);
+    cells(g, 0, 1, 16, 14, Pal.asphalt);
+    cells(g, 0, 1, 16, 1, Pal.asphaltLite);
+    cells(g, 0, 14, 16, 1, Pal.asphaltDark);
   });
 }
 
 function grass(scene: Phaser.Scene): void {
-  bake(scene, "tex-wall", 64, 64, (g) => {
+  const speck = (g: G, seed: number): void => {
     cells(g, 0, 0, 16, 16, Pal.grass);
-    for (let i = 0; i < 18; i++) {
-      const x = (i * 3 + 1) % 16;
-      const y = (i * 5 + 2) % 16;
-      cells(g, x, y, 1, 1, i % 2 === 0 ? Pal.grassLite : Pal.grassDark);
+    for (let i = 0; i < 9; i++) {
+      const x = (i * 5 + seed * 3 + 2) % 16;
+      const y = (i * 7 + seed * 5 + 3) % 16;
+      cells(g, x, y, 1, 1, i % 3 === 0 ? Pal.grassLite : Pal.grassDark);
     }
-    cells(g, 2, 12, 3, 1, Pal.grassDark);
-    cells(g, 11, 4, 2, 1, Pal.grassDark);
-  });
+  };
+  bake(scene, "tex-wall", 64, 64, (g) => speck(g, 0));
+  bake(scene, "tex-wall-2", 64, 64, (g) => speck(g, 2));
+  bake(scene, "tex-wall-3", 64, 64, (g) => speck(g, 5));
 }
 
 function shopTile(scene: Phaser.Scene): void {
@@ -716,13 +743,47 @@ function cog(scene: Phaser.Scene): void {
 }
 
 function phone(scene: Phaser.Scene): void {
-  bake(scene, "tex-phone", 56, 96, (g) => {
-    cells(g, 2, 2, 10, 22, Pal.ink);
-    cells(g, 3, 3, 8, 20, Pal.screen);
-    cells(g, 4, 5, 6, 14, Pal.screen);
-    cells(g, 5, 7, 4, 9, Pal.leaf);
-    cells(g, 6, 10, 2, 2, Pal.lime);
-    cells(g, 6, 3, 2, 1, Pal.dusk);
-    cells(g, 6, 20, 2, 1, Pal.cream);
+  // Standard smartphone: tall chassis, thin bezel, notch/island, side buttons, home bar.
+  bake(scene, "tex-phone", 56, 112, (g) => {
+    const body = Pal.ink;
+    const edge = Pal.dusk;
+    const screen = 0x152028;
+    // Soft shadow
+    cells(g, 2, 3, 12, 25, Pal.shadow);
+    // Chassis with rounded corners
+    cells(g, 2, 2, 12, 26, body);
+    cells(g, 3, 1, 10, 1, body);
+    cells(g, 3, 28, 10, 1, body);
+    cells(g, 1, 3, 1, 22, body);
+    cells(g, 14, 3, 1, 22, body);
+    // Highlight rim
+    cells(g, 3, 2, 10, 1, edge);
+    cells(g, 2, 3, 1, 1, edge);
+    // Volume / mute / power
+    cells(g, 0, 7, 1, 2, edge);
+    cells(g, 0, 10, 1, 3, edge);
+    cells(g, 0, 14, 1, 3, edge);
+    cells(g, 15, 11, 1, 4, edge);
+    // Screen
+    cells(g, 3, 3, 10, 22, Pal.screen);
+    cells(g, 3, 3, 10, 22, screen);
+    // Dynamic island + camera
+    cells(g, 5, 4, 6, 2, body);
+    cells(g, 6, 4, 1, 2, Pal.denimDark);
+    cells(g, 9, 4, 1, 2, 0x1a3040);
+    // Status icons
+    cells(g, 4, 7, 1, 1, Pal.creamSoft);
+    cells(g, 6, 7, 2, 1, Pal.creamSoft);
+    cells(g, 11, 7, 1, 1, Pal.lime);
+    // Wallpaper + app icons
+    cells(g, 4, 9, 8, 11, 0x1e3340);
+    cells(g, 5, 10, 2, 2, Pal.leaf);
+    cells(g, 9, 10, 2, 2, Pal.denim);
+    cells(g, 5, 13, 2, 2, Pal.amber);
+    cells(g, 9, 13, 2, 2, Pal.rust);
+    cells(g, 5, 16, 6, 3, Pal.leafDark);
+    cells(g, 6, 17, 4, 1, Pal.lime);
+    // Home indicator
+    cells(g, 6, 23, 4, 1, Pal.creamSoft);
   });
 }

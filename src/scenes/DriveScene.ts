@@ -13,7 +13,7 @@ import {
 } from "../maps/cityT0";
 import { cityProps, cityStreetLamps, type CityLamp } from "../maps/cityDecor";
 import { buildTrafficLoops, trafficCars, type TrafficLoop } from "../maps/traffic";
-import { enableItemHit, syncItemHit } from "../input/hit";
+import { enableItemHit } from "../input/hit";
 import { PEOPLE_SCALE } from "../maps/shopT0";
 import { getSim } from "../session";
 import { HANDOFF_RADIUS } from "../sim/constants";
@@ -171,7 +171,6 @@ export class DriveScene extends Phaser.Scene {
     if (this.shopImg.input) this.shopImg.input.enabled = driving;
     this.shopImg.setTint(flashShop && canTapShop ? 0xb8ffb0 : 0xffffff);
     this.shopCaption.setVisible(driving);
-    if (this.shopCaption.input) this.shopCaption.input.enabled = canTapShop;
     this.shopCaption.setAlpha(1);
     if (snap.run?.nextStopId) {
       this.shopCaption.setText("Kindling");
@@ -188,7 +187,6 @@ export class DriveScene extends Phaser.Scene {
         this.shopCaption.setColor(nearShop ? Color.inkHex : Color.creamHex);
       }
     }
-    syncItemHit(this.shopCaption);
   }
 
   private paintDayNight(snap: SimSnapshot): void {
@@ -249,7 +247,8 @@ export class DriveScene extends Phaser.Scene {
         const x = c * TILE + TILE / 2;
         const y = r * TILE + TILE / 2;
         if (houseTiles.has(`${c},${r}`) || (kind === "shop" && shopTiles.has(`${c},${r}`))) {
-          this.add.image(x, y, "tex-wall").setDisplaySize(TILE, TILE).setDepth(0);
+          const grass = ["tex-wall", "tex-wall-2", "tex-wall-3"][(c * 3 + r * 5) % 3]!;
+          this.add.image(x, y, grass).setDisplaySize(TILE, TILE).setDepth(0);
           continue;
         }
         if (kind === "parking") {
@@ -258,16 +257,13 @@ export class DriveScene extends Phaser.Scene {
         }
         const key =
           kind === "wall"
-            ? "tex-wall"
+            ? ["tex-wall", "tex-wall-2", "tex-wall-3"][(c * 3 + r * 5) % 3]!
             : kind === "shop"
               ? "tex-shop"
               : kind === "house"
                 ? HOUSE_TEX[(c + r) % HOUSE_TEX.length]!
                 : roadTextureKey(kinds, r, c);
         this.add.image(x, y, key).setDisplaySize(TILE, TILE).setDepth(0);
-        if (kind === "wall" && (c + r) % 5 === 2) {
-          this.add.image(x, y - 8, "tex-tree").setDisplaySize(TILE, TILE).setDepth(1);
-        }
       }
     }
 
@@ -276,17 +272,17 @@ export class DriveScene extends Phaser.Scene {
       const tex = HOUSE_TEX[i % HOUSE_TEX.length]!;
       this.add
         .image(home.x, home.y, tex)
-        .setDisplaySize(house.lotW * TILE, house.lotH * TILE)
+        .setDisplaySize(house.lotW * TILE * 0.92, house.lotH * TILE * 0.88)
         .setDepth(1);
-      const num = addUiText(this, home.x, home.y - 12, houseTitle(house.id).replace("House ", ""), {
-        size: Type.heading,
+      const num = addUiText(this, home.x, home.y - 8, houseTitle(house.id).replace("House ", ""), {
+        size: Type.body,
         color: Color.creamHex,
         fontStyle: "700",
-        ...overlayStroke(16),
+        ...overlayStroke(12),
       })
         .setOrigin(0.5)
         .setDepth(2);
-      fitTypeToWidth(num, house.lotW * TILE - 28, 20);
+      fitTypeToWidth(num, house.lotW * TILE - 36, 16);
     });
 
     const shop = lotCenter(CITY.shopLot.origin, CITY.shopLot.w, CITY.shopLot.h);
@@ -320,11 +316,6 @@ export class DriveScene extends Phaser.Scene {
       .setOrigin(0.5, 0)
       .setDepth(8)
       .setVisible(false);
-    enableItemHit(this.shopCaption);
-    this.shopCaption.on("pointerdown", (p: Phaser.Input.Pointer) => {
-      p.event.stopPropagation();
-      this.returnToShop();
-    });
 
     this.streetLamps = cityStreetLamps();
     for (const lamp of this.streetLamps) {

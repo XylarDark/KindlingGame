@@ -282,15 +282,31 @@ export function doorstepWorld(house: HouseStop): { x: number; y: number } {
 }
 
 export function roadTextureKey(kinds: TileKind[][], r: number, c: number): string {
-  const road = (rr: number, cc: number) => {
+  const isRoadCell = (rr: number, cc: number): boolean => {
     const k = kinds[rr]?.[cc];
     return k === "road" || k === "parking" || (k === "shop" && CITY.walkable[rr]?.[cc]);
   };
-  const h = road(r, c - 1) || road(r, c + 1);
-  const v = road(r - 1, c) || road(r + 1, c);
-  if (h && v) return "tex-road-x";
-  if (v && !h) return "tex-road-v";
-  return "tex-road";
+  const ew = isEWStreet(r) && isRoadCell(r, c);
+  const ns = isNSStreet(c) && isRoadCell(r, c);
+  if (ew && ns) {
+    // 2×2 junction: pick the quadrant so curbs/crosswalks sit only on the outer rim.
+    const northOfPair = isEWStreet(r + 1);
+    const westOfPair = isNSStreet(c + 1);
+    if (northOfPair && westOfPair) return "tex-road-x-nw";
+    if (northOfPair) return "tex-road-x-ne";
+    if (westOfPair) return "tex-road-x-sw";
+    return "tex-road-x-se";
+  }
+  if (ew) {
+    // Two-tile EW street: north lane has curb on top; south has curb on bottom; center line meets in the middle.
+    const northOfPair = isEWStreet(r + 1);
+    return northOfPair ? "tex-road-hn" : "tex-road-hs";
+  }
+  if (ns) {
+    const westOfPair = isNSStreet(c + 1);
+    return westOfPair ? "tex-road-vw" : "tex-road-ve";
+  }
+  return "tex-road-hn";
 }
 
 export function pathToHouse(from: TileCell, houseId: string): TileCell[] {

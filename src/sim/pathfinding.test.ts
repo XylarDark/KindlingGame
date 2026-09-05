@@ -33,7 +33,13 @@ describe("pathfinding", () => {
         if (kind === "road" || kind === "shop") keys.add(roadTextureKey(CITY.kinds, r, c));
       }
     }
-    expect(keys.has("tex-road")).toBe(true);
-    expect(keys.has("tex-road-v")).toBe(true);
+    expect(keys.has("tex-road-hn") || keys.has("tex-road-hs")).toBe(true);
+    expect(keys.has("tex-road-vw") || keys.has("tex-road-ve")).toBe(true);
+    expect(
+      keys.has("tex-road-x-nw") ||
+        keys.has("tex-road-x-ne") ||
+        keys.has("tex-road-x-sw") ||
+        keys.has("tex-road-x-se"),
+    ).toBe(true);
   });
 });

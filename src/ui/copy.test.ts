@@ -29,7 +29,7 @@ describe("shop copy", () => {
     expect(driverReadyCopy(2)).toContain("2 packed bags");
     expect(interactButtonCopy("PHOTO")?.caption).toContain("photo");
     expect(interactButtonCopy("ASK ID")?.label).toBe("ASK FOR ID");
-    expect(interactButtonCopy("CHECK ID")?.caption).toContain("19+");
+    expect(interactButtonCopy("CHECK ID")?.caption).toContain("ID card");
     expect(interactButtonCopy("CALL")).toBeNull();
   });
 

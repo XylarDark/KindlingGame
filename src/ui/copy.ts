@@ -44,14 +44,14 @@ export function interactButtonCopy(
   switch (action) {
     case "HANDOFF":
       return { label: "HANDOFF", caption: "Give them the bag" };
-    case "PHOTO":
-      return { label: "PHOTO", caption: "Snap a photo of the bag" };
     case "ASK ID":
-      return { label: "ASK FOR ID", caption: "Ask the customer for ID" };
+      return { label: "ASK FOR ID", caption: "Tap the customer" };
     case "CHECK ID":
-      return { label: "CHECK ID", caption: "Confirm they are 19+" };
+      return { label: "CHECK ID", caption: "Tap the ID card" };
     case "HAND BAG":
-      return { label: "HAND BAG", caption: "Hand over the order" };
+      return { label: "HAND BAG", caption: "Tap the bag to hand over" };
+    case "PHOTO":
+      return { label: "PHOTO", caption: "Tap the bag for a photo" };
     case "PARK":
       return { label: "PARK", caption: "Park in the driveway" };
     default:

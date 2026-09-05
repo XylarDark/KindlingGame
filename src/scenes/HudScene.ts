@@ -1,9 +1,11 @@
 import Phaser from "phaser";
 import { getMusicPrefs, setMusicEnabled, setMusicVolume, syncMusicToClock } from "../audio/music";
+import { playCameraClick } from "../audio/sfx";
 import { clampInput } from "../input/controls";
 import { enableItemHit, syncItemHit } from "../input/hit";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import { getSim } from "../session";
+import { nightFactor, skyAt } from "../sim/dayNight";
 import type { SimSnapshot } from "../sim/gameSim";
 import { tutorialHints } from "../sim/tutorialHints";
 import { addHudButton, addPanel } from "../ui/chrome";
@@ -81,8 +83,8 @@ export class HudScene extends Phaser.Scene {
       .setDepth(20);
 
     this.phone = this.add
-      .image(GAME_WIDTH - 380, GAME_HEIGHT - 230, "tex-phone")
-      .setDisplaySize(168, 288)
+      .image(GAME_WIDTH - 140, GAME_HEIGHT - 220, "tex-phone")
+      .setDisplaySize(96, 192)
       .setDepth(22)
       .setVisible(false);
     enableItemHit(this.phone);
@@ -90,22 +92,19 @@ export class HudScene extends Phaser.Scene {
       p.event.stopPropagation();
       getSim().queueInteract();
     });
-    this.phoneCaption = addUiText(this, GAME_WIDTH - 380, GAME_HEIGHT - 70, "Call the customer", {
+    this.phoneCaption = addUiText(this, GAME_WIDTH - 220, GAME_HEIGHT - 220, "Tap to call", {
       size: Type.caption,
       color: Color.neonHex,
       fontStyle: "600",
       backgroundColor: "#1c1612ee",
-      padding: { x: 10, y: 4 },
+      padding: { x: 10, y: 6 },
+      align: "right",
+      wordWrap: { width: 200 },
       ...overlayStroke(15),
     })
-      .setOrigin(0.5, 0)
+      .setOrigin(1, 0.5)
       .setDepth(22)
       .setVisible(false);
-    enableItemHit(this.phoneCaption);
-    this.phoneCaption.on("pointerdown", (p: Phaser.Input.Pointer) => {
-      p.event.stopPropagation();
-      getSim().queueInteract();
-    });
 
     this.toastText = addUiText(this, GAME_WIDTH / 2, GAME_HEIGHT - 24, "", {
       size: Type.body,
@@ -229,8 +228,14 @@ export class HudScene extends Phaser.Scene {
     this.scoreText.setPosition(left, top);
     this.scoreCaption.setPosition(left, top + 56);
     this.clockText.setPosition(right, top);
-    this.phone.setPosition(GAME_WIDTH - 380 - inset.right, GAME_HEIGHT - 230 - inset.bottom);
-    this.phoneCaption.setPosition(GAME_WIDTH - 380 - inset.right, GAME_HEIGHT - 70 - inset.bottom);
+    const phoneX = GAME_WIDTH - 100 - inset.right;
+    const phoneY = GAME_HEIGHT - 210 - inset.bottom;
+    this.phone.setPosition(phoneX, phoneY);
+    this.phone.setDisplaySize(96, 192);
+    syncItemHit(this.phone);
+    // Call prompt stays glued to the left of the phone.
+    this.phoneCaption.setOrigin(1, 0.5);
+    this.phoneCaption.setPosition(phoneX - this.phone.displayWidth * 0.5 - 14, phoneY);
     this.toastText.setPosition(GAME_WIDTH / 2, bottom);
     this.padCenter = { x: 196 + inset.left, y: GAME_HEIGHT - 220 - inset.bottom };
     this.drawPad();
@@ -263,14 +268,15 @@ export class HudScene extends Phaser.Scene {
     if (showPhone) {
       if (!this.phone.input) enableItemHit(this.phone);
       else this.phone.input.enabled = true;
-      if (!this.phoneCaption.input) enableItemHit(this.phoneCaption);
-      else this.phoneCaption.input.enabled = true;
-      syncItemHit(this.phoneCaption);
     } else {
       this.phone.disableInteractive();
-      this.phoneCaption.disableInteractive();
     }
-    this.phoneCaption.setText(drop.phase === "calling" ? "Phone is ringing…" : "Call the customer");
+    const callName = drop.customerName ?? "customer";
+    this.phoneCaption.setText(
+      drop.phase === "calling" ? `Calling ${callName}…` : `Tap to call ${callName}`,
+    );
+    // Keep caption locked beside the phone every frame.
+    this.phoneCaption.setPosition(this.phone.x - this.phone.displayWidth * 0.5 - 14, this.phone.y);
     if (showPhone) {
       this.phone.setAlpha(drop.phase === "calling" ? 0.85 : flashPhone ? pulse : 1);
       this.phone.setTint(flashPhone && drop.phase !== "calling" ? 0xb8ffb0 : 0xffffff);
@@ -323,13 +329,19 @@ export class HudScene extends Phaser.Scene {
 
     if (drop.photoTaken && !this.sawPhoto) {
       this.sawPhoto = true;
-      this.flash.setAlpha(0.85);
-      this.tweens.add({ targets: this.flash, alpha: 0, duration: 220 });
+      playCameraClick(this.game);
+      const sky = skyAt(snap.gameMs);
+      const night = nightFactor(snap.gameMs) > 0.12 || sky.lampAlpha > 0.35;
+      if (night) {
+        this.flash.setAlpha(0.9);
+        this.tweens.add({ targets: this.flash, alpha: 0, duration: 280 });
+      }
     }
     if (!drop.photoTaken) this.sawPhoto = false;
 
     this.toastText.setText(snap.toast);
-    this.toastText.setVisible(!!snap.toast && !showId && snap.dropoff.phase !== "atDoor");
+    // Call guidance lives next to the phone — hide the bottom toast while it's up.
+    this.toastText.setVisible(!!snap.toast && !showId && snap.dropoff.phase !== "atDoor" && !showPhone);
 
     const driving = snap.playerRole === "driver" && !atDoor;
     this.padRing.setVisible(false);
@@ -337,11 +349,19 @@ export class HudScene extends Phaser.Scene {
     this.padLabel.setVisible(driving);
     if (driving) {
       this.padLabel
-        .setText(snap.autoDriving ? "Heading to stop…" : snap.run?.nextStopId ? "Parked — call from phone" : "Parked at Kindling — tap shop")
+        .setText(
+          snap.autoDriving
+            ? "Heading to stop…"
+            : showPhone
+              ? "Parked"
+              : snap.run?.nextStopId
+                ? "At the curb"
+                : "Parked at Kindling — tap shop",
+        )
         .setPosition(this.padCenter.x, this.padCenter.y - 40)
         .setOrigin(0.5, 1)
         .setAlpha(1)
-        .setBackgroundColor(flashNext?.kind === "phone" || flashNext?.kind === "shop" ? Color.limeHex : "#1c1612ee")
+        .setBackgroundColor(flashNext?.kind === "shop" ? Color.limeHex : "#1c1612ee")
         .setColor(Color.creamHex);
     }
     this.syncDoorScene(snap);

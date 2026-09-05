@@ -49,11 +49,21 @@ export function cityStreetLamps(): CityLamp[] {
   for (let r = 1; r < kinds.length - 1; r++) {
     for (let c = 1; c < kinds[r]!.length - 1; c++) {
       if (kinds[r]![c] !== "road") continue;
-      if (!isEWStreet(r) || !isNSStreet(c)) continue;
-      lamps.push({
-        x: c * TILE + 22,
-        y: r * TILE + 20,
-      });
+      // Sit lamps on the outer curb mid-block — not stacked on every intersection.
+      if (isEWStreet(r) && !isNSStreet(c) && c % 4 === 2) {
+        const southLane = isEWStreet(r - 1);
+        lamps.push({
+          x: c * TILE + TILE / 2,
+          y: southLane ? r * TILE + TILE - 10 : r * TILE + 10,
+        });
+      }
+      if (isNSStreet(c) && !isEWStreet(r) && r % 4 === 2) {
+        const eastLane = isNSStreet(c - 1);
+        lamps.push({
+          x: eastLane ? c * TILE + TILE - 10 : c * TILE + 10,
+          y: r * TILE + TILE / 2,
+        });
+      }
     }
   }
   return lamps;
@@ -76,6 +86,15 @@ function parkCarOnPad(
   });
 }
 
+function nextToRoad(kinds: typeof CITY.kinds, c: number, r: number): boolean {
+  return (
+    kinds[r]?.[c - 1] === "road" ||
+    kinds[r]?.[c + 1] === "road" ||
+    kinds[r - 1]?.[c] === "road" ||
+    kinds[r + 1]?.[c] === "road"
+  );
+}
+
 export function cityProps(): CityProp[] {
   const props: CityProp[] = [];
   const kinds = CITY.kinds;
@@ -90,14 +109,15 @@ export function cityProps(): CityProp[] {
       if (lots.has(`${c},${r}`)) continue;
 
       if (kind === "wall") {
-        if ((c + r) % 4 === 1) {
-          props.push({ x: x - 8, y: y - 10, key: trees[(c + r) % trees.length]!, depth: 1 });
+        // Sparse yard trees only — avoid a second tree grid fighting the lots.
+        if ((c * 11 + r * 7) % 17 === 3) {
+          props.push({ x: x - 6, y: y - 8, key: trees[(c + r) % trees.length]!, depth: 1 });
         }
-        if ((c * 7 + r * 3) % 11 === 2) {
-          props.push({ x: x + 18, y: y + 22, key: "tex-hydrant", depth: 2, display: { w: 36, h: 48 } });
+        if ((c * 7 + r * 3) % 19 === 5 && nextToRoad(kinds, c, r)) {
+          props.push({ x: x + 14, y: y + 18, key: "tex-hydrant", depth: 2, display: { w: 32, h: 44 } });
         }
-        if ((c + r * 5) % 13 === 4) {
-          props.push({ x, y: y + 16, key: "tex-bench", depth: 2, display: { w: 72, h: 32 } });
+        if ((c + r * 5) % 23 === 8 && nextToRoad(kinds, c, r)) {
+          props.push({ x, y: y + 14, key: "tex-bench", depth: 2, display: { w: 64, h: 28 } });
         }
       }
     }

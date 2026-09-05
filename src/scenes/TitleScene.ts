@@ -20,7 +20,7 @@ const STEPS = [
   },
   {
     title: "Hit the road",
-    body: "The van parks at each stop. Call from the lot, check ID, hand the bag, then photo. Tap the flashing driver when packed — or wait for another delivery.",
+    body: "The van parks at each stop. Call from the lot, tap them for ID, tap the bag to hand it over, then tap the bag in their hands for a photo. Tap the flashing driver when packed — or wait for another delivery.",
   },
 ];
 

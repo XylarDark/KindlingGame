@@ -907,8 +907,8 @@ export class GameSim {
         .map((id) => this.orderById(id))
         .find((o) => o?.destinationId === stopId && o.status === "onRun");
       this.toast = order
-        ? `Parked at ${destLabel(order)}. Call ${order.customerName} from your phone.`
-        : "Parked. Call from your phone.";
+        ? `Parked at ${destLabel(order)}.`
+        : "Parked.";
       return;
     }
     if (dist(this.vehicle.x, this.vehicle.y, target.x, target.y) <= HANDOFF_RADIUS) {
@@ -1076,7 +1076,7 @@ export class GameSim {
 
     if (!this.dropoff || this.dropoff.houseId !== stopId) {
       if (!atCurb) {
-        this.toast = `Park at ${houseTitle(stopId)}, then call the customer.`;
+        this.toast = `Park at ${houseTitle(stopId)}.`;
         return;
       }
       this.beginCurb(stopId);
@@ -1211,30 +1211,30 @@ export class GameSim {
     const arrived = !!d.customer && d.customer.x === d.customer.targetX && d.customer.y === d.customer.targetY;
     let actionLabel = "";
     let canAct = false;
-    let hint = order ? `Park at ${destLabel(order)} — ${order.customerName}.` : "Park on the pin, then call from your phone.";
+    let hint = order ? `Park at ${destLabel(order)} — ${order.customerName}.` : "Park on the pin.";
     if (d.phase === "atCurb") {
       actionLabel = "CALL";
       canAct = true;
-      hint = `Call ${order?.customerName ?? "the customer"} at ${order ? destLabel(order) : "this house"}.`;
+      hint = `Tap your phone to call ${order?.customerName ?? "the customer"}.`;
     } else if (d.phase === "calling") {
       actionLabel = "RINGING";
-      hint = `Calling ${order?.customerName ?? "customer"} at ${order ? destLabel(order) : "the house"}…`;
+      hint = `Calling ${order?.customerName ?? "customer"}…`;
     } else if (d.phase === "atDoor" && !d.idAsked) {
       actionLabel = "ASK ID";
       canAct = true;
-      hint = `Ask ${order?.customerName ?? "the customer"} for ID.`;
+      hint = `Tap ${order?.customerName ?? "the customer"} to ask for ID.`;
     } else if (d.phase === "atDoor" && !d.idChecked) {
       actionLabel = "CHECK ID";
       canAct = true;
-      hint = `Check ID for ${order?.customerName ?? "the customer"} — must be 19+.`;
+      hint = `Tap the ID card to confirm ${order?.customerName ?? "they"} are 19+.`;
     } else if (d.phase === "atDoor" && !d.bagHanded) {
       actionLabel = "HAND BAG";
       canAct = true;
-      hint = `Hand ${order?.customerName ?? "them"} the bag.`;
+      hint = `Tap the bag to hand it to ${order?.customerName ?? "them"}.`;
     } else if (d.phase === "atDoor") {
       actionLabel = "PHOTO";
       canAct = true;
-      hint = `Photo the bag for ${order?.customerName ?? "the drop"}.`;
+      hint = `Tap the bag in their hands to take the photo.`;
     }
     return {
       phase: d.phase,

@@ -2,13 +2,11 @@ import Phaser from "phaser";
 import { doorGrade } from "../art/dayNightGrade";
 import { applyDayNight, attachDayNight, dayNightFrom, type DayNightPipeline } from "../art/dayNightPipeline";
 import { paintDoorstep, DOORSTEP_DOOR_X, DOORSTEP_FLOOR_Y, DOORSTEP_PORCH } from "../art/doorstep";
-import { enableItemHit, syncItemHit } from "../input/hit";
 import { itemHitSize } from "../input/hitRect";
 import { BAG_SCALE, PEOPLE_SCALE, PERSON_DISPLAY_H } from "../maps/shopT0";
 import { getSim } from "../session";
 import { skyAt } from "../sim/dayNight";
 import type { SimSnapshot } from "../sim/gameSim";
-import { addHudButton, setButtonPulse } from "../ui/chrome";
 import { formatSlaClock, isSlaUrgent } from "../ui/copy";
 import { addUiText } from "../ui/text";
 import { Color, Type } from "../ui/theme";
@@ -19,8 +17,8 @@ import { designSafeInset, readCssSafeArea, VIEWFIT_EVENT, viewFromScale } from "
 const DOOR_BAG_SCALE = BAG_SCALE * 1.25;
 const DRIVER_X = DOORSTEP_DOOR_X - 160;
 const CUSTOMER_X = DOORSTEP_DOOR_X + 200;
-/** Extra pad so tapping the customer for HAND BAG always registers. */
-const PERSON_HIT_PAD = 72;
+const PERSON_HIT_PAD = 64;
+const BAG_HIT_PAD = 56;
 
 export class DoorScene extends Phaser.Scene {
   private backdrop!: Phaser.GameObjects.Graphics;
@@ -32,10 +30,10 @@ export class DoorScene extends Phaser.Scene {
   private bagCaption!: Phaser.GameObjects.Text;
   private youLabel!: Phaser.GameObjects.Text;
   private customerCaption!: Phaser.GameObjects.Text;
-  private askIdBtn!: Phaser.GameObjects.Container;
-  private handBagBtn!: Phaser.GameObjects.Container;
+  private floorY = 0;
   private lastHouse = "";
   private lastSkyKey = "";
+  private lastBagHanded: boolean | null = null;
   private lighting?: DayNightPipeline;
 
   constructor() {
@@ -58,18 +56,16 @@ export class DoorScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(4);
 
-    const floor = DOORSTEP_FLOOR_Y + 8;
-    this.driver = this.add.image(DRIVER_X, floor, "tex-driver").setOrigin(0.5, 1).setScale(PEOPLE_SCALE).setDepth(5);
-    enableItemHit(this.driver);
-    this.customer = this.add.image(CUSTOMER_X, floor, "tex-customer").setOrigin(0.5, 1).setScale(PEOPLE_SCALE).setDepth(5);
-    enableWidePersonHit(this.customer);
+    this.floorY = DOORSTEP_FLOOR_Y + 8;
+    this.driver = this.add.image(DRIVER_X, this.floorY, "tex-driver").setOrigin(0.5, 1).setScale(PEOPLE_SCALE).setDepth(5);
+    this.customer = this.add.image(CUSTOMER_X, this.floorY, "tex-customer").setOrigin(0.5, 1).setScale(PEOPLE_SCALE).setDepth(5);
     this.bag = this.add
-      .image(DRIVER_X + 52, floor - PERSON_DISPLAY_H * 0.46, "tex-bag")
+      .image(bagDriverPos(this.floorY).x, bagDriverPos(this.floorY).y, "tex-bag")
       .setOrigin(0.5, 0.22)
       .setScale(DOOR_BAG_SCALE)
       .setDepth(6);
-    enableItemHit(this.bag);
-    this.driver.disableInteractive();
+    enableWideHit(this.customer, PERSON_HIT_PAD);
+    enableWideHit(this.bag, BAG_HIT_PAD);
     this.customer.on("pointerdown", (p: Phaser.Input.Pointer) => {
       p.event.stopPropagation();
       getSim().queueInteract();
@@ -78,7 +74,8 @@ export class DoorScene extends Phaser.Scene {
       p.event.stopPropagation();
       getSim().queueInteract();
     });
-    this.youLabel = addUiText(this, DRIVER_X, floor + 16, "You", {
+
+    this.youLabel = addUiText(this, DRIVER_X, this.floorY + 16, "You", {
       size: Type.caption,
       color: Color.creamHex,
       backgroundColor: "#1c1612ee",
@@ -87,7 +84,7 @@ export class DoorScene extends Phaser.Scene {
     })
       .setOrigin(0.5, 0)
       .setDepth(7);
-    this.customerCaption = addUiText(this, CUSTOMER_X, floor + 16, "Customer", {
+    this.customerCaption = addUiText(this, CUSTOMER_X, this.floorY + 16, "Customer", {
       size: Type.caption,
       color: Color.creamHex,
       backgroundColor: "#1c1612ee",
@@ -95,13 +92,8 @@ export class DoorScene extends Phaser.Scene {
       fontStyle: "700",
     })
       .setOrigin(0.5, 0)
-      .setDepth(10);
-    enableItemHit(this.customerCaption);
-    this.customerCaption.on("pointerdown", (p: Phaser.Input.Pointer) => {
-      p.event.stopPropagation();
-      getSim().queueInteract();
-    });
-    this.bagCaption = addUiText(this, this.bag.x, this.bag.y - this.bag.displayHeight * this.bag.originY - 8, "Bag", {
+      .setDepth(7);
+    this.bagCaption = addUiText(this, this.bag.x, this.bag.y - 8, "", {
       size: Type.caption,
       color: Color.inkHex,
       backgroundColor: Color.limeHex,
@@ -109,7 +101,8 @@ export class DoorScene extends Phaser.Scene {
       fontStyle: "700",
     })
       .setOrigin(0.5, 1)
-      .setDepth(7);
+      .setDepth(7)
+      .setVisible(false);
 
     this.prompt = addUiText(this, DOORSTEP_DOOR_X, GAME_PROMPT_Y, "", {
       size: Type.body,
@@ -122,29 +115,6 @@ export class DoorScene extends Phaser.Scene {
     })
       .setOrigin(0.5)
       .setDepth(8);
-
-    const btnY = floor - PERSON_DISPLAY_H - 16;
-    const act = (): void => getSim().queueInteract();
-    this.askIdBtn = addHudButton(this, CUSTOMER_X, btnY, "ASK FOR ID", act, {
-      originX: 0.5,
-      originY: 1,
-      variant: "primary",
-      minWidth: 360,
-      caption: "They must show ID first",
-      depth: 12,
-    });
-    this.handBagBtn = addHudButton(this, CUSTOMER_X, btnY, "HAND BAG", act, {
-      originX: 0.5,
-      originY: 1,
-      variant: "primary",
-      minWidth: 360,
-      caption: "Hand over the order",
-      depth: 12,
-    });
-    this.askIdBtn.setVisible(false);
-    if (this.askIdBtn.input) this.askIdBtn.input.enabled = false;
-    this.handBagBtn.setVisible(false);
-    if (this.handBagBtn.input) this.handBagBtn.input.enabled = false;
 
     this.layoutDoorHud();
     const relayout = (): void => this.layoutDoorHud();
@@ -171,6 +141,7 @@ export class DoorScene extends Phaser.Scene {
     if (houseKey !== this.lastHouse || skyKey !== this.lastSkyKey) {
       this.lastHouse = houseKey;
       this.lastSkyKey = skyKey;
+      this.lastBagHanded = null;
       const n = Number(houseKey.replace("house-", "")) || 1;
       paintDoorstep(this.backdrop, n - 1, sky);
     }
@@ -200,70 +171,80 @@ export class DoorScene extends Phaser.Scene {
     const nextAsk = drop.actionLabel === "ASK ID";
     const idModal = nextId;
 
+    const bagInHands = drop.bagHanded;
+    if (this.lastBagHanded !== bagInHands) {
+      this.lastBagHanded = bagInHands;
+      const target = bagInHands ? bagCustomerPos(this.floorY) : bagDriverPos(this.floorY);
+      this.tweens.killTweensOf(this.bag);
+      this.tweens.add({
+        targets: this.bag,
+        x: target.x,
+        y: target.y,
+        duration: bagInHands ? 280 : 0,
+        ease: "Sine.easeOut",
+      });
+      if (!bagInHands) this.bag.setPosition(target.x, target.y);
+    }
+
     this.bag.setVisible(true);
-    this.bag.setDepth(nextPhoto ? 12 : 6);
-    if (nextPhoto) {
+    this.bag.setDepth(nextHand || nextPhoto ? 12 : 6);
+    if (nextHand || nextPhoto) {
       this.bag.setAlpha(pulse);
       this.bag.setTint(0xb8ffb0);
     } else {
       this.bag.setAlpha(1);
       this.bag.clearTint();
     }
-    // ASK FOR ID: only the button flashes — customer stays steady.
-    this.customer.setAlpha(nextHand ? pulse : 1);
-    this.customer.clearTint();
-    this.customer.setDepth(nextHand ? 11 : 5);
 
-    const canPerson = !idModal && nextHand;
-    const canBag = !idModal && nextPhoto;
-    if (canBag) {
-      if (!this.bag.input) enableWideBagHit(this.bag);
-      else this.bag.input.enabled = true;
+    if (nextAsk) {
+      this.customer.setAlpha(pulse);
+      this.customer.setTint(0xb8ffb0);
     } else {
-      this.bag.disableInteractive();
+      this.customer.setAlpha(1);
+      this.customer.clearTint();
     }
-    if (canPerson) {
-      if (!this.customer.input) enableWidePersonHit(this.customer);
-      else this.customer.input.enabled = true;
-      if (!this.customerCaption.input) enableItemHit(this.customerCaption);
-      else this.customerCaption.input.enabled = true;
-      syncItemHit(this.customerCaption);
-    } else {
-      this.customer.disableInteractive();
-      this.customerCaption.disableInteractive();
-    }
+    this.customer.setDepth(nextAsk ? 11 : 5);
 
+    const canAsk = !idModal && nextAsk;
+    const canBag = !idModal && (nextHand || nextPhoto);
+    setHitOn(this.customer, canAsk, PERSON_HIT_PAD);
+    setHitOn(this.bag, canBag, BAG_HIT_PAD);
+
+    const who = drop.customerName ?? "the customer";
     this.prompt.setText(
-      nextHand
-        ? `Tap ${drop.customerName ?? "the customer"} to hand over the bag.`
-        : nextPhoto
-          ? `Tap the bag to photo the drop for ${drop.customerName ?? "the customer"}.`
-          : drop.hint || "They're at the door.",
+      nextAsk
+        ? `Tap ${who} to ask for ID.`
+        : nextHand
+          ? `Tap the bag to hand it to ${who}.`
+          : nextPhoto
+            ? `Tap the bag in their hands to take the photo.`
+            : drop.hint || "They're at the door.",
     );
     this.prompt.setAlpha(1);
-    this.customerCaption.setText(nextHand ? "Tap to hand bag" : drop.customerName ?? "Customer");
+
+    this.customerCaption.setText(drop.customerName ?? "Customer");
     this.customerCaption.setAlpha(1);
-    this.bagCaption.setVisible(nextPhoto);
-    this.bagCaption.setText("Tap bag for photo");
+    this.customerCaption.setBackgroundColor("#1c1612ee");
+    this.customerCaption.setColor(Color.creamHex);
+
+    this.bagCaption.setVisible(nextHand || nextPhoto);
+    this.bagCaption.setText(nextHand ? "Tap bag to hand over" : "Tap bag for photo");
     this.bagCaption.setAlpha(1);
+    this.bagCaption.setBackgroundColor(Color.limeHex);
+    this.bagCaption.setColor(Color.inkHex);
     this.bagCaption.setPosition(this.bag.x, this.bag.y - this.bag.displayHeight * this.bag.originY - 8);
-    if (nextPhoto) {
-      const bright = Math.round(180 + 60 * pulse);
-      this.bagCaption.setBackgroundColor(`rgb(${bright},${Math.min(255, bright + 40)},${Math.round(bright * 0.55)})`);
-      this.bagCaption.setColor(Color.inkHex);
-    }
-    this.customerCaption.setBackgroundColor(nextHand ? Color.limeHex : "#1c1612ee");
-    this.customerCaption.setColor(nextHand ? Color.inkHex : Color.creamHex);
-
-    setDoorButton(this.askIdBtn, nextAsk);
-    setButtonPulse(this.askIdBtn, pulse, nextAsk);
-
-    setDoorButton(this.handBagBtn, nextHand);
-    setButtonPulse(this.handBagBtn, pulse, nextHand);
   }
 }
 
 const GAME_PROMPT_Y = 148;
+
+function bagDriverPos(floorY: number): { x: number; y: number } {
+  return { x: DRIVER_X + 52, y: floorY - PERSON_DISPLAY_H * 0.46 };
+}
+
+function bagCustomerPos(floorY: number): { x: number; y: number } {
+  return { x: CUSTOMER_X - 44, y: floorY - PERSON_DISPLAY_H * 0.42 };
+}
 
 function houseLabel(id: string): string {
   return `House ${id.replace("house-", "")}`;
@@ -275,9 +256,8 @@ function runNote(snap: SimSnapshot): string {
   return `  ·  ${n} bags on the bike`;
 }
 
-function enableWidePersonHit(obj: Phaser.GameObjects.Image): void {
+function enableWideHit(obj: Phaser.GameObjects.Image, pad: number): void {
   const { width, height } = itemHitSize(obj);
-  const pad = PERSON_HIT_PAD;
   obj.setInteractive({
     useHandCursor: true,
     hitArea: new Phaser.Geom.Rectangle(-pad, -pad, width + pad * 2, height + pad * 2),
@@ -285,18 +265,11 @@ function enableWidePersonHit(obj: Phaser.GameObjects.Image): void {
   });
 }
 
-function enableWideBagHit(obj: Phaser.GameObjects.Image): void {
-  const { width, height } = itemHitSize(obj);
-  const pad = 48;
-  obj.setInteractive({
-    useHandCursor: true,
-    hitArea: new Phaser.Geom.Rectangle(-pad, -pad, width + pad * 2, height + pad * 2),
-    hitAreaCallback: Phaser.Geom.Rectangle.Contains,
-  });
-}
-
-function setDoorButton(button: Phaser.GameObjects.Container, on: boolean): void {
-  button.setVisible(on);
-  // Keep the chrome hit area from addHudButton — only toggle enabled.
-  if (button.input) button.input.enabled = on;
+function setHitOn(obj: Phaser.GameObjects.Image, on: boolean, pad: number): void {
+  if (on) {
+    if (!obj.input) enableWideHit(obj, pad);
+    else obj.input.enabled = true;
+  } else {
+    obj.disableInteractive();
+  }
 }
