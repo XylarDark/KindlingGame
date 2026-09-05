@@ -67,13 +67,18 @@ export const TV_COUNT = 3;
 export const TV_COLS = 3;
 export const TV_ROWS = 1;
 export const STRAINS_PER_TV = 3;
-export const TV_W = 304;
-export const TV_H = 220;
+/** 15% larger than the original 304×220 bank, then 5% shorter for headroom. */
+const TV_BASE_W = 304;
+const TV_BASE_H = 220;
+const TV_BASE_TOP = 152;
+const TV_SCALE = 1.15;
+export const TV_W = Math.round(TV_BASE_W * TV_SCALE);
+export const TV_H = Math.round(TV_BASE_H * TV_SCALE * 0.95);
 /** Chassis-to-chassis wall; ~32px of plaster shows after the 4px sit-on-wall reveal. */
 export const TV_GAP_X = 40;
 export const TV_GAP_Y = 0;
 /** Dark bezel / recessed-glass inset. Keep strain slots inside this. */
-export const TV_BEZEL = 16;
+export const TV_BEZEL = Math.round(16 * TV_SCALE);
 export const TV_GRID_W = TV_COLS * TV_W + (TV_COLS - 1) * TV_GAP_X;
 export const TV_GRID_H = TV_ROWS * TV_H + Math.max(0, TV_ROWS - 1) * TV_GAP_Y;
 export const CEILING_POT_LEFT = 150;
@@ -81,8 +86,8 @@ export const CEILING_POT_RIGHT = 1760;
 /** Menu TVs centered over the key-lead. */
 export const TV_GRID_MID = KEYLEAD.x;
 export const TV_GRID_LEFT = Math.floor(TV_GRID_MID - TV_GRID_W / 2);
-/** Menu TVs sit on the wall below the ceiling-can cones. */
-export const TV_GRID_TOP = 152;
+/** Keep the bank on the wall under the cans; shorter height lifts the bottom slightly. */
+export const TV_GRID_TOP = TV_BASE_TOP + TV_BASE_H - TV_H;
 export const TV_Y = TV_GRID_TOP + TV_H / 2;
 
 /** Grey-over-white chair rail; the pass-through oak sill sits on this band. */

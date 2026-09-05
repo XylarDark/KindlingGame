@@ -217,6 +217,8 @@ export class GameSim {
   private fetchSkuId: string | null = null;
   private backroomLeftMs = 0;
   private receiptHeld = false;
+  /** Blocks a second door/curb interact from the same tap (ASK ID → deny/next, etc.). */
+  private dropoffInteractReadyAt = 0;
 
   constructor(options: SimOptions = {}) {
     const seed = options.seed ?? 1;
@@ -1100,11 +1102,17 @@ export class GameSim {
   private continueDropoff(): void {
     const d = this.dropoff;
     if (!d) return;
+    if (this.clock.gameMs < this.dropoffInteractReadyAt) {
+      // Keep the tap — otherwise post-ID bag/photo presses vanish during the short lock.
+      this.queuedInteract = true;
+      return;
+    }
 
     if (d.phase === "atCurb") {
       d.phase = "calling";
       d.callDoneAt = this.clock.gameMs + CALL_CONNECT_MS;
       this.toast = `Calling ${this.orderById(d.orderId)?.customerName ?? "customer"}…`;
+      this.armDropoffInteract();
       return;
     }
     if (d.phase === "calling") {
@@ -1124,6 +1132,7 @@ export class GameSim {
     if (!d.idAsked) {
       d.idAsked = true;
       this.toast = `${order.customerName} is showing ID. Confirm 19+.`;
+      this.armDropoffInteract();
       return;
     }
 
@@ -1136,15 +1145,18 @@ export class GameSim {
           this.runOrderIds.length === 0
             ? "Denied. Van is heading back to Kindling."
             : `Denied. Next → ${this.nextStopId() ? houseTitle(this.nextStopId()!) : "Kindling"}.`;
+        this.armDropoffInteract();
         return;
       }
       d.idChecked = true;
       this.toast = `ID checks out — 19+. Hand ${order.customerName} the bag.`;
+      this.armDropoffInteract();
       return;
     }
     if (!d.bagHanded) {
       d.bagHanded = true;
       this.toast = `Bag handed to ${order.customerName}. Snap the photo.`;
+      this.armDropoffInteract();
       return;
     }
     if (!d.photoTaken) {
@@ -1158,7 +1170,13 @@ export class GameSim {
       } else {
         this.toast = `Dropped. Next → ${this.nextStopId() ? houseTitle(this.nextStopId()!) : "Kindling"}.`;
       }
+      this.armDropoffInteract();
     }
+  }
+
+  private armDropoffInteract(): void {
+    // Short lock so one tap can't double-advance; long enough to survive ID modal arming.
+    this.dropoffInteractReadyAt = this.clock.gameMs + Math.min(220, NPC_INTERACT_COOLDOWN_MS);
   }
 
   private beginCurb(stopId: string): void {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { advanceRoute, laneWorldPoint, routeWorldPoints, rightOffset } from "./driveRoute";
+import { advanceRoute, laneWorldPoint, routeIsOrthogonal, routeWorldPoints, rightOffset } from "./driveRoute";
 
 describe("driveRoute", () => {
   it("offsets eastbound travel to the southern lane", () => {
@@ -34,5 +34,17 @@ describe("driveRoute", () => {
   it("keeps right offset perpendicular to travel", () => {
     expect(rightOffset(1, 0).y).toBe(28);
     expect(rightOffset(0, 1).x).toBe(-28);
+  });
+
+  it("turns corners with axis-aligned elbows, not diagonal cuts", () => {
+    const route = routeWorldPoints([
+      { c: 2, r: 4 },
+      { c: 3, r: 4 },
+      { c: 4, r: 4 },
+      { c: 4, r: 5 },
+      { c: 4, r: 6 },
+    ]);
+    expect(route.length).toBeGreaterThan(4);
+    expect(routeIsOrthogonal(route)).toBe(true);
   });
 });

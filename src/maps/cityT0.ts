@@ -14,6 +14,9 @@ const MAX_HOUSES = 14;
 
 export type TileKind = "wall" | "road" | "shop" | "house" | "parking";
 
+/** How the delivery stall connects to the house. */
+export type HouseAccess = "garage" | "walkway" | "curb";
+
 export interface HouseStop {
   id: string;
   house: TileCell;
@@ -23,6 +26,8 @@ export interface HouseStop {
   lotH: number;
   /** Driveway / parking pad beside the house. */
   parking: TileCell[];
+  /** Visual + layout style for getting from the stall to the door. */
+  access: HouseAccess;
 }
 
 export interface ShopLot {
@@ -113,6 +118,7 @@ function drivewayTowardRoad(
   build: TileCell,
   bw: number,
   bh: number,
+  access: HouseAccess,
 ): { parking: TileCell[]; stop: TileCell } | null {
   const buildCells = lotCells(build, bw, bh);
   const candidates: { parking: TileCell[]; stop: TileCell; score: number }[] = [];
@@ -134,16 +140,22 @@ function drivewayTowardRoad(
               n,
               { c: n.c + (n.c > build.c ? 1 : -1), r: n.r },
             ].filter((p) => inBounds(p.r, p.c) && kinds[p.r]![p.c] === "wall");
-      const parking = along.length >= 2 ? along.slice(0, 2) : [n];
+      // Curb style: single street-side stall. Garage/walkway: longer pad when possible.
+      const parking =
+        access === "curb" ? [n] : along.length >= 2 ? along.slice(0, 2) : [n];
       if (parking.some((p) => buildCells.some((b) => b.c === p.c && b.r === p.r))) continue;
-      // Delivery stop is the stall itself (first pad cell, curb-side).
-      candidates.push({ parking, stop: parking[0]!, score: parking.length * 10 + (road.c + road.r) % 3 });
+      let score = parking.length * 10 + ((road.c + road.r) % 3);
+      if (access === "garage" && parking.length >= 2) score += 8;
+      if (access === "curb" && parking.length === 1) score += 6;
+      candidates.push({ parking, stop: parking[0]!, score });
     }
   }
 
   candidates.sort((a, b) => b.score - a.score);
   return candidates[0] ?? null;
 }
+
+const ACCESS_CYCLE: HouseAccess[] = ["garage", "walkway", "curb"];
 
 function placeShop(kinds: TileKind[][], walkable: boolean[][]): { shopLot: ShopLot; shopSpawn: TileCell } {
   // Building sits one lot in from the N–S street so a full parking strip faces the curb.
@@ -204,8 +216,9 @@ export function buildCityMap(): CityMap {
       const size = BUILD_SIZES[(c + r * 3) % BUILD_SIZES.length]!;
       const origin = { c, r };
       if (!lotFree(kinds, origin, size.w, size.h, "wall")) continue;
-      // Need empty wall ring for driveway.
-      const pad = drivewayTowardRoad(kinds, walkable, origin, size.w, size.h);
+      const access = ACCESS_CYCLE[houses.length % ACCESS_CYCLE.length]!;
+      // Need empty wall ring for driveway / curb stall.
+      const pad = drivewayTowardRoad(kinds, walkable, origin, size.w, size.h, access);
       if (!pad) continue;
       if (!pad.parking.every((p) => kinds[p.r]![p.c] === "wall")) continue;
       if ((c * 5 + r * 3) % 5 === 0) continue;
@@ -219,6 +232,7 @@ export function buildCityMap(): CityMap {
         lotW: size.w,
         lotH: size.h,
         parking: pad.parking,
+        access,
       });
     }
   }

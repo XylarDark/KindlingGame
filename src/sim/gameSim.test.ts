@@ -3,6 +3,7 @@ import {
   CALL_CONNECT_MS,
   INSTORE_WALKOUT_MS,
   MS_PER_GAME_HOUR,
+  NPC_INTERACT_COOLDOWN_MS,
   PICKUP_ARRIVE_MS,
   PICKUP_HANDOFF_WAIT_MS,
   SCORE_DELIVERY_LATE,
@@ -19,17 +20,22 @@ import {
   TICKET_WAVE_MAX_MS,
 } from "./constants";
 
+function stepDropoff(sim: GameSim): void {
+  sim.interact();
+  sim.tick(NPC_INTERACT_COOLDOWN_MS + 16);
+}
+
 function finishDropoff(sim: GameSim, houseId: string): void {
   const stop = houseById(houseId)!;
   const pos = tileToWorld(stop.stop);
   sim.setVehiclePosition(pos.x, pos.y);
   sim.tick(32);
-  sim.interact();
+  stepDropoff(sim); // call
   sim.tick(CALL_CONNECT_MS + 32);
-  sim.interact();
-  sim.interact();
-  sim.interact();
-  sim.interact();
+  stepDropoff(sim); // ask ID
+  stepDropoff(sim); // check ID
+  stepDropoff(sim); // hand bag
+  stepDropoff(sim); // photo
 }
 
 function startDoor(sim: GameSim, houseId: string): void {
@@ -37,7 +43,7 @@ function startDoor(sim: GameSim, houseId: string): void {
   const pos = tileToWorld(stop.stop);
   sim.setVehiclePosition(pos.x, pos.y);
   sim.tick(32);
-  sim.interact();
+  stepDropoff(sim);
   sim.tick(CALL_CONNECT_MS + 32);
 }
 
@@ -280,18 +286,32 @@ describe("GameSim order loops", () => {
     startDoor(sim, "house-1");
     expect(sim.snapshot().dropoff.actionLabel).toBe("ASK ID");
     expect(sim.snapshot().dropoff.idCard).toBeNull();
-    sim.interact();
+    stepDropoff(sim);
     expect(sim.snapshot().dropoff.actionLabel).toBe("CHECK ID");
     expect(sim.snapshot().dropoff.idCard?.ageOk).toBe(true);
-    sim.interact();
+    stepDropoff(sim);
     expect(sim.snapshot().dropoff.actionLabel).toBe("HAND BAG");
     expect(sim.snapshot().dropoff.idCard).toBeNull();
-    sim.interact();
+    stepDropoff(sim);
     expect(sim.snapshot().dropoff.actionLabel).toBe("PHOTO");
-    sim.interact();
+    stepDropoff(sim);
     expect(sim.orderById(order.id)?.status).toBe("completed");
     expect(sim.snapshot().dropoff.phase).toBe("none");
     expect(sim.snapshot().run).toBeNull();
+  });
+
+  it("does not advance past ASK ID on the same tap burst", () => {
+    const sim = GameSim.create({ seed: 4, autoSpawn: false });
+    fillTicket(sim, "delivery", { destinationId: "house-1", ageOk: false });
+    fillTicket(sim, "delivery", { destinationId: "house-2", ageOk: true });
+    sim.hitTheRoad();
+    startDoor(sim, "house-1");
+    sim.interact(); // ask
+    sim.interact(); // same-frame burst — must not check/deny yet
+    sim.interact();
+    expect(sim.snapshot().dropoff.actionLabel).toBe("CHECK ID");
+    expect(sim.snapshot().dropoff.phase).toBe("atDoor");
+    expect(sim.snapshot().run?.nextStopId).toBe("house-1");
   });
 
   it("keeps hand-bag and photo working on the first stop of a multi-stop run", () => {
@@ -300,17 +320,32 @@ describe("GameSim order loops", () => {
     fillTicket(sim, "delivery", { destinationId: "house-2", ageOk: true });
     sim.hitTheRoad();
     startDoor(sim, "house-1");
-    sim.interact(); // ask
-    sim.interact(); // check
+    stepDropoff(sim); // ask
+    stepDropoff(sim); // check
     expect(sim.snapshot().dropoff.actionLabel).toBe("HAND BAG");
     // Vehicle nearer the other house must not break the locked door flow.
     const other = tileToWorld(houseById("house-2")!.stop);
     sim.setVehiclePosition(other.x, other.y);
-    sim.interact();
+    stepDropoff(sim);
     expect(sim.snapshot().dropoff.actionLabel).toBe("PHOTO");
-    sim.interact();
+    stepDropoff(sim);
     expect(sim.orderById(first.id)?.status).toBe("completed");
     expect(sim.snapshot().run?.nextStopId).toBe("house-2");
+  });
+
+  it("holds a bag tap through the post-ID interact lock instead of dropping it", () => {
+    const sim = GameSim.create({ seed: 4, autoSpawn: false });
+    fillTicket(sim, "delivery", { destinationId: "house-1", ageOk: true });
+    sim.hitTheRoad();
+    startDoor(sim, "house-1");
+    stepDropoff(sim); // ask
+    sim.interact(); // check ID — arms short lock
+    expect(sim.snapshot().dropoff.actionLabel).toBe("HAND BAG");
+    sim.queueInteract(); // bag tap while still locked
+    sim.tick(16);
+    expect(sim.snapshot().dropoff.actionLabel).toBe("HAND BAG");
+    sim.tick(NPC_INTERACT_COOLDOWN_MS);
+    expect(sim.snapshot().dropoff.actionLabel).toBe("PHOTO");
   });
 
   it("denies an underage stop, fails the order, and returns to the map", () => {
@@ -320,9 +355,9 @@ describe("GameSim order loops", () => {
     startDoor(sim, "house-1");
     expect(sim.snapshot().dropoff.actionLabel).toBe("ASK ID");
     expect(sim.snapshot().dropoff.idCard).toBeNull();
-    sim.interact();
+    stepDropoff(sim);
     expect(sim.snapshot().dropoff.idCard?.ageOk).toBe(false);
-    sim.interact();
+    stepDropoff(sim);
     expect(sim.orderById(order.id)?.status).toBe("failed");
     expect(sim.score).toBe(SCORE_FAIL);
     expect(sim.snapshot().dropoff.phase).toBe("none");
@@ -335,8 +370,8 @@ describe("GameSim order loops", () => {
     const second = fillTicket(sim, "delivery", { destinationId: "house-2", ageOk: true });
     sim.hitTheRoad();
     startDoor(sim, "house-1");
-    sim.interact();
-    sim.interact();
+    stepDropoff(sim);
+    stepDropoff(sim);
     expect(sim.orderById(first.id)?.status).toBe("failed");
     expect(sim.orderById(second.id)?.status).toBe("onRun");
     expect(sim.snapshot().run?.nextStopId).toBe("house-2");

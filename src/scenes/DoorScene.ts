@@ -17,8 +17,8 @@ import { designSafeInset, readCssSafeArea, VIEWFIT_EVENT, viewFromScale } from "
 const DOOR_BAG_SCALE = BAG_SCALE * 1.25;
 const DRIVER_X = DOORSTEP_DOOR_X - 160;
 const CUSTOMER_X = DOORSTEP_DOOR_X + 200;
-const PERSON_HIT_PAD = 64;
-const BAG_HIT_PAD = 56;
+const PERSON_HIT_PAD = 72;
+const BAG_HIT_PAD = 80;
 
 export class DoorScene extends Phaser.Scene {
   private backdrop!: Phaser.GameObjects.Graphics;
@@ -207,8 +207,8 @@ export class DoorScene extends Phaser.Scene {
 
     const canAsk = !idModal && nextAsk;
     const canBag = !idModal && (nextHand || nextPhoto);
-    setHitOn(this.customer, canAsk, PERSON_HIT_PAD);
-    setHitOn(this.bag, canBag, BAG_HIT_PAD);
+    armHit(this.customer, canAsk, PERSON_HIT_PAD);
+    armHit(this.bag, canBag, BAG_HIT_PAD);
 
     const who = drop.customerName ?? "the customer";
     this.prompt.setText(
@@ -265,11 +265,16 @@ function enableWideHit(obj: Phaser.GameObjects.Image, pad: number): void {
   });
 }
 
-function setHitOn(obj: Phaser.GameObjects.Image, on: boolean, pad: number): void {
+/** Toggle hit without tearing down listeners every frame (bag/photo after ID). */
+function armHit(obj: Phaser.GameObjects.Image, on: boolean, pad: number): void {
   if (on) {
     if (!obj.input) enableWideHit(obj, pad);
-    else obj.input.enabled = true;
-  } else {
-    obj.disableInteractive();
+    else {
+      obj.input.enabled = true;
+      const { width, height } = itemHitSize(obj);
+      obj.input.hitArea = new Phaser.Geom.Rectangle(-pad, -pad, width + pad * 2, height + pad * 2);
+    }
+  } else if (obj.input) {
+    obj.input.enabled = false;
   }
 }

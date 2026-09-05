@@ -1,4 +1,4 @@
-import { TILE, tileToWorld } from "../maps/cityT0";
+import { tileToWorld } from "../maps/cityT0";
 import type { TileCell } from "./pathfinding";
 
 /** Nudge path points into the right-hand lane on two-tile streets. */
@@ -29,12 +29,51 @@ export function laneWorldPoint(cell: TileCell, prev?: TileCell, next?: TileCell)
   return { x: base.x + off.x, y: base.y + off.y };
 }
 
+/**
+ * Build a right-lane world path. Each grid step keeps a shared offset so straights
+ * stay axis-aligned; turns insert an L-shaped elbow instead of cutting diagonally.
+ */
 export function routeWorldPoints(cells: readonly TileCell[]): WorldPoint[] {
   if (cells.length === 0) return [];
+  if (cells.length === 1) return [tileToWorld(cells[0]!)];
+
   const out: WorldPoint[] = [];
-  for (let i = 0; i < cells.length; i++) {
-    out.push(laneWorldPoint(cells[i]!, cells[i - 1], cells[i + 1]));
+  const push = (p: WorldPoint): void => {
+    const last = out[out.length - 1];
+    if (last && Math.hypot(last.x - p.x, last.y - p.y) < 1) return;
+    out.push(p);
+  };
+
+  for (let i = 0; i < cells.length - 1; i++) {
+    const a = cells[i]!;
+    const b = cells[i + 1]!;
+    const { dc, dr } = segmentDir(a, b);
+    const off = rightOffset(dc, dr);
+    const wa = { x: tileToWorld(a).x + off.x, y: tileToWorld(a).y + off.y };
+    const wb = { x: tileToWorld(b).x + off.x, y: tileToWorld(b).y + off.y };
+
+    if (out.length === 0) {
+      push(wa);
+    } else {
+      const last = out[out.length - 1]!;
+      const dx = wa.x - last.x;
+      const dy = wa.y - last.y;
+      if (Math.abs(dx) > 1 && Math.abs(dy) > 1) {
+        // Lane offset changed at a corner — bend with an axis-aligned elbow,
+        // continuing the previous travel axis first (outer corner of a right turn).
+        const prev = cells[i - 1]!;
+        const prevDir = segmentDir(prev, a);
+        if (Math.abs(prevDir.dc) >= Math.abs(prevDir.dr)) {
+          push({ x: wa.x, y: last.y });
+        } else {
+          push({ x: last.x, y: wa.y });
+        }
+      }
+      push(wa);
+    }
+    push(wb);
   }
+
   return out;
 }
 
@@ -93,4 +132,15 @@ export function routeLength(route: readonly WorldPoint[]): number {
 export function estimateRouteMs(route: readonly WorldPoint[], speed: number): number {
   if (speed <= 0) return 0;
   return (routeLength(route) / speed) * 1000;
+}
+
+/** True when every consecutive pair shares an axis (no diagonal cuts). */
+export function routeIsOrthogonal(route: readonly WorldPoint[], epsilon = 1.5): boolean {
+  for (let i = 1; i < route.length; i++) {
+    const a = route[i - 1]!;
+    const b = route[i]!;
+    const axisAligned = Math.abs(a.x - b.x) <= epsilon || Math.abs(a.y - b.y) <= epsilon;
+    if (!axisAligned) return false;
+  }
+  return true;
 }

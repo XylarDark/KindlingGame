@@ -19,7 +19,7 @@ export function clampVolume(n: number): number {
 }
 
 export function defaultMusicPrefs(): MusicPrefs {
-  return { enabled: true, volume: DEFAULT_MUSIC_VOLUME };
+  return { enabled: false, volume: DEFAULT_MUSIC_VOLUME };
 }
 
 export function effectiveMusicVolume(enabled: boolean, volume: number, nightAmount: number): number {

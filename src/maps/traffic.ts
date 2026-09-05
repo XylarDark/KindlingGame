@@ -19,6 +19,18 @@ export interface TrafficCarView {
   speed: number;
 }
 
+type CarState = {
+  id: string;
+  loop: TrafficLoop;
+  /** Progress 0–1 around the loop. */
+  t: number;
+  key: string;
+  depth: number;
+  speed: number;
+  /** Lateral bypass offset in world px (left of travel). */
+  bypass: number;
+};
+
 export type TrafficObstacle = {
   x: number;
   y: number;
@@ -32,6 +44,12 @@ export const TRAFFIC_MIN_SEP = 110;
 
 /** How far ahead the delivery van looks for a slower lead car. */
 export const TRAFFIC_LOOK_AHEAD = 180;
+
+/** How far traffic looks for the delivery van to stop / go around. */
+export const TRAFFIC_VAN_DETECT = 240;
+
+/** Lateral offset when traffic swings around the van. */
+export const TRAFFIC_BYPASS = 52;
 
 /** Lateral lane tolerance when deciding a car is “in front”. */
 export const TRAFFIC_LANE_WIDTH = 72;
@@ -108,19 +126,10 @@ export function buildTrafficLoops(max = TRAFFIC_LOOP_MAX): TrafficLoop[] {
   return loops;
 }
 
-type CarState = {
-  id: string;
-  loop: TrafficLoop;
-  /** Progress 0–1 around the loop. */
-  t: number;
-  key: string;
-  depth: number;
-  speed: number;
-};
-
 /**
  * Moving traffic that yields so cars keep a minimum gap — they do not pass through
  * each other or the delivery van when `obstacle` is provided.
+ * Cars also stop or swing around when the van is closing in.
  */
 export function trafficCars(
   gameMs: number,
@@ -134,7 +143,6 @@ export function trafficCars(
     const speed = 115 + (i % 3) * 22;
     const stagger = i * 2_800 + (i % 2) * 1_400;
     const dist = ((gameMs + stagger) * speed) / 1000;
-    // Long loops can carry a second car; density trim below removes ~25% overall.
     const carsOnLoop = loop.length > TILE * 14 ? 2 : 1;
     for (let k = 0; k < carsOnLoop; k++) {
       const spaced = dist / loop.length + k / carsOnLoop;
@@ -145,11 +153,11 @@ export function trafficCars(
         key: CAR_KEYS[(i + k) % CAR_KEYS.length]!,
         depth: 5,
         speed,
+        bypass: 0,
       });
     }
   });
 
-  // Thin the fleet by TRAFFIC_DENSITY while keeping even coverage across loops.
   const keep = Math.max(1, Math.round(states.length * TRAFFIC_DENSITY));
   if (states.length > keep) {
     const picked: CarState[] = [];
@@ -159,7 +167,8 @@ export function trafficCars(
     states.length = 0;
     states.push(...picked);
   }
-  // Resolve overlaps (car↔car and car↔van) by holding followers back along their path.
+
+  // Car↔car separation.
   for (let pass = 0; pass < 12; pass++) {
     let moved = false;
     for (let a = 0; a < states.length; a++) {
@@ -177,32 +186,61 @@ export function trafficCars(
         moved = true;
       }
     }
-    if (obstacle) {
-      for (const car of states) {
-        const p = pointAlongLoop(car.loop.points, car.t);
-        const gap = Math.hypot(p.x - obstacle.x, p.y - obstacle.y);
-        if (gap >= TRAFFIC_MIN_SEP) continue;
-        const heading = headingAlongLoop(car.loop.points, car.t);
-        const toward =
-          Math.cos(heading) * (obstacle.x - p.x) + Math.sin(heading) * (obstacle.y - p.y);
+    if (!moved) break;
+  }
+
+  // Van awareness: stop if too close ahead, swing around if the van is coming, never overlap.
+  if (obstacle) {
+    for (const car of states) {
+      const p = pointAlongLoop(car.loop.points, car.t);
+      const heading = headingAlongLoop(car.loop.points, car.t);
+      const dx = obstacle.x - p.x;
+      const dy = obstacle.y - p.y;
+      const gap = Math.hypot(dx, dy);
+      const cos = Math.cos(heading);
+      const sin = Math.sin(heading);
+      const forward = cos * dx + sin * dy;
+      const lateral = -sin * dx + cos * dy;
+      const vanToward =
+        Math.cos(obstacle.heading) * (p.x - obstacle.x) + Math.sin(obstacle.heading) * (p.y - obstacle.y);
+
+      if (gap < TRAFFIC_VAN_DETECT && Math.abs(lateral) < TRAFFIC_LANE_WIDTH * 1.35) {
+        const closing = forward > 24 || (vanToward > 24 && forward > -40);
+        if (closing) {
+          // Swing into the adjacent lane (left of travel) while yielding.
+          car.bypass = TRAFFIC_BYPASS;
+          if (forward > 16 && gap < TRAFFIC_VAN_DETECT * 0.85) {
+            // Stop / hold back when the van is ahead in our lane.
+            const hold = Math.max(4, (TRAFFIC_MIN_SEP * 1.35 - Math.min(gap, TRAFFIC_MIN_SEP * 1.35)) + 8);
+            const step = hold / Math.max(TILE, car.loop.length);
+            car.t = ((car.t - step) % 1 + 1) % 1;
+            car.speed = 0;
+          } else if (vanToward > 30 && gap < TRAFFIC_VAN_DETECT * 0.7) {
+            // Van bearing down from behind/side — clear the lane and ease forward a touch.
+            car.bypass = TRAFFIC_BYPASS;
+          }
+        }
+      }
+
+      if (gap < TRAFFIC_MIN_SEP) {
         const need = TRAFFIC_MIN_SEP - gap + 6;
         const step = need / Math.max(TILE, car.loop.length);
-        // Cars driving into the van hold back; cars the van is eating from behind nudge forward.
-        if (toward >= 0) car.t = ((car.t - step) % 1 + 1) % 1;
+        if (forward >= 0) car.t = ((car.t - step) % 1 + 1) % 1;
         else car.t = (car.t + step) % 1;
-        moved = true;
+        car.bypass = Math.max(car.bypass, TRAFFIC_BYPASS);
       }
     }
-    if (!moved) break;
   }
 
   return states.map((car) => {
     const pos = pointAlongLoop(car.loop.points, car.t);
     const angle = headingAlongLoop(car.loop.points, car.t);
+    const leftX = -Math.sin(angle);
+    const leftY = Math.cos(angle);
     return {
       id: car.id,
-      x: pos.x,
-      y: pos.y,
+      x: pos.x + leftX * car.bypass,
+      y: pos.y + leftY * car.bypass,
       key: car.key,
       depth: car.depth,
       angle,

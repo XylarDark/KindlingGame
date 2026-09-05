@@ -16,6 +16,9 @@ describe("city map", () => {
     const sizes = new Set(CITY.houses.map((h) => `${h.lotW}x${h.lotH}`));
     expect(sizes.size).toBeGreaterThan(1);
     expect(CITY.houses.every((h) => h.parking.length >= 1)).toBe(true);
+    expect(CITY.houses.some((h) => h.access === "garage")).toBe(true);
+    expect(CITY.houses.some((h) => h.access === "walkway")).toBe(true);
+    expect(CITY.houses.some((h) => h.access === "curb")).toBe(true);
     expect(CITY.shopLot.parking.length).toBeGreaterThanOrEqual(3);
     expect(CITY.houses.some((h) => h.lotW >= 2 && h.lotH >= 2)).toBe(true);
     expect(CITY.kinds[CITY.shopSpawn.r]![CITY.shopSpawn.c]).toBe("parking");

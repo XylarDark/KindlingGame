@@ -3,7 +3,8 @@ import { getMusicPrefs, setMusicEnabled, setMusicVolume, syncMusicToClock } from
 import { playCameraClick } from "../audio/sfx";
 import { clampInput } from "../input/controls";
 import { enableItemHit, syncItemHit } from "../input/hit";
-import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
+import { CITY, MAP_PX_H, MAP_PX_W, TILE, houseById, tileToWorld } from "../maps/cityT0";
+import { GAME_HEIGHT, GAME_WIDTH, NPC_INTERACT_COOLDOWN_MS } from "../sim/constants";
 import { getSim } from "../session";
 import { nightFactor, skyAt } from "../sim/dayNight";
 import type { SimSnapshot } from "../sim/gameSim";
@@ -11,12 +12,16 @@ import { tutorialHints } from "../sim/tutorialHints";
 import { addHudButton, addPanel } from "../ui/chrome";
 import { addUiText } from "../ui/text";
 import { Color, Type } from "../ui/theme";
-import { overlayStroke } from "../ui/typekit";
 import { designSafeInset, HUD_TOUCH_MIN_DESIGN, readCssSafeArea, VIEWFIT_EVENT, viewFromScale } from "../ui/viewFit";
 
 const SETTINGS_W = 420;
 const SETTINGS_H = 352;
 const VOL_TRACK = { x: 24, y: 168, w: 292, h: 16 };
+/** Squarer black iPhone — room for Kindling header + map. */
+const PHONE_W = 168;
+const PHONE_H = 196;
+const PHONE_COG_GAP = 16;
+const PHONE_SCREEN = { x: -68, y: -74, w: 136, h: 148 };
 
 export class HudScene extends Phaser.Scene {
   private scoreText!: Phaser.GameObjects.Text;
@@ -25,8 +30,13 @@ export class HudScene extends Phaser.Scene {
   private padRing!: Phaser.GameObjects.Graphics;
   private padKnob!: Phaser.GameObjects.Arc;
   private padLabel!: Phaser.GameObjects.Text;
-  private phone!: Phaser.GameObjects.Image;
-  private phoneCaption!: Phaser.GameObjects.Text;
+  private phone!: Phaser.GameObjects.Container;
+  private phoneBody!: Phaser.GameObjects.Image;
+  private phoneHit!: Phaser.GameObjects.Rectangle;
+  private phoneFlash!: Phaser.GameObjects.Rectangle;
+  private phoneMap!: Phaser.GameObjects.Graphics;
+  private phoneTitle!: Phaser.GameObjects.Text;
+  private phoneStatus!: Phaser.GameObjects.Text;
   private idDim!: Phaser.GameObjects.Rectangle;
   private idPanel!: Phaser.GameObjects.Container;
   private idName!: Phaser.GameObjects.Text;
@@ -38,6 +48,8 @@ export class HudScene extends Phaser.Scene {
   private flash!: Phaser.GameObjects.Rectangle;
   private toastText!: Phaser.GameObjects.Text;
   private sawPhoto = false;
+  private idWasShowing = false;
+  private idCardArmedAt = 0;
   private padCenter = { x: 196, y: GAME_HEIGHT - 220 };
   private pointerId: number | null = null;
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
@@ -82,27 +94,44 @@ export class HudScene extends Phaser.Scene {
       .setOrigin(1, 0)
       .setDepth(20);
 
-    this.phone = this.add
-      .image(GAME_WIDTH - 140, GAME_HEIGHT - 220, "tex-phone")
-      .setDisplaySize(96, 192)
-      .setDepth(22)
-      .setVisible(false);
-    enableItemHit(this.phone);
-    this.phone.on("pointerdown", (p: Phaser.Input.Pointer) => {
+    this.phoneBody = this.add
+      .image(0, 0, "tex-phone")
+      .setDisplaySize(PHONE_W, PHONE_H);
+    this.phoneFlash = this.add
+      .rectangle(0, 0, PHONE_W + 10, PHONE_H + 10, Color.lime, 0)
+      .setStrokeStyle(4, Color.lime, 1);
+    this.phoneMap = this.add.graphics();
+    this.phoneTitle = addUiText(this, 0, PHONE_SCREEN.y + 20, "KINDLING DELIVERY", {
+      size: 12,
+      color: Color.limeHex,
+      fontStyle: "700",
+      align: "center",
+      strokeThickness: 0,
+    }).setOrigin(0.5);
+    this.phoneStatus = addUiText(this, 0, PHONE_SCREEN.y + PHONE_SCREEN.h - 16, "Tap to call", {
+      size: 11,
+      color: Color.creamHex,
+      fontStyle: "600",
+      align: "center",
+      wordWrap: { width: PHONE_SCREEN.w - 16 },
+      strokeThickness: 0,
+    }).setOrigin(0.5);
+    this.phoneHit = this.add
+      .rectangle(0, 0, PHONE_W - 8, PHONE_H - 8, 0x000000, 0.001)
+      .setInteractive({ useHandCursor: true });
+    this.phoneHit.on("pointerdown", (p: Phaser.Input.Pointer) => {
       p.event.stopPropagation();
       getSim().queueInteract();
     });
-    this.phoneCaption = addUiText(this, GAME_WIDTH - 220, GAME_HEIGHT - 220, "Tap to call", {
-      size: Type.caption,
-      color: Color.neonHex,
-      fontStyle: "600",
-      backgroundColor: "#1c1612ee",
-      padding: { x: 10, y: 6 },
-      align: "right",
-      wordWrap: { width: 200 },
-      ...overlayStroke(15),
-    })
-      .setOrigin(1, 0.5)
+    this.phone = this.add
+      .container(GAME_WIDTH - 160, GAME_HEIGHT - 220, [
+        this.phoneFlash,
+        this.phoneBody,
+        this.phoneMap,
+        this.phoneTitle,
+        this.phoneStatus,
+        this.phoneHit,
+      ])
       .setDepth(22)
       .setVisible(false);
 
@@ -228,19 +257,6 @@ export class HudScene extends Phaser.Scene {
     this.scoreText.setPosition(left, top);
     this.scoreCaption.setPosition(left, top + 56);
     this.clockText.setPosition(right, top);
-    const phoneX = GAME_WIDTH - 100 - inset.right;
-    const phoneY = GAME_HEIGHT - 210 - inset.bottom;
-    this.phone.setPosition(phoneX, phoneY);
-    this.phone.setDisplaySize(96, 192);
-    syncItemHit(this.phone);
-    // Call prompt stays glued to the left of the phone.
-    this.phoneCaption.setOrigin(1, 0.5);
-    this.phoneCaption.setPosition(phoneX - this.phone.displayWidth * 0.5 - 14, phoneY);
-    this.toastText.setPosition(GAME_WIDTH / 2, bottom);
-    this.padCenter = { x: 196 + inset.left, y: GAME_HEIGHT - 220 - inset.bottom };
-    this.drawPad();
-    this.padKnob.setPosition(this.padCenter.x, this.padCenter.y);
-    this.padLabel.setPosition(this.padCenter.x, this.padCenter.y - 128);
     const cogSize = HUD_TOUCH_MIN_DESIGN;
     const cogX = GAME_WIDTH - 24 - inset.right;
     const cogY = GAME_HEIGHT - 20 - inset.bottom;
@@ -249,6 +265,19 @@ export class HudScene extends Phaser.Scene {
     syncItemHit(this.cog);
     this.cogCaption.setPosition(cogX - 8, cogY - cogSize - 4);
     this.settingsPanel.setPosition(cogX - SETTINGS_W, cogY - cogSize - 32 - SETTINGS_H);
+
+    // Keep the phone clear of the settings cog (bottom-right).
+    const cogLeft = cogX - cogSize;
+    const cogTop = cogY - cogSize;
+    const phoneRight = Math.min(GAME_WIDTH - 16 - inset.right, cogLeft - PHONE_COG_GAP);
+    const phoneBottom = Math.min(GAME_HEIGHT - 16 - inset.bottom, cogTop - PHONE_COG_GAP);
+    this.phone.setPosition(phoneRight - PHONE_W * 0.5, phoneBottom - PHONE_H * 0.5);
+    this.phoneBody.setDisplaySize(PHONE_W, PHONE_H);
+    this.toastText.setPosition(GAME_WIDTH / 2, bottom);
+    this.padCenter = { x: 196 + inset.left, y: GAME_HEIGHT - 220 - inset.bottom };
+    this.drawPad();
+    this.padKnob.setPosition(this.padCenter.x, this.padCenter.y);
+    this.padLabel.setPosition(this.padCenter.x, this.padCenter.y - 128);
   }
 
   private paintHud(snap: SimSnapshot): void {
@@ -264,33 +293,41 @@ export class HudScene extends Phaser.Scene {
     const flashPhone = flashNext?.kind === "phone";
 
     this.phone.setVisible(showPhone);
-    this.phoneCaption.setVisible(showPhone);
     if (showPhone) {
-      if (!this.phone.input) enableItemHit(this.phone);
-      else this.phone.input.enabled = true;
+      if (!this.phoneHit.input) this.phoneHit.setInteractive({ useHandCursor: true });
+      else this.phoneHit.input.enabled = true;
     } else {
-      this.phone.disableInteractive();
+      this.phoneHit.disableInteractive();
     }
     const callName = drop.customerName ?? "customer";
-    this.phoneCaption.setText(
-      drop.phase === "calling" ? `Calling ${callName}…` : `Tap to call ${callName}`,
-    );
-    // Keep caption locked beside the phone every frame.
-    this.phoneCaption.setPosition(this.phone.x - this.phone.displayWidth * 0.5 - 14, this.phone.y);
+    this.phoneStatus.setText(drop.phase === "calling" ? `Calling ${callName}…` : `Tap to call ${callName}`);
     if (showPhone) {
-      this.phone.setAlpha(drop.phase === "calling" ? 0.85 : flashPhone ? pulse : 1);
-      this.phone.setTint(flashPhone && drop.phase !== "calling" ? 0xb8ffb0 : 0xffffff);
-      this.phoneCaption.setAlpha(1);
+      this.phone.setAlpha(1);
+      this.phoneBody.setAlpha(drop.phase === "calling" ? 0.92 : 1);
+      this.phoneFlash.setVisible(flashPhone && drop.phase !== "calling");
       if (flashPhone && drop.phase !== "calling") {
-        this.phoneCaption.setBackgroundColor(Color.limeHex);
-        this.phoneCaption.setColor(Color.inkHex);
+        this.phoneFlash.setStrokeStyle(4 + Math.round(3 * pulse), Color.lime, 0.55 + 0.45 * pulse);
+        this.phoneStatus.setColor(Color.inkHex);
+        this.phoneStatus.setBackgroundColor(Color.limeHex);
+        this.phoneStatus.setPadding(6, 3, 6, 3);
       } else {
-        this.phoneCaption.setBackgroundColor("#1c1612ee");
-        this.phoneCaption.setColor(Color.neonHex);
+        this.phoneFlash.setVisible(false);
+        this.phoneStatus.setColor(drop.phase === "calling" ? Color.neonHex : Color.creamHex);
+        this.phoneStatus.setBackgroundColor("#101418");
+        this.phoneStatus.setPadding(4, 2, 4, 2);
       }
+      this.paintPhoneMap(snap);
+    } else {
+      this.phoneFlash.setVisible(false);
+      this.phoneMap.clear();
     }
 
     const showId = !!drop.idCard && drop.idAsked;
+    if (showId && !this.idWasShowing) {
+      this.idCardArmedAt = snap.gameMs + NPC_INTERACT_COOLDOWN_MS;
+    }
+    this.idWasShowing = showId;
+    const idLive = showId && snap.gameMs >= this.idCardArmedAt;
     const flashId = flashNext?.kind === "idCard";
     this.idDim.setVisible(showId);
     if (showId) {
@@ -301,15 +338,15 @@ export class HudScene extends Phaser.Scene {
     }
     this.idPanel.setVisible(showId);
     this.idPanel.setAlpha(1);
-    if (showId) {
+    if (idLive) {
       if (!this.idBg.input) enableItemHit(this.idBg);
       else this.idBg.input.enabled = true;
     } else {
       this.idBg.disableInteractive();
     }
     // Pulse border only — keep ID text fully readable.
-    this.idFlashRing.setVisible(showId && flashId);
-    if (showId && flashId) {
+    this.idFlashRing.setVisible(idLive && flashId);
+    if (idLive && flashId) {
       this.idFlashRing.setStrokeStyle(6 + Math.round(4 * pulse), Color.lime, 0.55 + 0.45 * pulse);
       this.idFlashRing.setAlpha(1);
     }
@@ -340,30 +377,13 @@ export class HudScene extends Phaser.Scene {
     if (!drop.photoTaken) this.sawPhoto = false;
 
     this.toastText.setText(snap.toast);
-    // Call guidance lives next to the phone — hide the bottom toast while it's up.
-    this.toastText.setVisible(!!snap.toast && !showId && snap.dropoff.phase !== "atDoor" && !showPhone);
-
     const driving = snap.playerRole === "driver" && !atDoor;
+    // Drive prompts float over the van; ID/phone keep their own UI.
+    const driveBanner = driving && !!snap.toast;
+    this.toastText.setVisible(!!snap.toast && !showId && snap.dropoff.phase !== "atDoor" && !showPhone && !driveBanner);
     this.padRing.setVisible(false);
     this.padKnob.setVisible(false);
-    this.padLabel.setVisible(driving);
-    if (driving) {
-      this.padLabel
-        .setText(
-          snap.autoDriving
-            ? "Heading to stop…"
-            : showPhone
-              ? "Parked"
-              : snap.run?.nextStopId
-                ? "At the curb"
-                : "Parked at Kindling — tap shop",
-        )
-        .setPosition(this.padCenter.x, this.padCenter.y - 40)
-        .setOrigin(0.5, 1)
-        .setAlpha(1)
-        .setBackgroundColor(flashNext?.kind === "shop" ? Color.limeHex : "#1c1612ee")
-        .setColor(Color.creamHex);
-    }
+    this.padLabel.setVisible(false);
     this.syncDoorScene(snap);
     syncMusicToClock(snap.gameMs);
   }
@@ -552,18 +572,96 @@ export class HudScene extends Phaser.Scene {
     this.padRing.strokeCircle(x, y, 76);
   }
 
+  /** Mini city map on the delivery phone screen. */
+  private paintPhoneMap(snap: SimSnapshot): void {
+    const g = this.phoneMap;
+    g.clear();
+    const mapX = PHONE_SCREEN.x + 6;
+    const mapY = PHONE_SCREEN.y + 36;
+    const mapW = PHONE_SCREEN.w - 12;
+    const mapH = PHONE_SCREEN.h - 62;
+    g.fillStyle(0x1a2228, 1);
+    g.fillRoundedRect(mapX, mapY, mapW, mapH, 6);
+    g.lineStyle(1, 0x2e3a44, 1);
+    g.strokeRoundedRect(mapX, mapY, mapW, mapH, 6);
+
+    // App chrome behind title / status
+    g.fillStyle(0x0c1014, 1);
+    g.fillRect(PHONE_SCREEN.x + 4, PHONE_SCREEN.y + 8, PHONE_SCREEN.w - 8, 22);
+    g.fillRect(PHONE_SCREEN.x + 4, PHONE_SCREEN.y + PHONE_SCREEN.h - 28, PHONE_SCREEN.w - 8, 22);
+
+    const scale = Math.min(mapW / MAP_PX_W, mapH / MAP_PX_H);
+    const ox = mapX + (mapW - MAP_PX_W * scale) * 0.5;
+    const oy = mapY + (mapH - MAP_PX_H * scale) * 0.5;
+    const toMap = (wx: number, wy: number): { x: number; y: number } => ({
+      x: ox + wx * scale,
+      y: oy + wy * scale,
+    });
+
+    // Roads
+    g.fillStyle(0x3a4248, 1);
+    const kinds = CITY.kinds;
+    const step = Math.max(1, Math.floor(TILE * scale) < 1.2 ? 2 : 1);
+    for (let r = 0; r < kinds.length; r += step) {
+      for (let c = 0; c < kinds[r]!.length; c += step) {
+        const k = kinds[r]![c];
+        if (k !== "road" && k !== "parking") continue;
+        const p = toMap(c * TILE, r * TILE);
+        const s = Math.max(1.2, TILE * scale * step);
+        g.fillRect(p.x, p.y, s, s);
+      }
+    }
+
+    // Kindling shop
+    const shop = CITY.shopLot;
+    const shopPt = toMap(shop.origin.c * TILE, shop.origin.r * TILE);
+    g.fillStyle(Color.lime, 0.9);
+    g.fillRect(shopPt.x, shopPt.y, Math.max(3, shop.w * TILE * scale), Math.max(3, shop.h * TILE * scale));
+
+    // Destination pin
+    const stopId = snap.run?.nextStopId ?? snap.dropoff.houseId;
+    if (stopId) {
+      const house = houseById(stopId);
+      if (house) {
+        const stop = tileToWorld(house.stop);
+        const pin = toMap(stop.x, stop.y);
+        g.fillStyle(Color.amber, 1);
+        g.fillCircle(pin.x, pin.y, 4);
+        g.lineStyle(1.5, Color.cream, 1);
+        g.strokeCircle(pin.x, pin.y, 4);
+      }
+    }
+
+    // Van
+    const van = toMap(snap.vehicle.x, snap.vehicle.y);
+    g.fillStyle(0xffffff, 1);
+    g.fillCircle(van.x, van.y, 3.5);
+    g.fillStyle(Color.neon, 1);
+    g.fillCircle(van.x, van.y, 2.2);
+  }
+
   private syncDoorScene(snap: SimSnapshot): void {
     const wantDoor = snap.playerRole === "driver" && snap.dropoff.phase === "atDoor";
+    const showId = !!snap.dropoff.idCard && snap.dropoff.idAsked && !snap.dropoff.idChecked;
     const doorUp = this.scene.isActive("door") && !this.scene.isSleeping("door");
     if (wantDoor && !doorUp) {
       this.scene.sleep("drive");
       if (this.scene.isSleeping("door")) this.scene.wake("door");
       else this.scene.launch("door");
-      this.scene.bringToTop("door");
-      this.scene.bringToTop();
     } else if (!wantDoor && doorUp) {
       this.scene.sleep("door");
       if (snap.playerRole === "driver" && this.scene.isSleeping("drive")) this.scene.wake("drive");
+    }
+    if (wantDoor) {
+      // ID modal lives on the HUD; bag/customer taps live on the door — flip who is on top.
+      if (showId) {
+        this.scene.bringToTop("door");
+        this.scene.bringToTop();
+      } else {
+        this.scene.bringToTop();
+        this.scene.bringToTop("door");
+      }
+    } else {
       this.scene.bringToTop();
     }
   }

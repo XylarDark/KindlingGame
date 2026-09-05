@@ -4,6 +4,7 @@ import {
   TRAFFIC_DENSITY,
   TRAFFIC_LOOP_MAX,
   TRAFFIC_MIN_SEP,
+  TRAFFIC_VAN_DETECT,
   buildTrafficLoops,
   leadTrafficSpeed,
   trafficCars,
@@ -59,6 +60,30 @@ describe("city traffic", () => {
         expect(gap, `t=${t} ${car.id}`).toBeGreaterThanOrEqual(TRAFFIC_MIN_SEP - 1);
       }
     }
+  });
+
+  it("swings around or holds when the delivery van is ahead in lane", () => {
+    const loops = buildTrafficLoops(TRAFFIC_LOOP_MAX);
+    const base = trafficCars(4_000, loops);
+    expect(base.length).toBeGreaterThan(0);
+    const lead = base[0]!;
+    const van = {
+      x: lead.x + Math.cos(lead.angle) * (TRAFFIC_VAN_DETECT * 0.45),
+      y: lead.y + Math.sin(lead.angle) * (TRAFFIC_VAN_DETECT * 0.45),
+      heading: lead.angle,
+    };
+    const cars = trafficCars(4_000, loops, van);
+    const reacted = cars.find((c) => c.id === lead.id);
+    expect(reacted).toBeTruthy();
+    const gap = Math.hypot(reacted!.x - van.x, reacted!.y - van.y);
+    expect(gap).toBeGreaterThanOrEqual(TRAFFIC_MIN_SEP - 1);
+    // Either stopped behind (same-ish lane) or laterally offset away from the van.
+    const lateral = Math.abs(
+      -(Math.sin(lead.angle) * (reacted!.x - lead.x)) + Math.cos(lead.angle) * (reacted!.y - lead.y),
+    );
+    const retreated =
+      Math.cos(lead.angle) * (reacted!.x - lead.x) + Math.sin(lead.angle) * (reacted!.y - lead.y) < -2;
+    expect(lateral > 20 || retreated || gap > TRAFFIC_MIN_SEP + 10).toBe(true);
   });
 
   it("reports lead speed when a car is ahead in the same lane", () => {

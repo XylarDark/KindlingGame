@@ -11,7 +11,7 @@ import {
   roadTextureKey,
   tileToWorld,
 } from "../maps/cityT0";
-import { cityProps, cityStreetLamps, type CityLamp } from "../maps/cityDecor";
+import { cityAccessPaths, cityProps, cityStreetLamps, paintAccessPaths, type CityLamp } from "../maps/cityDecor";
 import { cityTrafficLoops, trafficCars, type TrafficLoop } from "../maps/traffic";
 import { enableItemHit } from "../input/hit";
 import { PEOPLE_SCALE } from "../maps/shopT0";
@@ -34,6 +34,7 @@ export class DriveScene extends Phaser.Scene {
   private pin!: Phaser.GameObjects.Image;
   private pinPulse!: Phaser.GameObjects.Rectangle;
   private pinLabel!: Phaser.GameObjects.Text;
+  private vanBanner!: Phaser.GameObjects.Text;
   private customer!: Phaser.GameObjects.Image;
   private shopImg!: Phaser.GameObjects.Image;
   private shopCaption!: Phaser.GameObjects.Text;
@@ -80,6 +81,19 @@ export class DriveScene extends Phaser.Scene {
       .setOrigin(0.5, 1)
       .setDepth(6)
       .setVisible(false);
+    this.vanBanner = addUiText(this, 0, 0, "", {
+      size: Type.body,
+      color: Color.creamHex,
+      backgroundColor: "#1c1612ee",
+      padding: { x: 14, y: 8 },
+      align: "center",
+      fontStyle: "600",
+      wordWrap: { width: 420 },
+      ...overlayStroke(14),
+    })
+      .setOrigin(0.5, 1)
+      .setDepth(12)
+      .setVisible(false);
     this.vehicle = this.add.image(0, 0, "tex-vehicle").setDepth(6).setDisplaySize(168, 104);
     this.walker = this.add.image(0, 0, "tex-driver").setOrigin(0.5, 1).setScale(PEOPLE_SCALE).setDepth(7).setVisible(false);
     this.customer = this.add.image(0, 0, "tex-customer").setOrigin(0.5, 1).setScale(PEOPLE_SCALE).setDepth(6).setVisible(false);
@@ -118,6 +132,17 @@ export class DriveScene extends Phaser.Scene {
       }
       sprite.setTexture(car.key).setPosition(car.x, car.y).setRotation(car.angle + Math.PI).setVisible(true);
     });
+
+    const driving = snap.playerRole === "driver" && snap.dropoff.phase !== "atDoor";
+    if (driving && snap.toast) {
+      this.vanBanner
+        .setVisible(true)
+        .setText(snap.toast)
+        .setPosition(snap.vehicle.x, snap.vehicle.y - 78);
+      fitTypeToWidth(this.vanBanner, 400, 16);
+    } else {
+      this.vanBanner.setVisible(false);
+    }
 
     if (snap.dropoff.driverOnFoot && snap.dropoff.driver) {
       this.walker.setVisible(true).setPosition(snap.dropoff.driver.x, snap.dropoff.driver.y + 18);
@@ -167,7 +192,6 @@ export class DriveScene extends Phaser.Scene {
     }
 
     const next = tutorialHints(snap)[0];
-    const driving = snap.playerRole === "driver" && snap.dropoff.phase !== "atDoor";
     const shop = tileToWorld(CITY.shopSpawn);
     const nearShop = Math.hypot(snap.vehicle.x - shop.x, snap.vehicle.y - shop.y) <= HANDOFF_RADIUS;
     const canTapShop = driving && nearShop;
@@ -288,6 +312,9 @@ export class DriveScene extends Phaser.Scene {
         .setDepth(2);
       fitTypeToWidth(num, house.lotW * TILE - 36, 16);
     });
+
+    const accessGfx = this.add.graphics().setDepth(0.5);
+    paintAccessPaths(accessGfx, cityAccessPaths());
 
     const shop = lotCenter(CITY.shopLot.origin, CITY.shopLot.w, CITY.shopLot.h);
     this.shopCenter = shop;

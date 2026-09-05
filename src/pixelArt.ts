@@ -41,6 +41,7 @@ export function generateTextures(scene: Phaser.Scene): void {
   treeTile(scene);
   treeTileAlt(scene, "tex-tree-2", Pal.leaf, Pal.leafDark);
   treeTileAlt(scene, "tex-tree-3", Pal.grassLite, Pal.leaf);
+  garageTile(scene);
   streetLamp(scene);
   parkedCar(scene, "tex-car", Pal.rustDark, Pal.rust);
   parkedCar(scene, "tex-car-2", Pal.denimDark, Pal.denim);
@@ -172,12 +173,13 @@ function roadCross(scene: Phaser.Scene): void {
 }
 
 function parkingStall(scene: Phaser.Scene): void {
-  // Soft driveway pad — asphalt that meets the street, not a framed parking box.
+  // Soft driveway pad — full asphalt tile so walkways can meet the lip cleanly.
   bake(scene, "tex-parking", 64, 64, (g) => {
-    cells(g, 0, 0, 16, 16, Pal.grass);
-    cells(g, 0, 1, 16, 14, Pal.asphalt);
-    cells(g, 0, 1, 16, 1, Pal.asphaltLite);
-    cells(g, 0, 14, 16, 1, Pal.asphaltDark);
+    cells(g, 0, 0, 16, 16, Pal.asphalt);
+    cells(g, 0, 0, 16, 1, Pal.asphaltLite);
+    cells(g, 0, 15, 16, 1, Pal.asphaltDark);
+    cells(g, 1, 2, 1, 12, Pal.asphaltLite);
+    cells(g, 14, 2, 1, 12, Pal.asphaltDark);
   });
 }
 
@@ -373,25 +375,40 @@ function shopBuilding(scene: Phaser.Scene): void {
 }
 
 function treeTile(scene: Phaser.Scene): void {
-  bake(scene, "tex-tree", 80, 80, (g) => {
-    cells(g, 0, 0, 20, 20, Pal.grass);
-    cells(g, 9, 14, 2, 5, Pal.woodDark);
-    cells(g, 8, 15, 4, 2, Pal.wood);
-    cells(g, 6, 6, 8, 8, Pal.leafDark);
-    cells(g, 7, 5, 6, 7, Pal.leaf);
-    cells(g, 8, 4, 4, 4, Pal.grassLite);
-    cells(g, 9, 7, 2, 2, Pal.leafDark);
+  // Transparent canvas — only trunk/canopy pixels, so trees never stamp a grass box over houses.
+  bake(scene, "tex-tree", 64, 80, (g) => {
+    cells(g, 7, 14, 2, 5, Pal.woodDark);
+    cells(g, 6, 15, 4, 2, Pal.wood);
+    cells(g, 4, 5, 8, 8, Pal.leafDark);
+    cells(g, 5, 4, 6, 7, Pal.leaf);
+    cells(g, 6, 3, 4, 4, Pal.grassLite);
+    cells(g, 7, 6, 2, 2, Pal.leafDark);
   });
 }
 
 function treeTileAlt(scene: Phaser.Scene, key: string, leaf: number, dark: number): void {
-  bake(scene, key, 80, 80, (g) => {
-    cells(g, 0, 0, 20, 20, Pal.grass);
-    cells(g, 9, 13, 2, 6, Pal.woodDark);
-    cells(g, 8, 14, 4, 2, Pal.wood);
-    cells(g, 5, 5, 10, 8, dark);
-    cells(g, 6, 4, 8, 7, leaf);
-    cells(g, 8, 3, 4, 3, Pal.grassLite);
+  bake(scene, key, 64, 80, (g) => {
+    cells(g, 7, 13, 2, 6, Pal.woodDark);
+    cells(g, 6, 14, 4, 2, Pal.wood);
+    cells(g, 3, 4, 10, 8, dark);
+    cells(g, 4, 3, 8, 7, leaf);
+    cells(g, 6, 2, 4, 3, Pal.grassLite);
+  });
+}
+
+function garageTile(scene: Phaser.Scene): void {
+  bake(scene, "tex-garage", 96, 80, (g) => {
+    cells(g, 1, 6, 22, 12, Pal.wall);
+    cells(g, 1, 4, 22, 3, Pal.asphaltDark);
+    cells(g, 2, 3, 20, 2, Pal.curb);
+    cells(g, 20, 6, 3, 12, Pal.shadow);
+    cells(g, 3, 9, 16, 8, Pal.asphalt);
+    cells(g, 3, 9, 16, 1, Pal.asphaltLite);
+    cells(g, 4, 11, 14, 5, Pal.asphaltDark);
+    cells(g, 5, 12, 3, 3, Pal.creamSoft);
+    cells(g, 10, 12, 3, 3, Pal.creamSoft);
+    cells(g, 15, 12, 3, 3, Pal.creamSoft);
+    cells(g, 11, 16, 2, 1, Pal.gold);
   });
 }
 
@@ -777,47 +794,36 @@ function cog(scene: Phaser.Scene): void {
 }
 
 function phone(scene: Phaser.Scene): void {
-  // Standard smartphone: tall chassis, thin bezel, notch/island, side buttons, home bar.
-  bake(scene, "tex-phone", 56, 112, (g) => {
-    const body = Pal.ink;
-    const edge = Pal.dusk;
-    const screen = 0x152028;
+  // Black square iPhone chassis — empty screen for live Kindling Delivery UI.
+  bake(scene, "tex-phone", 80, 96, (g) => {
+    const body = 0x0a0a0c;
+    const rim = 0x2a2a30;
+    const screen = 0x101418;
     // Soft shadow
-    cells(g, 2, 3, 12, 25, Pal.shadow);
-    // Chassis with rounded corners
-    cells(g, 2, 2, 12, 26, body);
-    cells(g, 3, 1, 10, 1, body);
-    cells(g, 3, 28, 10, 1, body);
-    cells(g, 1, 3, 1, 22, body);
-    cells(g, 14, 3, 1, 22, body);
-    // Highlight rim
-    cells(g, 3, 2, 10, 1, edge);
-    cells(g, 2, 3, 1, 1, edge);
-    // Volume / mute / power
-    cells(g, 0, 7, 1, 2, edge);
-    cells(g, 0, 10, 1, 3, edge);
-    cells(g, 0, 14, 1, 3, edge);
-    cells(g, 15, 11, 1, 4, edge);
+    cells(g, 2, 3, 18, 21, Pal.shadow);
+    // Chassis (rounded square)
+    cells(g, 2, 2, 18, 22, body);
+    cells(g, 3, 1, 16, 1, body);
+    cells(g, 3, 24, 16, 1, body);
+    cells(g, 1, 3, 1, 20, body);
+    cells(g, 20, 3, 1, 20, body);
+    // Metal rim highlight
+    cells(g, 3, 2, 16, 1, rim);
+    cells(g, 2, 3, 1, 1, rim);
+    cells(g, 19, 3, 1, 1, rim);
+    // Side buttons
+    cells(g, 0, 7, 1, 2, rim);
+    cells(g, 0, 10, 1, 3, rim);
+    cells(g, 0, 14, 1, 3, rim);
+    cells(g, 21, 11, 1, 4, rim);
     // Screen
-    cells(g, 3, 3, 10, 22, Pal.screen);
-    cells(g, 3, 3, 10, 22, screen);
-    // Dynamic island + camera
-    cells(g, 5, 4, 6, 2, body);
-    cells(g, 6, 4, 1, 2, Pal.denimDark);
-    cells(g, 9, 4, 1, 2, 0x1a3040);
-    // Status icons
-    cells(g, 4, 7, 1, 1, Pal.creamSoft);
-    cells(g, 6, 7, 2, 1, Pal.creamSoft);
-    cells(g, 11, 7, 1, 1, Pal.lime);
-    // Wallpaper + app icons
-    cells(g, 4, 9, 8, 11, 0x1e3340);
-    cells(g, 5, 10, 2, 2, Pal.leaf);
-    cells(g, 9, 10, 2, 2, Pal.denim);
-    cells(g, 5, 13, 2, 2, Pal.amber);
-    cells(g, 9, 13, 2, 2, Pal.rust);
-    cells(g, 5, 16, 6, 3, Pal.leafDark);
-    cells(g, 6, 17, 4, 1, Pal.lime);
+    cells(g, 3, 4, 16, 18, screen);
+    // Dynamic island
+    cells(g, 7, 5, 8, 2, body);
+    cells(g, 8, 5, 1, 2, 0x1a2830);
+    cells(g, 13, 5, 1, 2, 0x243848);
     // Home indicator
-    cells(g, 6, 23, 4, 1, Pal.creamSoft);
+    cells(g, 8, 20, 6, 1, 0x3a3a42);
   });
 }
+

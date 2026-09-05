@@ -35,8 +35,8 @@ function memoryStore(init: Record<string, string> = {}): Storage {
 }
 
 describe("music prefs", () => {
-  it("defaults to music on at a moderate volume", () => {
-    expect(defaultMusicPrefs()).toEqual({ enabled: true, volume: DEFAULT_MUSIC_VOLUME });
+  it("defaults to music muted at a moderate volume (dev-friendly)", () => {
+    expect(defaultMusicPrefs()).toEqual({ enabled: false, volume: DEFAULT_MUSIC_VOLUME });
     expect(loadMusicPrefs(memoryStore())).toEqual(defaultMusicPrefs());
   });
 
