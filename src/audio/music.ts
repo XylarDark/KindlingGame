@@ -17,6 +17,7 @@ let prefs: MusicPrefs = loadMusicPrefs();
 let music: PlayableSound | null = null;
 let unlockBound = false;
 let nightAmount = 0;
+let startQueued = false;
 
 export function getMusicPrefs(): MusicPrefs {
   return { ...prefs };
@@ -50,6 +51,12 @@ export function installMusicUnlock(game: Phaser.Game): void {
 export function startSessionMusic(game: Phaser.Game): void {
   installMusicUnlock(game);
   unlockAudio(game);
+  if (startQueued) {
+    ensureSound(game);
+    applyMusic();
+    return;
+  }
+  startQueued = true;
   const play = (): void => {
     ensureSound(game);
     applyMusic();
@@ -80,8 +87,23 @@ export function syncMusicToClock(gameMs: number): void {
 }
 
 function ensureSound(game: Phaser.Game): void {
-  if (music) return;
+  const existing = game.sound.get(BGM_KEY) as PlayableSound | null;
+  if (existing) {
+    music = existing;
+    // Hot reload / double-start can leave orphan loops with the same key.
+    for (const sound of game.sound.getAll(BGM_KEY) as PlayableSound[]) {
+      if (sound !== existing) {
+        sound.stop();
+        sound.destroy();
+      }
+    }
+    return;
+  }
   if (!game.cache.audio.exists(BGM_KEY)) return;
+  for (const sound of game.sound.getAll(BGM_KEY) as PlayableSound[]) {
+    sound.stop();
+    sound.destroy();
+  }
   music = game.sound.add(BGM_KEY, { loop: true, volume: 0 }) as PlayableSound;
 }
 

@@ -1,6 +1,6 @@
 import { CITY, TILE, isEWStreet, isNSStreet } from "./cityT0";
 import type { TileCell } from "../sim/pathfinding";
-import { routeWorldPoints, type WorldPoint } from "../sim/driveRoute";
+import { LANE_OFFSET_PX, routeWorldPoints, type WorldPoint } from "../sim/driveRoute";
 
 export interface TrafficLoop {
   id: string;
@@ -44,8 +44,8 @@ function rectangleLoop(c0: number, r0: number, c1: number, r1: number): TileCell
   return cells;
 }
 
-/** Ambient cars on closed road loops around the grid. */
-export function buildTrafficLoops(max = 6): TrafficLoop[] {
+/** Ambient cars on closed road loops. Cosmetic only — no collision with each other or the van. */
+export function buildTrafficLoops(max = 5): TrafficLoop[] {
   const loops: TrafficLoop[] = [];
   const seen = new Set<string>();
   const ewRows = CITY.kinds.map((_, r) => r).filter((r) => isEWStreet(r));
@@ -55,13 +55,13 @@ export function buildTrafficLoops(max = 6): TrafficLoop[] {
     for (let j = i + 1; j < ewRows.length && loops.length < max; j++) {
       const r0 = ewRows[i]!;
       const r1 = ewRows[j]!;
-      if (r1 - r0 < 2) continue;
+      if (r1 - r0 < 4) continue;
       for (let a = 0; a < nsCols.length && loops.length < max; a++) {
         for (let b = a + 1; b < nsCols.length && loops.length < max; b++) {
           const c0 = nsCols[a]!;
           const c1 = nsCols[b]!;
-          if (c1 - c0 < 3) continue;
-          if ((a + b + i + j) % 3 !== 0) continue;
+          if (c1 - c0 < 5) continue;
+          if ((a + b + i + j) % 4 !== 0) continue;
           const cells = rectangleLoop(c0, r0, c1, r1);
           if (!cells) continue;
           const key = `${c0},${r0}-${c1},${r1}`;
@@ -77,18 +77,27 @@ export function buildTrafficLoops(max = 6): TrafficLoop[] {
   return loops;
 }
 
+/**
+ * Positions for decorative traffic. Cars never collide — they are drawn ghosts with
+ * staggered timing and opposite-lane offsets so they do not stack on one path.
+ */
 export function trafficCars(gameMs: number, loops: readonly TrafficLoop[]): TrafficCarView[] {
   return loops.map((loop, i) => {
-    const speed = 140 + (i % 3) * 35;
-    const stagger = i * 2_400;
+    const speed = 120 + (i % 3) * 28;
+    const stagger = i * 3_600 + (i % 2) * 1_800;
     const dist = ((gameMs + stagger) * speed) / 1000;
     const t = (dist % loop.length) / loop.length;
     const pos = pointAlongLoop(loop.points, t);
     const angle = headingAlongLoop(loop.points, t);
+    // Alternate curb side so cars on nearby loops do not sit on top of each other.
+    const side = i % 2 === 0 ? 1 : -1;
+    const lateral = side * (LANE_OFFSET_PX * 0.55);
+    const x = pos.x + Math.cos(angle + Math.PI / 2) * lateral;
+    const y = pos.y + Math.sin(angle + Math.PI / 2) * lateral;
     return {
       id: loop.id,
-      x: pos.x,
-      y: pos.y,
+      x,
+      y,
       key: CAR_KEYS[i % CAR_KEYS.length]!,
       depth: 5,
       angle,

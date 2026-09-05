@@ -7,7 +7,7 @@ import { BAG_SCALE, PEOPLE_SCALE, PERSON_DISPLAY_H } from "../maps/shopT0";
 import { getSim } from "../session";
 import { skyAt } from "../sim/dayNight";
 import type { SimSnapshot } from "../sim/gameSim";
-import { addHudButton } from "../ui/chrome";
+import { addHudButton, setButtonPulse } from "../ui/chrome";
 import { formatSlaClock, isSlaUrgent } from "../ui/copy";
 import { addUiText } from "../ui/text";
 import { Color, Type } from "../ui/theme";
@@ -30,6 +30,8 @@ export class DoorScene extends Phaser.Scene {
   private youLabel!: Phaser.GameObjects.Text;
   private customerCaption!: Phaser.GameObjects.Text;
   private askIdBtn!: Phaser.GameObjects.Container;
+  private handBagBtn!: Phaser.GameObjects.Container;
+  private photoBtn!: Phaser.GameObjects.Container;
   private lastHouse = "";
   private lastSkyKey = "";
   private lighting?: DayNightPipeline;
@@ -108,7 +110,8 @@ export class DoorScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(8);
 
-    this.askIdBtn = addHudButton(this, CUSTOMER_X, floor - PERSON_DISPLAY_H - 16, "ASK FOR ID", () => getSim().queueInteract(), {
+    const btnY = floor - PERSON_DISPLAY_H - 16;
+    this.askIdBtn = addHudButton(this, CUSTOMER_X, btnY, "ASK FOR ID", () => getSim().queueInteract(), {
       originX: 0.5,
       originY: 1,
       variant: "primary",
@@ -117,6 +120,26 @@ export class DoorScene extends Phaser.Scene {
       depth: 9,
     });
     this.askIdBtn.setVisible(false);
+
+    this.handBagBtn = addHudButton(this, CUSTOMER_X, btnY, "HAND BAG", () => getSim().queueInteract(), {
+      originX: 0.5,
+      originY: 1,
+      variant: "primary",
+      minWidth: 360,
+      caption: "Hand over the order",
+      depth: 9,
+    });
+    this.handBagBtn.setVisible(false);
+
+    this.photoBtn = addHudButton(this, CUSTOMER_X, btnY, "TAKE PHOTO", () => getSim().queueInteract(), {
+      originX: 0.5,
+      originY: 1,
+      variant: "amber",
+      minWidth: 360,
+      caption: "Snap a photo of the bag",
+      depth: 9,
+    });
+    this.photoBtn.setVisible(false);
 
     this.layoutDoorHud();
     const relayout = (): void => this.layoutDoorHud();
@@ -170,21 +193,47 @@ export class DoorScene extends Phaser.Scene {
     const nextId = drop.actionLabel === "CHECK ID";
     const nextHand = drop.actionLabel === "HAND BAG";
     const nextAsk = drop.actionLabel === "ASK ID";
+    // While the ID card modal is up, door hits must not steal the tap.
+    const idModal = nextId;
+    const canDoorHit = !idModal && (nextAsk || nextHand || nextPhoto);
+
     this.bag.setVisible(true);
     this.bag.setAlpha(nextPhoto || nextHand ? pulse : 1);
     this.bag.clearTint();
-    this.customer.setAlpha(nextAsk || nextHand || nextId ? pulse : 1);
+    this.customer.setAlpha(nextAsk || nextHand ? pulse : 1);
     this.customer.clearTint();
+    if (this.bag.input) this.bag.input.enabled = canDoorHit && (nextHand || nextPhoto);
+    if (this.customer.input) this.customer.input.enabled = canDoorHit && (nextAsk || nextHand);
+    if (this.driver.input) this.driver.input.enabled = canDoorHit && (nextHand || nextPhoto);
+
     this.prompt.setText(drop.hint || "They're at the door.");
+    this.prompt.setAlpha(1);
     this.customerCaption.setText(drop.customerName ?? "Customer");
+    this.customerCaption.setAlpha(1);
     this.bagCaption.setVisible(nextPhoto || nextHand);
-    this.bagCaption.setText(nextPhoto ? "Tap to photo" : "Tap to hand over");
+    this.bagCaption.setText("Or tap the bag");
+    this.bagCaption.setAlpha(1);
     this.bagCaption.setPosition(this.bag.x, this.bag.y - this.bag.displayHeight * this.bag.originY - 8);
-    this.customerCaption.setBackgroundColor(nextAsk || nextId || nextHand ? Color.limeHex : "#1c1612ee");
-    this.customerCaption.setColor(nextAsk || nextId || nextHand ? Color.inkHex : Color.creamHex);
+    // Pulse caption background only — keep ink text steady.
+    if (nextPhoto || nextHand) {
+      const bright = Math.round(180 + 60 * pulse);
+      this.bagCaption.setBackgroundColor(`rgb(${bright},${Math.min(255, bright + 40)},${Math.round(bright * 0.55)})`);
+      this.bagCaption.setColor(Color.inkHex);
+    }
+    this.customerCaption.setBackgroundColor(nextAsk || nextHand ? Color.limeHex : "#1c1612ee");
+    this.customerCaption.setColor(nextAsk || nextHand ? Color.inkHex : Color.creamHex);
+
     this.askIdBtn.setVisible(nextAsk);
     if (this.askIdBtn.input) this.askIdBtn.input.enabled = nextAsk;
-    this.askIdBtn.setAlpha(nextAsk ? pulse : 1);
+    setButtonPulse(this.askIdBtn, pulse, nextAsk);
+
+    this.handBagBtn.setVisible(nextHand);
+    if (this.handBagBtn.input) this.handBagBtn.input.enabled = nextHand;
+    setButtonPulse(this.handBagBtn, pulse, nextHand);
+
+    this.photoBtn.setVisible(nextPhoto);
+    if (this.photoBtn.input) this.photoBtn.input.enabled = nextPhoto;
+    setButtonPulse(this.photoBtn, pulse, nextPhoto);
   }
 }
 

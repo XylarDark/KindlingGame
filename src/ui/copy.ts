@@ -29,11 +29,11 @@ export function deliveryBagLabel(destLabel: string, customerName: string, slaRem
   return `${destLabel}\n${customerName}  ·  ${clock}`;
 }
 
-export function roadButtonCopy(bagCount: number): { label: string; caption: string } {
+export function driverReadyCopy(bagCount: number): string {
   if (bagCount > 1) {
-    return { label: `HIT THE ROAD  ·  ${bagCount}`, caption: "Take every packed delivery" };
+    return `Tap me to take ${bagCount} packed bags\n— or wait for another delivery.`;
   }
-  return { label: "HIT THE ROAD", caption: "Leave with this delivery" };
+  return "Tap me when you're ready to leave\n— or wait for another delivery.";
 }
 
 export const BACK_TO_SHOP_COPY = { label: "BACK TO SHOP", caption: "Return to Kindling" };

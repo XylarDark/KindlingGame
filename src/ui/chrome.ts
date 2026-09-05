@@ -132,6 +132,16 @@ export function setButtonLabel(button: Phaser.GameObjects.Container, label: stri
   setButtonCopy(button, label, String(button.getData("caption") ?? ""));
 }
 
+/** Pulse only the button chrome — keep label/caption text fully opaque. */
+export function setButtonPulse(button: Phaser.GameObjects.Container, pulse: number, active: boolean): void {
+  const alpha = active ? pulse : 1;
+  for (const child of button.list) {
+    if (child instanceof Phaser.GameObjects.Graphics) child.setAlpha(alpha);
+    else if ("setAlpha" in child && typeof child.setAlpha === "function") child.setAlpha(1);
+  }
+  button.setAlpha(1);
+}
+
 export function wireHover(obj: Phaser.GameObjects.GameObject & { setTint?: (c: number) => unknown; clearTint?: () => unknown }): void {
   obj.on("pointerover", () => obj.setTint?.(0xfff0c0));
   obj.on("pointerout", () => obj.clearTint?.());

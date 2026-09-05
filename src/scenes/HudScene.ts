@@ -6,9 +6,8 @@ import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import { getSim } from "../session";
 import type { SimSnapshot } from "../sim/gameSim";
 import { tutorialHints } from "../sim/tutorialHints";
-import { addHudButton, addPanel, setButtonCopy } from "../ui/chrome";
+import { addHudButton, addPanel } from "../ui/chrome";
 import { addUiText } from "../ui/text";
-import { roadButtonCopy } from "../ui/copy";
 import { Color, Type } from "../ui/theme";
 import { overlayStroke } from "../ui/typekit";
 import { designSafeInset, HUD_TOUCH_MIN_DESIGN, readCssSafeArea, VIEWFIT_EVENT, viewFromScale } from "../ui/viewFit";
@@ -21,17 +20,19 @@ export class HudScene extends Phaser.Scene {
   private scoreText!: Phaser.GameObjects.Text;
   private scoreCaption!: Phaser.GameObjects.Text;
   private clockText!: Phaser.GameObjects.Text;
-  private roleBtn!: Phaser.GameObjects.Container;
   private padRing!: Phaser.GameObjects.Graphics;
   private padKnob!: Phaser.GameObjects.Arc;
   private padLabel!: Phaser.GameObjects.Text;
   private phone!: Phaser.GameObjects.Image;
   private phoneCaption!: Phaser.GameObjects.Text;
+  private idDim!: Phaser.GameObjects.Rectangle;
   private idPanel!: Phaser.GameObjects.Container;
   private idName!: Phaser.GameObjects.Text;
   private idDob!: Phaser.GameObjects.Text;
   private idHint!: Phaser.GameObjects.Text;
+  private idTitle!: Phaser.GameObjects.Text;
   private idBg!: Phaser.GameObjects.Rectangle;
+  private idFlashRing!: Phaser.GameObjects.Rectangle;
   private flash!: Phaser.GameObjects.Rectangle;
   private toastText!: Phaser.GameObjects.Text;
   private sawPhoto = false;
@@ -79,15 +80,6 @@ export class HudScene extends Phaser.Scene {
       .setOrigin(1, 0)
       .setDepth(20);
 
-    this.roleBtn = addHudButton(this, GAME_WIDTH - 28, 108, "HIT THE ROAD", () => this.onRole(), {
-      originX: 1,
-      originY: 0,
-      variant: "primary",
-      minWidth: 280,
-      caption: "Leave with this delivery",
-    });
-    this.roleBtn.setVisible(false);
-
     this.phone = this.add
       .image(GAME_WIDTH - 380, GAME_HEIGHT - 230, "tex-phone")
       .setDisplaySize(168, 288)
@@ -127,6 +119,13 @@ export class HudScene extends Phaser.Scene {
       .setOrigin(0.5, 1)
       .setDepth(20);
 
+    this.idDim = this.add
+      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x0a0806, 0.55)
+      .setDepth(24)
+      .setVisible(false);
+    this.idDim.setInteractive({ useHandCursor: false });
+    this.idDim.on("pointerdown", (p: Phaser.Input.Pointer) => p.event.stopPropagation());
+
     this.idName = addUiText(this, 0, -28, "", {
       size: Type.heading,
       color: Color.inkHex,
@@ -134,7 +133,7 @@ export class HudScene extends Phaser.Scene {
       fontStyle: "600",
       strokeThickness: 0,
     }).setOrigin(0.5);
-    const idTitle = addUiText(this, 0, -118, "CUSTOMER ID", {
+    this.idTitle = addUiText(this, 0, -118, "CUSTOMER ID", {
       size: Type.body,
       color: Color.inkHex,
       fontStyle: "700",
@@ -151,13 +150,21 @@ export class HudScene extends Phaser.Scene {
       fontStyle: "600",
       strokeThickness: 0,
     }).setOrigin(0.5);
+    this.idFlashRing = this.add.rectangle(0, 0, 572, 332, 0x000000, 0).setStrokeStyle(8, Color.lime, 1);
     this.idBg = this.add.rectangle(0, 0, 560, 320, 0xf4e8c1, 0.97).setStrokeStyle(6, 0x3d7a45);
     enableItemHit(this.idBg);
     this.idBg.on("pointerdown", (p: Phaser.Input.Pointer) => {
       p.event.stopPropagation();
       getSim().queueInteract();
     });
-    this.idPanel = this.add.container(GAME_WIDTH / 2, GAME_HEIGHT / 2, [this.idBg, idTitle, this.idName, this.idDob, this.idHint]);
+    this.idPanel = this.add.container(GAME_WIDTH / 2, GAME_HEIGHT / 2, [
+      this.idFlashRing,
+      this.idBg,
+      this.idTitle,
+      this.idName,
+      this.idDob,
+      this.idHint,
+    ]);
     this.idPanel.setDepth(25).setVisible(false);
 
     this.flash = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0xffffff, 0).setDepth(24);
@@ -222,7 +229,6 @@ export class HudScene extends Phaser.Scene {
     this.scoreText.setPosition(left, top);
     this.scoreCaption.setPosition(left, top + 56);
     this.clockText.setPosition(right, top);
-    this.roleBtn.setPosition(right, top + 72);
     this.phone.setPosition(GAME_WIDTH - 380 - inset.right, GAME_HEIGHT - 230 - inset.bottom);
     this.phoneCaption.setPosition(GAME_WIDTH - 380 - inset.right, GAME_HEIGHT - 70 - inset.bottom);
     this.toastText.setPosition(GAME_WIDTH / 2, bottom);
@@ -244,17 +250,8 @@ export class HudScene extends Phaser.Scene {
     this.scoreText.setText(String(snap.score));
     this.clockText.setText(snap.clockLabel);
     const next = tutorialHints(snap)[0];
-    if (snap.playerRole === "keyLead") {
-      const road = roadButtonCopy(snap.bagsInBin.length);
-      setButtonCopy(this.roleBtn, road.label, road.caption);
-    }
-    const showRole = snap.playerRole === "keyLead" && snap.canHitTheRoad;
-    this.roleBtn.setVisible(showRole);
-    if (this.roleBtn.input) this.roleBtn.input.enabled = showRole;
     const pulse = 0.55 + 0.45 * (0.5 + 0.5 * Math.sin(snap.gameMs / 160));
     const flashNext = this.settingsOpen ? null : next;
-    const pulseRoad = snap.playerRole === "keyLead" && flashNext?.kind === "hitTheRoad";
-    this.roleBtn.setAlpha(pulseRoad ? pulse : 1);
 
     const drop = snap.dropoff;
     const showPhone = snap.playerRole === "driver" && (drop.phase === "atCurb" || drop.phase === "calling");
@@ -268,12 +265,34 @@ export class HudScene extends Phaser.Scene {
     if (showPhone) {
       this.phone.setAlpha(drop.phase === "calling" ? 0.85 : flashPhone ? pulse : 1);
       this.phone.setTint(flashPhone && drop.phase !== "calling" ? 0xb8ffb0 : 0xffffff);
+      this.phoneCaption.setAlpha(1);
+      if (flashPhone && drop.phase !== "calling") {
+        this.phoneCaption.setBackgroundColor(Color.limeHex);
+        this.phoneCaption.setColor(Color.inkHex);
+      } else {
+        this.phoneCaption.setBackgroundColor("#1c1612ee");
+        this.phoneCaption.setColor(Color.neonHex);
+      }
     }
 
     const showId = !!drop.idCard && drop.idAsked;
     const flashId = flashNext?.kind === "idCard";
+    this.idDim.setVisible(showId);
+    if (this.idDim.input) this.idDim.input.enabled = showId;
     this.idPanel.setVisible(showId);
-    this.idPanel.setAlpha(flashId ? pulse : 1);
+    this.idPanel.setAlpha(1);
+    if (this.idBg.input) this.idBg.input.enabled = showId;
+    // Pulse border only — keep ID text fully readable.
+    this.idFlashRing.setVisible(showId && flashId);
+    if (showId && flashId) {
+      this.idFlashRing.setStrokeStyle(6 + Math.round(4 * pulse), Color.lime, 0.55 + 0.45 * pulse);
+      this.idFlashRing.setAlpha(1);
+    }
+    this.idBg.setAlpha(1);
+    this.idTitle.setAlpha(1);
+    this.idName.setAlpha(1);
+    this.idDob.setAlpha(1);
+    this.idHint.setAlpha(1);
     if (drop.idCard) {
       this.idName.setText(drop.idCard.name);
       const band = drop.idCard.ageOk ? "19+" : "UNDER 19";
@@ -302,8 +321,9 @@ export class HudScene extends Phaser.Scene {
         .setText(snap.autoDriving ? "Following GPS…" : snap.run?.nextStopId ? "At the curb — call" : "At Kindling — tap the shop")
         .setPosition(this.padCenter.x, this.padCenter.y - 40)
         .setOrigin(0.5, 1)
+        .setAlpha(1)
         .setBackgroundColor(flashNext?.kind === "phone" || flashNext?.kind === "shop" ? Color.limeHex : "#1c1612ee")
-        .setColor(flashNext?.kind === "phone" || flashNext?.kind === "shop" ? Color.inkHex : Color.creamHex);
+        .setColor(Color.creamHex);
     }
     this.syncDoorScene(snap);
     syncMusicToClock(snap.gameMs);
@@ -507,28 +527,6 @@ export class HudScene extends Phaser.Scene {
       if (snap.playerRole === "driver" && this.scene.isSleeping("drive")) this.scene.wake("drive");
       this.scene.bringToTop();
     }
-  }
-
-  private onRole(): void {
-    const sim = getSim();
-    if (sim.snapshot().playerRole !== "keyLead") return;
-    if (!sim.hitTheRoad()) return;
-    this.showDrive();
-  }
-
-  private showDrive(): void {
-    this.scene.sleep("shop");
-    this.scene.sleep("door");
-    if (this.scene.isSleeping("drive")) this.scene.wake("drive");
-    else if (!this.scene.isActive("drive")) this.scene.launch("drive");
-    this.scene.bringToTop();
-  }
-
-  private showShop(): void {
-    this.scene.sleep("drive");
-    this.scene.sleep("door");
-    this.scene.wake("shop");
-    this.scene.bringToTop();
   }
 
   private readInput(): { dx: number; dy: number } {

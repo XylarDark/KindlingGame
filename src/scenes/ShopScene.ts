@@ -35,7 +35,7 @@ import { skyAt } from "../sim/dayNight";
 import type { CustomerView, OrderView, SimSnapshot } from "../sim/gameSim";
 import { isPackedOnCounter } from "../sim/orders";
 import { nextShopHint } from "../sim/tutorialHints";
-import { deliveryBagLabel, isSlaUrgent } from "../ui/copy";
+import { deliveryBagLabel, driverReadyCopy, isSlaUrgent } from "../ui/copy";
 import { wireHover } from "../ui/chrome";
 import { addUiText } from "../ui/text";
 import { Color, Type } from "../ui/theme";
@@ -249,11 +249,11 @@ export class ShopScene extends Phaser.Scene {
     const pulse = 0.62 + 0.38 * (0.5 + 0.5 * Math.sin(snap.gameMs / 420));
     const tabletPulse = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(snap.gameMs / 160));
     const canGo = snap.canHitTheRoad && snap.playerRole === "keyLead";
-    const highlightGo = next?.kind === "hitTheRoad";
-    const readyLine =
-      snap.bagsInBin.length > 1 ? "Tap me — take every packed delivery." : "Tap me — take this delivery.";
-    const driverLine = highlightGo ? (snap.driverLine ?? readyLine) : null;
+    const highlightGo = canGo;
+    const readyLine = driverReadyCopy(snap.bagsInBin.length);
+    const driverLine = canGo ? (snap.driverLine ?? readyLine) : null;
     this.driverBubble.setVisible(!!driverLine && snap.playerRole === "keyLead").setText(driverLine ?? "");
+    this.driverBubble.setAlpha(1);
     this.driver.setAlpha(highlightGo ? pulse : 1);
     this.driver.setTint(highlightGo ? 0xb8ffb0 : 0xffffff);
     if (this.driver.input) this.driver.input.enabled = canGo;
@@ -266,6 +266,8 @@ export class ShopScene extends Phaser.Scene {
     this.bagRack.setAlpha(next?.kind === "bagRack" ? tabletPulse : 1);
     this.bagRack.setTint(next?.kind === "bagRack" ? 0xb8ffb0 : 0xffffff);
     this.bagRackLabel.setText(next?.kind === "bagRack" ? "Tap to pack" : "BAGS");
+    this.bagRackLabel.setAlpha(1);
+    this.bagRackLabel.setColor(Color.creamHex);
 
     this.tvs.forEach((tv, i) => {
       const sku = getSim().catalog.find((s) => s.id === this.jarSkus[i]);
@@ -274,8 +276,9 @@ export class ShopScene extends Phaser.Scene {
       if (wanted) tv.setStrokeStyle(3, Color.lime, 0.95);
       else tv.setStrokeStyle(0);
     });
-    this.tvLabels.forEach((label, i) => {
-      label.setColor(this.jarSkus[i] === snap.highlightSkuId ? Color.limeHex : Color.creamHex);
+    this.tvLabels.forEach((label) => {
+      label.setColor(Color.creamHex);
+      label.setAlpha(1);
     });
 
     const walkIn = snap.orders.find((o) => o.type === "inStore");
@@ -332,6 +335,8 @@ export class ShopScene extends Phaser.Scene {
       this.tabletScreen.fillRect(tab.screenLeft, tab.screenTop, tab.screenW, tab.screenH - tab.homeH);
     }
     this.tabletLabel.setText("ORDERS");
+    this.tabletLabel.setAlpha(1);
+    this.tabletLabel.setColor(Color.creamHex);
     fitTypeToWidth(this.tabletLabel, tab.screenW - 16, 12);
     const count = snap.tabletQueueCount;
     this.queueBadge.setVisible(count > 1);
@@ -410,10 +415,18 @@ export class ShopScene extends Phaser.Scene {
       sprite.setPosition(customer.x, CUSTOMER_SPOT.y);
       sprite.setAlpha(focus ? pulse : 1);
       sprite.setTint(focus ? 0xb8ffb0 : 0xffffff);
-      this.bubbles
-        .get(customer.orderId)
+      const bubble = this.bubbles.get(customer.orderId);
+      bubble
         ?.setPosition(customer.x + CUSTOMER_BUBBLE_DX, CUSTOMER_BUBBLE_Y)
-        .setText(customer.bubble);
+        .setText(customer.bubble)
+        .setAlpha(1);
+      if (bubble && focus) {
+        bubble.setBackgroundColor(Color.limeHex);
+        bubble.setColor(Color.inkHex);
+      } else if (bubble) {
+        bubble.setBackgroundColor(Color.creamHex);
+        bubble.setColor(Color.inkHex);
+      }
     }
   }
 

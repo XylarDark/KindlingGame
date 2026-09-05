@@ -8,10 +8,10 @@ import {
   WELCOME_HINT,
   WELCOME_TITLE,
   deliveryBagLabel,
+  driverReadyCopy,
   formatSlaClock,
   interactButtonCopy,
   isSlaUrgent,
-  roadButtonCopy,
 } from "./copy";
 
 describe("shop copy", () => {
@@ -24,12 +24,9 @@ describe("shop copy", () => {
     expect(HOWTO_HINT.startsWith("Tap")).toBe(true);
   });
 
-  it("labels the road and handoff buttons with what they do", () => {
-    expect(roadButtonCopy(1)).toEqual({
-      label: "HIT THE ROAD",
-      caption: "Leave with this delivery",
-    });
-    expect(roadButtonCopy(2).caption).toContain("every packed");
+  it("prompts the driver to leave or wait for another bag", () => {
+    expect(driverReadyCopy(1)).toContain("wait for another delivery");
+    expect(driverReadyCopy(2)).toContain("2 packed bags");
     expect(interactButtonCopy("PHOTO")?.caption).toContain("photo");
     expect(interactButtonCopy("ASK ID")?.label).toBe("ASK FOR ID");
     expect(interactButtonCopy("CHECK ID")?.caption).toContain("19+");

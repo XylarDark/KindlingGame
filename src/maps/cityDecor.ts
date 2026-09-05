@@ -25,6 +25,7 @@ function lotKeys(house: HouseStop): Set<string> {
       keys.add(`${c},${r}`);
     }
   }
+  for (const p of house.parking) keys.add(`${p.c},${p.r}`);
   return keys;
 }
 
@@ -38,6 +39,7 @@ function allLotKeys(): Set<string> {
       keys.add(`${c},${r}`);
     }
   }
+  for (const p of CITY.shopLot.parking) keys.add(`${p.c},${p.r}`);
   return keys;
 }
 
@@ -55,6 +57,23 @@ export function cityStreetLamps(): CityLamp[] {
     }
   }
   return lamps;
+}
+
+function parkCarOnPad(
+  props: CityProp[],
+  pad: { c: number; r: number },
+  key: string,
+  nsStreet: boolean,
+): void {
+  const x = pad.c * TILE + TILE / 2;
+  const y = pad.r * TILE + TILE / 2;
+  props.push({
+    x,
+    y,
+    key,
+    depth: 2,
+    display: nsStreet ? { w: 44, h: 80 } : { w: 88, h: 44 },
+  });
 }
 
 export function cityProps(): CityProp[] {
@@ -80,25 +99,11 @@ export function cityProps(): CityProp[] {
         if ((c + r * 5) % 13 === 4) {
           props.push({ x, y: y + 16, key: "tex-bench", depth: 2, display: { w: 72, h: 32 } });
         }
-        const nextToRoad =
-          kinds[r]?.[c - 1] === "road" ||
-          kinds[r]?.[c + 1] === "road" ||
-          kinds[r - 1]?.[c] === "road" ||
-          kinds[r + 1]?.[c] === "road";
-        if (nextToRoad && (c * 5 + r) % 7 === 3) {
-          const ns = kinds[r]?.[c - 1] === "road" || kinds[r]?.[c + 1] === "road";
-          props.push({
-            x: ns ? x : x + 8,
-            y: ns ? y + 10 : y,
-            key: (c + r) % 2 === 0 ? "tex-car" : "tex-car-2",
-            depth: 2,
-            display: ns ? { w: 44, h: 80 } : { w: 88, h: 44 },
-          });
-        }
       }
     }
   }
 
+  // Parked cars only on driveways / Kindling stalls — never on the road or lawn.
   CITY.houses.forEach((house, i) => {
     const home = lotCenter(house.house, house.lotW, house.lotH);
     const curb = tileToWorld(house.stop);
@@ -113,6 +118,16 @@ export function cityProps(): CityProp[] {
         depth: 2,
       });
     }
+    const pad = house.parking[0];
+    if (pad && i % 3 !== 2) {
+      const ns = isNSStreet(house.stop.c);
+      parkCarOnPad(props, pad, i % 2 === 0 ? "tex-car" : "tex-car-2", ns);
+    }
+  });
+
+  CITY.shopLot.parking.forEach((pad, i) => {
+    if (i % 2 === 1) return;
+    parkCarOnPad(props, pad, i % 4 === 0 ? "tex-car" : "tex-car-2", isNSStreet(pad.c + 1) || isNSStreet(pad.c - 1));
   });
 
   return props;

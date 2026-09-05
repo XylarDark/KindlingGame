@@ -20,7 +20,7 @@ const STEPS = [
   },
   {
     title: "Hit the road",
-    body: "The van follows GPS to each stop. Call from the curb, check ID, hand the bag, then photo. Packed deliveries on the counter all go with you.",
+    body: "The van follows GPS to each stop. Call from the curb, check ID, hand the bag, then photo. Tap the flashing driver when packed — or wait for another delivery.",
   },
 ];
 

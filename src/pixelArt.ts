@@ -28,6 +28,7 @@ export function generateTextures(scene: Phaser.Scene): void {
   roadH(scene);
   roadV(scene);
   roadCross(scene);
+  parkingStall(scene);
   grass(scene);
   shopTile(scene);
   shopBuilding(scene);
@@ -103,6 +104,20 @@ function roadCross(scene: Phaser.Scene): void {
     cells(g, 3, 3, 10, 10, Pal.asphaltLite);
     cells(g, 0, 7, 16, 1, Pal.dash);
     cells(g, 7, 0, 1, 16, Pal.dash);
+  });
+}
+
+function parkingStall(scene: Phaser.Scene): void {
+  bake(scene, "tex-parking", 64, 64, (g) => {
+    cells(g, 0, 0, 16, 16, Pal.asphaltDark);
+    cells(g, 1, 1, 14, 14, Pal.asphalt);
+    cells(g, 2, 2, 12, 12, Pal.asphaltLite);
+    cells(g, 0, 0, 16, 1, Pal.curb);
+    cells(g, 0, 15, 16, 1, Pal.curb);
+    cells(g, 0, 0, 1, 16, Pal.curb);
+    cells(g, 15, 0, 1, 16, Pal.curb);
+    cells(g, 3, 7, 10, 1, Pal.dash);
+    cells(g, 7, 3, 1, 10, 0x6a6860);
   });
 }
 

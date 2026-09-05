@@ -10,12 +10,14 @@ import {
 } from "./cityT0";
 
 describe("city map", () => {
-  it("uses large tiles and mixed house lots", () => {
+  it("uses large tiles, driveways, and mixed house lots", () => {
     expect(TILE).toBeGreaterThanOrEqual(112);
     expect(CITY.houses.length).toBeGreaterThanOrEqual(12);
     const sizes = new Set(CITY.houses.map((h) => `${h.lotW}x${h.lotH}`));
     expect(sizes.size).toBeGreaterThan(1);
-    expect(CITY.houses.some((h) => h.lotW >= 3 || h.lotH >= 3)).toBe(true);
+    expect(CITY.houses.every((h) => h.parking.length >= 1)).toBe(true);
+    expect(CITY.shopLot.parking.length).toBeGreaterThanOrEqual(3);
+    expect(CITY.houses.some((h) => h.lotW >= 2 && h.lotH >= 2)).toBe(true);
   });
 
   it("keeps every house reachable from Kindling", () => {

@@ -55,12 +55,12 @@ export class DriveScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, 0, MAP_PX_W, MAP_PX_H);
     this.cameras.main.setBackgroundColor(skyAt(0).mapGrass);
     this.lighting = attachDayNight(this.cameras.main);
-    this.paintDayNight(getSim().snapshot());
-    this.events.on(Phaser.Scenes.Events.PRE_RENDER, () => this.paintDayNight(getSim().snapshot()));
     this.drawCity();
     this.nightGlow = this.add.graphics().setDepth(2);
     this.glow = this.add.graphics().setDepth(3);
     this.gps = this.add.graphics().setDepth(4);
+    this.paintDayNight(getSim().snapshot());
+    this.events.on(Phaser.Scenes.Events.PRE_RENDER, () => this.paintDayNight(getSim().snapshot()));
     this.pinPulse = this.add.rectangle(0, 0, 88, 88, Color.neon, 0.28).setDepth(4);
     this.pin = this.add.image(0, 0, "tex-pin").setDepth(5).setDisplaySize(96, 120);
     this.tweens.add({
@@ -89,7 +89,7 @@ export class DriveScene extends Phaser.Scene {
   }
 
   private spawnTraffic(): void {
-    this.trafficLoops = buildTrafficLoops(6);
+    this.trafficLoops = buildTrafficLoops(5);
     this.trafficSprites = this.trafficLoops.map((loop, i) =>
       this.add
         .image(0, 0, i % 2 === 0 ? "tex-car" : "tex-car-2")
@@ -97,6 +97,7 @@ export class DriveScene extends Phaser.Scene {
         .setDisplaySize(120, 72)
         .setAlpha(0.92),
     );
+    // Traffic is cosmetic — never interactive, never collides with the van or other cars.
   }
 
   update(): void {
@@ -172,14 +173,21 @@ export class DriveScene extends Phaser.Scene {
     this.shopImg.setTint(flashShop && canTapShop ? 0xb8ffb0 : 0xffffff);
     this.shopCaption.setVisible(driving);
     if (this.shopCaption.input) this.shopCaption.input.enabled = canTapShop;
+    this.shopCaption.setAlpha(1);
     if (snap.run?.nextStopId) {
       this.shopCaption.setText("Kindling");
-      this.shopCaption.setAlpha(1);
+      this.shopCaption.setBackgroundColor("#1c1612ee");
+      this.shopCaption.setColor(Color.creamHex);
     } else {
       this.shopCaption.setText(nearShop ? "Tap Kindling to return" : snap.autoDriving ? "Van heading to Kindling" : "Drive to Kindling");
-      this.shopCaption.setAlpha(
-        flashShop && nearShop ? 0.7 + 0.3 * (0.5 + 0.5 * Math.sin(snap.gameMs / 200)) : nearShop ? 0.85 : 1,
-      );
+      if (flashShop && nearShop) {
+        const bright = Math.round(180 + 60 * (0.5 + 0.5 * Math.sin(snap.gameMs / 200)));
+        this.shopCaption.setBackgroundColor(`rgb(${bright},${Math.min(255, bright + 40)},${Math.round(bright * 0.55)})`);
+        this.shopCaption.setColor(Color.inkHex);
+      } else {
+        this.shopCaption.setBackgroundColor(nearShop ? Color.limeHex : "#1c1612ee");
+        this.shopCaption.setColor(nearShop ? Color.inkHex : Color.creamHex);
+      }
     }
     syncItemHit(this.shopCaption);
   }
@@ -201,6 +209,7 @@ export class DriveScene extends Phaser.Scene {
   }
 
   private paintNightGlow(sky: ReturnType<typeof skyAt>): void {
+    if (!this.nightGlow) return;
     this.nightGlow.clear();
     if (sky.windowGlow < 0.04 && sky.lampAlpha < 0.04) return;
     for (const house of CITY.houses) {
@@ -262,6 +271,10 @@ export class DriveScene extends Phaser.Scene {
         const y = r * TILE + TILE / 2;
         if (houseTiles.has(`${c},${r}`) || (kind === "shop" && shopTiles.has(`${c},${r}`))) {
           this.add.image(x, y, "tex-wall").setDisplaySize(TILE, TILE).setDepth(0);
+          continue;
+        }
+        if (kind === "parking") {
+          this.add.image(x, y, "tex-parking").setDisplaySize(TILE, TILE).setDepth(0);
           continue;
         }
         const key =
