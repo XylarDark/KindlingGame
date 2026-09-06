@@ -218,6 +218,9 @@ export class GameSim {
   private driveWaypoint = 0;
   private driveArrived = false;
   private vehicleHeading = Math.PI;
+  /** Smoothed cruise so traffic follow / corners do not jitter the van. */
+  private driveSpeedSmoothed = VEHICLE_SPEED;
+  private cornerSmoothed = 0;
   private keyLeadX = KEYLEAD.x;
   private keyLeadPhase: KeyLeadPhase = "idle";
   private keyLeadFacing = 1;
@@ -896,25 +899,35 @@ export class GameSim {
       y: this.vehicle.y,
       heading: this.vehicleHeading,
     });
-    const corner = upcomingTurnSharpness(
+    const cornerRaw = upcomingTurnSharpness(
       this.driveRoute,
       this.vehicle.x,
       this.vehicle.y,
       this.driveWaypoint,
     );
+    const smooth = 1 - Math.exp(-dt * 5.5);
+    this.cornerSmoothed += (cornerRaw - this.cornerSmoothed) * smooth;
     const cruise = driveSpeedForTraffic(
       { x: this.vehicle.x, y: this.vehicle.y, heading: this.vehicleHeading },
       traffic,
       VEHICLE_SPEED,
     );
-    // Ease off into elbows so the van tracks the lane instead of skating the chord.
-    const speed = cruise * (1 - 0.42 * corner);
-    const step = advanceRoute(this.vehicle.x, this.vehicle.y, this.driveWaypoint, this.driveRoute, speed, dt);
+    // Ease off into elbows; blend speed so lead-car bands never stutter the van.
+    const targetSpeed = cruise * (1 - 0.28 * this.cornerSmoothed);
+    this.driveSpeedSmoothed += (targetSpeed - this.driveSpeedSmoothed) * smooth;
+    const step = advanceRoute(
+      this.vehicle.x,
+      this.vehicle.y,
+      this.driveWaypoint,
+      this.driveRoute,
+      this.driveSpeedSmoothed,
+      dt,
+    );
     this.vehicle.x = clamp(step.x, TILE, MAP_PX_W - TILE);
     this.vehicle.y = clamp(step.y, TILE, MAP_PX_H - TILE);
     this.driveWaypoint = step.waypoint;
-    // Square up faster on hard corners; stay smooth on straights (no spin).
-    const turn = 1 - Math.exp(-dt * (7 + 8 * corner));
+    // Square up on corners; stay smooth on straights (no spin / heading jitter).
+    const turn = 1 - Math.exp(-dt * (6 + 7 * this.cornerSmoothed));
     this.vehicleHeading = lerpAngle(this.vehicleHeading, step.heading, turn);
     if (step.arrived || dist(this.vehicle.x, this.vehicle.y, target.x, target.y) <= PARK_ARRIVE_RADIUS) {
       this.parkAt(target);

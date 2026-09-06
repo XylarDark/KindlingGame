@@ -37,11 +37,14 @@ export type TrafficObstacle = {
 
 const CAR_KEYS = ["tex-car", "tex-car-2"] as const;
 
-/** Minimum center-to-center gap so cars never stack through each other (or the van). */
-export const TRAFFIC_MIN_SEP = 110;
+/** Hard floor — cars must never sit closer than this (overlap / clip). */
+export const TRAFFIC_MIN_SEP = 120;
+
+/** Comfortable following distance (center-to-center) when stacked in a lane. */
+export const TRAFFIC_FOLLOW_GAP = 156;
 
 /** How far ahead the delivery van looks for a slower lead car. */
-export const TRAFFIC_LOOK_AHEAD = 180;
+export const TRAFFIC_LOOK_AHEAD = 220;
 
 /** How far traffic looks for the delivery van to stop / go around. */
 export const TRAFFIC_VAN_DETECT = 240;
@@ -193,28 +196,34 @@ export function trafficCars(
     states.push(...picked);
   }
 
-  // Car↔car separation.
-  for (let pass = 0; pass < 12; pass++) {
+  // Same-loop convoys: hold a steady follow gap and match the lead's speed (no shove fights).
+  enforceLoopFollowing(states);
+
+  // Cross-traffic / Euclidean floor — soft, exact, no overshoot (avoids frame jitter).
+  for (let pass = 0; pass < 8; pass++) {
     let moved = false;
     for (let a = 0; a < states.length; a++) {
       for (let b = a + 1; b < states.length; b++) {
         const ca = states[a]!;
         const cb = states[b]!;
+        if (ca.loop.id === cb.loop.id) continue; // already handled as a convoy
         const pa = pointAlongLoop(ca.loop.points, ca.t);
         const pb = pointAlongLoop(cb.loop.points, cb.t);
         const gap = Math.hypot(pa.x - pb.x, pa.y - pb.y);
         if (gap >= TRAFFIC_MIN_SEP) continue;
-        const need = TRAFFIC_MIN_SEP - gap + 4;
+        const need = TRAFFIC_MIN_SEP - gap;
         const follower = pickFollower(ca, cb, pa, pb) === ca ? ca : cb;
+        const lead = follower === ca ? cb : ca;
         const retreat = need / Math.max(TILE, follower.loop.length);
         follower.t = ((follower.t - retreat) % 1 + 1) % 1;
+        follower.speed = Math.min(follower.speed, lead.speed);
         moved = true;
       }
     }
     if (!moved) break;
   }
 
-  // Van awareness: stop if too close ahead — stay in lane (no swing into oncoming).
+  // Van awareness: ease back in-lane — clamp once, match a crawl (no stop-go yank).
   if (obstacle) {
     for (const car of states) {
       const p = pointAlongLoop(car.loop.points, car.t);
@@ -232,19 +241,24 @@ export function trafficCars(
       if (gap < TRAFFIC_VAN_DETECT && Math.abs(lateral) < TRAFFIC_LANE_WIDTH * 1.35) {
         const closing = forward > 24 || (vanToward > 24 && forward > -40);
         if (closing && forward > 8) {
-          // Hold back in-lane when the van is ahead or closing — never change lanes.
-          const hold = Math.max(4, (TRAFFIC_MIN_SEP * 1.35 - Math.min(gap, TRAFFIC_MIN_SEP * 1.35)) + 8);
-          const step = hold / Math.max(TILE, car.loop.length);
-          car.t = ((car.t - step) % 1 + 1) % 1;
-          car.speed = 0;
+          const want = Math.max(TRAFFIC_MIN_SEP, TRAFFIC_FOLLOW_GAP * 0.85);
+          if (gap < want) {
+            const hold = want - gap;
+            const step = hold / Math.max(TILE, car.loop.length);
+            car.t = ((car.t - step) % 1 + 1) % 1;
+          }
+          // Crawl with the van instead of slamming to 0 (that caused speed jitter).
+          const crawl = Math.max(18, Math.min(car.speed, 55 + gap * 0.15));
+          car.speed = Math.min(car.speed, crawl);
         }
       }
 
       if (gap < TRAFFIC_MIN_SEP) {
-        const need = TRAFFIC_MIN_SEP - gap + 6;
+        const need = TRAFFIC_MIN_SEP - gap;
         const step = need / Math.max(TILE, car.loop.length);
         if (forward >= 0) car.t = ((car.t - step) % 1 + 1) % 1;
         else car.t = (car.t + step) % 1;
+        car.speed = Math.min(car.speed, 40);
       }
     }
   }
@@ -274,7 +288,7 @@ export function leadTrafficSpeed(
   return lead ? lead.car.speed : null;
 }
 
-/** Cruise speed for the van: match a lead car, and ease off if nose-to-tail. */
+/** Cruise speed for the van: smooth follow curve (no hard brake bands = less jitter). */
 export function driveSpeedForTraffic(
   player: TrafficObstacle,
   cars: readonly TrafficCarView[],
@@ -283,9 +297,20 @@ export function driveSpeedForTraffic(
 ): number {
   const lead = findLeadCar(player, cars, lookAhead);
   if (!lead) return cruise;
-  if (lead.dist < TRAFFIC_MIN_SEP * 0.92) return Math.min(cruise * 0.15, lead.car.speed * 0.4);
-  if (lead.dist < TRAFFIC_MIN_SEP * 1.2) return Math.min(cruise, lead.car.speed);
-  return Math.min(cruise, lead.car.speed + 20);
+  const dist = lead.dist;
+  const leadSpeed = Math.max(0, lead.car.speed);
+  // Nose-to-tail: crawl. At follow gap: match lead. Farther: gently close.
+  if (dist <= TRAFFIC_MIN_SEP) return Math.min(cruise * 0.12, Math.max(12, leadSpeed * 0.35));
+  if (dist >= lookAhead) return Math.min(cruise, leadSpeed + 24);
+  const follow = TRAFFIC_FOLLOW_GAP;
+  if (dist <= follow) {
+    const u = (dist - TRAFFIC_MIN_SEP) / Math.max(1, follow - TRAFFIC_MIN_SEP);
+    const s = u * u * (3 - 2 * u); // smoothstep
+    return Math.min(cruise, leadSpeed * (0.4 + 0.6 * s));
+  }
+  const u = (dist - follow) / Math.max(1, lookAhead - follow);
+  const s = u * u * (3 - 2 * u);
+  return Math.min(cruise, leadSpeed + 24 * s);
 }
 
 function findLeadCar(
@@ -310,6 +335,61 @@ function findLeadCar(
     bestDist = dist;
   }
   return best ? { car: best, dist: bestDist } : null;
+}
+
+
+/** Forward arc length from `fromT` to `toT` along a unit loop (0..length). */
+function loopArcAhead(fromT: number, toT: number, length: number): number {
+  const dt = ((toT - fromT) % 1 + 1) % 1;
+  return dt * length;
+}
+
+/**
+ * On each shared loop, keep followers a steady TRAFFIC_FOLLOW_GAP behind the
+ * car ahead and match that car's speed so stacks don't accordion every frame.
+ */
+function enforceLoopFollowing(states: CarState[]): void {
+  const byLoop = new Map<string, CarState[]>();
+  for (const car of states) {
+    const list = byLoop.get(car.loop.id);
+    if (list) list.push(car);
+    else byLoop.set(car.loop.id, [car]);
+  }
+  for (const group of byLoop.values()) {
+    if (group.length < 2) continue;
+    // Stable order so clamps don't flip identities frame-to-frame.
+    group.sort((a, b) => a.t - b.t || a.id.localeCompare(b.id));
+    // Multiple passes so a chain of three+ settles without overshoot fighting.
+    for (let pass = 0; pass < group.length; pass++) {
+      for (let i = 0; i < group.length; i++) {
+        const follower = group[i]!;
+        let bestLead: CarState | null = null;
+        let bestArc = Infinity;
+        for (let j = 0; j < group.length; j++) {
+          if (i === j) continue;
+          const lead = group[j]!;
+          const arc = loopArcAhead(follower.t, lead.t, follower.loop.length);
+          // Ignore the long way around (nearly full lap behind).
+          if (arc < 1 || arc > follower.loop.length * 0.5) continue;
+          if (arc < bestArc) {
+            bestArc = arc;
+            bestLead = lead;
+          }
+        }
+        if (!bestLead) continue;
+        const want = TRAFFIC_FOLLOW_GAP;
+        if (bestArc < want) {
+          const retreat = (want - bestArc) / Math.max(TILE, follower.loop.length);
+          follower.t = ((follower.t - retreat) % 1 + 1) % 1;
+          follower.speed = Math.min(follower.speed, bestLead.speed);
+        } else if (bestArc < want * 1.35) {
+          // Closing in — match pace before the hard gap clamp kicks in.
+          follower.speed = Math.min(follower.speed, bestLead.speed);
+        }
+      }
+      group.sort((a, b) => a.t - b.t || a.id.localeCompare(b.id));
+    }
+  }
 }
 
 function pickFollower(

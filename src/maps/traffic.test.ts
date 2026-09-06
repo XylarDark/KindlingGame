@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { TILE } from "./cityT0";
 import {
   TRAFFIC_DENSITY,
+  TRAFFIC_FOLLOW_GAP,
   TRAFFIC_LOOP_MAX,
   TRAFFIC_MIN_SEP,
   TRAFFIC_VAN_DETECT,
@@ -115,6 +116,39 @@ describe("city traffic", () => {
       -(Math.sin(lead.angle) * (reacted!.x - lead.x)) + Math.cos(lead.angle) * (reacted!.y - lead.y),
     );
     expect(lateral).toBeLessThan(12);
+  });
+
+  it("same-loop followers match lead speed and keep a follow gap", () => {
+    const loops = buildTrafficLoops(TRAFFIC_LOOP_MAX);
+    for (const ms of [0, 2_500, 8_000, 15_000]) {
+      const cars = trafficCars(ms, loops);
+      const byLoop = new Map<string, typeof cars>();
+      for (const car of cars) {
+        const loopId = car.id.replace(/-\d+$/, "");
+        // id is `${loop.id}-${k}` — regroup via proximity on shared heading instead
+        void loopId;
+      }
+      // Pairwise: when two cars share nearly the same heading and are stacked, follower ≤ lead speed
+      // and gap stays near the follow distance floor.
+      for (let i = 0; i < cars.length; i++) {
+        for (let j = 0; j < cars.length; j++) {
+          if (i === j) continue;
+          const a = cars[i]!;
+          const b = cars[j]!;
+          const facing =
+            Math.cos(a.angle) * Math.cos(b.angle) + Math.sin(a.angle) * Math.sin(b.angle);
+          if (facing < 0.85) continue;
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const forward = Math.cos(a.angle) * dx + Math.sin(a.angle) * dy;
+          const lateral = Math.abs(-Math.sin(a.angle) * dx + Math.cos(a.angle) * dy);
+          if (forward <= 8 || forward > TRAFFIC_FOLLOW_GAP * 1.6 || lateral > 40) continue;
+          // a is behind b → a is follower
+          expect(a.speed, `follower ${a.id} vs ${b.id} @${ms}`).toBeLessThanOrEqual(b.speed + 1e-6);
+          expect(forward, `gap ${a.id}->${b.id} @${ms}`).toBeGreaterThanOrEqual(TRAFFIC_MIN_SEP - 1);
+        }
+      }
+    }
   });
 
   it("reports lead speed when a car is ahead in the same lane", () => {
