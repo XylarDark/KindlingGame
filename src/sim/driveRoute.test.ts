@@ -10,6 +10,8 @@ import {
   rightOffset,
   segmentHeading,
   upcomingTurnSharpness,
+  normalizeAngle,
+  shortestAngleDelta,
 } from "./driveRoute";
 
 describe("driveRoute", () => {
@@ -95,7 +97,22 @@ describe("driveRoute", () => {
     const mid = lerpAngle(0, Math.PI / 2, 0.5);
     expect(mid).toBeGreaterThan(0.2);
     expect(mid).toBeLessThan(1.4);
-    expect(Math.abs(lerpAngle(0, Math.PI, 0.5))).toBeCloseTo(Math.PI / 2, 5);
+  });
+
+  it("never takes a 180°/360° flip — holds course on opposite headings", () => {
+    expect(lerpAngle(0, Math.PI, 1)).toBeCloseTo(0, 5);
+    expect(lerpAngle(0, -Math.PI, 1)).toBeCloseTo(0, 5);
+    expect(Math.abs(shortestAngleDelta(0.1, -0.1))).toBeLessThan(0.25);
+    // Cap each step under ~100° even when aiming further.
+    const stepped = lerpAngle(0, Math.PI * 0.9, 1);
+    expect(Math.abs(stepped)).toBeLessThanOrEqual(Math.PI * 0.55 + 1e-6);
+    expect(Math.abs(normalizeAngle(stepped))).toBeLessThan(Math.PI);
+  });
+
+  it("turns the short way across the ±π wrap without spinning", () => {
+    const a = lerpAngle(Math.PI - 0.1, -Math.PI + 0.1, 1);
+    expect(Math.abs(shortestAngleDelta(Math.PI - 0.1, a))).toBeLessThan(0.25);
+    expect(Math.abs(a)).toBeGreaterThan(Math.PI - 0.3);
   });
 
   it("flags a sharp corner ahead so drivers can slow into the elbow", () => {

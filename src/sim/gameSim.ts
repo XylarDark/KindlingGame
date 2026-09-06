@@ -914,7 +914,7 @@ export class GameSim {
     this.vehicle.y = clamp(step.y, TILE, MAP_PX_H - TILE);
     this.driveWaypoint = step.waypoint;
     // Square up faster on hard corners; stay smooth on straights (no spin).
-    const turn = 1 - Math.exp(-dt * (9 + 14 * corner));
+    const turn = 1 - Math.exp(-dt * (7 + 8 * corner));
     this.vehicleHeading = lerpAngle(this.vehicleHeading, step.heading, turn);
     if (step.arrived || dist(this.vehicle.x, this.vehicle.y, target.x, target.y) <= PARK_ARRIVE_RADIUS) {
       this.parkAt(target);
@@ -924,6 +924,16 @@ export class GameSim {
   private parkAt(target: { x: number; y: number }): void {
     this.vehicle.x = target.x;
     this.vehicle.y = target.y;
+    // Keep approach heading — never snap toward the lot (that was a 180° flip).
+    if (this.driveRoute.length >= 2) {
+      const a = this.driveRoute[this.driveRoute.length - 2]!;
+      const b = this.driveRoute[this.driveRoute.length - 1]!;
+      const hx = b.x - a.x;
+      const hy = b.y - a.y;
+      if (Math.hypot(hx, hy) > 0.5) {
+        this.vehicleHeading = lerpAngle(this.vehicleHeading, Math.atan2(hy, hx), 1);
+      }
+    }
     this.arriveAtDriveTarget(target);
   }
 
@@ -932,11 +942,6 @@ export class GameSim {
     this.driveArrived = true;
     const stopId = this.nextStopId();
     if (stopId) {
-      const house = houseById(stopId);
-      if (house) {
-        const home = lotCenter(house.house, house.lotW, house.lotH);
-        this.vehicleHeading = Math.atan2(home.y - this.vehicle.y, home.x - this.vehicle.x);
-      }
       const order = this.runOrderIds
         .map((id) => this.orderById(id))
         .find((o) => o?.destinationId === stopId && o.status === "onRun");
@@ -946,8 +951,6 @@ export class GameSim {
       return;
     }
     if (dist(this.vehicle.x, this.vehicle.y, target.x, target.y) <= HANDOFF_RADIUS) {
-      const shop = lotCenter(CITY.shopLot.origin, CITY.shopLot.w, CITY.shopLot.h);
-      this.vehicleHeading = Math.atan2(shop.y - this.vehicle.y, shop.x - this.vehicle.x);
       this.toast = "Parked at Kindling. Tap the shop to return.";
     }
   }
