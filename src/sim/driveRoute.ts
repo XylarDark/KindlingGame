@@ -122,6 +122,56 @@ export function orthogonalLanePath(cells: readonly TileCell[]): WorldPoint[] {
   return out;
 }
 
+
+/** 0 = straight ahead, 1 = hard ~90° corner within lookAhead px along the route. */
+export function upcomingTurnSharpness(
+  route: readonly WorldPoint[],
+  x: number,
+  y: number,
+  waypoint: number,
+  lookAhead = 140,
+): number {
+  if (route.length < 3) return 0;
+  let remaining = lookAhead;
+  let cx = x;
+  let cy = y;
+  let wp = Math.min(Math.max(0, waypoint), route.length);
+  let prevHeading: number | null = null;
+  let maxBend = 0;
+
+  while (remaining > 0 && wp < route.length) {
+    const target = route[wp]!;
+    const dx = target.x - cx;
+    const dy = target.y - cy;
+    const seg = Math.hypot(dx, dy);
+    if (seg > 0.5) {
+      const heading = Math.atan2(dy, dx);
+      if (prevHeading !== null) {
+        let delta = heading - prevHeading;
+        while (delta > Math.PI) delta -= Math.PI * 2;
+        while (delta < -Math.PI) delta += Math.PI * 2;
+        maxBend = Math.max(maxBend, Math.min(1, Math.abs(delta) / (Math.PI / 2)));
+      }
+      prevHeading = heading;
+    }
+    if (seg <= 0.5) {
+      cx = target.x;
+      cy = target.y;
+      wp += 1;
+      continue;
+    }
+    if (seg <= remaining) {
+      remaining -= seg;
+      cx = target.x;
+      cy = target.y;
+      wp += 1;
+      continue;
+    }
+    break;
+  }
+  return maxBend;
+}
+
 export function advanceRoute(
   x: number,
   y: number,

@@ -166,7 +166,7 @@ export function trafficCars(
 
   const states: CarState[] = [];
   loops.forEach((loop, i) => {
-    const speed = 115 + (i % 3) * 22;
+    const speed = (115 + (i % 3) * 22) * 0.95;
     const stagger = i * 2_800 + (i % 2) * 1_400;
     const dist = ((gameMs + stagger) * speed) / 1000;
     const carsOnLoop = loop.length > TILE * 14 ? 2 : 1;
