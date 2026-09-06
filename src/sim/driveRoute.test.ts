@@ -9,6 +9,7 @@ import {
   routeWorldPoints,
   rightOffset,
   segmentHeading,
+  upcomingTurnSharpness,
 } from "./driveRoute";
 
 describe("driveRoute", () => {
@@ -30,7 +31,7 @@ describe("driveRoute", () => {
     let wp = 0;
     let arrived = false;
     for (let i = 0; i < 200 && !arrived; i++) {
-      const step = advanceRoute(x, y, wp, route, 380, 0.05);
+      const step = advanceRoute(x, y, wp, route, 361, 0.05);
       x = step.x;
       y = step.y;
       wp = step.waypoint;
@@ -95,5 +96,19 @@ describe("driveRoute", () => {
     expect(mid).toBeGreaterThan(0.2);
     expect(mid).toBeLessThan(1.4);
     expect(Math.abs(lerpAngle(0, Math.PI, 0.5))).toBeCloseTo(Math.PI / 2, 5);
+  });
+
+  it("flags a sharp corner ahead so drivers can slow into the elbow", () => {
+    const route = routeWorldPoints([
+      { c: 2, r: 4 },
+      { c: 5, r: 4 },
+      { c: 5, r: 7 },
+    ]);
+    const start = route[0]!;
+    const midStraight = upcomingTurnSharpness(route, start.x, start.y, 1, 80);
+    expect(midStraight).toBeLessThan(0.35);
+    // Near the turn elbow, look-ahead should see the 90° bend.
+    const nearTurn = upcomingTurnSharpness(route, route[1]!.x - 20, route[1]!.y, 1, 200);
+    expect(nearTurn).toBeGreaterThan(0.6);
   });
 });

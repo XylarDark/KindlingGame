@@ -22,7 +22,14 @@ import {
 } from "./constants";
 import { ageForSeed, emptyDropoff, idCardFor, type DropoffPhase, type DropoffView } from "./dropoff";
 import { destLabel, isOpen, needsFetch, tabletQueue, type Order, type OrderType } from "./orders";
-import { advanceRoute, lerpAngle, routeWorldPoints, snapPathToDriveLanes, type WorldPoint } from "./driveRoute";
+import {
+  advanceRoute,
+  lerpAngle,
+  routeWorldPoints,
+  snapPathToDriveLanes,
+  upcomingTurnSharpness,
+  type WorldPoint,
+} from "./driveRoute";
 import { findPath } from "./pathfinding";
 import { generateCustomerName } from "./names";
 import { isDeliveryLate, scoreForComplete, scoreForFail } from "./scoring";
@@ -889,17 +896,25 @@ export class GameSim {
       y: this.vehicle.y,
       heading: this.vehicleHeading,
     });
-    const speed = driveSpeedForTraffic(
+    const corner = upcomingTurnSharpness(
+      this.driveRoute,
+      this.vehicle.x,
+      this.vehicle.y,
+      this.driveWaypoint,
+    );
+    const cruise = driveSpeedForTraffic(
       { x: this.vehicle.x, y: this.vehicle.y, heading: this.vehicleHeading },
       traffic,
       VEHICLE_SPEED,
     );
+    // Ease off into elbows so the van tracks the lane instead of skating the chord.
+    const speed = cruise * (1 - 0.42 * corner);
     const step = advanceRoute(this.vehicle.x, this.vehicle.y, this.driveWaypoint, this.driveRoute, speed, dt);
     this.vehicle.x = clamp(step.x, TILE, MAP_PX_W - TILE);
     this.vehicle.y = clamp(step.y, TILE, MAP_PX_H - TILE);
     this.driveWaypoint = step.waypoint;
-    // Ease through 90° corners like ambient traffic — segment heading, short lerp (no spin).
-    const turn = 1 - Math.exp(-dt * 8);
+    // Square up faster on hard corners; stay smooth on straights (no spin).
+    const turn = 1 - Math.exp(-dt * (9 + 14 * corner));
     this.vehicleHeading = lerpAngle(this.vehicleHeading, step.heading, turn);
     if (step.arrived || dist(this.vehicle.x, this.vehicle.y, target.x, target.y) <= PARK_ARRIVE_RADIUS) {
       this.parkAt(target);
