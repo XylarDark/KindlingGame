@@ -294,14 +294,37 @@ export function pointAheadOnRoute(
   return route[route.length - 1] ?? { x, y };
 }
 
-/** Shortest-path lerp for headings in (-π, π]. */
-export function lerpAngle(from: number, to: number, t: number): number {
-  const fromN = Math.atan2(Math.sin(from), Math.cos(from));
-  const toN = Math.atan2(Math.sin(to), Math.cos(to));
-  let delta = toN - fromN;
+/** Wrap to (-π, π]. */
+export function normalizeAngle(a: number): number {
+  return Math.atan2(Math.sin(a), Math.cos(a));
+}
+
+/** Shortest signed delta from → to in (-π, π]. */
+export function shortestAngleDelta(from: number, to: number): number {
+  let delta = normalizeAngle(to) - normalizeAngle(from);
   while (delta > Math.PI) delta -= Math.PI * 2;
   while (delta < -Math.PI) delta += Math.PI * 2;
-  return fromN + delta * Math.max(0, Math.min(1, t));
+  return delta;
+}
+
+/**
+ * Shortest-path lerp for headings. Caps each step so vehicles never take a
+ * ≥180° flip (reads as a 360° spin on screen). Ambiguous ±π holds course.
+ */
+export function lerpAngle(
+  from: number,
+  to: number,
+  t: number,
+  /** Max |delta| applied before t — ~100° keeps 90° corners, blocks flips. */
+  maxAbsDelta = Math.PI * 0.55,
+): number {
+  const fromN = normalizeAngle(from);
+  let delta = shortestAngleDelta(fromN, to);
+  // Exactly opposite: either way is a flip — hold heading instead.
+  if (Math.abs(delta) > Math.PI - 1e-3) return fromN;
+  if (delta > maxAbsDelta) delta = maxAbsDelta;
+  else if (delta < -maxAbsDelta) delta = -maxAbsDelta;
+  return normalizeAngle(fromN + delta * Math.max(0, Math.min(1, t)));
 }
 
 export function routeLength(route: readonly WorldPoint[]): number {
