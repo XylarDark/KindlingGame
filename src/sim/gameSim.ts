@@ -353,6 +353,9 @@ export class GameSim {
   }
 
   queueInteract(): void {
+    // Ignore spam/key-repeat while a doorstep step is locked — otherwise Space/E
+    // auto-repeat (or a click-through) burns the lock then races bag → photo.
+    if (this.dropoff && this.clock.gameMs < this.dropoffInteractReadyAt) return;
     this.queuedInteract = true;
   }
 
@@ -1131,7 +1134,8 @@ export class GameSim {
     if (!d.idAsked) {
       d.idAsked = true;
       this.toast = `${order.customerName} is showing ID. Confirm 19+.`;
-      this.armDropoffInteract();
+      this.queuedInteract = false;
+      this.armDropoffInteract(NPC_INTERACT_COOLDOWN_MS);
       return;
     }
 
@@ -1144,19 +1148,22 @@ export class GameSim {
           this.runOrderIds.length === 0
             ? "Denied. Van is heading back to Kindling."
             : `Denied. Next → ${this.nextStopId() ? houseTitle(this.nextStopId()!) : "Kindling"}.`;
-        this.armDropoffInteract();
+        this.queuedInteract = false;
+        this.armDropoffInteract(NPC_INTERACT_COOLDOWN_MS);
         return;
       }
       d.idChecked = true;
       this.toast = `ID checks out — 19+. Hand ${order.customerName} the bag.`;
-      // Full cooldown so the ID tap cannot click through into bag/photo.
+      // Drop any same-gesture queue and lock hard so ID cannot skip bag/photo.
+      this.queuedInteract = false;
       this.armDropoffInteract(NPC_INTERACT_COOLDOWN_MS);
       return;
     }
     if (!d.bagHanded) {
       d.bagHanded = true;
       this.toast = `Bag handed to ${order.customerName}. Snap the photo.`;
-      this.armDropoffInteract();
+      this.queuedInteract = false;
+      this.armDropoffInteract(NPC_INTERACT_COOLDOWN_MS);
       return;
     }
     if (!d.photoTaken) {
@@ -1170,7 +1177,8 @@ export class GameSim {
       } else {
         this.toast = `Dropped. Next → ${this.nextStopId() ? houseTitle(this.nextStopId()!) : "Kindling"}.`;
       }
-      this.armDropoffInteract();
+      this.queuedInteract = false;
+      this.armDropoffInteract(NPC_INTERACT_COOLDOWN_MS);
     }
   }
 
