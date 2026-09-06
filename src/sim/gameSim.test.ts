@@ -352,6 +352,28 @@ describe("GameSim order loops", () => {
     expect(sim.snapshot().dropoff.actionLabel).toBe("PHOTO");
   });
 
+  it("does not race through bag and photo from post-ID interact spam", () => {
+    const sim = GameSim.create({ seed: 4, autoSpawn: false });
+    fillTicket(sim, "delivery", { destinationId: "house-1", ageOk: true });
+    sim.hitTheRoad();
+    startDoor(sim, "house-1");
+    stepDropoff(sim); // ask
+    sim.interact(); // check ID
+    expect(sim.snapshot().dropoff.actionLabel).toBe("HAND BAG");
+    // Spam only inside the lock window (and across the unlock boundary without a fresh tap).
+    for (let i = 0; i < 6; i++) {
+      sim.queueInteract();
+      sim.tick(40);
+    }
+    sim.tick(NPC_INTERACT_COOLDOWN_MS);
+    expect(sim.snapshot().dropoff.actionLabel).toBe("HAND BAG");
+    expect(sim.snapshot().dropoff.bagHanded).toBe(false);
+    expect(sim.snapshot().dropoff.photoTaken).toBe(false);
+    stepDropoff(sim);
+    expect(sim.snapshot().dropoff.actionLabel).toBe("PHOTO");
+    expect(sim.snapshot().dropoff.bagHanded).toBe(true);
+  });
+
   it("denies an underage stop, fails the order, and returns to the map", () => {
     const sim = GameSim.create({ seed: 4, autoSpawn: false });
     const order = fillTicket(sim, "delivery", { destinationId: "house-1", ageOk: false });

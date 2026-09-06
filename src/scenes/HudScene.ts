@@ -217,8 +217,16 @@ export class HudScene extends Phaser.Scene {
     this.keys = kb
       ? (kb.addKeys("W,A,S,D,E,UP,DOWN,LEFT,RIGHT,SPACE") as Record<string, Phaser.Input.Keyboard.Key>)
       : {};
-    kb?.on("keydown-E", () => getSim().queueInteract());
-    kb?.on("keydown-SPACE", () => getSim().queueInteract());
+    // Just-down only — Phaser key repeat would otherwise queueInteract every frame
+    // and skip HAND BAG / PHOTO once the doorstep lock expires.
+    kb?.on("keydown-E", (ev: KeyboardEvent) => {
+      if (ev.repeat) return;
+      getSim().queueInteract();
+    });
+    kb?.on("keydown-SPACE", (ev: KeyboardEvent) => {
+      if (ev.repeat) return;
+      getSim().queueInteract();
+    });
 
     this.input.addPointer(2);
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => this.onPointerDown(p));
@@ -322,7 +330,7 @@ export class HudScene extends Phaser.Scene {
       this.phoneMap.clear();
     }
 
-    const showId = !!drop.idCard && drop.idAsked;
+    const showId = !!drop.idCard && drop.idAsked && !drop.idChecked;
     if (showId && !this.idWasShowing) {
       this.idCardArmedAt = snap.gameMs + NPC_INTERACT_COOLDOWN_MS;
     }
