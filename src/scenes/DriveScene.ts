@@ -141,7 +141,7 @@ export class DriveScene extends Phaser.Scene {
       y: snap.vehicle.y,
       heading: snap.vehicle.heading,
     });
-    const turnT = 1 - Math.exp(-(this.game.loop.delta / 1000) * 8);
+    const turnT = 1 - Math.exp(-(this.game.loop.delta / 1000) * 6.5);
     const seen = new Set<string>();
     while (this.trafficSprites.length < traffic.length) {
       this.trafficSprites.push(this.add.image(0, 0, "tex-car").setDepth(5).setDisplaySize(120, 72).setAlpha(0.92));
