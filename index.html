@@ -83,6 +83,63 @@
       #rotate-gate[hidden] {
         display: none;
       }
+      #chrome-coach {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 45;
+        display: flex;
+        justify-content: center;
+        padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+        pointer-events: none;
+      }
+      #chrome-coach[hidden] {
+        display: none;
+      }
+      .chrome-coach__card {
+        pointer-events: auto;
+        max-width: 420px;
+        width: 100%;
+        background: #1c1612ee;
+        color: #f4e8c1;
+        border: 2px solid #3d7a45;
+        border-radius: 14px;
+        padding: 14px 16px;
+        font-family: Inter, system-ui, sans-serif;
+        box-shadow: 0 10px 30px #0008;
+      }
+      .chrome-coach__card strong {
+        display: block;
+        font-size: 16px;
+        margin-bottom: 6px;
+      }
+      .chrome-coach__card p {
+        margin: 0 0 12px;
+        font-size: 14px;
+        line-height: 1.35;
+        color: #e8d9b8;
+      }
+      .chrome-coach__row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .chrome-coach__card button {
+        appearance: none;
+        border: 0;
+        border-radius: 999px;
+        padding: 10px 14px;
+        font: 700 14px Inter, system-ui, sans-serif;
+        background: #b8ffb0;
+        color: #1c1612;
+        cursor: pointer;
+      }
+      .chrome-coach__card button.chrome-coach__ghost {
+        background: transparent;
+        color: #f4e8c1;
+        border: 1px solid #f4e8c155;
+      }
     </style>
   </head>
   <body>

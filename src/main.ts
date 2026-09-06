@@ -7,3 +7,9 @@ import "@fontsource/inter/latin-700.css";
 
 const game = new Phaser.Game(gameConfig);
 installMobileShell(game);
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    void navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => undefined);
+  });
+}
