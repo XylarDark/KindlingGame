@@ -29,7 +29,7 @@ if (!Number.isInteger(LANE) || LANE < 0 || LANE > 63) {
 }
 
 const PORT = 9400 + LANE;
-const BASE = arg("url", process.env.KINDLING_URL ?? "http://localhost:5174")!.replace(/\/$/, "");
+const BASE = arg("url", process.env.KINDLING_URL ?? "http://127.0.0.1:5174")!.replace(/\/$/, "");
 const QUERY = arg("query", "?howto=0")!;
 const OUT = arg("out", process.env.KINDLING_SHOT_OUT ?? join(process.env.TEMP ?? "/tmp", "kindling-shots"))!;
 const NAME = arg("name", `lane${LANE}-${new Date().toISOString().replace(/[:.]/g, "-")}.png`)!;
