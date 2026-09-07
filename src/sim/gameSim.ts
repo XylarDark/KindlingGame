@@ -18,21 +18,20 @@ import {
   MS_PER_GAME_HOUR,
   PICKUP_ARRIVE_MS,
   PICKUP_HANDOFF_WAIT_MS,
+  SCORE_DELIVERY_LATE,
+  SCORE_DELIVERY_ON_TIME,
+  SCORE_FAIL,
+  SHIFT_MS,
   VEHICLE_SPEED,
 } from "./constants";
 import { ageForSeed, emptyDropoff, idCardFor, type DropoffPhase, type DropoffView } from "./dropoff";
 import { destLabel, isOpen, needsFetch, tabletQueue, type Order, type OrderType } from "./orders";
-import {
-  advanceRoute,
-  lerpAngle,
-  routeWorldPoints,
-  snapPathToDriveLanes,
-  upcomingTurnSharpness,
-  type WorldPoint,
-} from "./driveRoute";
+import { advanceRoute, lerpAngle, routeWorldPoints, snapPathToDriveLanes, type WorldPoint } from "./driveRoute";
 import { findPath } from "./pathfinding";
 import { generateCustomerName } from "./names";
 import { isDeliveryLate, scoreForComplete, scoreForFail } from "./scoring";
+import { buildShiftResults, type ShiftResults } from "./shiftResults";
+import type { SfxKind } from "../audio/sfx";
 import {
   CITY,
   doorstepWorld,
@@ -55,8 +54,6 @@ export type ShopClick =
   | { type: "keyLead" }
   | { type: "bagRack" }
   | { type: "strain"; skuId: string }
-  | { type: "counterBag" }
-  | { type: "receipt" }
   | { type: "tablet"; orderId: string }
   | { type: "handoff" }
   | { type: "customer"; orderId: string };
@@ -69,22 +66,6 @@ export interface KeyLeadView {
   facing: number;
   phase: KeyLeadPhase;
   visible: boolean;
-}
-
-export interface ReceiptView {
-  customerName: string;
-  skuName: string;
-  destLabel: string;
-  held: boolean;
-}
-
-export interface CounterBagView {
-  skuId: string | null;
-  skuName: string | null;
-  customerName: string | null;
-  destLabel: string | null;
-  filled: boolean;
-  hasItem: boolean;
 }
 
 export interface CustomerView {
@@ -120,11 +101,9 @@ export interface SimSnapshot {
   catalog: Sku[];
   handSkuId: string | null;
   handSkuName: string | null;
-  counterBag: CounterBagView | null;
   selectedOrderId: string | null;
   awaitingBag: boolean;
   keyLead: KeyLeadView;
-  receipt: ReceiptView | null;
   vehicle: { x: number; y: number; heading: number };
   autoDriving: boolean;
   customers: CustomerView[];
@@ -143,7 +122,15 @@ export interface SimSnapshot {
   keyLeadLine: string | null;
   /** After tapping a delivery: "Ok, off I go." */
   driverLine: string | null;
-  pendingDepart: boolean;
+  /** True after 23:00 or End shift — results UI owns the session. */
+  shiftEnded: boolean;
+  shiftResults: ShiftResults | null;
+  /** Settings: End shift early after ≥1 scored complete/fail. */
+  canEndShiftEarly: boolean;
+  /** Latest score delta for HUD pops; id increments each event. */
+  scoreFlash: { id: number; delta: number } | null;
+  /** One-shot UI sound cue for HudScene. */
+  sfxCue: { id: number; kind: SfxKind } | null;
 }
 
 export interface SimOptions {
@@ -177,12 +164,6 @@ interface DropoffState {
   bagHanded: boolean;
 }
 
-interface CounterBag {
-  skuId: string | null;
-  orderId: string;
-  hasItem: boolean;
-}
-
 export class GameSim {
   readonly catalog: Sku[];
   readonly clock = new GameClock();
@@ -192,11 +173,17 @@ export class GameSim {
   toast = "Welcome to Kindling. Watch the order screen.";
   input = { dx: 0, dy: 0 };
   autoSpawn: boolean;
+  shiftEnded = false;
+  private under19Fails = 0;
+  private scoredActions = 0;
+  private scoreFlash: { id: number; delta: number } | null = null;
+  private scoreFlashSeq = 0;
+  private sfxCue: { id: number; kind: SfxKind } | null = null;
+  private sfxSeq = 0;
   handSkuId: string | null = null;
   selectedOrderId: string | null = null;
   awaitingBag = false;
   private driverLine: string | null = null;
-  private pendingDepart = false;
   private packQueue: string[] = [];
 
   private orders: Order[] = [];
@@ -211,22 +198,17 @@ export class GameSim {
   private nextTicketWaveAt = 0;
   private rng: () => number;
   private runOrderIds: string[] = [];
-  private counterBag: CounterBag | null = null;
   private nameSeed: number;
   private dropoff: DropoffState | null = null;
   private driveRoute: WorldPoint[] = [];
   private driveWaypoint = 0;
   private driveArrived = false;
   private vehicleHeading = Math.PI;
-  /** Smoothed cruise so traffic follow / corners do not jitter the van. */
-  private driveSpeedSmoothed = VEHICLE_SPEED;
-  private cornerSmoothed = 0;
   private keyLeadX = KEYLEAD.x;
   private keyLeadPhase: KeyLeadPhase = "idle";
   private keyLeadFacing = 1;
   private fetchSkuId: string | null = null;
   private backroomLeftMs = 0;
-  private receiptHeld = false;
   /** Blocks a second door/curb interact from the same tap (ASK ID → deny/next, etc.). */
   private dropoffInteractReadyAt = 0;
 
@@ -265,6 +247,10 @@ export class GameSim {
 
   /** Jump the shift back to 09:00 and clear a door stop so leftover SLAs cannot pin the player LATE. */
   resetToMorning(): void {
+    if (this.shiftEnded) {
+      this.startNewDay();
+      return;
+    }
     this.clock.gameMs = 0;
     this.clearDropoff();
     for (const order of this.orders) {
@@ -283,10 +269,71 @@ export class GameSim {
     this.toast = "New day. Clock is 9:00 AM.";
   }
 
+  /** End the shift early (settings) or when the clock hits 23:00. */
+  endShift(): void {
+    if (this.shiftEnded) return;
+    this.shiftEnded = true;
+    this.clearDropoff();
+    this.queuedInteract = false;
+    this.input = { dx: 0, dy: 0 };
+    this.driveArrived = true;
+    this.driveRoute = [];
+    this.toast = "Shift over. See your results.";
+  }
+
+  /** Tester shortcut: same results card as 23:00, for time played so far. */
+  endShiftEarly(): boolean {
+    if (this.shiftEnded || this.scoredActions < 1) return false;
+    this.endShift();
+    return true;
+  }
+
+  /** Results → New day: 09:00, score 0, fresh floor, shop playable. */
+  startNewDay(): void {
+    this.shiftEnded = false;
+    this.score = 0;
+    this.under19Fails = 0;
+    this.scoredActions = 0;
+    this.scoreFlash = null;
+    this.scoreFlashSeq = 0;
+    this.clock.gameMs = 0;
+    this.clearDropoff();
+    this.playerRole = "keyLead";
+    this.vehicle = tileToWorld(CITY.shopSpawn);
+    this.vehicleHeading = Math.PI;
+    this.driveRoute = [];
+    this.driveWaypoint = 0;
+    this.driveArrived = false;
+    this.orders = [];
+    this.customers = [];
+    this.runOrderIds = [];
+    this.handSkuId = null;
+    this.selectedOrderId = null;
+    this.awaitingBag = false;
+    this.packQueue = [];
+    this.driverLine = null;
+    this.keyLeadX = KEYLEAD.x;
+    this.keyLeadPhase = "idle";
+    this.keyLeadFacing = 1;
+    this.fetchSkuId = null;
+    this.backroomLeftMs = 0;
+    this.npcCooldown = 0;
+    this.npcStep = 0;
+    this.queuedInteract = false;
+    this.input = { dx: 0, dy: 0 };
+    this.dropoffInteractReadyAt = 0;
+    this.lastAutoSpawn = 0;
+    this.nextOrderId = 1;
+    this.nextDeliveryHouse = 0;
+    if (this.autoSpawn) this.queueOpeningOrders();
+    else {
+      this.spawnQueue = [];
+      this.nextTicketWaveAt = 0;
+    }
+    this.toast = "New day. Clock is 9:00 AM.";
+  }
+
   snapshot(): SimSnapshot {
-    const bagSku = this.counterBag?.skuId ? skuById(this.catalog, this.counterBag.skuId) : undefined;
-    const bagOrder = this.counterBag ? this.orderById(this.counterBag.orderId) : undefined;
-    const receiptSku = bagOrder ? skuById(this.catalog, bagOrder.skuId) : undefined;
     const selected = this.selectedOrderId ? this.orderById(this.selectedOrderId) : undefined;
     return {
       gameMs: this.clock.gameMs,
@@ -296,16 +343,6 @@ export class GameSim {
       catalog: this.catalog,
       handSkuId: this.handSkuId,
       handSkuName: this.handSkuId ? (skuById(this.catalog, this.handSkuId)?.name ?? null) : null,
-      counterBag: this.counterBag
-        ? {
-            skuId: this.counterBag.skuId,
-            skuName: bagSku?.name ?? receiptSku?.name ?? null,
-            customerName: bagOrder?.customerName ?? null,
-            destLabel: bagOrder ? destLabel(bagOrder) : null,
-            filled: this.counterBag.hasItem,
-            hasItem: this.counterBag.hasItem,
-          }
-        : null,
       selectedOrderId: this.selectedOrderId,
       awaitingBag:
         !!selected &&
@@ -320,14 +357,6 @@ export class GameSim {
         phase: this.keyLeadPhase,
         visible: this.keyLeadPhase !== "inBack",
       },
-      receipt: bagOrder
-        ? {
-            customerName: bagOrder.customerName,
-            skuName: receiptSku?.name ?? bagOrder.skuId,
-            destLabel: destLabel(bagOrder),
-            held: this.receiptHeld,
-          }
-        : null,
       vehicle: { ...this.vehicle, heading: this.vehicleHeading },
       autoDriving: this.playerRole === "driver" && this.dropoff?.phase !== "atDoor" && !this.driveArrived,
       customers: this.customers.map((c) => ({
@@ -346,14 +375,19 @@ export class GameSim {
       highlightSkuId: this.focusSkuId(),
       canHitTheRoad:
         this.playerRole === "keyLead" &&
-        (this.pendingDepart ||
-          this.orders.some((o) => o.status === "inBin") ||
-          this.runOrderIds.length > 0),
+        !this.orders.some((o) => o.type === "inStore" && o.status === "atRegister") &&
+        (this.orders.some((o) => o.status === "inBin") || this.runOrderIds.length > 0),
       tabletTicket: this.toViewOrNull(this.tabletFront()),
       tabletQueueCount: tabletQueue(this.orders).length,
       keyLeadLine: this.keyLeadCallout(selected),
       driverLine: this.playerRole === "keyLead" ? this.driverLine : null,
-      pendingDepart: this.playerRole === "keyLead" && this.pendingDepart,
+      shiftEnded: this.shiftEnded,
+      shiftResults: this.shiftEnded
+        ? buildShiftResults(this.orders, this.score, this.clock.gameMs, this.under19Fails)
+        : null,
+      canEndShiftEarly: !this.shiftEnded && this.scoredActions >= 1,
+      scoreFlash: this.scoreFlash,
+      sfxCue: this.sfxCue,
     };
   }
 
@@ -363,9 +397,6 @@ export class GameSim {
   }
 
   queueInteract(): void {
-    // Ignore spam/key-repeat while a doorstep step is locked — otherwise Space/E
-    // auto-repeat (or a click-through) burns the lock then races bag → photo.
-    if (this.dropoff && this.clock.gameMs < this.dropoffInteractReadyAt) return;
     this.queuedInteract = true;
   }
 
@@ -375,19 +406,16 @@ export class GameSim {
   }
 
   shopClick(click: ShopClick): void {
+    if (this.shiftEnded) return;
     switch (click.type) {
       case "keyLead":
         this.toast = "Pick a flashing ticket, then the strain.";
         return;
       case "bagRack":
-      case "counterBag":
         this.packSelected();
         return;
       case "strain":
         this.pickStrain(click.skuId);
-        return;
-      case "receipt":
-        this.toast = "Tap a bag to pack — no extra slip to grab.";
         return;
       case "tablet":
         this.selectTicket(click.orderId);
@@ -434,7 +462,8 @@ export class GameSim {
         targetX: CUSTOMER_SPOT.x,
         kind: "inStore",
       });
-      this.toast = `${order.customerName} walked in and wants ${sku.name}. Tap that TV, then tap them.`;
+      // Floor counterPrompt carries walk-in guidance — keep toast free for errors/score.
+      this.toast = "";
     } else if (type === "pickup") {
       this.toast = `Pickup ticket: ${order.customerName} — ${sku.name}`;
     } else {
@@ -444,6 +473,12 @@ export class GameSim {
   }
 
   hitTheRoad(): boolean {
+    if (this.shiftEnded) return false;
+    const walkIn = this.orders.find((o) => o.type === "inStore" && o.status === "atRegister");
+    if (walkIn) {
+      this.toast = `Finish with ${walkIn.customerName} at the counter before you leave.`;
+      return false;
+    }
     const fresh = this.orders.filter((o) => o.status === "inBin");
     if (this.playerRole === "keyLead" && fresh.length === 0 && this.runOrderIds.length === 0) {
       this.toast = "Need a named delivery bag first.";
@@ -454,7 +489,6 @@ export class GameSim {
       this.runOrderIds.push(order.id);
     }
     this.playerRole = "driver";
-    this.pendingDepart = false;
     this.driverLine = null;
     this.refreshDriveRoute();
     this.toast = this.runOrderIds.length > 1 ? "Multi-stop run. Van is heading out." : "Hit the road. Van is heading to the stop.";
@@ -470,7 +504,6 @@ export class GameSim {
     }
     this.clearDropoff();
     this.playerRole = "keyLead";
-    this.pendingDepart = false;
     this.driverLine = null;
     this.toast = this.runOrderIds.length
       ? "Back at Kindling. Remaining bags stay in the car."
@@ -479,8 +512,13 @@ export class GameSim {
   }
 
   tick(dtMs: number): void {
+    if (this.shiftEnded) return;
     this.clock.tick(dtMs);
-    if (this.playerRole === "driver" && this.dropoff?.phase !== "atDoor") this.tickAutoDrive(dtMs / 1000);
+    if (this.clock.gameMs >= SHIFT_MS) {
+      this.endShift();
+      return;
+    }
+    if (this.playerRole === "driver" && this.dropoff?.phase !== "atDoor") this.tickDrive(dtMs / 1000);
     this.syncCurb();
     this.moveCustomers(dtMs);
     this.tickKeyLead(dtMs);
@@ -530,6 +568,7 @@ export class GameSim {
     }
     this.handSkuId = null;
     this.sealBag(order);
+    this.pushSfx("pack");
   }
 
   private selectedTicket(): Order | undefined {
@@ -545,8 +584,25 @@ export class GameSim {
       this.toast = "They're already in the back.";
       return;
     }
-    const ticket = this.selectedTicket();
     const walkIn = this.orders.find((o) => o.type === "inStore" && o.status === "atRegister");
+    if (walkIn && this.customerAtCounter(walkIn.id)) {
+      if (skuId !== walkIn.skuId) {
+        this.toast = `Wrong TV. ${walkIn.customerName} wants ${skuById(this.catalog, walkIn.skuId)?.name}.`;
+        this.pushSfx("wrong");
+        return;
+      }
+      if (this.handSkuId === skuId) {
+        this.toast = `Already holding ${sku.name}. Tap ${walkIn.customerName}.`;
+        return;
+      }
+      this.startFetch(skuId);
+      return;
+    }
+    if (walkIn && !this.customerAtCounter(walkIn.id)) {
+      this.toast = `${walkIn.customerName} is still walking in.`;
+      return;
+    }
+    const ticket = this.selectedTicket();
     if (ticket) {
       if (this.handSkuId === ticket.skuId) {
         this.toast = `Already holding ${skuById(this.catalog, ticket.skuId)?.name}. Tap a bag.`;
@@ -554,22 +610,7 @@ export class GameSim {
       }
       if (skuId !== ticket.skuId) {
         this.toast = `Wrong TV. ${ticket.customerName} ordered ${skuById(this.catalog, ticket.skuId)?.name}.`;
-        return;
-      }
-      this.startFetch(skuId);
-      return;
-    }
-    if (walkIn) {
-      if (!this.customerAtCounter(walkIn.id)) {
-        this.toast = `${walkIn.customerName} is still walking in.`;
-        return;
-      }
-      if (skuId !== walkIn.skuId) {
-        this.toast = `Wrong TV. ${walkIn.customerName} wants ${skuById(this.catalog, walkIn.skuId)?.name}.`;
-        return;
-      }
-      if (this.handSkuId === skuId) {
-        this.toast = `Already holding ${sku.name}. Tap ${walkIn.customerName}.`;
+        this.pushSfx("wrong");
         return;
       }
       this.startFetch(skuId);
@@ -593,6 +634,19 @@ export class GameSim {
   }
 
   private tickKeyLead(dtMs: number): void {
+    // Catch up after long frames so a hitch cannot leave the key-lead mid-fetch forever.
+    const SLICE_MS = 32;
+    let remaining = dtMs;
+    let steps = 0;
+    while (remaining > 0 && this.keyLeadPhase !== "idle" && steps < 256) {
+      const slice = Math.min(SLICE_MS, remaining);
+      this.tickKeyLeadSlice(slice);
+      remaining -= slice;
+      steps += 1;
+    }
+  }
+
+  private tickKeyLeadSlice(dtMs: number): void {
     const dt = dtMs / 1000;
     const step = KEYLEAD_WALK_SPEED * dt;
     if (this.keyLeadPhase === "toBack") {
@@ -638,14 +692,12 @@ export class GameSim {
     if (order.type === "delivery") {
       order.status = "inBin";
       order.slaStartGameMs = this.clock.gameMs;
-      this.toast = `Bag labeled ${destLabel(order)} · ${order.customerName}. Ready to roll.`;
+      this.toast = `Bag labeled ${destLabel(order)} · ${order.customerName}. Packed — ready to roll.`;
     } else {
       order.status = "onPickupShelf";
       order.slaStartGameMs = this.clock.gameMs;
-      this.toast = `Pickup bag for ${order.customerName} is waiting.`;
+      this.toast = `Pickup bag packed for ${order.customerName}.`;
     }
-    this.counterBag = null;
-    this.receiptHeld = false;
     this.awaitingBag = false;
     if (this.selectedOrderId === order.id) this.selectedOrderId = null;
     this.advancePackQueue();
@@ -654,12 +706,10 @@ export class GameSim {
   private claimedTicketIds(): Set<string> {
     const ids = new Set(this.packQueue);
     if (this.selectedOrderId) ids.add(this.selectedOrderId);
-    if (this.counterBag) ids.add(this.counterBag.orderId);
     return ids;
   }
 
   private ticketInProgress(): boolean {
-    if (this.counterBag) return true;
     const selected = this.selectedOrderId ? this.orderById(this.selectedOrderId) : undefined;
     return !!selected && selected.type !== "inStore" && needsFetch(selected);
   }
@@ -667,12 +717,12 @@ export class GameSim {
   private beginTicket(order: Order): void {
     this.selectedOrderId = order.id;
     this.driverLine = null;
-    this.pendingDepart = false;
     const sku = skuById(this.catalog, order.skuId);
     this.toast =
       order.type === "delivery"
         ? `Delivery to ${destLabel(order)}: ${order.customerName} — ${sku?.name}. Tap that TV, then a bag.`
         : `Pickup: ${order.customerName} — ${sku?.name}. Tap that TV, then a bag.`;
+    this.pushSfx("ticket");
   }
 
   private enqueueTicket(order: Order): void {
@@ -709,7 +759,7 @@ export class GameSim {
       this.toast = "That ticket is not on the tablet.";
       return;
     }
-    if (this.selectedOrderId === order.id || this.counterBag?.orderId === order.id) {
+    if (this.selectedOrderId === order.id) {
       this.toast = `Already packing ${order.customerName}.`;
       return;
     }
@@ -767,7 +817,7 @@ export class GameSim {
     }
     const sku = skuById(this.catalog, target.skuId);
     if (!this.handSkuId) {
-      this.toast = `Tap the ${sku?.name ?? "strain"} TV, then tap ${target.customerName}.`;
+      this.toast = "";
       return true;
     }
     if (this.keyLeadPhase !== "idle") {
@@ -775,7 +825,8 @@ export class GameSim {
       return true;
     }
     if (this.handSkuId !== target.skuId) {
-      this.toast = `Wrong strain. ${target.customerName} wants ${sku?.name ?? "a different jar"}.`;
+      this.toast = `Wrong TV. ${target.customerName} wants ${sku?.name ?? "a different jar"}. Tap that TV first.`;
+      this.pushSfx("wrong");
       return true;
     }
     this.handSkuId = null;
@@ -880,6 +931,44 @@ export class GameSim {
     this.driveArrived = false;
   }
 
+  private tickDrive(dt: number): void {
+    // Catch up after long frames so a hitch cannot tunnel through traffic gaps.
+    const SLICE = 0.05;
+    let remaining = dt;
+    let steps = 0;
+    while (remaining > 0 && !this.driveArrived && steps < 256) {
+      const slice = Math.min(SLICE, remaining);
+      const mag = Math.hypot(this.input.dx, this.input.dy);
+      if (mag > 0.2) this.tickManualDrive(slice);
+      else this.tickAutoDrive(slice);
+      remaining -= slice;
+      steps += 1;
+    }
+  }
+
+  private tickManualDrive(dt: number): void {
+    const mag = Math.hypot(this.input.dx, this.input.dy) || 1;
+    const ux = this.input.dx / mag;
+    const uy = this.input.dy / mag;
+    const traffic = trafficCars(this.clock.gameMs, cityTrafficLoops(), {
+      x: this.vehicle.x,
+      y: this.vehicle.y,
+      heading: this.vehicleHeading,
+    });
+    const speed = driveSpeedForTraffic(
+      { x: this.vehicle.x, y: this.vehicle.y, heading: this.vehicleHeading },
+      traffic,
+      VEHICLE_SPEED,
+    );
+    this.vehicle.x = clamp(this.vehicle.x + ux * speed * dt, TILE, MAP_PX_W - TILE);
+    this.vehicle.y = clamp(this.vehicle.y + uy * speed * dt, TILE, MAP_PX_H - TILE);
+    this.vehicleHeading = Math.atan2(uy, ux);
+    const target = this.driveTargetWorld();
+    if (target && dist(this.vehicle.x, this.vehicle.y, target.x, target.y) <= PARK_ARRIVE_RADIUS) {
+      this.parkAt(target);
+    }
+  }
+
   private tickAutoDrive(dt: number): void {
     if (this.driveArrived) return;
     const target = this.driveTargetWorld();
@@ -899,35 +988,17 @@ export class GameSim {
       y: this.vehicle.y,
       heading: this.vehicleHeading,
     });
-    const cornerRaw = upcomingTurnSharpness(
-      this.driveRoute,
-      this.vehicle.x,
-      this.vehicle.y,
-      this.driveWaypoint,
-    );
-    const smooth = 1 - Math.exp(-dt * 5.5);
-    this.cornerSmoothed += (cornerRaw - this.cornerSmoothed) * smooth;
-    const cruise = driveSpeedForTraffic(
+    const speed = driveSpeedForTraffic(
       { x: this.vehicle.x, y: this.vehicle.y, heading: this.vehicleHeading },
       traffic,
       VEHICLE_SPEED,
     );
-    // Ease off into elbows; blend speed so lead-car bands never stutter the van.
-    const targetSpeed = cruise * (1 - 0.28 * this.cornerSmoothed);
-    this.driveSpeedSmoothed += (targetSpeed - this.driveSpeedSmoothed) * smooth;
-    const step = advanceRoute(
-      this.vehicle.x,
-      this.vehicle.y,
-      this.driveWaypoint,
-      this.driveRoute,
-      this.driveSpeedSmoothed,
-      dt,
-    );
+    const step = advanceRoute(this.vehicle.x, this.vehicle.y, this.driveWaypoint, this.driveRoute, speed, dt);
     this.vehicle.x = clamp(step.x, TILE, MAP_PX_W - TILE);
     this.vehicle.y = clamp(step.y, TILE, MAP_PX_H - TILE);
     this.driveWaypoint = step.waypoint;
-    // Square up on corners; stay smooth on straights (no spin / heading jitter).
-    const turn = 1 - Math.exp(-dt * (6 + 7 * this.cornerSmoothed));
+    // Ease through 90° corners like ambient traffic — segment heading, short lerp (no spin).
+    const turn = 1 - Math.exp(-dt * 8);
     this.vehicleHeading = lerpAngle(this.vehicleHeading, step.heading, turn);
     if (step.arrived || dist(this.vehicle.x, this.vehicle.y, target.x, target.y) <= PARK_ARRIVE_RADIUS) {
       this.parkAt(target);
@@ -937,16 +1008,6 @@ export class GameSim {
   private parkAt(target: { x: number; y: number }): void {
     this.vehicle.x = target.x;
     this.vehicle.y = target.y;
-    // Keep approach heading — never snap toward the lot (that was a 180° flip).
-    if (this.driveRoute.length >= 2) {
-      const a = this.driveRoute[this.driveRoute.length - 2]!;
-      const b = this.driveRoute[this.driveRoute.length - 1]!;
-      const hx = b.x - a.x;
-      const hy = b.y - a.y;
-      if (Math.hypot(hx, hy) > 0.5) {
-        this.vehicleHeading = lerpAngle(this.vehicleHeading, Math.atan2(hy, hx), 1);
-      }
-    }
     this.arriveAtDriveTarget(target);
   }
 
@@ -955,6 +1016,11 @@ export class GameSim {
     this.driveArrived = true;
     const stopId = this.nextStopId();
     if (stopId) {
+      const house = houseById(stopId);
+      if (house) {
+        const home = lotCenter(house.house, house.lotW, house.lotH);
+        this.vehicleHeading = Math.atan2(home.y - this.vehicle.y, home.x - this.vehicle.x);
+      }
       const order = this.runOrderIds
         .map((id) => this.orderById(id))
         .find((o) => o?.destinationId === stopId && o.status === "onRun");
@@ -964,6 +1030,8 @@ export class GameSim {
       return;
     }
     if (dist(this.vehicle.x, this.vehicle.y, target.x, target.y) <= HANDOFF_RADIUS) {
+      const shop = lotCenter(CITY.shopLot.origin, CITY.shopLot.w, CITY.shopLot.h);
+      this.vehicleHeading = Math.atan2(shop.y - this.vehicle.y, shop.x - this.vehicle.x);
       this.toast = "Parked at Kindling. Tap the shop to return.";
     }
   }
@@ -979,8 +1047,7 @@ export class GameSim {
         if (order?.type === "inStore" && order.arriveAtGameMs === undefined && order.status === "atRegister") {
           order.arriveAtGameMs = this.clock.gameMs;
           if (!this.selectedOrderId) this.selectedOrderId = order.id;
-          const sku = skuById(this.catalog, order.skuId);
-          this.toast = `${order.customerName} is at the counter and wants ${sku?.name ?? "a strain"}. Tap that TV, then tap them.`;
+          this.toast = "";
         } else if (
           order?.type === "pickup" &&
           order.status === "readyForHandoff" &&
@@ -1108,6 +1175,7 @@ export class GameSim {
   }
 
   private interactDriver(): void {
+    if (this.shiftEnded) return;
     // Stay locked on an in-progress curb/door stop — never rebind mid-handoff.
     if (this.dropoff && this.dropoff.phase !== "atCurb") {
       this.continueDropoff();
@@ -1165,8 +1233,7 @@ export class GameSim {
     if (!d.idAsked) {
       d.idAsked = true;
       this.toast = `${order.customerName} is showing ID. Confirm 19+.`;
-      this.queuedInteract = false;
-      this.armDropoffInteract(NPC_INTERACT_COOLDOWN_MS);
+      this.armDropoffInteract();
       return;
     }
 
@@ -1177,24 +1244,21 @@ export class GameSim {
         this.refreshDriveRoute();
         this.toast =
           this.runOrderIds.length === 0
-            ? "Denied. Van is heading back to Kindling."
-            : `Denied. Next → ${this.nextStopId() ? houseTitle(this.nextStopId()!) : "Kindling"}.`;
-        this.queuedInteract = false;
-        this.armDropoffInteract(NPC_INTERACT_COOLDOWN_MS);
+            ? `Denied (${SCORE_FAIL}). Van is heading back to Kindling.`
+            : `Denied (${SCORE_FAIL}). Next → ${this.nextStopId() ? houseTitle(this.nextStopId()!) : "Kindling"}.`;
+        this.armDropoffInteract();
         return;
       }
       d.idChecked = true;
       this.toast = `ID checks out — 19+. Hand ${order.customerName} the bag.`;
-      // Drop any same-gesture queue and lock hard so ID cannot skip bag/photo.
-      this.queuedInteract = false;
+      // Full cooldown so the ID tap cannot click through into bag/photo.
       this.armDropoffInteract(NPC_INTERACT_COOLDOWN_MS);
       return;
     }
     if (!d.bagHanded) {
       d.bagHanded = true;
       this.toast = `Bag handed to ${order.customerName}. Snap the photo.`;
-      this.queuedInteract = false;
-      this.armDropoffInteract(NPC_INTERACT_COOLDOWN_MS);
+      this.armDropoffInteract();
       return;
     }
     if (!d.photoTaken) {
@@ -1203,13 +1267,15 @@ export class GameSim {
       this.runOrderIds = this.runOrderIds.filter((id) => id !== order.id);
       this.clearDropoff();
       this.refreshDriveRoute();
+      const dropMsg = order.late
+        ? `Late drop (${SCORE_DELIVERY_LATE})`
+        : `On-time (+${SCORE_DELIVERY_ON_TIME})`;
       if (this.runOrderIds.length === 0) {
-        this.toast = "Run complete. Van is heading to Kindling — tap the shop when you arrive.";
+        this.toast = `${dropMsg}. Van is heading to Kindling — tap the shop when you arrive.`;
       } else {
-        this.toast = `Dropped. Next → ${this.nextStopId() ? houseTitle(this.nextStopId()!) : "Kindling"}.`;
+        this.toast = `${dropMsg}. Next → ${this.nextStopId() ? houseTitle(this.nextStopId()!) : "Kindling"}.`;
       }
-      this.queuedInteract = false;
-      this.armDropoffInteract(NPC_INTERACT_COOLDOWN_MS);
+      this.armDropoffInteract();
     }
   }
 
@@ -1368,10 +1434,6 @@ export class GameSim {
   }
 
   private focusOrder(): Order | undefined {
-    if (this.counterBag) {
-      const packing = this.orderById(this.counterBag.orderId);
-      if (packing && isOpen(packing)) return packing;
-    }
     if (this.selectedOrderId) {
       const selected = this.orderById(this.selectedOrderId);
       if (selected && isOpen(selected) && selected.type !== "inStore") return selected;
@@ -1392,31 +1454,66 @@ export class GameSim {
   }
 
   private complete(order: Order): void {
+    if (this.shiftEnded) return;
     order.status = "completed";
     if (order.type === "delivery") order.late = isDeliveryLate(order, this.clock.gameMs);
-    this.score += scoreForComplete(order, this.clock.gameMs);
+    const delta = scoreForComplete(order, this.clock.gameMs);
+    this.score += delta;
+    this.pushScoreFlash(delta);
+    this.scoredActions += 1;
     this.customers = this.customers.filter((c) => c.orderId !== order.id);
     if (this.selectedOrderId === order.id) this.selectedOrderId = null;
     this.dropQueuedTicket(order.id);
     const sku = skuById(this.catalog, order.skuId);
-    if (order.type === "delivery" && order.late) this.toast = `Late drop: ${sku?.name}.`;
-    else this.toast = `Sold ${sku?.name ?? "item"} to ${order.customerName}!`;
+    if (order.type === "delivery" && order.late) {
+      this.toast = `Late drop (−${Math.abs(SCORE_DELIVERY_LATE)}): ${sku?.name}.`;
+    } else if (order.type === "delivery") {
+      this.toast = `On-time drop (+${SCORE_DELIVERY_ON_TIME}): ${sku?.name} to ${order.customerName}!`;
+    } else {
+      this.toast = `Sold ${sku?.name ?? "item"} to ${order.customerName}! (+${delta})`;
+    }
+    this.pushSfx("sell");
   }
 
   private failOrder(order: Order, reason: string): void {
+    if (this.shiftEnded) return;
     order.status = "failed";
-    this.score += scoreForFail();
+    const delta = scoreForFail();
+    this.score += delta;
+    this.pushScoreFlash(delta);
+    this.scoredActions += 1;
+    if (reason.includes("under 19")) this.under19Fails += 1;
     this.customers = this.customers.filter((c) => c.orderId !== order.id);
-    if (this.counterBag?.orderId === order.id) {
-      this.counterBag = null;
-      this.receiptHeld = false;
-    }
     if (this.selectedOrderId === order.id) this.selectedOrderId = null;
     this.dropQueuedTicket(order.id);
     this.advancePackQueue();
     this.runOrderIds = this.runOrderIds.filter((id) => id !== order.id);
     if (this.dropoff?.orderId === order.id) this.clearDropoff();
-    this.toast = reason;
+    // Drop leftover fetch/hand when this order (or its SKU) was in flight — avoids ghost jars after walkout.
+    if (
+      order.type === "inStore" ||
+      this.fetchSkuId === order.skuId ||
+      this.handSkuId === order.skuId
+    ) {
+      this.handSkuId = null;
+      this.fetchSkuId = null;
+      this.keyLeadPhase = "idle";
+      this.keyLeadX = KEYLEAD.x;
+      this.keyLeadFacing = 1;
+      this.backroomLeftMs = 0;
+    }
+    this.toast = `${reason} (${delta})`;
+    this.pushSfx("deny");
+  }
+
+  private pushScoreFlash(delta: number): void {
+    this.scoreFlashSeq += 1;
+    this.scoreFlash = { id: this.scoreFlashSeq, delta };
+  }
+
+  private pushSfx(kind: SfxKind): void {
+    this.sfxSeq += 1;
+    this.sfxCue = { id: this.sfxSeq, kind };
   }
 
   private customerX(orderId: string): number | undefined {

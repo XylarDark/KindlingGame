@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CITY, TILE } from "./cityT0";
+import { CITY, TILE, doorstepWorld } from "./cityT0";
 import { cityAccessPaths, cityProps, cityStreetLamps } from "./cityDecor";
 
 describe("city decorations", () => {
@@ -34,6 +34,20 @@ describe("city decorations", () => {
     expect(paths.some((p) => p.kind === "drive")).toBe(true);
     expect(paths.some((p) => p.kind === "walk")).toBe(true);
     expect(paths.some((p) => p.kind === "flag")).toBe(true);
+  });
+
+  it("ends walk and flag paths at the facade doorstep", () => {
+    const paths = cityAccessPaths();
+    CITY.houses.forEach((house, i) => {
+      if (house.access === "garage") return;
+      const path = paths[i]!;
+      const door = doorstepWorld(house);
+      const end = path.points[path.points.length - 1]!;
+      const start = path.points[0]!;
+      const nearEnd = Math.hypot(end.x - door.x, end.y - door.y);
+      const nearStart = Math.hypot(start.x - door.x, start.y - door.y);
+      expect(Math.min(nearEnd, nearStart), house.id).toBeLessThan(8);
+    });
   });
 
   it("routes access on the lawn — not through parking stall centers", () => {

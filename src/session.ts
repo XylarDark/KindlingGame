@@ -1,5 +1,6 @@
 import { GameSim } from "./sim/gameSim";
-import { GAME_END_HOUR, GAME_START_HOUR, MS_PER_GAME_HOUR } from "./sim/constants";
+import { GAME_END_HOUR, GAME_START_HOUR, MS_PER_GAME_HOUR, SHIFT_MS } from "./sim/constants";
+import { applyPromoShot, shotQuery } from "./promoShot";
 
 let sim: GameSim | null = null;
 
@@ -43,11 +44,22 @@ export function startSession(seed?: number): GameSim {
   sim = GameSim.create({ seed: seed ?? (Date.now() % 1_000_000), autoSpawn: false });
   const hour = hourQuery();
   if (hour !== null) sim.clock.gameMs = (hour - GAME_START_HOUR) * MS_PER_GAME_HOUR;
+  // `?hour=23` must not leave a frozen shop with no results card.
+  if (sim.clock.gameMs >= SHIFT_MS) sim.endShift();
   return sim;
 }
 
 export function beginPlay(): void {
-  getSim().enableSpawns();
+  const s = getSim();
+  if (s.clock.gameMs >= SHIFT_MS || s.snapshot().shiftEnded) {
+    if (!s.snapshot().shiftEnded) s.endShift();
+    return;
+  }
+  if (shotQuery()) {
+    applyPromoShot(s);
+    return;
+  }
+  s.enableSpawns();
 }
 
 export function getSim(): GameSim {

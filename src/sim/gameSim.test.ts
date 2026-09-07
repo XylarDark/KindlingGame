@@ -11,6 +11,7 @@ import {
   SCORE_FAIL,
   SCORE_INSTORE,
   SCORE_PICKUP,
+  SHIFT_MS,
 } from "./constants";
 import { GameSim } from "./gameSim";
 import { CITY, houseById, tileToWorld } from "../maps/cityT0";
@@ -225,11 +226,36 @@ describe("GameSim order loops", () => {
     sim.shopClick({ type: "strain", skuId: other.id });
     expect(sim.snapshot().handSkuId).toBeNull();
     expect(sim.snapshot().keyLead.phase).toBe("idle");
+    expect(sim.snapshot().toast).toMatch(/^Wrong TV\./);
+    expect(sim.snapshot().sfxCue?.kind).toBe("wrong");
     sim.shopClick({ type: "strain", skuId: order.skuId });
     waitForFetch(sim);
     expect(sim.snapshot().handSkuId).toBe(order.skuId);
     sim.shopClick({ type: "bagRack" });
     expect(order.status).toBe("onPickupShelf");
+    expect(sim.snapshot().sfxCue?.kind).toBe("pack");
+  });
+
+  it("toasts Wrong TV for walk-ins and prefers them over a selected ticket", () => {
+    const sim = GameSim.create({ seed: 2, autoSpawn: false });
+    const ticket = sim.spawnOrder("pickup");
+    const walkIn = sim.spawnOrder("inStore");
+    waitForCustomerAtCounter(sim, walkIn.id);
+    sim.shopClick({ type: "tablet", orderId: ticket.id });
+    const other = sim.catalog.find((s) => s.id !== walkIn.skuId)!;
+    sim.shopClick({ type: "strain", skuId: other.id });
+    expect(sim.snapshot().handSkuId).toBeNull();
+    expect(sim.snapshot().toast).toMatch(/^Wrong TV\./);
+    expect(sim.snapshot().toast).toContain(walkIn.customerName);
+    sim.shopClick({ type: "strain", skuId: walkIn.skuId });
+    waitForFetch(sim);
+    expect(sim.snapshot().handSkuId).toBe(walkIn.skuId);
+  });
+
+  it("keeps walk-in guidance on the counter prompt, not the bottom toast", () => {
+    const sim = GameSim.create({ seed: 2, autoSpawn: false });
+    sim.spawnOrder("inStore");
+    expect(sim.snapshot().toast).toBe("");
   });
 
   it("scores on-time and late delivery handoffs", () => {
@@ -352,28 +378,6 @@ describe("GameSim order loops", () => {
     expect(sim.snapshot().dropoff.actionLabel).toBe("PHOTO");
   });
 
-  it("does not race through bag and photo from post-ID interact spam", () => {
-    const sim = GameSim.create({ seed: 4, autoSpawn: false });
-    fillTicket(sim, "delivery", { destinationId: "house-1", ageOk: true });
-    sim.hitTheRoad();
-    startDoor(sim, "house-1");
-    stepDropoff(sim); // ask
-    sim.interact(); // check ID
-    expect(sim.snapshot().dropoff.actionLabel).toBe("HAND BAG");
-    // Spam only inside the lock window (and across the unlock boundary without a fresh tap).
-    for (let i = 0; i < 6; i++) {
-      sim.queueInteract();
-      sim.tick(40);
-    }
-    sim.tick(NPC_INTERACT_COOLDOWN_MS);
-    expect(sim.snapshot().dropoff.actionLabel).toBe("HAND BAG");
-    expect(sim.snapshot().dropoff.bagHanded).toBe(false);
-    expect(sim.snapshot().dropoff.photoTaken).toBe(false);
-    stepDropoff(sim);
-    expect(sim.snapshot().dropoff.actionLabel).toBe("PHOTO");
-    expect(sim.snapshot().dropoff.bagHanded).toBe(true);
-  });
-
   it("denies an underage stop, fails the order, and returns to the map", () => {
     const sim = GameSim.create({ seed: 4, autoSpawn: false });
     const order = fillTicket(sim, "delivery", { destinationId: "house-1", ageOk: false });
@@ -459,6 +463,17 @@ describe("GameSim order loops", () => {
     for (let i = 0; i < 400; i++) sim.tick(50);
     const after = sim.snapshot().vehicle;
     expect(Math.hypot(after.x - start.x, after.y - start.y)).toBeGreaterThan(120);
+  });
+
+  it("lets pad/WASD nudge override auto-drive while en route", () => {
+    const sim = GameSim.create({ seed: 5, autoSpawn: false });
+    fillTicket(sim, "delivery", { destinationId: "house-1" });
+    sim.hitTheRoad();
+    const start = { ...sim.snapshot().vehicle };
+    sim.setPlayerInput(0, 1);
+    for (let i = 0; i < 20; i++) sim.tick(50);
+    const after = sim.snapshot().vehicle;
+    expect(after.y).toBeGreaterThan(start.y + 40);
   });
 
   it("auto-parks in the driveway so the phone call can start", () => {
@@ -550,7 +565,6 @@ describe("GameSim order loops", () => {
     expect(sim.snapshot().keyLeadLine).toBe(`Delivery: ${sku.name} for ${order.customerName}`);
     expect(sim.snapshot().highlightSkuId).toBe(order.skuId);
     expect(sim.snapshot().awaitingBag).toBe(false);
-    expect(sim.snapshot().pendingDepart).toBe(false);
     expect(sim.snapshot().playerRole).toBe("keyLead");
     expect(order.status).toBe("queued");
   });
@@ -577,8 +591,6 @@ describe("GameSim order loops", () => {
     sim.shopClick({ type: "tablet", orderId: second.id });
     expect(sim.snapshot().selectedOrderId).toBe(first.id);
     expect(sim.snapshot().highlightSkuId).toBe(first.skuId);
-    expect(sim.snapshot().counterBag).toBeNull();
-    expect(sim.snapshot().pendingDepart).toBe(false);
     expect(sim.snapshot().tabletTicket?.id).toBeUndefined();
   });
 
@@ -630,6 +642,89 @@ describe("GameSim order loops", () => {
     expect(b.status).toBe("inBin");
     expect(snap.bagsOnPickup).toContain(a.id);
     expect(snap.bagsInBin).toContain(b.id);
-    expect(snap.counterBag).toBeNull();
+  });
+
+  it("ends the shift at 23:00 with a results breakdown and no softlock mid-door", () => {
+    const sim = GameSim.create({ seed: 4, autoSpawn: false });
+    fillTicket(sim, "delivery", { destinationId: "house-1" });
+    sim.hitTheRoad();
+    startDoor(sim, "house-1");
+    expect(sim.snapshot().dropoff.phase).toBe("atDoor");
+    sim.tick(SHIFT_MS);
+    const snap = sim.snapshot();
+    expect(snap.clockLabel).toBe("23:00");
+    expect(snap.shiftEnded).toBe(true);
+    expect(snap.dropoff.phase).toBe("none");
+    expect(snap.shiftResults).not.toBeNull();
+    expect(snap.shiftResults!.breakdown).toBeDefined();
+    sim.tick(5_000);
+    expect(sim.snapshot().shiftEnded).toBe(true);
+    expect(sim.snapshot().clockLabel).toBe("23:00");
+  });
+
+  it("allows end-shift early after a scored action and startNewDay clears score", () => {
+    const sim = GameSim.create({ seed: 2, autoSpawn: false });
+    expect(sim.endShiftEarly()).toBe(false);
+    expect(sim.snapshot().canEndShiftEarly).toBe(false);
+    fillTicket(sim, "inStore");
+    expect(sim.score).toBe(SCORE_INSTORE);
+    expect(sim.snapshot().canEndShiftEarly).toBe(true);
+    expect(sim.endShiftEarly()).toBe(true);
+    expect(sim.snapshot().shiftEnded).toBe(true);
+    expect(sim.snapshot().shiftResults!.breakdown.inStore).toBe(1);
+    sim.startNewDay();
+    const snap = sim.snapshot();
+    expect(snap.shiftEnded).toBe(false);
+    expect(snap.clockLabel).toBe("09:00");
+    expect(snap.score).toBe(0);
+    expect(snap.playerRole).toBe("keyLead");
+    expect(snap.shiftResults).toBeNull();
+  });
+
+  it("stops scoring after the shift ends", () => {
+    const sim = GameSim.create({ seed: 3, autoSpawn: false });
+    fillTicket(sim, "inStore");
+    expect(sim.score).toBe(SCORE_INSTORE);
+    expect(sim.snapshot().scoreFlash?.delta).toBe(SCORE_INSTORE);
+    sim.endShift();
+    const score = sim.score;
+    sim.tick(60_000);
+    expect(sim.score).toBe(score);
+    expect(sim.snapshot().shiftEnded).toBe(true);
+  });
+
+  it("blocks hitTheRoad while a walk-in is still at the counter", () => {
+    const sim = GameSim.create({ seed: 2, autoSpawn: false });
+    fillTicket(sim, "delivery", { destinationId: "house-1" });
+    const walk = sim.spawnOrder("inStore");
+    waitForCustomerAtCounter(sim, walk.id);
+    expect(sim.snapshot().canHitTheRoad).toBe(false);
+    expect(sim.hitTheRoad()).toBe(false);
+    expect(sim.snapshot().playerRole).toBe("keyLead");
+    expect(sim.orderById(walk.id)?.status).toBe("atRegister");
+    expect(sim.snapshot().toast).toMatch(/Finish with|counter/i);
+  });
+
+  it("clears hand and key-lead fetch state when a walk-in walks out mid-fetch", () => {
+    const sim = GameSim.create({ seed: 2, autoSpawn: false });
+    const order = sim.spawnOrder("inStore");
+    waitForCustomerAtCounter(sim, order.id);
+    sim.shopClick({ type: "strain", skuId: order.skuId });
+    expect(sim.snapshot().keyLead.phase).not.toBe("idle");
+    for (let t = 0; t < INSTORE_WALKOUT_MS + 2_000; t += 50) sim.tick(50);
+    expect(sim.orderById(order.id)?.status).toBe("failed");
+    expect(sim.snapshot().keyLead.phase).toBe("idle");
+    expect(sim.snapshot().handSkuId).toBeNull();
+  });
+
+  it("catches up a key-lead fetch across a single long hitch frame", () => {
+    const sim = GameSim.create({ seed: 1, autoSpawn: false });
+    const order = sim.spawnOrder("pickup");
+    sim.shopClick({ type: "tablet", orderId: order.id });
+    sim.shopClick({ type: "strain", skuId: order.skuId });
+    expect(sim.snapshot().keyLead.phase).toBe("toBack");
+    sim.tick(8_000);
+    expect(sim.snapshot().keyLead.phase).toBe("idle");
+    expect(sim.snapshot().handSkuId).toBe(order.skuId);
   });
 });

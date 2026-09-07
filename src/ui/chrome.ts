@@ -157,7 +157,7 @@ export function addBanner(
   return addUiText(scene, x, y, "", {
     size: Type.body,
     color: Color.creamHex,
-    backgroundColor: "#1c1612ee",
+    backgroundColor: Color.bannerInk,
     padding: { x: 18, y: 10 },
     align: "center",
     wordWrap: { width },

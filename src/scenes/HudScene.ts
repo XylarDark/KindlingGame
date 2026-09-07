@@ -1,27 +1,30 @@
 import Phaser from "phaser";
 import { getMusicPrefs, setMusicEnabled, setMusicVolume, syncMusicToClock } from "../audio/music";
-import { playCameraClick } from "../audio/sfx";
+import { playCameraClick, playUiSfx } from "../audio/sfx";
 import { clampInput } from "../input/controls";
 import { enableItemHit, syncItemHit } from "../input/hit";
 import { CITY, MAP_PX_H, MAP_PX_W, TILE, houseById, tileToWorld } from "../maps/cityT0";
-import { GAME_HEIGHT, GAME_WIDTH, NPC_INTERACT_COOLDOWN_MS } from "../sim/constants";
-import { getSim } from "../session";
-import { nightFactor, skyAt } from "../sim/dayNight";
+import { GAME_HEIGHT, GAME_WIDTH, NPC_INTERACT_COOLDOWN_MS, SCORE_DELIVERY_LATE, SCORE_DELIVERY_ON_TIME, SCORE_FAIL, SCORE_INSTORE, SCORE_PICKUP } from "../sim/constants";
+import { getSim, startSession } from "../session";
 import type { SimSnapshot } from "../sim/gameSim";
+import type { ShiftResults } from "../sim/shiftResults";
 import { tutorialHints } from "../sim/tutorialHints";
 import { addHudButton, addPanel } from "../ui/chrome";
+import { END_SHIFT_CAPTION, END_SHIFT_LABEL, RESULTS_NEW_DAY, RESULTS_TITLE } from "../ui/copy";
 import { addUiText } from "../ui/text";
 import { Color, Type } from "../ui/theme";
 import { designSafeInset, HUD_TOUCH_MIN_DESIGN, readCssSafeArea, VIEWFIT_EVENT, viewFromScale } from "../ui/viewFit";
 
 const SETTINGS_W = 420;
-const SETTINGS_H = 352;
+const SETTINGS_H = 430;
 const VOL_TRACK = { x: 24, y: 168, w: 292, h: 16 };
 /** Squarer black iPhone — room for Kindling header + map. */
 const PHONE_W = 168;
 const PHONE_H = 196;
 const PHONE_COG_GAP = 16;
 const PHONE_SCREEN = { x: -68, y: -74, w: 136, h: 148 };
+const RESULTS_W = 720;
+const RESULTS_H = 560;
 
 export class HudScene extends Phaser.Scene {
   private scoreText!: Phaser.GameObjects.Text;
@@ -64,6 +67,18 @@ export class HudScene extends Phaser.Scene {
   private volumeHit!: Phaser.GameObjects.Rectangle;
   private draggingVol = false;
   private settingsOpen = false;
+  private resultsDim!: Phaser.GameObjects.Rectangle;
+  private resultsPanel!: Phaser.GameObjects.Container;
+  private resultsTitle!: Phaser.GameObjects.Text;
+  private resultsScore!: Phaser.GameObjects.Text;
+  private resultsBreakdown!: Phaser.GameObjects.Text;
+  private resultsVerdict!: Phaser.GameObjects.Text;
+  private resultsClock!: Phaser.GameObjects.Text;
+  private resultsVisible = false;
+  private endShiftBtn!: Phaser.GameObjects.Container;
+  private lastScoreFlashId = 0;
+  private lastSfxId = 0;
+  private scorePopLayer!: Phaser.GameObjects.Container;
 
   constructor() {
     super("hud");
@@ -84,6 +99,7 @@ export class HudScene extends Phaser.Scene {
       fontStyle: "700",
       strokeThickness: 0,
     }).setDepth(20);
+    this.scorePopLayer = this.add.container(28, 36).setDepth(30);
 
     this.clockText = addUiText(this, GAME_WIDTH - 28, 36, "", {
       size: Type.display,
@@ -138,7 +154,7 @@ export class HudScene extends Phaser.Scene {
     this.toastText = addUiText(this, GAME_WIDTH / 2, GAME_HEIGHT - 24, "", {
       size: Type.body,
       color: Color.creamHex,
-      backgroundColor: "#1c1612ee",
+      backgroundColor: Color.bannerInk,
       padding: { x: 16, y: 10 },
       align: "center",
       fontStyle: "600",
@@ -203,7 +219,7 @@ export class HudScene extends Phaser.Scene {
     this.padLabel = addUiText(this, this.padCenter.x, this.padCenter.y - 128, "Heading to stop…", {
       size: Type.caption,
       color: Color.creamHex,
-      backgroundColor: "#1c1612ee",
+      backgroundColor: Color.bannerInk,
       padding: { x: 10, y: 6 },
       fontStyle: "600",
     })
@@ -217,16 +233,8 @@ export class HudScene extends Phaser.Scene {
     this.keys = kb
       ? (kb.addKeys("W,A,S,D,E,UP,DOWN,LEFT,RIGHT,SPACE") as Record<string, Phaser.Input.Keyboard.Key>)
       : {};
-    // Just-down only — Phaser key repeat would otherwise queueInteract every frame
-    // and skip HAND BAG / PHOTO once the doorstep lock expires.
-    kb?.on("keydown-E", (ev: KeyboardEvent) => {
-      if (ev.repeat) return;
-      getSim().queueInteract();
-    });
-    kb?.on("keydown-SPACE", (ev: KeyboardEvent) => {
-      if (ev.repeat) return;
-      getSim().queueInteract();
-    });
+    kb?.on("keydown-E", () => getSim().queueInteract());
+    kb?.on("keydown-SPACE", () => getSim().queueInteract());
 
     this.input.addPointer(2);
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => this.onPointerDown(p));
@@ -234,6 +242,7 @@ export class HudScene extends Phaser.Scene {
     this.input.on("pointerupoutside", (p: Phaser.Input.Pointer) => this.onPointerUp(p));
 
     this.makeSettings();
+    this.makeResults();
     this.layoutHud();
     const relayout = (): void => this.layoutHud();
     this.scale.on(Phaser.Scale.Events.RESIZE, relayout);
@@ -264,6 +273,7 @@ export class HudScene extends Phaser.Scene {
     const bottom = GAME_HEIGHT - 24 - inset.bottom;
     this.scoreText.setPosition(left, top);
     this.scoreCaption.setPosition(left, top + 56);
+    this.scorePopLayer.setPosition(left + 120, top + 24);
     this.clockText.setPosition(right, top);
     const cogSize = HUD_TOUCH_MIN_DESIGN;
     const cogX = GAME_WIDTH - 24 - inset.right;
@@ -291,9 +301,25 @@ export class HudScene extends Phaser.Scene {
   private paintHud(snap: SimSnapshot): void {
     this.scoreText.setText(String(snap.score));
     this.clockText.setText(snap.clockLabel);
+    this.consumeScoreFlash(snap);
+    this.consumeSfx(snap);
+    this.syncResults(snap);
+    if (snap.shiftEnded) {
+      this.toastText.setVisible(false);
+      this.phone.setVisible(false);
+      this.phoneHit.disableInteractive();
+      this.idDim.setVisible(false);
+      this.idPanel.setVisible(false);
+      this.padRing.setVisible(false);
+      this.padKnob.setVisible(false);
+      this.padLabel.setVisible(false);
+      this.syncDoorScene(snap);
+      syncMusicToClock(snap.gameMs);
+      return;
+    }
     const next = tutorialHints(snap)[0];
     const pulse = 0.55 + 0.45 * (0.5 + 0.5 * Math.sin(snap.gameMs / 160));
-    const flashNext = this.settingsOpen ? null : next;
+    const flashNext = this.settingsOpen || this.resultsVisible ? null : next;
 
     const drop = snap.dropoff;
     const showPhone = snap.playerRole === "driver" && (drop.phase === "atCurb" || drop.phase === "calling");
@@ -330,7 +356,7 @@ export class HudScene extends Phaser.Scene {
       this.phoneMap.clear();
     }
 
-    const showId = !!drop.idCard && drop.idAsked && !drop.idChecked;
+    const showId = !!drop.idCard && drop.idAsked;
     if (showId && !this.idWasShowing) {
       this.idCardArmedAt = snap.gameMs + NPC_INTERACT_COOLDOWN_MS;
     }
@@ -375,12 +401,8 @@ export class HudScene extends Phaser.Scene {
     if (drop.photoTaken && !this.sawPhoto) {
       this.sawPhoto = true;
       playCameraClick(this.game);
-      const sky = skyAt(snap.gameMs);
-      const night = nightFactor(snap.gameMs) > 0.12 || sky.lampAlpha > 0.35;
-      if (night) {
-        this.flash.setAlpha(0.9);
-        this.tweens.add({ targets: this.flash, alpha: 0, duration: 280 });
-      }
+      this.flash.setAlpha(0.85);
+      this.tweens.add({ targets: this.flash, alpha: 0, duration: 220 });
     }
     if (!drop.photoTaken) this.sawPhoto = false;
 
@@ -389,11 +411,34 @@ export class HudScene extends Phaser.Scene {
     // Drive prompts float over the van; ID/phone keep their own UI.
     const driveBanner = driving && !!snap.toast;
     this.toastText.setVisible(!!snap.toast && !showId && snap.dropoff.phase !== "atDoor" && !showPhone && !driveBanner);
-    this.padRing.setVisible(false);
-    this.padKnob.setVisible(false);
-    this.padLabel.setVisible(false);
+    const showPad =
+      driving &&
+      !showPhone &&
+      !showId &&
+      !this.settingsOpen &&
+      !this.resultsVisible &&
+      snap.autoDriving;
+    this.padRing.setVisible(showPad);
+    this.padKnob.setVisible(showPad);
+    this.padLabel.setVisible(showPad);
+    if (showPad) {
+      this.padLabel.setText(snap.run?.nextStopId ? "Auto · nudge pad" : "Auto · nudge to shop");
+      this.drawPad(!!flashNext && flashNext.kind === "gpsPin");
+      if (this.pointerId === null) this.padKnob.setPosition(this.padCenter.x, this.padCenter.y);
+    } else if (this.pointerId !== null) {
+      this.pointerId = null;
+    }
+    this.syncDriveScene(snap);
     this.syncDoorScene(snap);
     syncMusicToClock(snap.gameMs);
+  }
+
+  private syncDriveScene(snap: SimSnapshot): void {
+    if (snap.playerRole !== "driver") return;
+    if (this.scene.isActive("shop") && !this.scene.isSleeping("shop")) this.scene.sleep("shop");
+    if (snap.dropoff.phase === "atDoor") return;
+    if (this.scene.isSleeping("drive")) this.scene.wake("drive");
+    else if (!this.scene.isActive("drive")) this.scene.launch("drive");
   }
 
   private makeSettings(): void {
@@ -412,7 +457,7 @@ export class HudScene extends Phaser.Scene {
     const panelY = GAME_HEIGHT - 24 - 168 - SETTINGS_H;
     const bg = addPanel(this, 0, 0, SETTINGS_W, SETTINGS_H, {
       radius: 4,
-      fill: 0xfffaf3,
+      fill: Color.card,
       stroke: Color.woodTrim,
       depth: 41,
     });
@@ -476,7 +521,17 @@ export class HudScene extends Phaser.Scene {
       this.draggingVol = false;
     });
 
-    const reset = addHudButton(this, 24, 232, "RESET DAY TO 9:00 AM", () => this.resetDayToNine(), {
+    const endShift = addHudButton(this, 24, 232, END_SHIFT_LABEL, () => this.endShiftEarly(), {
+      originX: 0,
+      originY: 0,
+      variant: "primary",
+      minWidth: SETTINGS_W - 48,
+      caption: END_SHIFT_CAPTION,
+      depth: 41,
+    });
+    this.endShiftBtn = endShift;
+
+    const reset = addHudButton(this, 24, 312, "RESET DAY TO 9:00 AM", () => this.resetDayToNine(), {
       originX: 0,
       originY: 0,
       variant: "amber",
@@ -484,7 +539,7 @@ export class HudScene extends Phaser.Scene {
       caption: "Clock back to 9 AM · clears the door stop",
       depth: 41,
     });
-    const resetHint = addUiText(this, 24, 304, "Packed bags stay. Late timers start over.", {
+    const resetHint = addUiText(this, 24, 384, "Packed bags stay. Late timers start over.", {
       size: Type.caption,
       color: Color.muteHex,
       fontStyle: "600",
@@ -503,6 +558,7 @@ export class HudScene extends Phaser.Scene {
       this.volumeFill,
       this.volumeKnob,
       this.volumeHit,
+      endShift,
       reset,
       resetHint,
     ]);
@@ -519,10 +575,10 @@ export class HudScene extends Phaser.Scene {
       else this.openSettings();
     };
     this.cog.on("pointerdown", toggleSettings);
-    this.cogCaption = addUiText(this, cogX - 8, cogY - cogSize - 4, "Settings", {
+    this.cogCaption = addUiText(this, cogX - 8, cogY - cogSize - 4, "Music · Settings", {
       size: Type.caption,
       color: Color.creamHex,
-      backgroundColor: "#1c1612ee",
+      backgroundColor: Color.bannerInk,
       padding: { x: 8, y: 3 },
       fontStyle: "600",
     })
@@ -538,12 +594,18 @@ export class HudScene extends Phaser.Scene {
     this.settingsDim.setVisible(true).setInteractive();
     this.settingsPanel.setVisible(true);
     this.refreshMusicControls();
+    this.refreshEndShiftButton();
   }
 
   private closeSettings(): void {
     this.settingsOpen = false;
     this.settingsDim.setVisible(false).disableInteractive();
     this.settingsPanel.setVisible(false);
+  }
+
+  private refreshEndShiftButton(): void {
+    const can = getSim().snapshot().canEndShiftEarly;
+    this.endShiftBtn.setAlpha(can ? 1 : 0.45);
   }
 
   private refreshMusicControls(): void {
@@ -566,7 +628,203 @@ export class HudScene extends Phaser.Scene {
   private resetDayToNine(): void {
     getSim().resetToMorning();
     syncMusicToClock(0);
+    this.closeSettings();
+    this.hideResults();
     this.refreshMusicControls();
+    this.ensureShopVisible();
+  }
+
+  private endShiftEarly(): void {
+    if (!getSim().endShiftEarly()) return;
+    this.closeSettings();
+    this.paintHud(getSim().snapshot());
+  }
+
+  private makeResults(): void {
+    this.resultsDim = this.add
+      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, Color.ink, 0.62)
+      .setDepth(50)
+      .setInteractive()
+      .setVisible(false);
+    this.resultsDim.disableInteractive();
+    this.resultsDim.on("pointerdown", (p: Phaser.Input.Pointer) => p.event.stopPropagation());
+
+    const x = Math.floor((GAME_WIDTH - RESULTS_W) / 2);
+    const y = Math.floor((GAME_HEIGHT - RESULTS_H) / 2);
+    const bg = addPanel(this, 0, 0, RESULTS_W, RESULTS_H, {
+      radius: 4,
+      fill: Color.card,
+      stroke: Color.woodTrim,
+      depth: 51,
+    });
+    this.resultsTitle = addUiText(this, RESULTS_W / 2, 28, "", {
+      size: Type.title,
+      color: Color.inkHex,
+      fontStyle: "700",
+      align: "center",
+      strokeThickness: 0,
+      wordWrap: { width: RESULTS_W - 64 },
+    }).setOrigin(0.5, 0);
+    this.resultsClock = addUiText(this, RESULTS_W / 2, 78, "", {
+      size: Type.caption,
+      color: Color.muteHex,
+      fontStyle: "600",
+      align: "center",
+      strokeThickness: 0,
+    }).setOrigin(0.5, 0);
+    this.resultsScore = addUiText(this, RESULTS_W / 2, 118, "", {
+      size: Type.display,
+      color: Color.inkHex,
+      fontStyle: "700",
+      align: "center",
+      strokeThickness: 0,
+    }).setOrigin(0.5, 0);
+    const scoreCap = addUiText(this, RESULTS_W / 2, 176, "SHIFT SCORE", {
+      size: Type.caption,
+      color: Color.muteHex,
+      fontStyle: "700",
+      align: "center",
+      strokeThickness: 0,
+    }).setOrigin(0.5, 0);
+    this.resultsBreakdown = addUiText(this, RESULTS_W / 2, 220, "", {
+      size: Type.body,
+      color: Color.inkHex,
+      fontStyle: "600",
+      align: "center",
+      strokeThickness: 0,
+      lineSpacing: 10,
+      wordWrap: { width: RESULTS_W - 80 },
+    }).setOrigin(0.5, 0);
+    this.resultsVerdict = addUiText(this, RESULTS_W / 2, 390, "", {
+      size: Type.body,
+      color: Color.inkHex,
+      fontStyle: "700",
+      align: "center",
+      strokeThickness: 0,
+      wordWrap: { width: RESULTS_W - 96 },
+    }).setOrigin(0.5, 0);
+
+    const newDay = addHudButton(this, RESULTS_W / 2 - 12, 470, RESULTS_NEW_DAY.label, () => this.onNewDay(), {
+      originX: 1,
+      originY: 0,
+      variant: "primary",
+      minWidth: 280,
+      caption: RESULTS_NEW_DAY.caption,
+      depth: 52,
+    });
+    const titleBtn = addHudButton(this, RESULTS_W / 2 + 12, 470, RESULTS_TITLE.label, () => this.onTitle(), {
+      originX: 0,
+      originY: 0,
+      variant: "amber",
+      minWidth: 240,
+      caption: RESULTS_TITLE.caption,
+      depth: 52,
+    });
+
+    this.resultsPanel = this.add.container(x, y, [
+      bg,
+      this.resultsTitle,
+      this.resultsClock,
+      this.resultsScore,
+      scoreCap,
+      this.resultsBreakdown,
+      this.resultsVerdict,
+      newDay,
+      titleBtn,
+    ]);
+    this.resultsPanel.setDepth(51).setVisible(false);
+  }
+
+  private consumeScoreFlash(snap: SimSnapshot): void {
+    const flash = snap.scoreFlash;
+    if (!flash || flash.id === this.lastScoreFlashId) return;
+    this.lastScoreFlashId = flash.id;
+    this.spawnScorePop(flash.delta);
+  }
+
+  private consumeSfx(snap: SimSnapshot): void {
+    const cue = snap.sfxCue;
+    if (!cue || cue.id === this.lastSfxId) return;
+    this.lastSfxId = cue.id;
+    playUiSfx(this.game, cue.kind);
+  }
+
+  private spawnScorePop(delta: number): void {
+    const positive = delta >= 0;
+    const label = addUiText(this, 0, 0, positive ? `+${delta}` : String(delta), {
+      size: Type.heading,
+      color: positive ? Color.neonHex : Color.dangerHex,
+      fontStyle: "700",
+      strokeThickness: 0,
+      backgroundColor: Color.bannerInkSoft,
+      padding: { x: 10, y: 4 },
+    }).setOrigin(0, 0.5);
+    this.scorePopLayer.add(label);
+    this.tweens.add({
+      targets: this.scoreText,
+      scale: { from: 1.18, to: 1 },
+      duration: 280,
+      ease: "Back.easeOut",
+    });
+    this.tweens.add({
+      targets: label,
+      y: { from: 0, to: -56 },
+      alpha: { from: 1, to: 0 },
+      duration: 900,
+      ease: "Cubic.easeOut",
+      onComplete: () => label.destroy(),
+    });
+  }
+
+  private syncResults(snap: SimSnapshot): void {
+    if (!snap.shiftEnded || !snap.shiftResults) {
+      this.hideResults();
+      return;
+    }
+    this.showResults(snap.shiftResults);
+  }
+
+  private showResults(results: ShiftResults): void {
+    this.resultsVisible = true;
+    this.resultsDim.setVisible(true).setInteractive();
+    this.resultsPanel.setVisible(true);
+    this.resultsTitle.setText(results.title);
+    this.resultsClock.setText(`Clock ${results.clockLabel}`);
+    this.resultsScore.setText(String(results.score));
+    this.resultsBreakdown.setText(formatBreakdown(results));
+    this.resultsVerdict.setText(results.verdict);
+    this.scene.bringToTop();
+  }
+
+  private hideResults(): void {
+    this.resultsVisible = false;
+    this.resultsDim.setVisible(false).disableInteractive();
+    this.resultsPanel.setVisible(false);
+  }
+
+  private onNewDay(): void {
+    getSim().startNewDay();
+    syncMusicToClock(0);
+    this.hideResults();
+    this.closeSettings();
+    this.ensureShopVisible();
+    this.paintHud(getSim().snapshot());
+  }
+
+  private onTitle(): void {
+    startSession();
+    this.hideResults();
+    this.closeSettings();
+    this.ensureShopVisible();
+    if (this.scene.isActive("title")) this.scene.stop("title");
+    this.scene.launch("title");
+  }
+
+  private ensureShopVisible(): void {
+    if (this.scene.isActive("door") && !this.scene.isSleeping("door")) this.scene.sleep("door");
+    if (this.scene.isActive("drive") && !this.scene.isSleeping("drive")) this.scene.sleep("drive");
+    if (this.scene.isSleeping("shop")) this.scene.wake("shop");
+    else if (!this.scene.isActive("shop")) this.scene.launch("shop");
   }
 
   private drawPad(flash = false): void {
@@ -705,4 +963,16 @@ export class HudScene extends Phaser.Scene {
   private onPointerUp(p: Phaser.Input.Pointer): void {
     if (this.pointerId === p.id) this.pointerId = null;
   }
+}
+
+function formatBreakdown(results: ShiftResults): string {
+  const b = results.breakdown;
+  const lines = [
+    `In-store  ×${b.inStore}   ·   +${b.inStore * SCORE_INSTORE}`,
+    `Pickups  ×${b.pickups}   ·   +${b.pickups * SCORE_PICKUP}`,
+    `On-time drops  ×${b.deliveriesOnTime}   ·   +${b.deliveriesOnTime * SCORE_DELIVERY_ON_TIME}`,
+    `Late drops  ×${b.deliveriesLate}   ·   ${b.deliveriesLate * SCORE_DELIVERY_LATE}`,
+    `Fails  ×${b.fails}   ·   ${b.fails * SCORE_FAIL}`,
+  ];
+  return lines.join("\n");
 }

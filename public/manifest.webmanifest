@@ -1,16 +1,14 @@
 {
-  "name": "Kindling",
+  "name": "Kindling Cannabis",
   "short_name": "Kindling",
-  "description": "Run the Kindling shop, then hit the road for deliveries.",
+  "description": "One Kindling shift: run the shop, then deliver with ID checks. 9 AM–11 PM.",
   "id": "./",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "display_override": ["fullscreen", "standalone", "minimal-ui"],
   "orientation": "landscape",
   "background_color": "#241c16",
   "theme_color": "#241c16",
-  "categories": ["games"],
   "icons": [
     {
       "src": "icon-192.png",

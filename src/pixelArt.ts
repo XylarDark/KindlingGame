@@ -260,6 +260,11 @@ function windowPane(g: G, x: number, y: number, w: number, h: number): void {
 function houseLot(scene: Phaser.Scene, key: string, wall: number, roof: number, trim: number, style: HouseStyle): void {
   bake(scene, key, 192, 192, (g) => {
     yard(g, 48, 48);
+    // Soft lot edge so the building meets grass instead of floating on a hard crop.
+    cells(g, 1, 1, 46, 2, Pal.grassLite);
+    cells(g, 1, 45, 46, 2, Pal.grassLite);
+    cells(g, 1, 1, 2, 46, Pal.grassLite);
+    cells(g, 45, 1, 2, 46, Pal.grassLite);
     if (style === "ranch") {
       cells(g, 3, 16, 42, 6, roof);
       cells(g, 5, 14, 38, 4, roof);
@@ -270,9 +275,11 @@ function houseLot(scene: Phaser.Scene, key: string, wall: number, roof: number, 
       windowPane(g, 8, 24, 7, 7);
       windowPane(g, 18, 24, 7, 7);
       windowPane(g, 33, 24, 7, 7);
+      cells(g, 4, 40, 40, 3, Pal.curb);
       cells(g, 20, 32, 8, 10, Pal.woodDark);
       cells(g, 21, 34, 6, 8, Pal.wood);
       cells(g, 24, 36, 1, 2, Pal.gold);
+      cells(g, 18, 41, 12, 3, Pal.wall);
     } else if (style === "town") {
       cells(g, 10, 2, 28, 8, roof);
       cells(g, 8, 8, 32, 6, roof);
@@ -282,9 +289,11 @@ function houseLot(scene: Phaser.Scene, key: string, wall: number, roof: number, 
       windowPane(g, 13, 17, 6, 8);
       windowPane(g, 29, 17, 6, 8);
       windowPane(g, 13, 28, 6, 6);
+      cells(g, 9, 40, 30, 3, Pal.curb);
       cells(g, 20, 30, 8, 12, Pal.woodDark);
       cells(g, 21, 32, 6, 10, Pal.wood);
       cells(g, 24, 35, 1, 2, Pal.gold);
+      cells(g, 18, 41, 12, 3, Pal.wall);
     } else if (style === "cottage") {
       cells(g, 16, 4, 16, 8, roof);
       cells(g, 10, 10, 28, 6, roof);
@@ -299,6 +308,8 @@ function houseLot(scene: Phaser.Scene, key: string, wall: number, roof: number, 
       cells(g, 6, 36, 8, 5, Pal.leaf);
       cells(g, 36, 34, 7, 7, Pal.leafDark);
       cells(g, 24, 34, 1, 2, Pal.gold);
+      cells(g, 9, 40, 30, 3, Pal.curb);
+      cells(g, 18, 41, 12, 3, Pal.wall);
     } else if (style === "twoStory") {
       cells(g, 8, 4, 32, 6, roof);
       cells(g, 6, 8, 36, 5, roof);
@@ -315,6 +326,8 @@ function houseLot(scene: Phaser.Scene, key: string, wall: number, roof: number, 
       cells(g, 20, 30, 8, 10, Pal.woodDark);
       cells(g, 21, 32, 6, 8, Pal.wood);
       cells(g, 24, 34, 1, 2, Pal.gold);
+      cells(g, 7, 40, 34, 3, Pal.curb);
+      cells(g, 18, 41, 12, 3, Pal.wall);
     } else if (style === "modern") {
       cells(g, 6, 8, 36, 6, roof);
       cells(g, 6, 8, 36, 2, trim);
@@ -327,6 +340,8 @@ function houseLot(scene: Phaser.Scene, key: string, wall: number, roof: number, 
       cells(g, 26, 32, 10, 8, Pal.woodDark);
       cells(g, 27, 34, 8, 6, Pal.wood);
       cells(g, 30, 36, 1, 2, Pal.gold);
+      cells(g, 7, 40, 34, 3, Pal.curb);
+      cells(g, 24, 41, 14, 3, Pal.wall);
     } else {
       cells(g, 20, 2, 8, 8, Pal.shadow);
       cells(g, 21, 1, 6, 6, roof);
@@ -343,6 +358,8 @@ function houseLot(scene: Phaser.Scene, key: string, wall: number, roof: number, 
       cells(g, 24, 33, 1, 2, Pal.gold);
       cells(g, 12, 34, 5, 3, Pal.leaf);
       cells(g, 31, 34, 5, 3, Pal.leafDark);
+      cells(g, 7, 40, 34, 3, Pal.curb);
+      cells(g, 18, 41, 12, 3, Pal.wall);
     }
   });
 }

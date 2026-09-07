@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CITY,
   TILE,
+  doorstepWorld,
   houseById,
   lotCenter,
   lotWorldRect,
@@ -48,5 +49,22 @@ describe("city map", () => {
     expect(hit.x).toBe(home.x);
     expect(hit.y).toBe(home.y);
     expect(houseById("house-1")).toBeTruthy();
+  });
+
+  it("places doorsteps on the driveway-facing facade, not mid-lawn", () => {
+    for (const house of CITY.houses) {
+      const door = doorstepWorld(house);
+      const lot = lotWorldRect(house.house, house.lotW, house.lotH);
+      const edge =
+        door.x <= lot.left + 24 ||
+        door.x >= lot.right - 24 ||
+        door.y <= lot.top + 24 ||
+        door.y >= lot.bottom - 24;
+      expect(edge, house.id).toBe(true);
+      expect(door.x).toBeGreaterThanOrEqual(lot.left);
+      expect(door.x).toBeLessThanOrEqual(lot.right);
+      expect(door.y).toBeGreaterThanOrEqual(lot.top);
+      expect(door.y).toBeLessThanOrEqual(lot.bottom);
+    }
   });
 });

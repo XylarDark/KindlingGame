@@ -13,8 +13,7 @@ export const PICKUP_HANDOFF_WAIT_MS = 12_000;
 export const INSTORE_WALKOUT_MS = 18_000;
 
 export const CUSTOMER_SPEED = 220;
-/** px/s — ~5% under the prior 380 for tighter lane control. */
-export const VEHICLE_SPEED = 361;
+export const VEHICLE_SPEED = 380;
 export const HANDOFF_RADIUS = 160;
 /** Snap into a parking stall once this close to the pad center. */
 export const PARK_ARRIVE_RADIUS = 70;

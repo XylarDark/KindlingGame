@@ -49,7 +49,7 @@ export class DoorScene extends Phaser.Scene {
     this.houseLabel = addUiText(this, DOORSTEP_DOOR_X, 56, "", {
       size: Type.title,
       color: Color.creamHex,
-      backgroundColor: "#1c1612ee",
+      backgroundColor: Color.bannerInk,
       padding: { x: 20, y: 10 },
       fontStyle: "700",
     })
@@ -78,7 +78,7 @@ export class DoorScene extends Phaser.Scene {
     this.youLabel = addUiText(this, DRIVER_X, this.floorY + 16, "You", {
       size: Type.caption,
       color: Color.creamHex,
-      backgroundColor: "#1c1612ee",
+      backgroundColor: Color.bannerInk,
       padding: { x: 8, y: 3 },
       fontStyle: "700",
     })
@@ -87,7 +87,7 @@ export class DoorScene extends Phaser.Scene {
     this.customerCaption = addUiText(this, CUSTOMER_X, this.floorY + 16, "Customer", {
       size: Type.caption,
       color: Color.creamHex,
-      backgroundColor: "#1c1612ee",
+      backgroundColor: Color.bannerInk,
       padding: { x: 8, y: 3 },
       fontStyle: "700",
     })
@@ -190,7 +190,7 @@ export class DoorScene extends Phaser.Scene {
     this.bag.setDepth(nextHand || nextPhoto ? 12 : 6);
     if (nextHand || nextPhoto) {
       this.bag.setAlpha(pulse);
-      this.bag.setTint(0xb8ffb0);
+      this.bag.setTint(Color.flash);
     } else {
       this.bag.setAlpha(1);
       this.bag.clearTint();
@@ -198,7 +198,7 @@ export class DoorScene extends Phaser.Scene {
 
     if (nextAsk) {
       this.customer.setAlpha(pulse);
-      this.customer.setTint(0xb8ffb0);
+      this.customer.setTint(Color.flash);
     } else {
       this.customer.setAlpha(1);
       this.customer.clearTint();
@@ -224,7 +224,7 @@ export class DoorScene extends Phaser.Scene {
 
     this.customerCaption.setText(drop.customerName ?? "Customer");
     this.customerCaption.setAlpha(1);
-    this.customerCaption.setBackgroundColor("#1c1612ee");
+    this.customerCaption.setBackgroundColor(Color.bannerInk);
     this.customerCaption.setColor(Color.creamHex);
 
     this.bagCaption.setVisible(nextHand || nextPhoto);

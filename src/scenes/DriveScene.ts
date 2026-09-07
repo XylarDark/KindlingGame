@@ -11,7 +11,7 @@ import {
   roadTextureKey,
   tileToWorld,
 } from "../maps/cityT0";
-import { cityAccessPaths, cityProps, cityStreetLamps, paintAccessPaths, type CityLamp } from "../maps/cityDecor";
+import { cityAccessPaths, cityProps, cityStreetLamps, paintAccessPaths, paintHouseStreetSeams, type CityLamp } from "../maps/cityDecor";
 import { cityTrafficLoops, trafficCars, type TrafficLoop } from "../maps/traffic";
 import { enableItemHit } from "../input/hit";
 import { PEOPLE_SCALE } from "../maps/shopT0";
@@ -104,7 +104,7 @@ export class DriveScene extends Phaser.Scene {
     this.vanBanner = addUiText(this, 0, 0, "", {
       size: Type.body,
       color: Color.creamHex,
-      backgroundColor: "#1c1612ee",
+      backgroundColor: Color.bannerInk,
       padding: { x: 14, y: 8 },
       align: "center",
       fontStyle: "600",
@@ -141,7 +141,7 @@ export class DriveScene extends Phaser.Scene {
       y: snap.vehicle.y,
       heading: snap.vehicle.heading,
     });
-    const turnT = 1 - Math.exp(-(this.game.loop.delta / 1000) * 6.5);
+    const turnT = 1 - Math.exp(-(this.game.loop.delta / 1000) * 6);
     const seen = new Set<string>();
     while (this.trafficSprites.length < traffic.length) {
       this.trafficSprites.push(this.add.image(0, 0, "tex-car").setDepth(5).setDisplaySize(120, 72).setAlpha(0.92));
@@ -163,15 +163,6 @@ export class DriveScene extends Phaser.Scene {
     }
 
     const driving = snap.playerRole === "driver" && snap.dropoff.phase !== "atDoor";
-    if (driving && snap.toast) {
-      this.vanBanner
-        .setVisible(true)
-        .setText(snap.toast)
-        .setPosition(snap.vehicle.x, snap.vehicle.y - 78);
-      fitTypeToWidth(this.vanBanner, 400, 16);
-    } else {
-      this.vanBanner.setVisible(false);
-    }
 
     if (snap.dropoff.driverOnFoot && snap.dropoff.driver) {
       this.walker.setVisible(true).setPosition(snap.dropoff.driver.x, snap.dropoff.driver.y + 18);
@@ -183,8 +174,10 @@ export class DriveScene extends Phaser.Scene {
 
     this.paintDayNight(snap);
     this.glow.clear();
+    const next = tutorialHints(snap)[0];
     const stopId = snap.run?.nextStopId;
     const destOrder = snap.orders.find((o) => o.destinationId === stopId && o.status === "onRun");
+    let pinWorld: { x: number; y: number } | null = null;
     if (stopId) {
       const house = CITY.houses.find((h) => h.id === stopId);
       if (house) {
@@ -210,11 +203,35 @@ export class DriveScene extends Phaser.Scene {
         this.pinLabel.setColor(destOrder && isSlaUrgent(destOrder.slaRemainingMs) ? Color.dangerHex : Color.inkHex);
         this.pinLabel.setBackgroundColor(Color.amberHex);
         fitTypeToWidth(this.pinLabel, 280, 18);
+        const flashPin = next?.kind === "gpsPin";
+        const pulse = 0.62 + 0.38 * (0.5 + 0.5 * Math.sin(snap.gameMs / 280));
+        this.pin.setTint(flashPin ? Color.flash : 0xffffff);
+        this.pin.setAlpha(flashPin ? pulse : 1);
+        this.pinPulse.setFillStyle(flashPin ? Color.lime : Color.amber, flashPin ? 0.25 + 0.35 * pulse : 0.35);
+        if (flashPin) {
+          this.pinLabel.setBackgroundColor(Color.limeHex);
+          this.pinLabel.setAlpha(0.85 + 0.15 * pulse);
+        } else {
+          this.pinLabel.setAlpha(1);
+        }
       }
     } else {
       this.pin.setVisible(false);
       this.pinPulse.setVisible(false);
       this.pinLabel.setVisible(false);
+      this.pin.clearTint();
+      this.pin.setAlpha(1);
+    }
+
+    // GPS pin + label already carry the stop — van toast stacks on them mid-route.
+    if (driving && snap.toast && !stopId) {
+      this.vanBanner
+        .setVisible(true)
+        .setText(snap.toast)
+        .setPosition(snap.vehicle.x, snap.vehicle.y - 78);
+      fitTypeToWidth(this.vanBanner, 400, 16);
+    } else {
+      this.vanBanner.setVisible(false);
     }
 
     if (snap.dropoff.customer) {
@@ -223,18 +240,17 @@ export class DriveScene extends Phaser.Scene {
       this.customer.setVisible(false);
     }
 
-    const next = tutorialHints(snap)[0];
     const shop = tileToWorld(CITY.shopSpawn);
     const nearShop = Math.hypot(snap.vehicle.x - shop.x, snap.vehicle.y - shop.y) <= HANDOFF_RADIUS;
     const canTapShop = driving && nearShop;
     const flashShop = next?.kind === "shop";
     if (this.shopImg.input) this.shopImg.input.enabled = driving;
-    this.shopImg.setTint(flashShop && canTapShop ? 0xb8ffb0 : 0xffffff);
+    this.shopImg.setTint(flashShop && canTapShop ? Color.flash : 0xffffff);
     this.shopCaption.setVisible(driving);
     this.shopCaption.setAlpha(1);
     if (snap.run?.nextStopId) {
       this.shopCaption.setText("Kindling");
-      this.shopCaption.setBackgroundColor("#1c1612ee");
+      this.shopCaption.setBackgroundColor(Color.bannerInk);
       this.shopCaption.setColor(Color.creamHex);
     } else {
       this.shopCaption.setText(nearShop ? "Tap Kindling to return" : snap.autoDriving ? "Van heading to Kindling" : "Drive to Kindling");
@@ -243,7 +259,7 @@ export class DriveScene extends Phaser.Scene {
         this.shopCaption.setBackgroundColor(`rgb(${bright},${Math.min(255, bright + 40)},${Math.round(bright * 0.55)})`);
         this.shopCaption.setColor(Color.inkHex);
       } else {
-        this.shopCaption.setBackgroundColor(nearShop ? Color.limeHex : "#1c1612ee");
+        this.shopCaption.setBackgroundColor(nearShop ? Color.limeHex : Color.bannerInk);
         this.shopCaption.setColor(nearShop ? Color.inkHex : Color.creamHex);
       }
     }
@@ -332,7 +348,7 @@ export class DriveScene extends Phaser.Scene {
       const tex = HOUSE_TEX[i % HOUSE_TEX.length]!;
       this.add
         .image(home.x, home.y, tex)
-        .setDisplaySize(house.lotW * TILE * 0.92, house.lotH * TILE * 0.88)
+        .setDisplaySize(house.lotW * TILE * 0.98, house.lotH * TILE * 0.96)
         .setDepth(1);
       const num = addUiText(this, home.x, home.y - 8, houseTitle(house.id).replace("House ", ""), {
         size: Type.body,
@@ -345,7 +361,9 @@ export class DriveScene extends Phaser.Scene {
       fitTypeToWidth(num, house.lotW * TILE - 36, 16);
     });
 
-    const accessGfx = this.add.graphics().setDepth(0.5);
+    // Seams + walks above grass, clipped under roofs but over lot edge / pad lips.
+    const accessGfx = this.add.graphics().setDepth(1.2);
+    paintHouseStreetSeams(accessGfx);
     paintAccessPaths(accessGfx, cityAccessPaths());
 
     const shop = lotCenter(CITY.shopLot.origin, CITY.shopLot.w, CITY.shopLot.h);

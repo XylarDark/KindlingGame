@@ -290,9 +290,31 @@ export function shopWorldHit(): { x: number; y: number; w: number; h: number } {
 }
 
 export function doorstepWorld(house: HouseStop): { x: number; y: number } {
+  const lot = lotWorldRect(house.house, house.lotW, house.lotH);
   const home = lotCenter(house.house, house.lotW, house.lotH);
-  const curb = tileToWorld(house.stop);
-  return { x: home.x * 0.55 + curb.x * 0.45, y: home.y * 0.55 + curb.y * 0.45 };
+  const pads = house.parking.length > 0 ? house.parking : [house.stop];
+  let px = 0;
+  let py = 0;
+  for (const p of pads) {
+    const w = tileToWorld(p);
+    px += w.x;
+    py += w.y;
+  }
+  px /= pads.length;
+  py /= pads.length;
+
+  // Sit the door on the lot facade that faces the driveway / curb stall.
+  const inset = 14;
+  const dx = px - home.x;
+  const dy = py - home.y;
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    const x = dx < 0 ? lot.left + inset : lot.right - inset;
+    const y = Math.min(lot.bottom - TILE * 0.28, Math.max(lot.top + TILE * 0.32, py));
+    return { x, y };
+  }
+  const y = dy < 0 ? lot.top + inset : lot.bottom - inset;
+  const x = Math.min(lot.right - TILE * 0.28, Math.max(lot.left + TILE * 0.28, px));
+  return { x, y };
 }
 
 export function roadTextureKey(kinds: TileKind[][], r: number, c: number): string {

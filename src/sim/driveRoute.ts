@@ -30,9 +30,9 @@ export function laneWorldPoint(cell: TileCell, prev?: TileCell, next?: TileCell)
 }
 
 /**
- * Build a right-lane world path. Each grid step keeps a shared offset so straights
- * stay axis-aligned; turns pass through the tile center so cars never chord across
- * the inside of a corner into the wrong lane.
+ * Build a right-lane world path. Straights stay axis-aligned; turns use a single
+ * outer-lane corner. Avoids pushing past the corner on the inbound leg (that
+ * forced a reverse) and avoids routing through tile center (E→N→W→S spins).
  */
 export function routeWorldPoints(cells: readonly TileCell[], laneOffset = LANE_OFFSET_PX): WorldPoint[] {
   if (cells.length === 0) return [];
@@ -48,34 +48,52 @@ export function routeWorldPoints(cells: readonly TileCell[], laneOffset = LANE_O
   for (let i = 0; i < cells.length - 1; i++) {
     const a = cells[i]!;
     const b = cells[i + 1]!;
-    const { dc, dr } = segmentDir(a, b);
-    const off = rightOffset(dc, dr, laneOffset);
+    const ab = segmentDir(a, b);
+    const off = rightOffset(ab.dc, ab.dr, laneOffset);
     const centerA = tileToWorld(a);
+    const centerB = tileToWorld(b);
     const wa = { x: centerA.x + off.x, y: centerA.y + off.y };
-    const wb = { x: tileToWorld(b).x + off.x, y: tileToWorld(b).y + off.y };
+    const wb = { x: centerB.x + off.x, y: centerB.y + off.y };
 
-    if (out.length === 0) {
-      push(wa);
-    } else {
+    if (out.length === 0) push(wa);
+    else {
       const last = out[out.length - 1]!;
-      const dx = wa.x - last.x;
-      const dy = wa.y - last.y;
-      if (Math.abs(dx) > 1 && Math.abs(dy) > 1) {
-        // Offset flipped at a corner — settle through the tile center with axis elbows
-        // so the path stays in-lane instead of cutting the inside chord.
+      if (Math.abs(wa.x - last.x) > 1 && Math.abs(wa.y - last.y) > 1) {
         const prev = cells[i - 1]!;
         const prevDir = segmentDir(prev, a);
-        if (Math.abs(prevDir.dc) >= Math.abs(prevDir.dr)) {
-          push({ x: centerA.x, y: last.y });
-          push(centerA);
-          push({ x: centerA.x, y: wa.y });
-        } else {
-          push({ x: last.x, y: centerA.y });
-          push(centerA);
-          push({ x: wa.x, y: centerA.y });
-        }
+        push(
+          Math.abs(prevDir.dc) >= Math.abs(prevDir.dr)
+            ? { x: wa.x, y: last.y }
+            : { x: last.x, y: wa.y },
+        );
       }
-      push(wa);
+      // Skip wa when it sits behind the corner relative to travel toward wb.
+      const last2 = out[out.length - 1]!;
+      const toWaX = wa.x - last2.x;
+      const toWaY = wa.y - last2.y;
+      const toWbX = wb.x - last2.x;
+      const toWbY = wb.y - last2.y;
+      if (toWaX * toWbX + toWaY * toWbY > 0 && Math.hypot(toWaX, toWaY) > 1) {
+        push(wa);
+      }
+    }
+
+    const c = cells[i + 2];
+    if (c) {
+      const bc = segmentDir(b, c);
+      // Axis change ahead: stop at the outer-lane corner instead of overshooting wb.
+      const axisTurn = (ab.dc !== 0) !== (bc.dc !== 0);
+      if (axisTurn) {
+        const off2 = rightOffset(bc.dc, bc.dr, laneOffset);
+        const outbound = { x: centerB.x + off2.x, y: centerB.y + off2.y };
+        const last = out[out.length - 1]!;
+        const corner =
+          Math.abs(ab.dc) >= Math.abs(ab.dr)
+            ? { x: outbound.x, y: last.y }
+            : { x: last.x, y: outbound.y };
+        push(corner);
+        continue;
+      }
     }
     push(wb);
   }
@@ -120,56 +138,6 @@ export function orthogonalLanePath(cells: readonly TileCell[]): WorldPoint[] {
   }
 
   return out;
-}
-
-
-/** 0 = straight ahead, 1 = hard ~90° corner within lookAhead px along the route. */
-export function upcomingTurnSharpness(
-  route: readonly WorldPoint[],
-  x: number,
-  y: number,
-  waypoint: number,
-  lookAhead = 140,
-): number {
-  if (route.length < 3) return 0;
-  let remaining = lookAhead;
-  let cx = x;
-  let cy = y;
-  let wp = Math.min(Math.max(0, waypoint), route.length);
-  let prevHeading: number | null = null;
-  let maxBend = 0;
-
-  while (remaining > 0 && wp < route.length) {
-    const target = route[wp]!;
-    const dx = target.x - cx;
-    const dy = target.y - cy;
-    const seg = Math.hypot(dx, dy);
-    if (seg > 0.5) {
-      const heading = Math.atan2(dy, dx);
-      if (prevHeading !== null) {
-        let delta = heading - prevHeading;
-        while (delta > Math.PI) delta -= Math.PI * 2;
-        while (delta < -Math.PI) delta += Math.PI * 2;
-        maxBend = Math.max(maxBend, Math.min(1, Math.abs(delta) / (Math.PI / 2)));
-      }
-      prevHeading = heading;
-    }
-    if (seg <= 0.5) {
-      cx = target.x;
-      cy = target.y;
-      wp += 1;
-      continue;
-    }
-    if (seg <= remaining) {
-      remaining -= seg;
-      cx = target.x;
-      cy = target.y;
-      wp += 1;
-      continue;
-    }
-    break;
-  }
-  return maxBend;
 }
 
 export function advanceRoute(
@@ -294,37 +262,14 @@ export function pointAheadOnRoute(
   return route[route.length - 1] ?? { x, y };
 }
 
-/** Wrap to (-π, π]. */
-export function normalizeAngle(a: number): number {
-  return Math.atan2(Math.sin(a), Math.cos(a));
-}
-
-/** Shortest signed delta from → to in (-π, π]. */
-export function shortestAngleDelta(from: number, to: number): number {
-  let delta = normalizeAngle(to) - normalizeAngle(from);
+/** Shortest-path lerp for headings in (-π, π]. */
+export function lerpAngle(from: number, to: number, t: number): number {
+  const fromN = Math.atan2(Math.sin(from), Math.cos(from));
+  const toN = Math.atan2(Math.sin(to), Math.cos(to));
+  let delta = toN - fromN;
   while (delta > Math.PI) delta -= Math.PI * 2;
   while (delta < -Math.PI) delta += Math.PI * 2;
-  return delta;
-}
-
-/**
- * Shortest-path lerp for headings. Caps each step so vehicles never take a
- * ≥180° flip (reads as a 360° spin on screen). Ambiguous ±π holds course.
- */
-export function lerpAngle(
-  from: number,
-  to: number,
-  t: number,
-  /** Max |delta| applied before t — ~100° keeps 90° corners, blocks flips. */
-  maxAbsDelta = Math.PI * 0.55,
-): number {
-  const fromN = normalizeAngle(from);
-  let delta = shortestAngleDelta(fromN, to);
-  // Exactly opposite: either way is a flip — hold heading instead.
-  if (Math.abs(delta) > Math.PI - 1e-3) return fromN;
-  if (delta > maxAbsDelta) delta = maxAbsDelta;
-  else if (delta < -maxAbsDelta) delta = -maxAbsDelta;
-  return normalizeAngle(fromN + delta * Math.max(0, Math.min(1, t)));
+  return fromN + delta * Math.max(0, Math.min(1, t));
 }
 
 export function routeLength(route: readonly WorldPoint[]): number {

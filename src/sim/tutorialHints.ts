@@ -4,8 +4,6 @@ export type TutorialHint =
   | { id: string; kind: "strain"; skuId: string }
   | { id: string; kind: "bagRack" }
   | { id: string; kind: "tablet"; orderId: string }
-  | { id: string; kind: "counterBag" }
-  | { id: string; kind: "receipt" }
   | { id: string; kind: "customer"; orderId: string }
   | { id: string; kind: "hitTheRoad" }
   | { id: string; kind: "handoff" }
@@ -38,7 +36,7 @@ export function nextShopHint(snap: SimSnapshot): TutorialHint | null {
 
   if (busy) return null;
 
-  if (snap.awaitingBag && !snap.pendingDepart) {
+  if (snap.awaitingBag) {
     return { id: "bagRack", kind: "bagRack" };
   }
 
@@ -80,7 +78,7 @@ function nextDriverHint(snap: SimSnapshot): TutorialHint | null {
   if (drop.actionLabel === "HAND BAG" || drop.actionLabel === "PHOTO") {
     return { id: "handoff", kind: "handoff" };
   }
-  if (snap.autoDriving) return null;
   if (snap.run?.nextStopId) return { id: "gpsPin", kind: "gpsPin" };
+  if (snap.autoDriving) return null;
   return { id: "shop", kind: "shop" };
 }

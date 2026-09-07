@@ -3,6 +3,7 @@ import { MS_PER_GAME_HOUR, MS_PER_GAME_MINUTE } from "../sim/constants";
 import {
   HOURS,
   HOWTO_HINT,
+  HOWTO_STEPS,
   MARK,
   PAUSE_HINT,
   WELCOME_HINT,
@@ -19,9 +20,11 @@ describe("shop copy", () => {
     expect(MARK).toBe("KINDLING");
     expect(HOURS).toBe("Open\n9 AM – 11 PM");
     expect(WELCOME_TITLE).toBe("Welcome to Kindling Cannabis");
-    expect(WELCOME_HINT).toBe("Interact to begin");
+    expect(WELCOME_HINT).toMatch(/key-lead|tap to begin/i);
     expect(PAUSE_HINT.startsWith("Paused")).toBe(true);
     expect(HOWTO_HINT.startsWith("Tap")).toBe(true);
+    expect(HOWTO_STEPS).toHaveLength(3);
+    expect(HOWTO_STEPS[2]?.body).toMatch(/ASK ID/i);
   });
 
   it("prompts the driver to leave or wait for another bag", () => {

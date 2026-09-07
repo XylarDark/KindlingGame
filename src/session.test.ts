@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { shouldShowHowTo } from "./session";
+import { beginPlay, getSim, shouldShowHowTo, startSession } from "./session";
+import { SHIFT_MS } from "./sim/constants";
 
 describe("shouldShowHowTo", () => {
   afterEach(() => {
@@ -19,5 +20,22 @@ describe("shouldShowHowTo", () => {
   it("forces welcome then how-to when ?howto=1", () => {
     vi.stubGlobal("location", { search: "?howto=1" });
     expect(shouldShowHowTo()).toBe(true);
+  });
+});
+
+describe("startSession hour=23", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("ends the shift immediately so results are ready without a frozen shop", () => {
+    vi.stubGlobal("location", { search: "?howto=0&hour=23" });
+    const sim = startSession(1);
+    expect(sim.clock.gameMs).toBe(SHIFT_MS);
+    expect(sim.snapshot().shiftEnded).toBe(true);
+    expect(sim.snapshot().shiftResults).not.toBeNull();
+    beginPlay();
+    expect(getSim().snapshot().shiftEnded).toBe(true);
+    expect(getSim().snapshot().orders.length).toBe(0);
   });
 });

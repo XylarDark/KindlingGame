@@ -23,4 +23,11 @@ describe("game scale config", () => {
     const src = readFileSync(join(root, "src/ui/chrome.ts"), "utf8");
     expect(src).toContain("HUD_BUTTON_MIN_H = HUD_TOUCH_MIN_DESIGN");
   });
+
+  it("fills the visual viewport with object-fit fill (no letterbox bars)", () => {
+    const html = readFileSync(join(root, "index.html"), "utf8");
+    expect(html).toContain("object-fit: fill");
+    expect(html).toContain("viewport-fit=cover");
+    expect(html).toContain("100dvh");
+  });
 });

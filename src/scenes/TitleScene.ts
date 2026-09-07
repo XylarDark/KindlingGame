@@ -3,26 +3,11 @@ import { startSessionMusic, unlockAudio } from "../audio/music";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import { beginPlay, shouldShowHowTo } from "../session";
 import { addHudButton, addPanel, HUD_BUTTON_MIN_H } from "../ui/chrome";
-import { HOWTO_HINT, PAUSE_HINT, WELCOME_HINT, WELCOME_TITLE } from "../ui/copy";
+import { HOWTO_HINT, HOWTO_STEPS, PAUSE_HINT, WELCOME_HINT, WELCOME_TITLE } from "../ui/copy";
 import { addUiText } from "../ui/text";
 import { Color, Type } from "../ui/theme";
 import { fitTypeToWidth } from "../ui/typekit";
 import { designSafeInset, readCssSafeArea, VIEWFIT_EVENT, viewFromScale } from "../ui/viewFit";
-
-const STEPS = [
-  {
-    title: "Walk-ins",
-    body: "They tell you the strain. Tap that TV — the budtender grabs it from the back — then tap them. No bag.",
-  },
-  {
-    title: "Tickets",
-    body: "Tap the flashing tablet, then that strain, then a bag. Pickups wait here. Deliveries go with the driver.",
-  },
-  {
-    title: "Hit the road",
-    body: "The van parks at each stop. Call from the lot, tap them for ID, tap the bag to hand it over, then tap the bag in their hands for a photo. Tap the flashing driver when packed — or wait for another delivery.",
-  },
-];
 
 export class TitleScene extends Phaser.Scene {
   private started = false;
@@ -88,23 +73,30 @@ export class TitleScene extends Phaser.Scene {
   }
 
   private drawWelcome(): void {
-    const cardW = 920;
-    const cardH = 188;
+    const cardW = 960;
+    const cardH = 210;
     const x = Math.floor((GAME_WIDTH - cardW) / 2);
     const y = Math.floor((GAME_HEIGHT - cardH) / 2);
 
     this.welcomeLayer.push(
       addPanel(this, x, y, cardW, cardH, {
-        radius: 4,
+        radius: 6,
         alpha: 1,
-        fill: 0xfffaf3,
+        fill: Color.card,
         stroke: Color.woodTrim,
         depth: 41,
       }),
     );
 
+    const accent = this.add.graphics().setDepth(42);
+    accent.fillStyle(Color.leaf, 1);
+    accent.fillRoundedRect(x + 10, y + 14, 8, cardH - 28, 4);
+    accent.fillStyle(Color.lime, 0.55);
+    accent.fillRoundedRect(x + 12, y + 18, 4, cardH - 36, 2);
+    this.welcomeLayer.push(accent);
+
     this.welcomeLayer.push(
-      addUiText(this, GAME_WIDTH / 2, GAME_HEIGHT / 2 - 22, WELCOME_TITLE, {
+      addUiText(this, GAME_WIDTH / 2 + 8, GAME_HEIGHT / 2 - 28, WELCOME_TITLE, {
         size: Type.title,
         color: Color.inkHex,
         fontStyle: "700",
@@ -115,11 +107,13 @@ export class TitleScene extends Phaser.Scene {
         .setDepth(42),
     );
     this.welcomeLayer.push(
-      addUiText(this, GAME_WIDTH / 2, GAME_HEIGHT / 2 + 28, WELCOME_HINT, {
+      addUiText(this, GAME_WIDTH / 2 + 8, GAME_HEIGHT / 2 + 32, WELCOME_HINT, {
         size: Type.body,
         color: Color.inkHex,
         fontStyle: "600",
         align: "center",
+        wordWrap: { width: cardW - 96 },
+        lineSpacing: 6,
         strokeThickness: 0,
       })
         .setOrigin(0.5)
@@ -133,29 +127,52 @@ export class TitleScene extends Phaser.Scene {
   }
 
   private drawHowTo(): void {
-    const cardW = 420;
-    const cardH = 184;
-    const gap = 28;
+    const cardW = 440;
+    const cardH = 220;
+    const gap = 24;
     const rowW = cardW * 3 + gap * 2;
     const btnH = HUD_BUTTON_MIN_H + 28;
-    const stackGap = 16;
-    const hintGap = 8;
+    const stackGap = 20;
+    const hintGap = 10;
     const hintH = 28;
     const blockH = cardH + stackGap + btnH + hintGap + hintH;
     const startX = Math.floor((GAME_WIDTH - rowW) / 2);
     const cardY = Math.floor((GAME_HEIGHT - blockH) / 2);
 
-    STEPS.forEach((step, i) => {
+    HOWTO_STEPS.forEach((step, i) => {
       const x = startX + i * (cardW + gap);
       const cx = x + cardW / 2;
+
       addPanel(this, x, cardY, cardW, cardH, {
-        radius: 4,
+        radius: 6,
         alpha: 1,
-        fill: 0xfffaf3,
+        fill: Color.card,
         stroke: Color.woodTrim,
         depth: 41,
       });
-      addUiText(this, cx, cardY + 18, `0${i + 1}  ${step.title}`, {
+
+      const band = this.add.graphics().setDepth(42);
+      band.fillStyle(Color.leaf, 1);
+      band.fillRoundedRect(x + 12, cardY + 12, cardW - 24, 6, 3);
+      band.fillStyle(Color.lime, 0.45);
+      band.fillRoundedRect(x + 14, cardY + 13, cardW - 28, 3, 2);
+
+      const badge = this.add.graphics().setDepth(42);
+      badge.fillStyle(Color.leaf, 1);
+      badge.fillCircle(cx, cardY + 48, 18);
+      badge.lineStyle(2, 0x2a4a28, 1);
+      badge.strokeCircle(cx, cardY + 48, 18);
+
+      addUiText(this, cx, cardY + 48, String(i + 1), {
+        size: Type.heading,
+        color: Color.creamHex,
+        fontStyle: "700",
+        strokeThickness: 0,
+      })
+        .setOrigin(0.5)
+        .setDepth(43);
+
+      addUiText(this, cx, cardY + 78, step.title, {
         size: Type.heading,
         color: Color.inkHex,
         fontStyle: "700",
@@ -163,13 +180,14 @@ export class TitleScene extends Phaser.Scene {
       })
         .setOrigin(0.5, 0)
         .setDepth(42);
-      addUiText(this, cx, cardY + 60, step.body, {
+
+      addUiText(this, cx, cardY + 112, step.body, {
         size: Type.body,
         color: Color.inkHex,
         fontStyle: "600",
         align: "center",
-        wordWrap: { width: cardW - 48 },
-        lineSpacing: 8,
+        wordWrap: { width: cardW - 52 },
+        lineSpacing: 7,
         strokeThickness: 0,
       })
         .setOrigin(0.5, 0)
@@ -198,7 +216,7 @@ export class TitleScene extends Phaser.Scene {
       size: Type.caption,
       color: Color.inkHex,
       backgroundColor: Color.creamHex,
-      padding: { x: 12, y: 4 },
+      padding: { x: 14, y: 5 },
       fontStyle: "700",
       lineSpacing: 0,
       strokeThickness: 0,

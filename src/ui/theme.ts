@@ -37,6 +37,14 @@ export const Color = {
   screenHex: "#0c1612",
   dangerHex: "#ff8a6a",
   muteHex: "#a89880",
+  /** Soft lime tint on the next tap target. */
+  flash: 0xb8ffb0,
+  /** Dark banner chips over the map / HUD. */
+  bannerInk: "#1c1612ee",
+  bannerInkSoft: "#1c1612cc",
+  /** Title / settings / results cream cards. */
+  card: 0xfffaf3,
+  cardHex: "#fffaf3",
 } as const;
 
 export const Type = {

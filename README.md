@@ -1,6 +1,6 @@
-# Kindling (T0)
+# Kindling
 
-A 2D pixel-art cannabis shop + delivery game for **iPhone, iPad, Android, and desktop** browsers. You play the **key-lead** in a side-cutaway of Kindling, then **hit the road** as the driver on a handmade city map.
+A 2D pixel-art cannabis shop + delivery game for **iPhone, iPad, Android, and desktop** browsers. You play the **key-lead** in a side-cutaway of Kindling, then **hit the road** as the driver on a handmade city map. One shift runs **09:00–23:00**, then a **results card** closes the day.
 
 ## Play
 
@@ -29,19 +29,21 @@ Open the printed local URL on desktop or your phone (same Wi-Fi). `npm run build
 Shop (tap / click):
 - Tablet → strain TV → bag. Packed deliveries sit on the counter.
 - Walk-ins: tap that TV, then the customer. No bag.
-- **HIT THE ROAD** takes every packed delivery
+- Tap the flashing driver to **HIT THE ROAD** with packed deliveries.
 
 Drive:
-- **Move:** WASD / arrows / on-screen pad
-- **Call** from the curb, then photo → check ID → hand the bag at the door
-- **Hit the road / Back to shop:** HUD button
+- **Auto-drive** between stops (primary). On-screen pad + WASD/arrows nudge if you need to steer
+- At each stop: **call** → **ASK ID** → **CHECK ID** → **HAND BAG** → **PHOTO**
+- Tap Kindling when you return to the shop
+
+Settings (Music · Settings cog): volume/mute, **End shift** (after any scored action), or reset the clock to 9:00 AM.
 
 ## Loops
 
-- **In-store:** customer at the counter → matching strain → sold
-- **Pickup:** tablet ticket → bag + strain → wait → customer arrives → tap them
-- **Delivery:** tablet ticket → bag + strain → HIT THE ROAD → GPS → call → door
+- **In-store (counter sale):** customer at the counter → matching strain → sold
+- **Pickup:** tablet ticket → strain → bag → wait → customer arrives → tap them
+- **Delivery:** tablet ticket → strain → bag → HIT THE ROAD → park → call → ASK ID → CHECK ID → HAND BAG → PHOTO
 
-1 game minute = 1 real second (1 game hour = 1 real minute). Late deliveries still complete but lose points. While you drive, an NPC key-lead keeps working the shop.
+1 game minute = 1 real second (1 game hour = 1 real minute). The shop day is **09:00–23:00**; at 23:00 (or End shift) you get a results breakdown. Late deliveries still complete but lose points. While you drive, an NPC key-lead keeps working the shop.
 
-Placeholder pixels only. City maps stay handmade at T0.
+Placeholder pixels only (T0). City maps stay handmade.

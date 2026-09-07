@@ -9,9 +9,6 @@ import {
   routeWorldPoints,
   rightOffset,
   segmentHeading,
-  upcomingTurnSharpness,
-  normalizeAngle,
-  shortestAngleDelta,
 } from "./driveRoute";
 
 describe("driveRoute", () => {
@@ -33,7 +30,7 @@ describe("driveRoute", () => {
     let wp = 0;
     let arrived = false;
     for (let i = 0; i < 200 && !arrived; i++) {
-      const step = advanceRoute(x, y, wp, route, 361, 0.05);
+      const step = advanceRoute(x, y, wp, route, 380, 0.05);
       x = step.x;
       y = step.y;
       wp = step.waypoint;
@@ -97,35 +94,48 @@ describe("driveRoute", () => {
     const mid = lerpAngle(0, Math.PI / 2, 0.5);
     expect(mid).toBeGreaterThan(0.2);
     expect(mid).toBeLessThan(1.4);
+    expect(Math.abs(lerpAngle(0, Math.PI, 0.5))).toBeCloseTo(Math.PI / 2, 5);
   });
 
-  it("never takes a 180°/360° flip — holds course on opposite headings", () => {
-    expect(lerpAngle(0, Math.PI, 1)).toBeCloseTo(0, 5);
-    expect(lerpAngle(0, -Math.PI, 1)).toBeCloseTo(0, 5);
-    expect(Math.abs(shortestAngleDelta(0.1, -0.1))).toBeLessThan(0.25);
-    // Cap each step under ~100° even when aiming further.
-    const stepped = lerpAngle(0, Math.PI * 0.9, 1);
-    expect(Math.abs(stepped)).toBeLessThanOrEqual(Math.PI * 0.55 + 1e-6);
-    expect(Math.abs(normalizeAngle(stepped))).toBeLessThan(Math.PI);
-  });
-
-  it("turns the short way across the ±π wrap without spinning", () => {
-    const a = lerpAngle(Math.PI - 0.1, -Math.PI + 0.1, 1);
-    expect(Math.abs(shortestAngleDelta(Math.PI - 0.1, a))).toBeLessThan(0.25);
-    expect(Math.abs(a)).toBeGreaterThan(Math.PI - 0.3);
-  });
-
-  it("flags a sharp corner ahead so drivers can slow into the elbow", () => {
+  it("turns with one outer-lane elbow so heading does not sweep ~270° through the center", () => {
     const route = routeWorldPoints([
       { c: 2, r: 4 },
-      { c: 5, r: 4 },
-      { c: 5, r: 7 },
+      { c: 3, r: 4 },
+      { c: 4, r: 4 },
+      { c: 4, r: 5 },
+      { c: 4, r: 6 },
     ]);
-    const start = route[0]!;
-    const midStraight = upcomingTurnSharpness(route, start.x, start.y, 1, 80);
-    expect(midStraight).toBeLessThan(0.35);
-    // Near the turn elbow, look-ahead should see the 90° bend.
-    const nearTurn = upcomingTurnSharpness(route, route[1]!.x - 20, route[1]!.y, 1, 200);
-    expect(nearTurn).toBeGreaterThan(0.6);
+    expect(routeIsOrthogonal(route)).toBe(true);
+
+    let x = route[0]!.x;
+    let y = route[0]!.y;
+    let wp = 0;
+    let heading = 0;
+    let prev = heading;
+    let spin = 0;
+    let maxStep = 0;
+    let prevStep = heading;
+    for (let i = 0; i < 400; i++) {
+      const step = advanceRoute(x, y, wp, route, 380, 0.05);
+      x = step.x;
+      y = step.y;
+      wp = step.waypoint;
+      let sh = step.heading - prevStep;
+      while (sh > Math.PI) sh -= Math.PI * 2;
+      while (sh < -Math.PI) sh += Math.PI * 2;
+      maxStep = Math.max(maxStep, Math.abs(sh));
+      prevStep = step.heading;
+      const turn = 1 - Math.exp(-0.05 * 8);
+      heading = lerpAngle(heading, step.heading, turn);
+      let d = heading - prev;
+      while (d > Math.PI) d -= Math.PI * 2;
+      while (d < -Math.PI) d += Math.PI * 2;
+      spin += Math.abs(d);
+      prev = heading;
+      if (step.arrived) break;
+    }
+    // One ~90° corner (+ settle): well under a half-circle of absolute turn.
+    expect((spin * 180) / Math.PI).toBeLessThan(150);
+    expect((maxStep * 180) / Math.PI).toBeLessThanOrEqual(95);
   });
 });

@@ -29,63 +29,6 @@ export function isStandaloneDisplay(
   return standaloneFlag;
 }
 
-/** True when the JS Fullscreen API can hide browser chrome (Android/desktop; not iOS Safari). */
-export function canRequestFullscreen(
-  doc: Pick<Document, "fullscreenEnabled"> & { documentElement?: { requestFullscreen?: unknown } } = document,
-): boolean {
-  if (doc.fullscreenEnabled === false) return false;
-  const el = doc.documentElement as { requestFullscreen?: unknown; webkitRequestFullscreen?: unknown } | undefined;
-  return typeof el?.requestFullscreen === "function" || typeof el?.webkitRequestFullscreen === "function";
-}
-
-export function tryEnterFullscreen(
-  target: {
-    requestFullscreen?: (options?: FullscreenOptions) => Promise<void>;
-    webkitRequestFullscreen?: () => void;
-  } | null | undefined = typeof document !== "undefined" ? document.documentElement : undefined,
-): boolean {
-  if (!target) return false;
-  if (typeof target.requestFullscreen === "function") {
-    void target.requestFullscreen().catch(() => undefined);
-    return true;
-  }
-  if (typeof target.webkitRequestFullscreen === "function") {
-    try {
-      target.webkitRequestFullscreen();
-      return true;
-    } catch {
-      return false;
-    }
-  }
-  return false;
-}
-
-/** Whether to show the "install / fullscreen" coach for more screen space. */
-export function shouldShowChromeCoach(opts: {
-  standalone: boolean;
-  fullscreenElement: Element | null;
-  dismissed: boolean;
-  coarsePointer: boolean;
-}): boolean {
-  if (opts.standalone || opts.fullscreenElement || opts.dismissed) return false;
-  return opts.coarsePointer;
-}
-
-export function chromeCoachCopy(canFullscreen: boolean): { title: string; body: string; action: string } {
-  if (canFullscreen) {
-    return {
-      title: "More screen space",
-      body: "Tap for fullscreen so Kindling fills the display.",
-      action: "Go fullscreen",
-    };
-  }
-  return {
-    title: "Install for fullscreen",
-    body: "Browsers keep a search bar in a normal tab. Add Kindling to your Home Screen for a chrome-free play.",
-    action: "Got it",
-  };
-}
-
 export function tryLockLandscape(orientation: Pick<ScreenOrientation, "lock"> | null | undefined): boolean {
   if (!orientation || typeof orientation.lock !== "function") return false;
   void orientation.lock("landscape").catch(() => undefined);
@@ -152,82 +95,13 @@ export function installMobileShell(game: Phaser.Game): void {
   });
 
   const nav = navigator as Navigator & { standalone?: boolean };
-  const standalone = () => isStandaloneDisplay(globalThis.matchMedia, nav.standalone === true);
   const tryLandscape = (): void => {
     tryLockLandscape(screen.orientation);
   };
-  if (standalone()) {
+  if (isStandaloneDisplay(globalThis.matchMedia, nav.standalone === true)) {
     tryLandscape();
   }
-
-  const coach = ensureChromeCoach();
-  const syncCoach = (): void => {
-    const dismissed = globalThis.sessionStorage?.getItem("kindling-chrome-coach") === "1";
-    const show = shouldShowChromeCoach({
-      standalone: standalone(),
-      fullscreenElement: document.fullscreenElement,
-      dismissed,
-      coarsePointer: coarse(),
-    });
-    coach.hidden = !show;
-    coach.setAttribute("aria-hidden", show ? "false" : "true");
-    if (show) {
-      const copy = chromeCoachCopy(canRequestFullscreen());
-      coach.querySelector("[data-coach-title]")!.textContent = copy.title;
-      coach.querySelector("[data-coach-body]")!.textContent = copy.body;
-      coach.querySelector("[data-coach-action]")!.textContent = copy.action;
-    }
-  };
-
-  const onFirstGesture = (): void => {
-    tryLandscape();
-    if (!standalone() && canRequestFullscreen() && !document.fullscreenElement) {
-      tryEnterFullscreen(document.documentElement);
-    }
-    syncCoach();
-  };
-  document.addEventListener("pointerdown", onFirstGesture);
-  document.addEventListener("fullscreenchange", () => {
-    sync();
-    syncCoach();
-  });
-
-  coach.querySelector("[data-coach-action]")?.addEventListener("click", (event) => {
-    event.stopPropagation();
-    if (canRequestFullscreen()) {
-      tryEnterFullscreen(document.documentElement);
-    } else {
-      globalThis.sessionStorage?.setItem("kindling-chrome-coach", "1");
-    }
-    syncCoach();
-  });
-  coach.querySelector("[data-coach-dismiss]")?.addEventListener("click", (event) => {
-    event.stopPropagation();
-    globalThis.sessionStorage?.setItem("kindling-chrome-coach", "1");
-    syncCoach();
-  });
+  document.addEventListener("pointerdown", tryLandscape);
 
   sync();
-  syncCoach();
-}
-
-function ensureChromeCoach(): HTMLElement {
-  let coach = document.getElementById("chrome-coach");
-  if (coach) return coach;
-  coach = document.createElement("div");
-  coach.id = "chrome-coach";
-  coach.hidden = true;
-  coach.setAttribute("aria-hidden", "true");
-  coach.innerHTML = `
-    <div class="chrome-coach__card">
-      <strong data-coach-title></strong>
-      <p data-coach-body></p>
-      <div class="chrome-coach__row">
-        <button type="button" data-coach-action></button>
-        <button type="button" data-coach-dismiss class="chrome-coach__ghost">Not now</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(coach);
-  return coach;
 }

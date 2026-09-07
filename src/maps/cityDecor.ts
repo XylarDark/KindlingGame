@@ -6,6 +6,7 @@ import {
   isEWStreet,
   isNSStreet,
   lotCenter,
+  lotWorldRect,
   tileToWorld,
   type HouseStop,
 } from "./cityT0";
@@ -282,6 +283,63 @@ export function paintAccessPaths(g: Phaser.GameObjects.Graphics, paths: readonly
     else if (path.kind === "walk") paintConcreteWalk(g, path.points, path.width);
     else paintFlagstones(g, path.points, path.width);
   }
+}
+
+/** Concrete lips where parking pads meet house lots, plus door stoops. */
+export function paintHouseStreetSeams(g: Phaser.GameObjects.Graphics): void {
+  for (const house of CITY.houses) {
+    paintPadLotSeam(g, house);
+    paintDoorStoop(g, house);
+  }
+}
+
+function paintPadLotSeam(g: Phaser.GameObjects.Graphics, house: HouseStop): void {
+  const lot = lotWorldRect(house.house, house.lotW, house.lotH);
+  const home = lotCenter(house.house, house.lotW, house.lotH);
+  const pad = parkingNearestHouse(house);
+  const padW = tileToWorld(pad);
+  const dx = padW.x - home.x;
+  const dy = padW.y - home.y;
+  const thick = 10;
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    const x = dx < 0 ? lot.left - thick : lot.right;
+    g.fillStyle(Pal.curb, 1);
+    g.fillRect(x, lot.top + 8, thick, lot.bottom - lot.top - 16);
+    g.fillStyle(Pal.wall, 0.85);
+    g.fillRect(x + 2, lot.top + 12, thick - 4, lot.bottom - lot.top - 24);
+  } else {
+    const y = dy < 0 ? lot.top - thick : lot.bottom;
+    g.fillStyle(Pal.curb, 1);
+    g.fillRect(lot.left + 8, y, lot.right - lot.left - 16, thick);
+    g.fillStyle(Pal.wall, 0.85);
+    g.fillRect(lot.left + 12, y + 2, lot.right - lot.left - 24, thick - 4);
+  }
+}
+
+function paintDoorStoop(g: Phaser.GameObjects.Graphics, house: HouseStop): void {
+  if (house.access === "garage") return;
+  const door = doorstepWorld(house);
+  const home = lotCenter(house.house, house.lotW, house.lotH);
+  const padEdge = tileEdgeToward(parkingNearestHouse(house), home);
+  const dx = padEdge.x - door.x;
+  const dy = padEdge.y - door.y;
+  const alongX = Math.abs(dx) >= Math.abs(dy);
+  const outX = alongX ? Math.sign(dx || 1) : 0;
+  const outY = alongX ? 0 : Math.sign(dy || 1);
+  const cx = door.x + outX * 10;
+  const cy = door.y + outY * 10;
+  const w = alongX ? 18 : 28;
+  const h = alongX ? 28 : 16;
+  g.fillStyle(Pal.asphaltDark, 0.35);
+  g.fillRect(cx - w / 2 + 2, cy - h / 2 + 2, w, h);
+  g.fillStyle(Pal.curb, 1);
+  g.fillRect(cx - w / 2, cy - h / 2, w, h);
+  g.fillStyle(Pal.wall, 0.95);
+  g.fillRect(cx - w / 2 + 2, cy - h / 2 + 2, w - 4, h - 4);
+  // Door threshold mark on the facade.
+  g.fillStyle(Pal.woodDark, 1);
+  if (alongX) g.fillRect(door.x - 3, door.y - 10, 6, 20);
+  else g.fillRect(door.x - 10, door.y - 3, 20, 6);
 }
 
 function paintDriveApron(

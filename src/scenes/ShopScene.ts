@@ -14,10 +14,8 @@ import {
   KEYLEAD,
   OUT_BAG_GAP,
   OUT_BAG_RIGHT,
-  PACK_SPOT,
   PEOPLE_SCALE,
   PERSON_DISPLAY_H,
-  RECEIPT_SPOT,
   TABLET,
   TABLET_H,
   TABLET_W,
@@ -46,17 +44,12 @@ export class ShopScene extends Phaser.Scene {
   private driver!: Phaser.GameObjects.Image;
   private bagRack!: Phaser.GameObjects.Image;
   private bagRackLabel!: Phaser.GameObjects.Text;
-  private packBag!: Phaser.GameObjects.Image;
-  private bagLabel!: Phaser.GameObjects.Text;
-  private receipt!: Phaser.GameObjects.Image;
-  private receiptText!: Phaser.GameObjects.Text;
   private tabletScreen!: Phaser.GameObjects.Graphics;
   private tabletHit!: Phaser.GameObjects.Rectangle;
   private tabletLabel!: Phaser.GameObjects.Text;
   private queueBadge!: Phaser.GameObjects.Text;
   private keyLeadBubble!: Phaser.GameObjects.Text;
   private driverBubble!: Phaser.GameObjects.Text;
-  private departing = false;
   private counterPrompt!: Phaser.GameObjects.Text;
   private customers = new Map<string, Phaser.GameObjects.Image>();
   private bubbles = new Map<string, Phaser.GameObjects.Text>();
@@ -169,37 +162,6 @@ export class ShopScene extends Phaser.Scene {
       .setDepth(12)
       .setVisible(false);
 
-    this.packBag = this.add.image(PACK_SPOT.x, PACK_SPOT.y, "tex-bag").setOrigin(0.5, 1).setScale(BAG_SCALE).setDepth(8).setVisible(false);
-    enableItemHit(this.packBag);
-    this.packBag.on("pointerdown", () => getSim().shopClick({ type: "counterBag" }));
-    wireHover(this.packBag);
-    this.bagLabel = addUiText(this, PACK_SPOT.x, bagCaptionY(PACK_SPOT.y), "", {
-      size: Type.caption,
-      color: Color.inkHex,
-      backgroundColor: Color.limeHex,
-      padding: { x: 6, y: 3 },
-      fontStyle: "600",
-    })
-      .setOrigin(0.5)
-      .setDepth(9)
-      .setVisible(false);
-
-    this.receipt = this.add.image(RECEIPT_SPOT.x, RECEIPT_SPOT.y, "tex-receipt").setOrigin(0.5, 1).setDepth(9).setVisible(false);
-    enableItemHit(this.receipt);
-    this.receipt.on("pointerdown", () => getSim().shopClick({ type: "receipt" }));
-    wireHover(this.receipt);
-    this.receiptText = addUiText(this, RECEIPT_SPOT.x, RECEIPT_SPOT.y - 108, "", {
-      size: Type.caption,
-      color: Color.inkHex,
-      backgroundColor: Color.creamHex,
-      padding: { x: 8, y: 4 },
-      align: "center",
-      fontStyle: "600",
-    })
-      .setOrigin(0.5)
-      .setDepth(10)
-      .setVisible(false);
-
     this.counterPrompt = addUiText(this, CUSTOMER_SPOT.x + 268, COUNTER_FRONT + 96, "", {
       size: Type.body,
       color: Color.inkHex,
@@ -244,28 +206,20 @@ export class ShopScene extends Phaser.Scene {
       .setText(callout ?? "")
       .setPosition(snap.keyLead.x - 168, snap.keyLead.y - PERSON_DISPLAY_H - 24);
 
-    this.tryDepart(snap);
-
     const next = nextShopHint(snap);
     const pulse = 0.62 + 0.38 * (0.5 + 0.5 * Math.sin(snap.gameMs / 420));
     const tabletPulse = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(snap.gameMs / 160));
-    const canGo = snap.canHitTheRoad && snap.playerRole === "keyLead";
-    const highlightGo = canGo;
+    const highlightGo = next?.kind === "hitTheRoad";
     const readyLine = driverReadyCopy(snap.bagsInBin.length);
-    const driverLine = canGo ? (snap.driverLine ?? readyLine) : null;
+    const driverLine = highlightGo ? (snap.driverLine ?? readyLine) : null;
     this.driverBubble.setVisible(!!driverLine && snap.playerRole === "keyLead").setText(driverLine ?? "");
     this.driverBubble.setAlpha(1);
     this.driver.setAlpha(highlightGo ? pulse : 1);
-    this.driver.setTint(highlightGo ? 0xb8ffb0 : 0xffffff);
-    if (this.driver.input) this.driver.input.enabled = canGo;
-
-    this.packBag.setVisible(false);
-    this.bagLabel.setVisible(false);
-    this.receipt.setVisible(false);
-    this.receiptText.setVisible(false);
+    this.driver.setTint(highlightGo ? Color.flash : 0xffffff);
+    if (this.driver.input) this.driver.input.enabled = highlightGo;
 
     this.bagRack.setAlpha(next?.kind === "bagRack" ? tabletPulse : 1);
-    this.bagRack.setTint(next?.kind === "bagRack" ? 0xb8ffb0 : 0xffffff);
+    this.bagRack.setTint(next?.kind === "bagRack" ? Color.flash : 0xffffff);
     this.bagRackLabel.setText(next?.kind === "bagRack" ? "Tap to pack" : "BAGS");
     this.bagRackLabel.setAlpha(1);
     this.bagRackLabel.setColor(Color.creamHex);
@@ -298,20 +252,6 @@ export class ShopScene extends Phaser.Scene {
     this.syncTablet(snap, tabletPulse, next?.kind === "tablet");
     this.syncCustomers(snap.customers, pulse, next?.kind === "customer" ? next.orderId : null);
     this.syncOutgoing(snap);
-  }
-
-  private tryDepart(snap: SimSnapshot): void {
-    if (snap.playerRole !== "keyLead") {
-      this.departing = false;
-      return;
-    }
-    if (!snap.pendingDepart || this.departing) return;
-    this.departing = true;
-    this.time.delayedCall(1200, () => {
-      this.departing = false;
-      if (!getSim().snapshot().pendingDepart) return;
-      this.departNow();
-    });
   }
 
   private departNow(): void {
@@ -415,7 +355,7 @@ export class ShopScene extends Phaser.Scene {
       const focus = customer.orderId === focusId;
       sprite.setPosition(customer.x, CUSTOMER_SPOT.y);
       sprite.setAlpha(focus ? pulse : 1);
-      sprite.setTint(focus ? 0xb8ffb0 : 0xffffff);
+      sprite.setTint(focus ? Color.flash : 0xffffff);
       const bubble = this.bubbles.get(customer.orderId);
       bubble
         ?.setPosition(customer.x + CUSTOMER_BUBBLE_DX, CUSTOMER_BUBBLE_Y)

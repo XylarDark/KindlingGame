@@ -1,14 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import {
-  applyCanvasDisplayScale,
-  canRequestFullscreen,
-  chromeCoachCopy,
-  isPortraitPhone,
-  isStandaloneDisplay,
-  shouldShowChromeCoach,
-  tryEnterFullscreen,
-  tryLockLandscape,
-} from "./shell";
+import { applyCanvasDisplayScale, isPortraitPhone, isStandaloneDisplay, tryLockLandscape } from "./shell";
 import { GAME_HEIGHT, GAME_WIDTH } from "./sim/constants";
 
 describe("isPortraitPhone", () => {
@@ -79,47 +70,5 @@ describe("applyCanvasDisplayScale", () => {
     applyCanvasDisplayScale(game as never);
     expect(displayScale.x).toBeCloseTo(GAME_WIDTH / 844);
     expect(displayScale.y).toBeCloseTo(GAME_HEIGHT / 390);
-  });
-});
-
-describe("fullscreen helpers", () => {
-  it("detects requestFullscreen support", () => {
-    expect(
-      canRequestFullscreen({
-        fullscreenEnabled: true,
-        documentElement: { requestFullscreen: async () => undefined },
-      }),
-    ).toBe(true);
-    expect(canRequestFullscreen({ fullscreenEnabled: false, documentElement: {} })).toBe(false);
-  });
-
-  it("calls requestFullscreen when available", () => {
-    const requestFullscreen = vi.fn().mockResolvedValue(undefined);
-    expect(tryEnterFullscreen({ requestFullscreen })).toBe(true);
-    expect(requestFullscreen).toHaveBeenCalled();
-  });
-
-  it("shows the chrome coach only for touch browsers that are not already fullscreen", () => {
-    expect(
-      shouldShowChromeCoach({
-        standalone: false,
-        fullscreenElement: null,
-        dismissed: false,
-        coarsePointer: true,
-      }),
-    ).toBe(true);
-    expect(
-      shouldShowChromeCoach({
-        standalone: true,
-        fullscreenElement: null,
-        dismissed: false,
-        coarsePointer: true,
-      }),
-    ).toBe(false);
-  });
-
-  it("uses install copy when fullscreen API is missing", () => {
-    expect(chromeCoachCopy(false).action).toBe("Got it");
-    expect(chromeCoachCopy(true).action).toBe("Go fullscreen");
   });
 });
