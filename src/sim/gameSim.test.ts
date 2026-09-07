@@ -71,6 +71,17 @@ function waitForCustomerAtCounter(sim: GameSim, orderId: string): void {
   }
 }
 
+/**
+ * Let the key lead work the counter while the van is out. Coarse 50ms ticks and an early
+ * exit keep these well clear of vitest's default timeout — never tighten the granularity.
+ */
+function runCover(sim: GameSim, done: () => boolean, maxTicks = 600): void {
+  for (let i = 0; i < maxTicks; i++) {
+    if (done()) return;
+    sim.tick(50);
+  }
+}
+
 function fillTicket(
   sim: GameSim,
   type: "pickup" | "inStore" | "delivery",
@@ -738,16 +749,18 @@ describe("GameSim order loops", () => {
     expect(sim.snapshot().shiftEnded).toBe(true);
   });
 
-  it("blocks hitTheRoad while a walk-in is still at the counter", () => {
+  it("lets the driver leave a walk-in with the key lead instead of pinning them to the floor", () => {
     const sim = GameSim.create({ seed: 2, autoSpawn: false });
     fillTicket(sim, "delivery", { destinationId: "house-1" });
-    const walk = sim.spawnOrder("inStore");
+    const walk = sim.spawnOrder("inStore", { ageOk: true });
     waitForCustomerAtCounter(sim, walk.id);
-    expect(sim.snapshot().canHitTheRoad).toBe(false);
-    expect(sim.hitTheRoad()).toBe(false);
-    expect(sim.snapshot().playerRole).toBe("keyLead");
-    expect(sim.orderById(walk.id)?.status).toBe("atRegister");
-    expect(sim.snapshot().toast).toMatch(/Finish with|counter/i);
+    expect(sim.snapshot().canHitTheRoad).toBe(true);
+    expect(sim.hitTheRoad()).toBe(true);
+    expect(sim.snapshot().playerRole).toBe("driver");
+    expect(sim.snapshot().toast).toContain(walk.customerName);
+    runCover(sim, () => sim.orderById(walk.id)?.status === "completed");
+    expect(sim.orderById(walk.id)?.status).toBe("completed");
+    expect(sim.score).toBe(SCORE_INSTORE);
   });
 
   it("clears hand and key-lead fetch state when a walk-in walks out mid-fetch", () => {
@@ -771,5 +784,177 @@ describe("GameSim order loops", () => {
     sim.tick(8_000);
     expect(sim.snapshot().keyLead.phase).toBe("idle");
     expect(sim.snapshot().handSkuId).toBe(order.skuId);
+  });
+});
+
+describe("key lead covering the counter while the van is out", () => {
+  /** Puts one packed delivery in the van and sends the player out. */
+  function sendVanOut(sim: GameSim): void {
+    fillTicket(sim, "delivery", { destinationId: "house-1" });
+    expect(sim.hitTheRoad()).toBe(true);
+  }
+
+  it("leaves the floor to the player while they are still in the shop", () => {
+    const sim = GameSim.create({ seed: 6, autoSpawn: false });
+    const walk = sim.spawnOrder("inStore", { ageOk: true });
+    waitForCustomerAtCounter(sim, walk.id);
+    expect(sim.snapshot().shopCover.active).toBe(false);
+    for (let i = 0; i < 40; i++) sim.tick(50);
+    expect(sim.orderById(walk.id)?.status).toBe("atRegister");
+    expect(sim.score).toBe(0);
+  });
+
+  it("serves a walk-in who arrives after the van has already left", () => {
+    const sim = GameSim.create({ seed: 6, autoSpawn: false });
+    sendVanOut(sim);
+    const walk = sim.spawnOrder("inStore", { ageOk: true });
+    runCover(sim, () => sim.orderById(walk.id)?.status === "completed");
+    expect(sim.orderById(walk.id)?.status).toBe("completed");
+    expect(sim.score).toBe(SCORE_INSTORE);
+  });
+
+  it("hands off a pickup that ripens while the driver is away", () => {
+    const sim = GameSim.create({ seed: 6, autoSpawn: false });
+    const pick = fillTicket(sim, "pickup");
+    sendVanOut(sim);
+    expect(sim.orderById(pick.id)?.status).toBe("onPickupShelf");
+    runCover(sim, () => sim.orderById(pick.id)?.status === "completed");
+    expect(sim.orderById(pick.id)?.status).toBe("completed");
+    expect(sim.score).toBe(SCORE_PICKUP);
+  });
+
+  it("packs and hands a pickup ticket that lands mid-run", () => {
+    const sim = GameSim.create({ seed: 6, autoSpawn: false });
+    sendVanOut(sim);
+    const pick = sim.spawnOrder("pickup", { ageOk: true });
+    runCover(sim, () => sim.orderById(pick.id)?.status === "completed");
+    expect(sim.orderById(pick.id)?.status).toBe("completed");
+    expect(sim.score).toBe(SCORE_PICKUP);
+  });
+
+  it("clears a stacked counter during a long run without losing anyone", () => {
+    const sim = GameSim.create({ seed: 5, autoSpawn: false });
+    sendVanOut(sim);
+    const ids = Array.from({ length: 6 }, (_, n) =>
+      sim.spawnOrder(n % 2 ? "inStore" : "pickup", { ageOk: true }).id,
+    );
+    runCover(sim, () => ids.every((id) => sim.orderById(id)?.status === "completed"), 1_200);
+    expect(ids.map((id) => sim.orderById(id)?.status)).toEqual(ids.map(() => "completed"));
+    expect(sim.score).toBe(3 * SCORE_INSTORE + 3 * SCORE_PICKUP);
+    expect(sim.snapshot().shopCover.lost).toBe(0);
+  });
+
+  it("keeps packing when the player drove off with a ticket already claimed", () => {
+    const sim = GameSim.create({ seed: 6, autoSpawn: false });
+    fillTicket(sim, "delivery", { destinationId: "house-1" });
+    const older = sim.spawnOrder("pickup", { ageOk: true });
+    const newer = sim.spawnOrder("pickup", { ageOk: true });
+    sim.shopClick({ type: "tablet", orderId: newer.id });
+    expect(sim.snapshot().selectedOrderId).toBe(newer.id);
+    expect(older.status).toBe("queued");
+    expect(sim.hitTheRoad()).toBe(true);
+    runCover(
+      sim,
+      () => [older.id, newer.id].every((id) => sim.orderById(id)?.status === "completed"),
+      900,
+    );
+    expect(sim.orderById(newer.id)?.status).toBe("completed");
+    expect(sim.orderById(older.id)?.status).toBe("completed");
+  });
+
+  it("scores each covered order exactly once and cannot be paid twice", () => {
+    const sim = GameSim.create({ seed: 6, autoSpawn: false });
+    sendVanOut(sim);
+    const walk = sim.spawnOrder("inStore", { ageOk: true });
+    const pick = sim.spawnOrder("pickup", { ageOk: true });
+    runCover(sim, () =>
+      [walk.id, pick.id].every((id) => sim.orderById(id)?.status === "completed"),
+    );
+    expect(sim.score).toBe(SCORE_INSTORE + SCORE_PICKUP);
+    expect(sim.snapshot().shopCover.served).toBe(2);
+
+    // Stale taps and further cover ticks must not re-close an order that is already paid.
+    const score = sim.score;
+    sim.shopClick({ type: "customer", orderId: walk.id });
+    sim.shopClick({ type: "customer", orderId: pick.id });
+    sim.shopClick({ type: "handoff" });
+    for (let i = 0; i < 40; i++) sim.tick(50);
+    expect(sim.score).toBe(score);
+    expect(sim.snapshot().shopCover.served).toBe(2);
+    expect(sim.snapshot().orders.some((o) => o.id === walk.id || o.id === pick.id)).toBe(false);
+
+    sim.endShift();
+    const breakdown = sim.snapshot().shiftResults!.breakdown;
+    expect(breakdown.inStore).toBe(1);
+    expect(breakdown.pickups).toBe(1);
+    expect(breakdown.fails).toBe(0);
+  });
+
+  it("holds the courier hour on a bag packed while the van is out until the driver is back", () => {
+    const sim = GameSim.create({ seed: 5, autoSpawn: false });
+    sendVanOut(sim);
+    const later = sim.spawnOrder("delivery", { destinationId: "house-3", ageOk: true });
+    runCover(sim, () => sim.orderById(later.id)?.status === "inBin");
+    expect(sim.orderById(later.id)?.status).toBe("inBin");
+    expect(sim.orderById(later.id)?.slaStartGameMs).toBeUndefined();
+    expect(sim.snapshot().orders.find((o) => o.id === later.id)?.slaRemainingMs).toBeNull();
+    expect(sim.snapshot().shopCover.packed).toBe(1);
+
+    // A run longer than the SLA itself must not hand the player a bag that is already late.
+    sim.tick(MS_PER_GAME_HOUR);
+    expect(sim.snapshot().orders.find((o) => o.id === later.id)?.late).toBe(false);
+
+    const shop = tileToWorld(CITY.shopSpawn);
+    sim.setVehiclePosition(shop.x, shop.y);
+    expect(sim.backToShop()).toBe(true);
+    expect(sim.orderById(later.id)?.slaStartGameMs).toBe(sim.clock.gameMs);
+    const view = sim.snapshot().orders.find((o) => o.id === later.id)!;
+    expect(view.late).toBe(false);
+    expect(view.slaRemainingMs).toBeGreaterThan(MS_PER_GAME_HOUR - 50);
+  });
+
+  it("still starts the hour at the bag rack when the player packs it themselves", () => {
+    const sim = GameSim.create({ seed: 5, autoSpawn: false });
+    const order = fillTicket(sim, "delivery", { destinationId: "house-2" });
+    expect(order.slaDeferred).toBeUndefined();
+    expect(order.slaStartGameMs).toBe(sim.clock.gameMs);
+  });
+
+  it("tells the driver what the counter is doing and what it has cleared", () => {
+    const sim = GameSim.create({ seed: 6, autoSpawn: false });
+    expect(sim.snapshot().shopCover.active).toBe(false);
+    sendVanOut(sim);
+    const idle = sim.snapshot().shopCover;
+    expect(idle.active).toBe(true);
+    expect(idle.line).toBe("Counter is clear");
+    expect(idle.served).toBe(0);
+
+    const walk = sim.spawnOrder("inStore", { ageOk: true });
+    sim.tick(50);
+    const arriving = sim.snapshot().shopCover;
+    expect(arriving.waiting).toBe(1);
+    expect(arriving.line).toContain(walk.customerName);
+
+    runCover(sim, () => sim.orderById(walk.id)?.status === "completed");
+    const after = sim.snapshot().shopCover;
+    expect(after.served).toBe(1);
+    expect(after.waiting).toBe(0);
+    expect(after.lost).toBe(0);
+  });
+
+  it("resets the cover tally on each new run", () => {
+    const sim = GameSim.create({ seed: 6, autoSpawn: false });
+    sendVanOut(sim);
+    const walk = sim.spawnOrder("inStore", { ageOk: true });
+    runCover(sim, () => sim.orderById(walk.id)?.status === "completed");
+    expect(sim.snapshot().shopCover.served).toBe(1);
+
+    const shop = tileToWorld(CITY.shopSpawn);
+    sim.setVehiclePosition(shop.x, shop.y);
+    expect(sim.backToShop()).toBe(true);
+    expect(sim.snapshot().toast).toContain("1");
+    fillTicket(sim, "delivery", { destinationId: "house-2" });
+    expect(sim.hitTheRoad()).toBe(true);
+    expect(sim.snapshot().shopCover.served).toBe(0);
   });
 });

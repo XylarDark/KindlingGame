@@ -18,6 +18,8 @@ export interface Order {
   status: OrderStatus;
   createdAtGameMs: number;
   slaStartGameMs?: number;
+  /** Packed while the van was out — the courier hour waits for a driver to be back. */
+  slaDeferred?: boolean;
   arriveAtGameMs?: number;
   destinationId?: string;
   customerName: string;

@@ -95,6 +95,22 @@ export interface DeliveryRun {
   nextStopId: string | null;
 }
 
+/** What the key lead is holding down at the counter while the van is out. */
+export interface ShopCoverView {
+  /** True whenever the player is driving and the key lead is minding the shop alone. */
+  active: boolean;
+  /** One line naming the job the key lead has in their hands right now. */
+  line: string;
+  /** Walk-ins and pickup customers still owed a bag. */
+  waiting: number;
+  /** Delivery bags packed and parked for the driver's next run. */
+  packed: number;
+  /** Counter sales the key lead has closed since the van left. */
+  served: number;
+  /** Counter orders lost since the van left. */
+  lost: number;
+}
+
 export interface SimSnapshot {
   gameMs: number;
   clockLabel: string;
@@ -113,6 +129,7 @@ export interface SimSnapshot {
   bagsOnPickup: string[];
   bagsInBin: string[];
   run: DeliveryRun | null;
+  shopCover: ShopCoverView;
   dropoff: DropoffView;
   toast: string;
   serveLine: string;
@@ -194,7 +211,8 @@ export class GameSim {
   private nextDeliveryHouse = 0;
   private queuedInteract = false;
   private npcCooldown = 0;
-  private npcStep = 0;
+  private coverServed = 0;
+  private coverLost = 0;
   private spawnQueue: SpawnEvent[] = [];
   private lastAutoSpawn = 0;
   private nextTicketWaveAt = 0;
@@ -320,7 +338,8 @@ export class GameSim {
     this.fetchSkuId = null;
     this.backroomLeftMs = 0;
     this.npcCooldown = 0;
-    this.npcStep = 0;
+    this.coverServed = 0;
+    this.coverLost = 0;
     this.queuedInteract = false;
     this.input = { dx: 0, dy: 0 };
     this.dropoffInteractReadyAt = 0;
@@ -371,13 +390,14 @@ export class GameSim {
       bagsOnPickup: this.orders.filter((o) => o.status === "onPickupShelf" || o.status === "readyForHandoff").map((o) => o.id),
       bagsInBin: this.orders.filter((o) => o.status === "inBin").map((o) => o.id),
       run: this.runSnapshot(),
+      shopCover: this.shopCoverView(),
       dropoff: this.toDropoffView(),
       toast: this.toast,
       serveLine: this.serveLine(),
       highlightSkuId: this.focusSkuId(),
+      // A walk-in no longer pins the driver to the floor — the key lead covers the counter.
       canHitTheRoad:
         this.playerRole === "keyLead" &&
-        !this.orders.some((o) => o.type === "inStore" && o.status === "atRegister") &&
         (this.orders.some((o) => o.status === "inBin") || this.runOrderIds.length > 0),
       tabletTicket: this.toViewOrNull(this.tabletFront()),
       tabletQueueCount: tabletQueue(this.orders).length,
@@ -476,24 +496,28 @@ export class GameSim {
 
   hitTheRoad(): boolean {
     if (this.shiftEnded) return false;
-    const walkIn = this.orders.find((o) => o.type === "inStore" && o.status === "atRegister");
-    if (walkIn) {
-      this.toast = `Finish with ${walkIn.customerName} at the counter before you leave.`;
-      return false;
-    }
     const fresh = this.orders.filter((o) => o.status === "inBin");
     if (this.playerRole === "keyLead" && fresh.length === 0 && this.runOrderIds.length === 0) {
       this.toast = "Need a named delivery bag first.";
       return false;
     }
+    // A bag going out now needs its hour running, deferred or not.
+    this.startDeferredSlas();
     for (const order of fresh) {
       order.status = "onRun";
       this.runOrderIds.push(order.id);
     }
     this.playerRole = "driver";
     this.driverLine = null;
+    this.coverServed = 0;
+    this.coverLost = 0;
     this.refreshDriveRoute();
-    this.toast = this.runOrderIds.length > 1 ? "Multi-stop run. Van is heading out." : "Hit the road. Van is heading to the stop.";
+    const walkIn = this.orders.find((o) => o.type === "inStore" && o.status === "atRegister");
+    this.toast = walkIn
+      ? `Key lead has the counter — ${walkIn.customerName} is in good hands.`
+      : this.runOrderIds.length > 1
+        ? "Multi-stop run. Van is heading out."
+        : "Hit the road. Van is heading to the stop.";
     return true;
   }
 
@@ -507,10 +531,28 @@ export class GameSim {
     this.clearDropoff();
     this.playerRole = "keyLead";
     this.driverLine = null;
-    this.toast = this.runOrderIds.length
-      ? "Back at Kindling. Remaining bags stay in the car."
-      : "Back at Kindling. Watch the order screen.";
+    const served = this.coverServed;
+    // The driver is back on the floor, so bags the key lead packed can start their hour.
+    this.startDeferredSlas();
+    this.toast = served
+      ? `Back at Kindling. Key lead cleared ${served} at the counter.`
+      : this.runOrderIds.length
+        ? "Back at Kindling. Remaining bags stay in the car."
+        : "Back at Kindling. Watch the order screen.";
     return true;
+  }
+
+  /**
+   * The courier hour is a promise the shop can only keep with a driver in the building.
+   * Bags the key lead packs mid-run hold their clock until the van is back, so a long
+   * run cannot hand the player a bag that is already late.
+   */
+  private startDeferredSlas(): void {
+    for (const order of this.orders) {
+      if (!order.slaDeferred) continue;
+      order.slaDeferred = false;
+      if (isOpen(order)) order.slaStartGameMs = this.clock.gameMs;
+    }
   }
 
   tick(dtMs: number): void {
@@ -529,7 +571,7 @@ export class GameSim {
       this.queuedInteract = false;
       this.interact();
     }
-    if (this.playerRole === "driver") this.tickNpc(dtMs);
+    if (this.playerRole === "driver") this.tickCounterCover(dtMs);
     this.tickTimers();
     this.tickSpawns();
   }
@@ -693,8 +735,14 @@ export class GameSim {
   private sealBag(order: Order): void {
     if (order.type === "delivery") {
       order.status = "inBin";
-      order.slaStartGameMs = this.clock.gameMs;
-      this.toast = `Bag labeled ${destLabel(order)} · ${order.customerName}. Packed — ready to roll.`;
+      if (this.playerRole === "driver") {
+        order.slaDeferred = true;
+        delete order.slaStartGameMs;
+        this.toast = `Bag labeled ${destLabel(order)} · ${order.customerName}. Waiting on the van.`;
+      } else {
+        order.slaStartGameMs = this.clock.gameMs;
+        this.toast = `Bag labeled ${destLabel(order)} · ${order.customerName}. Packed — ready to roll.`;
+      }
     } else {
       order.status = "onPickupShelf";
       order.slaStartGameMs = this.clock.gameMs;
@@ -834,6 +882,40 @@ export class GameSim {
     this.handSkuId = null;
     this.complete(target);
     return true;
+  }
+
+  private shopCoverView(): ShopCoverView {
+    const walkIns = this.orders.filter((o) => o.type === "inStore" && o.status === "atRegister");
+    const pickups = this.orders.filter((o) => o.status === "readyForHandoff");
+    return {
+      active: this.playerRole === "driver",
+      line: this.coverLine(walkIns[0], pickups[0]),
+      waiting: walkIns.length + pickups.length,
+      packed: this.orders.filter((o) => o.status === "inBin").length,
+      served: this.coverServed,
+      lost: this.coverLost,
+    };
+  }
+
+  /** Mirrors the cover loop's own priority so the readout never names the wrong job. */
+  private coverLine(walkIn: Order | undefined, pickup: Order | undefined): string {
+    if (this.keyLeadPhase !== "idle") {
+      const sku = this.fetchSkuId ? skuById(this.catalog, this.fetchSkuId) : undefined;
+      return sku ? `In the back for ${sku.name}` : "In the back";
+    }
+    if (walkIn) {
+      return this.customerAtCounter(walkIn.id)
+        ? `Serving ${walkIn.customerName}`
+        : `${walkIn.customerName} is walking in`;
+    }
+    if (pickup && this.customerAtCounter(pickup.id)) return `Handing ${pickup.customerName} their pickup`;
+    const ticket = this.selectedTicket() ?? this.tabletFront();
+    if (ticket) {
+      const sku = skuById(this.catalog, ticket.skuId);
+      return `Packing ${sku?.name ?? "a bag"} for ${ticket.customerName}`;
+    }
+    if (pickup) return `Waiting on ${pickup.customerName}`;
+    return "Counter is clear";
   }
 
   private runSnapshot(): DeliveryRun | null {
@@ -1065,35 +1147,60 @@ export class GameSim {
     }
   }
 
-  private tickNpc(dtMs: number): void {
+  /**
+   * The counter does not close because the van left. While the player drives, the key lead
+   * works the floor on their own: walk-ins first, then a pickup customer who is already
+   * standing there, then whatever ticket is next on the tablet. One job at a time, at the
+   * same pace a player manages, so the shop earns exactly what it would have earned anyway.
+   */
+  private tickCounterCover(dtMs: number): void {
     this.npcCooldown -= dtMs;
     if (this.npcCooldown > 0) return;
     if (this.keyLeadPhase !== "idle") {
       this.npcCooldown = NPC_INTERACT_COOLDOWN_MS;
       return;
     }
-    const instore = this.orders.find((o) => o.type === "inStore" && o.status === "atRegister");
-    if (instore && this.customerAtCounter(instore.id)) {
-      if (this.handSkuId !== instore.skuId) this.shopClick({ type: "strain", skuId: instore.skuId });
-      else this.shopClick({ type: "customer", orderId: instore.id });
+    if (this.coverWalkIn() || this.coverPickup() || this.coverTicket()) {
       this.npcCooldown = NPC_INTERACT_COOLDOWN_MS;
-      return;
     }
-    const open = this.orders.find((o) => needsFetch(o) && o.type !== "inStore");
-    const pickupWait = this.orders.find(
+  }
+
+  private coverWalkIn(): boolean {
+    const walkIn = this.orders.find((o) => o.type === "inStore" && o.status === "atRegister");
+    if (!walkIn) return false;
+    // Nothing else can be fetched while someone is crossing the floor, so hold the turn.
+    if (!this.customerAtCounter(walkIn.id)) return true;
+    if (this.handSkuId === walkIn.skuId) this.shopClick({ type: "customer", orderId: walkIn.id });
+    else this.shopClick({ type: "strain", skuId: walkIn.skuId });
+    return true;
+  }
+
+  private coverPickup(): boolean {
+    const waiting = this.orders.find(
       (o) => o.status === "readyForHandoff" && this.customerAtCounter(o.id),
     );
-    if (pickupWait) {
-      this.shopClick({ type: "handoff" });
-      this.npcCooldown = NPC_INTERACT_COOLDOWN_MS;
-      return;
+    if (!waiting) return false;
+    this.shopClick({ type: "handoff" });
+    return true;
+  }
+
+  private coverTicket(): boolean {
+    let ticket = this.selectedTicket();
+    if (!ticket) {
+      // Whatever the player left claimed comes first; a stranded queue heals itself here.
+      this.advancePackQueue();
+      ticket = this.selectedTicket();
     }
-    if (!open) return;
-    if (this.selectedOrderId !== open.id) this.shopClick({ type: "tablet", orderId: open.id });
-    else if (!this.handSkuId) this.shopClick({ type: "strain", skuId: open.skuId });
-    else this.shopClick({ type: "bagRack" });
-    this.npcCooldown = NPC_INTERACT_COOLDOWN_MS;
-    this.npcStep += 1;
+    if (!ticket) {
+      const next = this.tabletFront();
+      if (!next) return false;
+      this.beginTicket(next);
+      return true;
+    }
+    // A jar in hand that this ticket does not want gets swapped by re-tapping the right TV.
+    if (this.handSkuId === ticket.skuId) this.shopClick({ type: "bagRack" });
+    else this.shopClick({ type: "strain", skuId: ticket.skuId });
+    return true;
   }
 
   private tickTimers(): void {
@@ -1460,6 +1567,7 @@ export class GameSim {
     if (this.shiftEnded) return;
     order.status = "completed";
     if (order.type === "delivery") order.late = isDeliveryLate(order, this.clock.gameMs);
+    if (this.playerRole === "driver" && order.type !== "delivery") this.coverServed += 1;
     const delta = scoreForComplete(order, this.clock.gameMs);
     this.score += delta;
     this.pushScoreFlash(delta);
@@ -1481,6 +1589,7 @@ export class GameSim {
   private failOrder(order: Order, reason: string): void {
     if (this.shiftEnded) return;
     order.status = "failed";
+    if (this.playerRole === "driver" && order.type !== "delivery") this.coverLost += 1;
     const delta = scoreForFail();
     this.score += delta;
     this.pushScoreFlash(delta);
