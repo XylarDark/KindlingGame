@@ -93,10 +93,13 @@ export class DriveScene extends Phaser.Scene {
       size: Type.heading,
       color: Color.inkHex,
       backgroundColor: Color.amberHex,
-      padding: { x: 14, y: 8 },
+      padding: { x: 18, y: 12 },
       align: "center",
       fontStyle: "700",
       strokeThickness: 0,
+      lineSpacing: 6,
+      maxWidth: 380,
+      maxHeight: 120,
     })
       .setOrigin(0.5, 1)
       .setDepth(6)
@@ -108,7 +111,8 @@ export class DriveScene extends Phaser.Scene {
       padding: { x: 14, y: 8 },
       align: "center",
       fontStyle: "600",
-      wordWrap: { width: 420 },
+      maxWidth: 400,
+      maxHeight: 56,
       ...overlayStroke(14),
     })
       .setOrigin(0.5, 1)
@@ -196,13 +200,12 @@ export class DriveScene extends Phaser.Scene {
         this.pinPulse.setPosition(x, y + 6).setVisible(true);
         const clock = destOrder ? formatSlaClock(destOrder.slaRemainingMs) : "";
         const who = destOrder
-          ? `${houseTitle(stopId)}\n${destOrder.customerName}${clock ? `  ·  ${clock}` : ""}`
+          ? `${houseTitle(stopId)}\n${destOrder.customerName}${clock ? `\n${clock}` : ""}`
           : houseTitle(stopId);
         this.pinLabel.setVisible(true).setPosition(x, this.pinBase.y - this.pinBob - 12).setText(who);
-        this.pinLabel.setFontSize(24);
         this.pinLabel.setColor(destOrder && isSlaUrgent(destOrder.slaRemainingMs) ? Color.dangerHex : Color.inkHex);
         this.pinLabel.setBackgroundColor(Color.amberHex);
-        fitTypeToWidth(this.pinLabel, 280, 18);
+
         const flashPin = next?.kind === "gpsPin";
         const pulse = 0.62 + 0.38 * (0.5 + 0.5 * Math.sin(snap.gameMs / 280));
         this.pin.setTint(flashPin ? Color.flash : 0xffffff);
@@ -229,7 +232,7 @@ export class DriveScene extends Phaser.Scene {
         .setVisible(true)
         .setText(snap.toast)
         .setPosition(snap.vehicle.x, snap.vehicle.y - 78);
-      fitTypeToWidth(this.vanBanner, 400, 16);
+      fitTypeToWidth(this.vanBanner, 400);
     } else {
       this.vanBanner.setVisible(false);
     }
@@ -354,11 +357,13 @@ export class DriveScene extends Phaser.Scene {
         size: Type.body,
         color: Color.creamHex,
         fontStyle: "700",
+        maxWidth: house.lotW * TILE - 36,
+        maxHeight: 28,
         ...overlayStroke(12),
       })
         .setOrigin(0.5)
         .setDepth(2);
-      fitTypeToWidth(num, house.lotW * TILE - 36, 16);
+      fitTypeToWidth(num, house.lotW * TILE - 36);
     });
 
     // Seams + walks above grass, clipped under roofs but over lot edge / pad lips.
@@ -381,11 +386,12 @@ export class DriveScene extends Phaser.Scene {
       size: Type.heading,
       color: Color.creamHex,
       maxWidth: CITY.shopLot.w * TILE - 32,
+      maxHeight: 36,
       ...overlayStroke(16),
     })
       .setOrigin(0.5)
       .setDepth(2);
-    fitTypeToWidth(mark, CITY.shopLot.w * TILE - 32, 20);
+    fitTypeToWidth(mark, CITY.shopLot.w * TILE - 32);
 
     this.shopCaption = addUiText(this, shop.x, shop.y + CITY.shopLot.h * TILE * 0.42, "Tap Kindling to return", {
       size: Type.body,
@@ -393,6 +399,8 @@ export class DriveScene extends Phaser.Scene {
       backgroundColor: Color.limeHex,
       padding: { x: 12, y: 6 },
       fontStyle: "700",
+      maxWidth: CITY.shopLot.w * TILE - 24,
+      maxHeight: 52,
     })
       .setOrigin(0.5, 0)
       .setDepth(8)

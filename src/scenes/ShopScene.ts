@@ -38,7 +38,7 @@ import { deliveryBagLabel, driverReadyCopy, isSlaUrgent } from "../ui/copy";
 import { wireHover } from "../ui/chrome";
 import { addUiText } from "../ui/text";
 import { Color, Type } from "../ui/theme";
-import { fitTypeToWidth, parseFontPx, polishText } from "../ui/typekit";
+import { fitTypeToWidth } from "../ui/typekit";
 export class ShopScene extends Phaser.Scene {
   private keyLead!: Phaser.GameObjects.Image;
   private driver!: Phaser.GameObjects.Image;
@@ -83,11 +83,13 @@ export class ShopScene extends Phaser.Scene {
     enableItemHit(this.bagRack);
     this.bagRack.on("pointerdown", () => getSim().shopClick({ type: "bagRack" }));
     this.bagRackLabel = addUiText(this, BAG_STACK.x, bagCaptionY(BAG_STACK.y), "BAGS", {
-      size: Type.caption,
+      size: Type.body,
       color: Color.inkHex,
       backgroundColor: Color.creamHex,
-      padding: { x: 6, y: 3 },
+      padding: { x: 8, y: 4 },
       fontStyle: "700",
+      maxWidth: 112,
+      maxHeight: 32,
     })
       .setOrigin(0.5)
       .setDepth(9);
@@ -106,10 +108,12 @@ export class ShopScene extends Phaser.Scene {
       color: Color.creamHex,
       fontStyle: "700",
       strokeThickness: 0,
+      maxWidth: tab.screenW - 16,
+      maxHeight: tab.screenH - 16,
     })
       .setOrigin(0.5)
       .setDepth(11);
-    fitTypeToWidth(this.tabletLabel, tab.screenW - 16, 12);
+    fitTypeToWidth(this.tabletLabel, tab.screenW - 16);
 
     this.tabletHit = this.add.rectangle(TABLET.x, TABLET.y, TABLET_W, TABLET_H, 0x000000, 0.001).setDepth(12);
     enableItemHit(this.tabletHit);
@@ -126,6 +130,8 @@ export class ShopScene extends Phaser.Scene {
       padding: { x: 6, y: 2 },
       fontStyle: "700",
       strokeThickness: 0,
+      maxWidth: 48,
+      maxHeight: 28,
     })
       .setOrigin(0.5)
       .setDepth(13)
@@ -138,7 +144,8 @@ export class ShopScene extends Phaser.Scene {
       padding: { x: 10, y: 6 },
       align: "center",
       fontStyle: "600",
-      wordWrap: { width: 280 },
+      maxWidth: 280,
+      maxHeight: 72,
     })
       .setOrigin(0.5)
       .setDepth(12)
@@ -156,19 +163,22 @@ export class ShopScene extends Phaser.Scene {
       padding: { x: 10, y: 6 },
       align: "center",
       fontStyle: "600",
-      wordWrap: { width: 240 },
+      maxWidth: 280,
+      maxHeight: 88,
     })
       .setOrigin(1, 1)
       .setDepth(12)
       .setVisible(false);
 
-    this.counterPrompt = addUiText(this, CUSTOMER_SPOT.x + 268, COUNTER_FRONT + 96, "", {
+    this.counterPrompt = addUiText(this, CUSTOMER_SPOT.x + 268, COUNTER_FRONT + 104, "", {
       size: Type.body,
       color: Color.inkHex,
       backgroundColor: Color.limeHex,
       padding: { x: 12, y: 8 },
       align: "center",
       fontStyle: "700",
+      maxWidth: 360,
+      maxHeight: 72,
     })
       .setOrigin(0.5)
       .setDepth(8)
@@ -278,7 +288,7 @@ export class ShopScene extends Phaser.Scene {
     this.tabletLabel.setText("ORDERS");
     this.tabletLabel.setAlpha(1);
     this.tabletLabel.setColor(Color.creamHex);
-    fitTypeToWidth(this.tabletLabel, tab.screenW - 16, 12);
+    fitTypeToWidth(this.tabletLabel, tab.screenW - 16);
     const count = snap.tabletQueueCount;
     this.queueBadge.setVisible(count > 1);
     this.queueBadge.setText(String(count));
@@ -306,6 +316,8 @@ export class ShopScene extends Phaser.Scene {
           padding: { x: 5, y: 2 },
           align: "center",
           fontStyle: "600",
+          maxWidth: OUT_BAG_GAP - 16,
+          maxHeight: 64,
         })
           .setOrigin(0.5)
           .setDepth(9);
@@ -315,10 +327,9 @@ export class ShopScene extends Phaser.Scene {
       (objs[0] as Phaser.GameObjects.Image).setPosition(x, y);
       const label = objs[1] as Phaser.GameObjects.Text;
       label.setPosition(x, bagCaptionY(y));
-      label.setFontSize(15);
       label.setText(outgoingBagText(o));
       label.setColor(o.type === "delivery" && isSlaUrgent(o.slaRemainingMs) ? Color.dangerHex : Color.inkHex);
-      fitTypeToWidth(label, OUT_BAG_GAP - 16, 12);
+      fitTypeToWidth(label, OUT_BAG_GAP - 16);
     });
   }
 
@@ -347,6 +358,8 @@ export class ShopScene extends Phaser.Scene {
           padding: { x: 10, y: 6 },
           align: "center",
           fontStyle: "600",
+          maxWidth: 280,
+          maxHeight: 80,
         })
           .setOrigin(0.5)
           .setDepth(7);
@@ -391,16 +404,11 @@ export class ShopScene extends Phaser.Scene {
         fontStyle: "700",
         lineSpacing: 0,
         strokeThickness: 0,
+        maxWidth: maxW,
+        maxHeight: maxH,
       })
         .setOrigin(0.5)
         .setDepth(6);
-      fitTypeToWidth(label, maxW, 13);
-      let px = parseFontPx(label.style.fontSize);
-      while (px > 12 && label.height > maxH) {
-        px -= 1;
-        label.setFontSize(px);
-      }
-      polishText(label);
       this.tvLabels.push(label);
     });
   }

@@ -8,9 +8,10 @@ const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "shopInte
 describe("shop type proportionality", () => {
   it("fits door, mat, and plaque marks to their host boxes", () => {
     expect(src).toContain("pane.w - inset * 2");
-    expect(src).toContain("wordWrap: { width: maxW }");
+    expect(src).toContain("maxWidth: maxW");
+    expect(src).toContain("maxHeight: Math.floor(pane.h * 0.4)");
     expect(src).toContain("maxWidth: w - 48");
-    expect(src).toContain('size: "28px"');
+    expect(src).toContain('size: "25px"');
     expect(src).toContain("maxWidth: plaqueW - 40");
     expect(src).not.toMatch(/addMark[\s\S]{0,200}setScale/);
   });

@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { MARK } from "./copy";
+import { TYPE_MIN_FIT_PX, Type } from "./theme";
 import {
   capsTracking,
   currentDpr,
@@ -16,7 +17,10 @@ export { capsTracking, currentDpr, displayFit, isAllCaps, overlayStroke, parseFo
 export type { TypeResolutionInput } from "./typeMetrics";
 
 const TYPEKIT_DATA = "kindlingTypekit";
-const MIN_FIT_PX = 12;
+const TYPEKIT_BOX = "typekitBox";
+const MIN_FIT_PX = TYPE_MIN_FIT_PX;
+
+type TypeBox = { maxWidth?: number; maxHeight?: number; minPx?: number; basePx?: number };
 
 function enableCanvasSmoothing(text: Phaser.GameObjects.Text): void {
   const ctx = text.context;
@@ -28,6 +32,7 @@ function enableCanvasSmoothing(text: Phaser.GameObjects.Text): void {
 /** Apply high-DPI raster + LINEAR filter. Safe to call after setText / resize. */
 export function polishText(text: Phaser.GameObjects.Text, scene?: Phaser.Scene): Phaser.GameObjects.Text {
   const host = scene ?? text.scene;
+  text.setScale(1);
   const objectScale = Math.max(Math.abs(text.scaleX), Math.abs(text.scaleY), 1);
   const res = typeResolution({
     dpr: currentDpr(),
@@ -43,6 +48,8 @@ export function polishText(text: Phaser.GameObjects.Text, scene?: Phaser.Scene):
 
 function trackingFor(content: string, px: number, explicit?: number): number {
   if (explicit !== undefined) return explicit;
+  // Multi-line labels: tracking fights word-wrap math and clips edges.
+  if (content.includes("\n")) return 0;
   return isAllCaps(content) ? capsTracking(px) : 0;
 }
 
@@ -51,27 +58,93 @@ function applyTracking(text: Phaser.GameObjects.Text, content: string, explicit?
   text.setLetterSpacing(trackingFor(content, px, explicit));
 }
 
+function padExtents(text: Phaser.GameObjects.Text): { x: number; y: number } {
+  const p = text.padding;
+  return {
+    x: (p?.left ?? 0) + (p?.right ?? 0),
+    y: (p?.top ?? 0) + (p?.bottom ?? 0),
+  };
+}
+
+/**
+ * Shrink font size until the glyph box fits — never bitmap-scale (that pixelates).
+ * Wrap width is padded conservatively so letter-spacing cannot spill past the box.
+ */
+export function fitTypeToBox(
+  text: Phaser.GameObjects.Text,
+  maxWidth?: number,
+  maxHeight?: number,
+  minPx = MIN_FIT_PX,
+): Phaser.GameObjects.Text {
+  text.setScale(1);
+  const box: TypeBox = text.getData(TYPEKIT_BOX) ?? {};
+  const basePx = box.basePx ?? parseFontPx(text.style.fontSize);
+  const floor = Math.max(MIN_FIT_PX, minPx);
+  let px = basePx;
+
+  const widthLimit = maxWidth ?? box.maxWidth;
+  const heightLimit = maxHeight ?? box.maxHeight;
+
+  const applySize = (size: number): void => {
+    text.setFontSize(size);
+    applyTracking(text, text.text, text.getData("typekitTracking"));
+    const pad = padExtents(text);
+    if (widthLimit && widthLimit > 0) {
+      // Phaser wrap ignores letter-spacing; keep a small safety gutter.
+      const gutter = Math.max(4, Math.round(size * 0.35));
+      const wrapW = Math.max(8, widthLimit - pad.x - gutter);
+      text.setStyle({ wordWrap: { width: wrapW } });
+    }
+    text.updateText();
+  };
+
+  applySize(px);
+
+  let guard = 0;
+  while (px > floor && guard++ < 200) {
+    const tooWide = widthLimit !== undefined && widthLimit > 0 && text.width > widthLimit + 0.5;
+    const tooTall = heightLimit !== undefined && heightLimit > 0 && text.height > heightLimit + 0.5;
+    if (!tooWide && !tooTall) break;
+    px -= 1;
+    applySize(px);
+  }
+
+  text.setData(TYPEKIT_BOX, {
+    maxWidth: widthLimit,
+    maxHeight: heightLimit,
+    minPx: floor,
+    basePx,
+  } satisfies TypeBox);
+  return polishText(text, text.scene);
+}
+
+/** @deprecated Prefer fitTypeToBox — kept for call sites that only constrain width. */
+export function fitTypeToWidth(text: Phaser.GameObjects.Text, maxWidth: number, minPx = MIN_FIT_PX): Phaser.GameObjects.Text {
+  return fitTypeToBox(text, maxWidth, undefined, minPx);
+}
+
+/** Re-run shrink-to-fit after padding / color chrome changes. */
+export function refitType(text: Phaser.GameObjects.Text): Phaser.GameObjects.Text {
+  refitStoredBox(text);
+  return text;
+}
+
+function refitStoredBox(text: Phaser.GameObjects.Text): void {
+  const box = text.getData(TYPEKIT_BOX) as TypeBox | undefined;
+  if (!box) return;
+  fitTypeToBox(text, box.maxWidth, box.maxHeight, box.minPx ?? MIN_FIT_PX);
+}
+
 function bindPolish(text: Phaser.GameObjects.Text, scene: Phaser.Scene, explicitTracking?: number): void {
   const raw = text.setText.bind(text);
   text.setText = ((value: string | string[]) => {
     raw(value);
     const content = Array.isArray(value) ? value.join("\n") : value;
     applyTracking(text, content, explicitTracking);
-    return polishText(text, scene);
+    polishText(text, scene);
+    refitStoredBox(text);
+    return text;
   }) as typeof text.setText;
-}
-
-/** Shrink font size to fit, never bitmap-scale (that pixelates). */
-export function fitTypeToWidth(text: Phaser.GameObjects.Text, maxWidth: number, minPx = MIN_FIT_PX): Phaser.GameObjects.Text {
-  text.setScale(1);
-  let px = parseFontPx(text.style.fontSize);
-  const floor = Math.max(minPx, MIN_FIT_PX);
-  while (px > floor && text.width > maxWidth) {
-    px -= 1;
-    text.setFontSize(px);
-  }
-  applyTracking(text, text.text, text.getData("typekitTracking"));
-  return polishText(text, text.scene);
 }
 
 export interface TypeStyle {
@@ -86,20 +159,31 @@ export interface TypeStyle {
   strokeThickness?: number;
   lineSpacing?: number;
   letterSpacing?: number;
+  /** Shrink until glyphs fit this width (also sets word wrap). */
+  maxWidth?: number;
+  /** Shrink until glyphs fit this height. */
+  maxHeight?: number;
+  /** Floor for shrink-to-fit (default {@link TYPE_MIN_FIT_PX}). */
+  minPx?: number;
 }
 
 function canvasStyle(options: TypeStyle): Phaser.Types.GameObjects.Text.TextStyle {
   const strokeOff = options.strokeThickness === 0 || (options.strokeThickness === undefined && !options.stroke);
+  const fontSize = options.size ?? Type.body;
+  const px = parseFontPx(fontSize);
+  const padX = ((options.padding?.x ?? 0) * 2);
+  const rawWrap = options.wordWrap?.width ?? options.maxWidth;
+  const wrapW = rawWrap ? Math.max(8, rawWrap - padX - Math.max(4, Math.round(px * 0.35))) : undefined;
   return {
     fontFamily: UI_FONT,
-    fontSize: options.size ?? "20px",
+    fontSize,
     color: options.color ?? "#f4e8c1",
     backgroundColor: options.backgroundColor,
     align: options.align,
     padding: options.padding,
     fontStyle: options.fontStyle ?? "600",
-    lineSpacing: options.lineSpacing ?? 6,
-    wordWrap: options.wordWrap,
+    lineSpacing: options.lineSpacing ?? Math.max(2, Math.round(px * 0.2)),
+    wordWrap: wrapW ? { width: wrapW } : undefined,
     stroke: options.stroke ?? (strokeOff ? "#00000000" : "#140e0a"),
     strokeThickness: options.strokeThickness ?? (strokeOff ? 0 : 2),
   };
@@ -111,10 +195,21 @@ function finishType(
   content: string,
   options: TypeStyle,
 ): Phaser.GameObjects.Text {
+  const basePx = parseFontPx(options.size ?? Type.body);
+  text.setData(TYPEKIT_BOX, {
+    maxWidth: options.maxWidth ?? options.wordWrap?.width,
+    maxHeight: options.maxHeight,
+    minPx: options.minPx ?? MIN_FIT_PX,
+    basePx,
+  } satisfies TypeBox);
   applyTracking(text, content, options.letterSpacing);
   if (options.letterSpacing !== undefined) text.setData("typekitTracking", options.letterSpacing);
   bindPolish(text, scene, options.letterSpacing);
-  return polishText(text, scene);
+  polishText(text, scene);
+  if (options.maxWidth || options.maxHeight || options.wordWrap) {
+    fitTypeToBox(text, options.maxWidth ?? options.wordWrap?.width, options.maxHeight, options.minPx);
+  }
+  return text;
 }
 
 export function makeType(
@@ -152,15 +247,17 @@ export function addMark(
   y: number,
   options: TypeStyle & { maxWidth?: number } = {},
 ): Phaser.GameObjects.Text {
-  const { maxWidth, ...style } = options;
-  const px = parseFontPx(style.size ?? "24px");
+  const { maxWidth, maxHeight, minPx, ...style } = options;
+  const px = parseFontPx(style.size ?? Type.heading);
   const text = addType(scene, x, y, MARK, {
     fontStyle: "700",
     strokeThickness: 0,
     letterSpacing: capsTracking(px),
+    maxWidth,
+    maxHeight,
+    minPx: minPx ?? MIN_FIT_PX,
     ...style,
   });
-  if (maxWidth) fitTypeToWidth(text, maxWidth, 12);
   return text;
 }
 
@@ -175,7 +272,10 @@ export function refreshTypekit(game: Phaser.Game): void {
   for (const scene of game.scene.getScenes(true)) {
     scene.children.each((obj) => {
       eachText(obj as Phaser.GameObjects.GameObject, (text) => {
-        if (text.getData(TYPEKIT_DATA)) polishText(text, scene);
+        if (text.getData(TYPEKIT_DATA)) {
+          polishText(text, scene);
+          refitStoredBox(text);
+        }
       });
     });
   }

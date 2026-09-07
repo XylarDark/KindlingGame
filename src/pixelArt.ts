@@ -54,9 +54,9 @@ export function generateTextures(scene: Phaser.Scene): void {
   person(scene, "tex-driver", "driver", Pal.skin, Pal.hairBlack, Pal.amber, Pal.hairBlackLite);
   person(scene, "tex-customer", "customer", Pal.skin, Pal.hairAuburn, Pal.glass, Pal.hairAuburnLite);
   personSit(scene);
-  stampKindling(scene, "tex-driver", 96, 36, 13, 104);
-  stampKindling(scene, "tex-driver-sit", 112, 36, 13, 120);
-  stampKindling(scene, "tex-keylead", 96, 208, 26, 120);
+  stampKindling(scene, "tex-driver", 96, 36, 12, 104);
+  stampKindling(scene, "tex-driver-sit", 112, 36, 12, 120);
+  stampKindling(scene, "tex-keylead", 96, 208, 23, 120);
   receipt(scene);
   jar(scene, "tex-flower", 0x4a8a52, 0x3a2a18, true);
   jar(scene, "tex-edible", 0xc48496, 0x5a3040, false);
@@ -632,9 +632,11 @@ function stampKindling(scene: Phaser.Scene, key: string, cx: number, cy: number,
     stroke: "#1a301e",
     strokeThickness: stroke,
     letterSpacing: Math.max(1, Math.round(fontSize * 0.08)),
+    maxWidth: Math.max(24, maxWidth - 4),
+    maxHeight: Math.max(16, Math.round(fontSize * 1.4)),
   });
   label.setOrigin(0.5, 0.5);
-  fitTypeToWidth(label, Math.max(24, maxWidth - 4), 12);
+  fitTypeToWidth(label, Math.max(24, maxWidth - 4));
   const rt = scene.add.renderTexture(0, 0, w, h);
   rt.setVisible(false);
   rt.draw(key, 0, 0);

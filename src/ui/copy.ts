@@ -20,7 +20,7 @@ export const HOWTO_STEPS = [
   },
   {
     title: "Delivery run",
-    body: "Pack the same way, tap the flashing driver. At each stop: call → ASK ID → CHECK ID → HAND BAG → PHOTO. Empty van returns to Kindling. Shift ends at 11 PM.",
+    body: "Pack the same way, then tap the flashing driver. Stops: call → ASK ID → bag → photo. Empty van returns to Kindling. Ends 11 PM.",
   },
 ] as const;
 

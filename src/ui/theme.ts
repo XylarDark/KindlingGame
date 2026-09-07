@@ -47,11 +47,20 @@ export const Color = {
   cardHex: "#fffaf3",
 } as const;
 
+/**
+ * Design-space type ramp for the 1920×1080 layout.
+ * Sized to fit chrome; `fitTypeToBox` shrinks further when a container is tighter.
+ * Aspirational on-screen CSS floors (mobile HUD) are documented in docs/qa-typography.md —
+ * fill-stretch makes true CSS floors conflict with fixed containers.
+ */
 export const Type = {
-  display: "48px",
-  title: "36px",
-  heading: "24px",
-  body: "20px",
-  caption: "15px",
-  micro: "13px",
+  display: "36px",
+  title: "27px",
+  heading: "20px",
+  body: "16px",
+  caption: "13px",
+  micro: "11px",
 } as const;
+
+/** Absolute shrink floor — below this, prefer wrapping/ellipsis over unreadable glyphs. */
+export const TYPE_MIN_FIT_PX = 10;

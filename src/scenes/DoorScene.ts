@@ -52,6 +52,8 @@ export class DoorScene extends Phaser.Scene {
       backgroundColor: Color.bannerInk,
       padding: { x: 20, y: 10 },
       fontStyle: "700",
+      maxWidth: 900,
+      maxHeight: 72,
     })
       .setOrigin(0.5)
       .setDepth(4);
@@ -81,6 +83,8 @@ export class DoorScene extends Phaser.Scene {
       backgroundColor: Color.bannerInk,
       padding: { x: 8, y: 3 },
       fontStyle: "700",
+      maxWidth: 120,
+      maxHeight: 28,
     })
       .setOrigin(0.5, 0)
       .setDepth(7);
@@ -90,6 +94,8 @@ export class DoorScene extends Phaser.Scene {
       backgroundColor: Color.bannerInk,
       padding: { x: 8, y: 3 },
       fontStyle: "700",
+      maxWidth: 160,
+      maxHeight: 28,
     })
       .setOrigin(0.5, 0)
       .setDepth(7);
@@ -99,6 +105,8 @@ export class DoorScene extends Phaser.Scene {
       backgroundColor: Color.limeHex,
       padding: { x: 8, y: 3 },
       fontStyle: "700",
+      maxWidth: 200,
+      maxHeight: 36,
     })
       .setOrigin(0.5, 1)
       .setDepth(7)
@@ -111,7 +119,8 @@ export class DoorScene extends Phaser.Scene {
       padding: { x: 16, y: 10 },
       align: "center",
       fontStyle: "600",
-      wordWrap: { width: 720 },
+      maxWidth: 720,
+      maxHeight: 72,
     })
       .setOrigin(0.5)
       .setDepth(8);
@@ -159,10 +168,9 @@ export class DoorScene extends Phaser.Scene {
     const title = drop.houseId
       ? `${drop.customerName ?? "Customer"}  ·  ${houseLabel(drop.houseId)}${sla ? `  ·  ${sla}` : ""}${runNote(snap)}`
       : "";
-    this.houseLabel.setFontSize(36);
     this.houseLabel.setText(title);
     this.houseLabel.setColor(destOrder && isSlaUrgent(destOrder.slaRemainingMs) ? Color.dangerHex : Color.creamHex);
-    fitTypeToWidth(this.houseLabel, 900, 18);
+    fitTypeToWidth(this.houseLabel, 900);
 
     const pulse = 0.7 + 0.3 * (0.5 + 0.5 * Math.sin(snap.gameMs / 180));
     const nextPhoto = drop.actionLabel === "PHOTO";

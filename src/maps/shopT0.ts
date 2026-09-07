@@ -37,7 +37,7 @@ export const BAG_STACK = { x: KEYLEAD.x - 220, y: COUNTER_TOP };
 export const PACK_SPOT = { x: COUNTER_RIGHT - 120, y: COUNTER_TOP };
 export const RECEIPT_SPOT = { x: COUNTER_RIGHT - 48, y: COUNTER_TOP - 8 };
 /** Packed bags on the right of the counter; labels need a full slot between them. */
-export const OUT_BAG_GAP = 160;
+export const OUT_BAG_GAP = 172;
 export const OUT_BAG_RIGHT = COUNTER_RIGHT - 64;
 
 /** Label sits 10% of bag height above the sprite top. */

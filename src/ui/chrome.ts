@@ -55,6 +55,8 @@ export function addHudButton(
     fontStyle: "700",
     align: "center",
     strokeThickness: 0,
+    maxWidth: Math.max(160, (opts.minWidth ?? 260) - 56),
+    maxHeight: 36,
   }).setOrigin(0.5);
   const caption = addUiText(scene, 0, 0, opts.caption ?? "", {
     size: Type.caption,
@@ -62,6 +64,8 @@ export function addHudButton(
     fontStyle: "600",
     align: "center",
     strokeThickness: 0,
+    maxWidth: Math.max(160, (opts.minWidth ?? 260) - 48),
+    maxHeight: 40,
   }).setOrigin(0.5);
 
   const paint = (pressed: boolean): void => {
@@ -160,8 +164,9 @@ export function addBanner(
     backgroundColor: Color.bannerInk,
     padding: { x: 18, y: 10 },
     align: "center",
-    wordWrap: { width },
     fontStyle: "600",
+    maxWidth: width,
+    maxHeight: 64,
   })
     .setOrigin(0.5, 0)
     .setDepth(opts.depth ?? 20);

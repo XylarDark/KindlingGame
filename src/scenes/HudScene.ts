@@ -13,18 +13,19 @@ import { addHudButton, addPanel } from "../ui/chrome";
 import { END_SHIFT_CAPTION, END_SHIFT_LABEL, RESULTS_NEW_DAY, RESULTS_TITLE } from "../ui/copy";
 import { addUiText } from "../ui/text";
 import { Color, Type } from "../ui/theme";
+import { refitType } from "../ui/typekit";
 import { designSafeInset, HUD_TOUCH_MIN_DESIGN, readCssSafeArea, VIEWFIT_EVENT, viewFromScale } from "../ui/viewFit";
 
-const SETTINGS_W = 420;
-const SETTINGS_H = 430;
-const VOL_TRACK = { x: 24, y: 168, w: 292, h: 16 };
-/** Squarer black iPhone — room for Kindling header + map. */
-const PHONE_W = 168;
-const PHONE_H = 196;
+const SETTINGS_W = 440;
+const SETTINGS_H = 560;
+const VOL_TRACK = { x: 24, y: 168, w: 312, h: 16 };
+/** Delivery phone — screen room for two-line status + title. */
+const PHONE_W = 268;
+const PHONE_H = 328;
 const PHONE_COG_GAP = 16;
-const PHONE_SCREEN = { x: -68, y: -74, w: 136, h: 148 };
-const RESULTS_W = 720;
-const RESULTS_H = 560;
+const PHONE_SCREEN = { x: -108, y: -128, w: 216, h: 248 };
+const RESULTS_W = 740;
+const RESULTS_H = 640;
 
 export class HudScene extends Phaser.Scene {
   private scoreText!: Phaser.GameObjects.Text;
@@ -87,25 +88,32 @@ export class HudScene extends Phaser.Scene {
   create(): void {
     this.input.setTopOnly(false);
 
-    this.scoreText = addUiText(this, 28, 36, "", {
+    this.scoreText = addUiText(this, 28, 28, "", {
       size: Type.display,
       color: Color.inkHex,
       fontStyle: "700",
       strokeThickness: 0,
+      maxWidth: 360,
+      maxHeight: 48,
     }).setDepth(20);
-    this.scoreCaption = addUiText(this, 28, 92, "SCORE", {
-      size: Type.caption,
+    this.scoreCaption = addUiText(this, 28, 78, "SCORE", {
+      size: Type.body,
       color: Color.muteHex,
       fontStyle: "700",
       strokeThickness: 0,
+      letterSpacing: 2,
+      maxWidth: 160,
+      maxHeight: 24,
     }).setDepth(20);
-    this.scorePopLayer = this.add.container(28, 36).setDepth(30);
+    this.scorePopLayer = this.add.container(28, 28).setDepth(30);
 
-    this.clockText = addUiText(this, GAME_WIDTH - 28, 36, "", {
+    this.clockText = addUiText(this, GAME_WIDTH - 28, 28, "", {
       size: Type.display,
       color: Color.inkHex,
       fontStyle: "700",
       strokeThickness: 0,
+      maxWidth: 360,
+      maxHeight: 48,
     })
       .setOrigin(1, 0)
       .setDepth(20);
@@ -117,20 +125,27 @@ export class HudScene extends Phaser.Scene {
       .rectangle(0, 0, PHONE_W + 10, PHONE_H + 10, Color.lime, 0)
       .setStrokeStyle(4, Color.lime, 1);
     this.phoneMap = this.add.graphics();
-    this.phoneTitle = addUiText(this, 0, PHONE_SCREEN.y + 20, "KINDLING DELIVERY", {
-      size: 12,
+    this.phoneTitle = addUiText(this, 0, PHONE_SCREEN.y + 28, "KINDLING\nDELIVERY", {
+      size: Type.body,
       color: Color.limeHex,
       fontStyle: "700",
       align: "center",
+      lineSpacing: 4,
       strokeThickness: 0,
+      letterSpacing: 0,
+      maxWidth: PHONE_SCREEN.w - 28,
+      maxHeight: 52,
     }).setOrigin(0.5);
-    this.phoneStatus = addUiText(this, 0, PHONE_SCREEN.y + PHONE_SCREEN.h - 16, "Tap to call", {
-      size: 11,
+    this.phoneStatus = addUiText(this, 0, PHONE_SCREEN.y + PHONE_SCREEN.h - 40, "Tap to call", {
+      size: Type.body,
       color: Color.creamHex,
       fontStyle: "600",
       align: "center",
-      wordWrap: { width: PHONE_SCREEN.w - 16 },
+      lineSpacing: 4,
       strokeThickness: 0,
+      padding: { x: 10, y: 6 },
+      maxWidth: PHONE_SCREEN.w - 16,
+      maxHeight: 72,
     }).setOrigin(0.5);
     this.phoneHit = this.add
       .rectangle(0, 0, PHONE_W - 8, PHONE_H - 8, 0x000000, 0.001)
@@ -151,14 +166,15 @@ export class HudScene extends Phaser.Scene {
       .setDepth(22)
       .setVisible(false);
 
-    this.toastText = addUiText(this, GAME_WIDTH / 2, GAME_HEIGHT - 24, "", {
+    this.toastText = addUiText(this, GAME_WIDTH / 2, GAME_HEIGHT - 36, "", {
       size: Type.body,
       color: Color.creamHex,
       backgroundColor: Color.bannerInk,
-      padding: { x: 16, y: 10 },
+      padding: { x: 18, y: 10 },
       align: "center",
       fontStyle: "600",
-      wordWrap: { width: 760 },
+      maxWidth: 720,
+      maxHeight: 64,
     })
       .setOrigin(0.5, 1)
       .setDepth(20);
@@ -176,23 +192,31 @@ export class HudScene extends Phaser.Scene {
       align: "center",
       fontStyle: "600",
       strokeThickness: 0,
+      maxWidth: 500,
+      maxHeight: 40,
     }).setOrigin(0.5);
     this.idTitle = addUiText(this, 0, -118, "CUSTOMER ID", {
       size: Type.body,
       color: Color.inkHex,
       fontStyle: "700",
       strokeThickness: 0,
+      maxWidth: 500,
+      maxHeight: 28,
     }).setOrigin(0.5);
     this.idDob = addUiText(this, 0, 22, "", {
       size: Type.body,
       color: "#3a2418",
       strokeThickness: 0,
+      maxWidth: 500,
+      maxHeight: 28,
     }).setOrigin(0.5);
     this.idHint = addUiText(this, 0, 88, "Tap the card to confirm 19+", {
       size: Type.caption,
       color: "#3d7a45",
       fontStyle: "600",
       strokeThickness: 0,
+      maxWidth: 500,
+      maxHeight: 36,
     }).setOrigin(0.5);
     this.idFlashRing = this.add.rectangle(0, 0, 572, 332, 0x000000, 0).setStrokeStyle(8, Color.lime, 1);
     this.idBg = this.add.rectangle(0, 0, 560, 320, 0xf4e8c1, 0.97).setStrokeStyle(6, 0x3d7a45);
@@ -222,6 +246,8 @@ export class HudScene extends Phaser.Scene {
       backgroundColor: Color.bannerInk,
       padding: { x: 10, y: 6 },
       fontStyle: "600",
+      maxWidth: 240,
+      maxHeight: 40,
     })
       .setOrigin(0.5, 1)
       .setDepth(20);
@@ -247,6 +273,9 @@ export class HudScene extends Phaser.Scene {
     const relayout = (): void => this.layoutHud();
     this.scale.on(Phaser.Scale.Events.RESIZE, relayout);
     this.game.events.on(VIEWFIT_EVENT, relayout);
+    this.events.on(Phaser.Scenes.Events.PAUSE, () => {
+      this.toastText.setVisible(false);
+    });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.game.events.off(VIEWFIT_EVENT, relayout));
 
     this.paintHud(getSim().snapshot());
@@ -269,10 +298,10 @@ export class HudScene extends Phaser.Scene {
     const inset = designSafeInset(viewFromScale(this.scale), readCssSafeArea(document.getElementById("game-root")));
     const left = 28 + inset.left;
     const right = GAME_WIDTH - 28 - inset.right;
-    const top = 36 + inset.top;
-    const bottom = GAME_HEIGHT - 24 - inset.bottom;
+    const top = 28 + inset.top;
+    const bottom = GAME_HEIGHT - 40 - inset.bottom;
     this.scoreText.setPosition(left, top);
-    this.scoreCaption.setPosition(left, top + 56);
+    this.scoreCaption.setPosition(left, top + 50);
     this.scorePopLayer.setPosition(left + 120, top + 24);
     this.clockText.setPosition(right, top);
     const cogSize = HUD_TOUCH_MIN_DESIGN;
@@ -281,7 +310,7 @@ export class HudScene extends Phaser.Scene {
     this.cog.setPosition(cogX, cogY);
     this.cog.setDisplaySize(cogSize, cogSize);
     syncItemHit(this.cog);
-    this.cogCaption.setPosition(cogX - 8, cogY - cogSize - 4);
+    this.cogCaption.setPosition(cogX - 8, cogY - cogSize - 8);
     this.settingsPanel.setPosition(cogX - SETTINGS_W, cogY - cogSize - 32 - SETTINGS_H);
 
     // Keep the phone clear of the settings cog (bottom-right).
@@ -291,7 +320,8 @@ export class HudScene extends Phaser.Scene {
     const phoneBottom = Math.min(GAME_HEIGHT - 16 - inset.bottom, cogTop - PHONE_COG_GAP);
     this.phone.setPosition(phoneRight - PHONE_W * 0.5, phoneBottom - PHONE_H * 0.5);
     this.phoneBody.setDisplaySize(PHONE_W, PHONE_H);
-    this.toastText.setPosition(GAME_WIDTH / 2, bottom);
+    // Toast stays clear of the cog column.
+    this.toastText.setPosition(GAME_WIDTH / 2 - 40, bottom);
     this.padCenter = { x: 196 + inset.left, y: GAME_HEIGHT - 220 - inset.bottom };
     this.drawPad();
     this.padKnob.setPosition(this.padCenter.x, this.padCenter.y);
@@ -334,7 +364,9 @@ export class HudScene extends Phaser.Scene {
       this.phoneHit.disableInteractive();
     }
     const callName = drop.customerName ?? "customer";
-    this.phoneStatus.setText(drop.phase === "calling" ? `Calling ${callName}…` : `Tap to call ${callName}`);
+    const phoneLine =
+      drop.phase === "calling" ? `Calling…\n${callName}` : `Tap to call\n${callName}`;
+    this.phoneStatus.setText(phoneLine);
     if (showPhone) {
       this.phone.setAlpha(1);
       this.phoneBody.setAlpha(drop.phase === "calling" ? 0.92 : 1);
@@ -343,13 +375,13 @@ export class HudScene extends Phaser.Scene {
         this.phoneFlash.setStrokeStyle(4 + Math.round(3 * pulse), Color.lime, 0.55 + 0.45 * pulse);
         this.phoneStatus.setColor(Color.inkHex);
         this.phoneStatus.setBackgroundColor(Color.limeHex);
-        this.phoneStatus.setPadding(6, 3, 6, 3);
       } else {
         this.phoneFlash.setVisible(false);
         this.phoneStatus.setColor(drop.phase === "calling" ? Color.neonHex : Color.creamHex);
         this.phoneStatus.setBackgroundColor("#101418");
-        this.phoneStatus.setPadding(4, 2, 4, 2);
       }
+      this.phoneStatus.setPadding(10, 6, 10, 6);
+      refitType(this.phoneStatus);
       this.paintPhoneMap(snap);
     } else {
       this.phoneFlash.setVisible(false);
@@ -466,18 +498,24 @@ export class HudScene extends Phaser.Scene {
       color: Color.inkHex,
       fontStyle: "700",
       strokeThickness: 0,
+      maxWidth: SETTINGS_W - 48,
+      maxHeight: 36,
     });
     const musicLabel = addUiText(this, 24, 64, "Music", {
       size: Type.body,
       color: Color.inkHex,
       fontStyle: "600",
       strokeThickness: 0,
+      maxWidth: 180,
+      maxHeight: 28,
     });
     this.musicValue = addUiText(this, SETTINGS_W - 28, 72, "", {
       size: Type.heading,
       color: Color.inkHex,
       fontStyle: "700",
       strokeThickness: 0,
+      maxWidth: 140,
+      maxHeight: 32,
     }).setOrigin(1, 0.5);
     const musicHit = this.add
       .rectangle(SETTINGS_W / 2, 76, SETTINGS_W - 24, 48, 0x000000, 0.001)
@@ -493,12 +531,16 @@ export class HudScene extends Phaser.Scene {
       color: Color.inkHex,
       fontStyle: "600",
       strokeThickness: 0,
+      maxWidth: 180,
+      maxHeight: 28,
     });
     this.volumePct = addUiText(this, SETTINGS_W - 28, 132, "", {
       size: Type.body,
       color: Color.inkHex,
       fontStyle: "700",
       strokeThickness: 0,
+      maxWidth: 100,
+      maxHeight: 28,
     }).setOrigin(1, 0.5);
     const track = this.add.rectangle(VOL_TRACK.x, VOL_TRACK.y, VOL_TRACK.w, VOL_TRACK.h, 0xd8c8b0).setOrigin(0, 0.5);
     this.volumeFill = this.add.rectangle(VOL_TRACK.x, VOL_TRACK.y, 8, VOL_TRACK.h, Color.leaf).setOrigin(0, 0.5);
@@ -521,7 +563,7 @@ export class HudScene extends Phaser.Scene {
       this.draggingVol = false;
     });
 
-    const endShift = addHudButton(this, 24, 232, END_SHIFT_LABEL, () => this.endShiftEarly(), {
+    const endShift = addHudButton(this, 24, 200, END_SHIFT_LABEL, () => this.endShiftEarly(), {
       originX: 0,
       originY: 0,
       variant: "primary",
@@ -531,7 +573,7 @@ export class HudScene extends Phaser.Scene {
     });
     this.endShiftBtn = endShift;
 
-    const reset = addHudButton(this, 24, 312, "RESET DAY TO 9:00 AM", () => this.resetDayToNine(), {
+    const reset = addHudButton(this, 24, 348, "RESET DAY TO 9:00 AM", () => this.resetDayToNine(), {
       originX: 0,
       originY: 0,
       variant: "amber",
@@ -539,11 +581,13 @@ export class HudScene extends Phaser.Scene {
       caption: "Clock back to 9 AM · clears the door stop",
       depth: 41,
     });
-    const resetHint = addUiText(this, 24, 384, "Packed bags stay. Late timers start over.", {
+    const resetHint = addUiText(this, 24, 496, "Packed bags stay. Late timers start over.", {
       size: Type.caption,
       color: Color.muteHex,
       fontStyle: "600",
       strokeThickness: 0,
+      maxWidth: SETTINGS_W - 48,
+      maxHeight: 36,
     });
 
     this.settingsPanel = this.add.container(panelX, panelY, [
@@ -575,12 +619,14 @@ export class HudScene extends Phaser.Scene {
       else this.openSettings();
     };
     this.cog.on("pointerdown", toggleSettings);
-    this.cogCaption = addUiText(this, cogX - 8, cogY - cogSize - 4, "Music · Settings", {
-      size: Type.caption,
+    this.cogCaption = addUiText(this, cogX - 8, cogY - cogSize - 8, "Music · Settings", {
+      size: Type.body,
       color: Color.creamHex,
       backgroundColor: Color.bannerInk,
-      padding: { x: 8, y: 3 },
+      padding: { x: 12, y: 6 },
       fontStyle: "600",
+      maxWidth: 240,
+      maxHeight: 36,
     })
       .setOrigin(1, 1)
       .setDepth(42);
@@ -663,7 +709,8 @@ export class HudScene extends Phaser.Scene {
       fontStyle: "700",
       align: "center",
       strokeThickness: 0,
-      wordWrap: { width: RESULTS_W - 64 },
+      maxWidth: RESULTS_W - 64,
+      maxHeight: 48,
     }).setOrigin(0.5, 0);
     this.resultsClock = addUiText(this, RESULTS_W / 2, 78, "", {
       size: Type.caption,
@@ -671,6 +718,8 @@ export class HudScene extends Phaser.Scene {
       fontStyle: "600",
       align: "center",
       strokeThickness: 0,
+      maxWidth: RESULTS_W - 64,
+      maxHeight: 28,
     }).setOrigin(0.5, 0);
     this.resultsScore = addUiText(this, RESULTS_W / 2, 118, "", {
       size: Type.display,
@@ -678,6 +727,8 @@ export class HudScene extends Phaser.Scene {
       fontStyle: "700",
       align: "center",
       strokeThickness: 0,
+      maxWidth: RESULTS_W - 64,
+      maxHeight: 52,
     }).setOrigin(0.5, 0);
     const scoreCap = addUiText(this, RESULTS_W / 2, 176, "SHIFT SCORE", {
       size: Type.caption,
@@ -685,6 +736,8 @@ export class HudScene extends Phaser.Scene {
       fontStyle: "700",
       align: "center",
       strokeThickness: 0,
+      maxWidth: RESULTS_W - 64,
+      maxHeight: 28,
     }).setOrigin(0.5, 0);
     this.resultsBreakdown = addUiText(this, RESULTS_W / 2, 220, "", {
       size: Type.body,
@@ -692,19 +745,21 @@ export class HudScene extends Phaser.Scene {
       fontStyle: "600",
       align: "center",
       strokeThickness: 0,
-      lineSpacing: 10,
-      wordWrap: { width: RESULTS_W - 80 },
+      lineSpacing: 8,
+      maxWidth: RESULTS_W - 80,
+      maxHeight: 168,
     }).setOrigin(0.5, 0);
-    this.resultsVerdict = addUiText(this, RESULTS_W / 2, 390, "", {
+    this.resultsVerdict = addUiText(this, RESULTS_W / 2, 408, "", {
       size: Type.body,
       color: Color.inkHex,
       fontStyle: "700",
       align: "center",
       strokeThickness: 0,
-      wordWrap: { width: RESULTS_W - 96 },
+      maxWidth: RESULTS_W - 96,
+      maxHeight: 48,
     }).setOrigin(0.5, 0);
 
-    const newDay = addHudButton(this, RESULTS_W / 2 - 12, 470, RESULTS_NEW_DAY.label, () => this.onNewDay(), {
+    const newDay = addHudButton(this, RESULTS_W / 2 - 12, 472, RESULTS_NEW_DAY.label, () => this.onNewDay(), {
       originX: 1,
       originY: 0,
       variant: "primary",
@@ -712,7 +767,7 @@ export class HudScene extends Phaser.Scene {
       caption: RESULTS_NEW_DAY.caption,
       depth: 52,
     });
-    const titleBtn = addHudButton(this, RESULTS_W / 2 + 12, 470, RESULTS_TITLE.label, () => this.onTitle(), {
+    const titleBtn = addHudButton(this, RESULTS_W / 2 + 12, 472, RESULTS_TITLE.label, () => this.onTitle(), {
       originX: 0,
       originY: 0,
       variant: "amber",
@@ -758,6 +813,8 @@ export class HudScene extends Phaser.Scene {
       strokeThickness: 0,
       backgroundColor: Color.bannerInkSoft,
       padding: { x: 10, y: 4 },
+      maxWidth: 160,
+      maxHeight: 40,
     }).setOrigin(0, 0.5);
     this.scorePopLayer.add(label);
     this.tweens.add({
@@ -843,9 +900,9 @@ export class HudScene extends Phaser.Scene {
     const g = this.phoneMap;
     g.clear();
     const mapX = PHONE_SCREEN.x + 6;
-    const mapY = PHONE_SCREEN.y + 36;
+    const mapY = PHONE_SCREEN.y + 64;
     const mapW = PHONE_SCREEN.w - 12;
-    const mapH = PHONE_SCREEN.h - 62;
+    const mapH = PHONE_SCREEN.h - 140;
     g.fillStyle(0x1a2228, 1);
     g.fillRoundedRect(mapX, mapY, mapW, mapH, 6);
     g.lineStyle(1, 0x2e3a44, 1);
@@ -853,8 +910,8 @@ export class HudScene extends Phaser.Scene {
 
     // App chrome behind title / status
     g.fillStyle(0x0c1014, 1);
-    g.fillRect(PHONE_SCREEN.x + 4, PHONE_SCREEN.y + 8, PHONE_SCREEN.w - 8, 22);
-    g.fillRect(PHONE_SCREEN.x + 4, PHONE_SCREEN.y + PHONE_SCREEN.h - 28, PHONE_SCREEN.w - 8, 22);
+    g.fillRect(PHONE_SCREEN.x + 4, PHONE_SCREEN.y + 6, PHONE_SCREEN.w - 8, 56);
+    g.fillRect(PHONE_SCREEN.x + 4, PHONE_SCREEN.y + PHONE_SCREEN.h - 72, PHONE_SCREEN.w - 8, 66);
 
     const scale = Math.min(mapW / MAP_PX_W, mapH / MAP_PX_H);
     const ox = mapX + (mapW - MAP_PX_W * scale) * 0.5;

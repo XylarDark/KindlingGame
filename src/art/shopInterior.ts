@@ -641,21 +641,23 @@ function drawStreetDoorHours(scene: Phaser.Scene): void {
     color: Color.inkHex,
     align: "center",
     maxWidth: maxW,
+    maxHeight: Math.floor(pane.h * 0.28),
   })
     .setOrigin(0.5)
     .setDepth(1);
   const hours = addUiText(scene, cx, pane.y + Math.floor(pane.h * 0.64), HOURS, {
-    size: Type.caption,
+    size: Type.body,
     color: Color.inkHex,
     fontStyle: "600",
     align: "center",
-    lineSpacing: 2,
+    lineSpacing: 3,
     strokeThickness: 0,
-    wordWrap: { width: maxW },
+    maxWidth: maxW,
+    maxHeight: Math.floor(pane.h * 0.4),
   })
     .setOrigin(0.5)
     .setDepth(1);
-  fitTypeToWidth(hours, maxW, 12);
+  fitTypeToWidth(hours, maxW);
 }
 
 /** No painted window spill — shopGrade uses pots + ambient only. */
@@ -851,6 +853,7 @@ function drawKindlingMat(scene: Phaser.Scene, g: Phaser.GameObjects.Graphics): v
     stroke: "#2a4a30",
     strokeThickness: 2,
     maxWidth: w - 48,
+    maxHeight: h - 24,
   })
     .setOrigin(0.5)
     .setDepth(1);
@@ -970,7 +973,7 @@ export function drawShopCounter(scene: Phaser.Scene): Phaser.GameObjects.Graphic
   fill(g, BAG_STACK.x - 24, BAG_STACK.y - 8, 48, 8, greyEdge);
 
   const cx = COUNTER_MID;
-  const plaqueH = 56;
+  const plaqueH = 64;
   const plaqueW = 320;
   const plaqueTop = COUNTER_TOP + Math.floor((faceH - plaqueH) / 2);
   fill(g, cx - plaqueW / 2, plaqueTop, plaqueW, plaqueH, 0xb49464);
@@ -978,9 +981,10 @@ export function drawShopCounter(scene: Phaser.Scene): Phaser.GameObjects.Graphic
   fill(g, cx - plaqueW / 2 + 8, plaqueTop + 4, plaqueW - 16, 4, 0xd0b888);
   fill(g, cx - plaqueW / 2 + 8, plaqueTop + plaqueH - 6, plaqueW - 16, 6, 0xa07c54);
   addMark(scene, cx, plaqueTop + plaqueH / 2, {
-    size: "28px",
+    size: "25px",
     color: Color.inkHex,
     maxWidth: plaqueW - 40,
+    maxHeight: plaqueH - 16,
   })
     .setOrigin(0.5)
     .setDepth(8);

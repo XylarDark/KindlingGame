@@ -27,9 +27,9 @@ describe("people bake contract", () => {
     expect(src).toContain("makeType");
     expect(src).toContain("fitTypeToWidth");
     expect(src).not.toMatch(/label\.setScale/);
-    expect(src).toContain('stampKindling(scene, "tex-driver", 96, 36, 13, 104)');
-    expect(src).toContain('stampKindling(scene, "tex-driver-sit", 112, 36, 13, 120)');
-    expect(src).toContain('stampKindling(scene, "tex-keylead", 96, 208, 26, 120)');
+    expect(src).toContain('stampKindling(scene, "tex-driver", 96, 36, 12, 104)');
+    expect(src).toContain('stampKindling(scene, "tex-driver-sit", 112, 36, 12, 120)');
+    expect(src).toContain('stampKindling(scene, "tex-keylead", 96, 208, 23, 120)');
   });
 
   it("does not flip the front-facing key-lead", () => {
