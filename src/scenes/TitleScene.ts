@@ -9,6 +9,12 @@ import { Color, Type } from "../ui/theme";
 import { fitTypeToWidth } from "../ui/typekit";
 import { designSafeInset, readCssSafeArea, VIEWFIT_EVENT, viewFromScale } from "../ui/viewFit";
 
+/** Welcome copy runs well over the shared ramp — it is the first thing read. */
+const WELCOME_TITLE_SIZE = "36.3px";
+const WELCOME_HINT_SIZE = "21.8px";
+/** How-to stack lift, keeping its tap hint off the counter sign behind it. */
+const HOWTO_LIFT = 44;
+
 export class TitleScene extends Phaser.Scene {
   private started = false;
   private phase: "welcome" | "howto" | "paused" = "paused";
@@ -76,7 +82,7 @@ export class TitleScene extends Phaser.Scene {
 
   private drawWelcome(): void {
     const cardW = 920;
-    const cardH = 188;
+    const cardH = 216;
     const x = Math.floor((GAME_WIDTH - cardW) / 2);
     const y = Math.floor((GAME_HEIGHT - cardH) / 2);
     const innerW = cardW - 96;
@@ -99,29 +105,29 @@ export class TitleScene extends Phaser.Scene {
     this.welcomeLayer.push(accent);
 
     this.welcomeLayer.push(
-      addUiText(this, GAME_WIDTH / 2 + 8, y + 44, WELCOME_TITLE, {
-        size: Type.title,
+      addUiText(this, GAME_WIDTH / 2 + 8, y + 72, WELCOME_TITLE, {
+        size: WELCOME_TITLE_SIZE,
         color: Color.inkHex,
         fontStyle: "700",
         align: "center",
         strokeThickness: 0,
         maxWidth: innerW,
-        maxHeight: 40,
+        maxHeight: 56,
       })
-        .setOrigin(0.5, 0)
+        .setOrigin(0.5, 0.5)
         .setDepth(42),
     );
     this.welcomeLayer.push(
-      addUiText(this, GAME_WIDTH / 2 + 8, y + 100, WELCOME_HINT, {
-        size: Type.body,
+      addUiText(this, GAME_WIDTH / 2 + 8, y + 144, WELCOME_HINT, {
+        size: WELCOME_HINT_SIZE,
         color: Color.inkHex,
         fontStyle: "600",
         align: "center",
         strokeThickness: 0,
         maxWidth: innerW,
-        maxHeight: 56,
+        maxHeight: 60,
       })
-        .setOrigin(0.5, 0)
+        .setOrigin(0.5, 0.5)
         .setDepth(42),
     );
   }
@@ -133,7 +139,7 @@ export class TitleScene extends Phaser.Scene {
 
   private drawHowTo(): void {
     const cardW = 440;
-    const cardH = 248;
+    const cardH = 216;
     const gap = 28;
     const rowW = cardW * 3 + gap * 2;
     const btnH = HUD_BUTTON_MIN_H + 28;
@@ -142,9 +148,10 @@ export class TitleScene extends Phaser.Scene {
     const hintH = 32;
     const blockH = cardH + stackGap + btnH + hintGap + hintH;
     const startX = Math.floor((GAME_WIDTH - rowW) / 2);
-    const cardY = Math.floor((GAME_HEIGHT - blockH) / 2);
-    const bodyTop = 96;
-    const bodyH = cardH - bodyTop - 22;
+    // Sit the stack above dead centre so the tap hint clears the counter sign.
+    const cardY = Math.floor((GAME_HEIGHT - blockH) / 2) - HOWTO_LIFT;
+    const bodyTop = 92;
+    const bodyH = cardH - bodyTop - 18;
 
     HOWTO_STEPS.forEach((step, i) => {
       const x = startX + i * (cardW + gap);

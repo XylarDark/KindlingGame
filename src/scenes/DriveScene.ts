@@ -98,11 +98,13 @@ export class DriveScene extends Phaser.Scene {
       fontStyle: "700",
       strokeThickness: 0,
       lineSpacing: 6,
+      noWrap: true,
       maxWidth: 380,
       maxHeight: 120,
     })
       .setOrigin(0.5, 1)
-      .setDepth(6)
+      // Above the van/walker sprites — the stop label must never be clipped.
+      .setDepth(13)
       .setVisible(false);
     this.vanBanner = addUiText(this, 0, 0, "", {
       size: Type.body,

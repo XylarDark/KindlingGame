@@ -7,3 +7,8 @@ import "@fontsource/inter/latin-700.css";
 
 const game = new Phaser.Game(gameConfig);
 installMobileShell(game);
+
+// Dev-only handle for the typography/layout QA harness (see docs/qa-typography.md).
+if (import.meta.env.DEV) {
+  (globalThis as unknown as { kindlingGame?: Phaser.Game }).kindlingGame = game;
+}
