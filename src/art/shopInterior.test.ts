@@ -4,7 +4,12 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { WINDOW } from "../maps/shopT0";
 
-const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "shopInterior.ts"), "utf8");
+// Normalised to LF: git checks these files out with CRLF on Windows, which silently
+// broke the newline-anchored scans below.
+const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "shopInterior.ts"), "utf8").replace(
+  /\r\n/g,
+  "\n",
+);
 
 describe("shop type proportionality", () => {
   it("fits door, mat, and plaque marks to their host boxes", () => {
@@ -42,7 +47,10 @@ function fnBody(name: string): string {
   if (start < 0) throw new Error(`missing function ${name}`);
   const rest = src.slice(start);
   const end = rest.indexOf("\n}\n");
-  return end < 0 ? rest : rest.slice(0, end);
+  // Returning `rest` on a miss would scan every later function too, passing or
+  // failing for reasons that have nothing to do with `name`.
+  if (end < 0) throw new Error(`could not find the end of function ${name}`);
+  return rest.slice(0, end);
 }
 
 describe("delivery window paint", () => {
