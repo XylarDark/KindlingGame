@@ -84,6 +84,7 @@ export class HudScene extends Phaser.Scene {
   private idFlashRing!: Phaser.GameObjects.Rectangle;
   private flash!: Phaser.GameObjects.Rectangle;
   private toastText!: Phaser.GameObjects.Text;
+  private coverText!: Phaser.GameObjects.Text;
   private sawPhoto = false;
   private idWasShowing = false;
   private idCardArmedAt = 0;
@@ -223,6 +224,21 @@ export class HudScene extends Phaser.Scene {
     })
       .setOrigin(0.5, 1)
       .setDepth(20);
+
+    // Out on the road the shop is off-screen, so the counter reports in under the score.
+    this.coverText = addUiText(this, 0, 0, "", {
+      size: Type.caption,
+      color: Color.creamHex,
+      backgroundColor: Color.bannerInk,
+      padding: { x: 12, y: 6 },
+      fontStyle: "600",
+      noWrap: true,
+      maxWidth: 560,
+      maxHeight: 40,
+    })
+      .setOrigin(0, 0)
+      .setDepth(20)
+      .setVisible(false);
 
     this.idDim = this.add
       .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x0a0806, 0.55)
@@ -412,6 +428,7 @@ export class HudScene extends Phaser.Scene {
     this.syncResults(snap);
     if (snap.shiftEnded) {
       this.toastText.setVisible(false);
+      this.coverText.setVisible(false);
       this.phone.setVisible(false);
       this.phoneHit.disableInteractive();
       this.idDim.setVisible(false);
@@ -519,6 +536,7 @@ export class HudScene extends Phaser.Scene {
     // Drive prompts float over the van; ID/phone keep their own UI.
     const driveBanner = driving && !!snap.toast;
     this.toastText.setVisible(!!snap.toast && !showId && snap.dropoff.phase !== "atDoor" && !showPhone && !driveBanner);
+    this.paintCover(snap);
     const showPad =
       driving &&
       !showPhone &&
@@ -541,6 +559,28 @@ export class HudScene extends Phaser.Scene {
     syncMusicToClock(snap.gameMs);
   }
 
+  /**
+   * The key lead keeps trading while the player drives, but the shop scene is asleep for
+   * the whole run. Without this line the only sign of it is an unexplained score pop.
+   */
+  private paintCover(snap: SimSnapshot): void {
+    const cover = snap.shopCover;
+    const show = cover.active && !this.settingsOpen && !this.resultsVisible && !snap.dropoff.idCard;
+    this.coverText.setVisible(show);
+    if (!show) return;
+    const tally = [
+      cover.served ? `${cover.served} served` : null,
+      cover.waiting ? `${cover.waiting} waiting` : null,
+      cover.packed ? `${cover.packed} bagged` : null,
+      cover.lost ? `${cover.lost} lost` : null,
+    ]
+      .filter(Boolean)
+      .join("  ·  ");
+    this.coverText.setText(`COUNTER  ·  ${cover.line}${tally ? `  ·  ${tally}` : ""}`);
+    this.coverText.setPosition(this.readoutCorner.left, this.readoutCorner.top + 40);
+    refitType(this.coverText);
+  }
+
   private syncDriveScene(snap: SimSnapshot): void {
     if (snap.playerRole !== "driver") return;
     if (this.scene.isActive("shop") && !this.scene.isSleeping("shop")) this.scene.sleep("shop");
@@ -553,9 +593,8 @@ export class HudScene extends Phaser.Scene {
     this.settingsDim = this.add
       .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, Color.ink, 0.45)
       .setDepth(40)
-      .setInteractive()
       .setVisible(false);
-    this.settingsDim.disableInteractive();
+    this.armSettingsDim(false);
     this.settingsDim.on("pointerdown", (p: Phaser.Input.Pointer) => {
       p.event.stopPropagation();
       this.closeSettings();
@@ -716,9 +755,23 @@ export class HudScene extends Phaser.Scene {
     this.refreshMusicControls();
   }
 
+  private armSettingsDim(on: boolean): void {
+    // The dim spans the whole screen, so it must not exist as a hit target while
+    // the panel is closed or it swallows every click behind it.
+    if (on) this.settingsDim.setInteractive({ useHandCursor: false });
+    else this.settingsDim.disableInteractive();
+  }
+
+  /** Design-space panel rect — the dim spans the screen, so its local coords are design coords. */
+  private overSettingsPanel(x: number, y: number): boolean {
+    const { x: px, y: py } = this.settingsPanel;
+    return x >= px && x <= px + SETTINGS_W && y >= py && y <= py + SETTINGS_H;
+  }
+
   private openSettings(): void {
     this.settingsOpen = true;
-    this.settingsDim.setVisible(true).setInteractive();
+    this.settingsDim.setVisible(true);
+    this.armSettingsDim(true);
     this.settingsPanel.setVisible(true);
     this.refreshMusicControls();
     this.refreshEndShiftButton();
@@ -726,7 +779,8 @@ export class HudScene extends Phaser.Scene {
 
   private closeSettings(): void {
     this.settingsOpen = false;
-    this.settingsDim.setVisible(false).disableInteractive();
+    this.settingsDim.setVisible(false);
+    this.armSettingsDim(false);
     this.settingsPanel.setVisible(false);
   }
 
