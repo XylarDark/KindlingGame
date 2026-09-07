@@ -1,6 +1,6 @@
 import { CITY, TILE, isEWStreet, isNSStreet } from "./cityT0";
 import type { TileCell } from "../sim/pathfinding";
-import { orthogonalLanePath, routeIsOrthogonal, type WorldPoint } from "../sim/driveRoute";
+import { orthogonalLanePath, type WorldPoint } from "../sim/driveRoute";
 
 export interface TrafficLoop {
   id: string;
@@ -48,6 +48,33 @@ export const TRAFFIC_VAN_DETECT = 240;
 
 /** Lateral lane tolerance when deciding a car is “in front”. */
 export const TRAFFIC_LANE_WIDTH = 72;
+
+/** Ambient car pace in px/s: base plus a per-loop step so lanes are not lockstep. */
+export const TRAFFIC_BASE_SPEED = 115;
+export const TRAFFIC_SPEED_STEP = 22;
+
+/** Traffic pace trim layered on the base pace — 1.15 = 15% faster ambient cars. */
+export const TRAFFIC_SPEED_SCALE = 1.15;
+
+/**
+ * Extra room the van leaves behind the car it queues behind — 1.1 = 10% further back.
+ * Layered on the {@link TRAFFIC_MIN_SEP} bands below; both stay inside
+ * {@link TRAFFIC_LOOK_AHEAD} so the van still sees the lead car it is reacting to.
+ */
+export const VAN_FOLLOW_GAP_SCALE = 1.1;
+
+/** Nose-to-tail: inside this gap the van eases to a crawl. */
+export const VAN_CRAWL_GAP = TRAFFIC_MIN_SEP * 0.92 * VAN_FOLLOW_GAP_SCALE;
+
+/** Inside this gap the van holds the lead car's speed instead of closing in. */
+export const VAN_MATCH_GAP = TRAFFIC_MIN_SEP * 1.2 * VAN_FOLLOW_GAP_SCALE;
+
+/**
+ * Hard clearance a lead car keeps from the van queued behind it. This is what the settled
+ * queueing distance actually lands on, so it takes the same trim as the bands above.
+ * Cars *behind* the van still use the plain {@link TRAFFIC_MIN_SEP}.
+ */
+export const VAN_FOLLOW_MIN_SEP = TRAFFIC_MIN_SEP * VAN_FOLLOW_GAP_SCALE;
 
 /** Spawn density vs a full loop fill — 0.75 = 25% fewer cars on the road. */
 export const TRAFFIC_DENSITY = 0.75;
@@ -166,7 +193,7 @@ export function trafficCars(
 
   const states: CarState[] = [];
   loops.forEach((loop, i) => {
-    const speed = 115 + (i % 3) * 22;
+    const speed = (TRAFFIC_BASE_SPEED + (i % 3) * TRAFFIC_SPEED_STEP) * TRAFFIC_SPEED_SCALE;
     const stagger = i * 2_800 + (i % 2) * 1_400;
     const dist = ((gameMs + stagger) * speed) / 1000;
     const carsOnLoop = loop.length > TILE * 14 ? 2 : 1;
@@ -236,11 +263,17 @@ export function trafficCars(
         car.speed = 0;
       }
 
-      if (gap < TRAFFIC_MIN_SEP) {
-        const need = TRAFFIC_MIN_SEP - gap + 6;
-        const step = need / Math.max(TILE, car.loop.length);
-        if (forward >= 0) car.t = ((car.t - step) % 1 + 1) % 1;
-        else car.t = (car.t + step) % 1;
+      // Clear the van's footprint. Re-measure each pass: around a corner, backing up N px
+      // along the lane opens less than N px of straight-line gap, so one shove can fall short.
+      // A car the van is queued behind leaves the wider follow clearance.
+      const away = forward >= 0 ? -1 : 1;
+      const minSep = forward >= 0 ? TRAFFIC_MIN_SEP : VAN_FOLLOW_MIN_SEP;
+      for (let pass = 0; pass < 8; pass++) {
+        const q = pointAlongLoop(car.loop.points, car.t);
+        const short = minSep - Math.hypot(obstacle.x - q.x, obstacle.y - q.y);
+        if (short <= 0) break;
+        const step = (short + 6) / Math.max(TILE, car.loop.length);
+        car.t = ((car.t + away * step) % 1 + 1) % 1;
       }
     }
   }
@@ -280,8 +313,8 @@ export function driveSpeedForTraffic(
   const lead = findLeadCar(player, cars, lookAhead);
   if (!lead) return cruise;
   let speed: number;
-  if (lead.dist < TRAFFIC_MIN_SEP * 0.92) speed = Math.min(cruise * 0.15, lead.car.speed * 0.4);
-  else if (lead.dist < TRAFFIC_MIN_SEP * 1.2) speed = Math.min(cruise, lead.car.speed);
+  if (lead.dist < VAN_CRAWL_GAP) speed = Math.min(cruise * 0.15, lead.car.speed * 0.4);
+  else if (lead.dist < VAN_MATCH_GAP) speed = Math.min(cruise, lead.car.speed);
   else speed = Math.min(cruise, lead.car.speed + 20);
   // Never softlock behind a fully stopped lead (yield-to-van zero).
   return Math.max(speed, cruise * 0.2);

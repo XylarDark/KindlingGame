@@ -16,6 +16,14 @@ import {
 import { GameSim } from "./gameSim";
 import { CITY, houseById, tileToWorld } from "../maps/cityT0";
 import {
+  TRAFFIC_LANE_WIDTH,
+  TRAFFIC_LOOK_AHEAD,
+  TRAFFIC_MIN_SEP,
+  VAN_MATCH_GAP,
+  cityTrafficLoops,
+  trafficCars,
+} from "../maps/traffic";
+import {
   OPENING_FIRST_AT_MS,
   OPENING_ORDER_GAP_MS,
   TICKET_WAVE_MAX_MS,
@@ -488,6 +496,43 @@ describe("GameSim order loops", () => {
     const pad = tileToWorld(stop.stop);
     const v = sim.snapshot().vehicle;
     expect(Math.hypot(v.x - pad.x, v.y - pad.y)).toBeLessThan(2);
+  });
+
+  it("queues behind traffic at the follow gap and still reaches the stop", () => {
+    // 50ms ticks match the auto-drive's own slice, so this is the same drive at a third of
+    // the cost. Two phases is enough: both put ~250 ticks of lane traffic in front of the
+    // van. Mid-corner shoves are pinned cheaply by the time sweep in traffic.test.ts.
+    for (const phaseMs of [1_500, 4_000]) {
+      const sim = GameSim.create({ seed: 5, autoSpawn: false });
+      fillTicket(sim, "delivery", { destinationId: "house-3" });
+      sim.hitTheRoad();
+      sim.clock.gameMs = phaseMs;
+      let queuedTicks = 0;
+      let tightest = Infinity;
+      for (let i = 0; i < 1_200 && sim.snapshot().autoDriving; i++) {
+        const v = sim.snapshot().vehicle;
+        const cars = trafficCars(sim.clock.gameMs, cityTrafficLoops(), v);
+        const cos = Math.cos(v.heading);
+        const sin = Math.sin(v.heading);
+        for (const car of cars) {
+          const dx = car.x - v.x;
+          const dy = car.y - v.y;
+          const gap = Math.hypot(dx, dy);
+          if (gap >= TRAFFIC_LOOK_AHEAD) continue;
+          if (cos * dx + sin * dy < 36) continue;
+          if (Math.abs(-sin * dx + cos * dy) > TRAFFIC_LANE_WIDTH) continue;
+          queuedTicks += 1;
+          tightest = Math.min(tightest, gap);
+        }
+        sim.tick(50);
+      }
+      // A bigger follow gap must never stall the route or deadlock against a lead car.
+      expect(sim.snapshot().autoDriving, `phase ${phaseMs} stalled`).toBe(false);
+      expect(queuedTicks, `phase ${phaseMs} never met traffic`).toBeGreaterThan(0);
+      // Queued means tucked into the follow band — close up, but never inside a car.
+      expect(tightest, `phase ${phaseMs} nose-to-tail`).toBeGreaterThanOrEqual(TRAFFIC_MIN_SEP - 1);
+      expect(tightest, `phase ${phaseMs} never closed up`).toBeLessThan(VAN_MATCH_GAP + 24);
+    }
   });
 
   it("lets the driver leave with packed deliveries while more tickets wait", () => {

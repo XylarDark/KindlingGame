@@ -1,10 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { TILE } from "./cityT0";
 import {
+  TRAFFIC_BASE_SPEED,
   TRAFFIC_DENSITY,
+  TRAFFIC_LOOK_AHEAD,
   TRAFFIC_LOOP_MAX,
   TRAFFIC_MIN_SEP,
+  TRAFFIC_SPEED_SCALE,
+  TRAFFIC_SPEED_STEP,
   TRAFFIC_VAN_DETECT,
+  VAN_CRAWL_GAP,
+  VAN_FOLLOW_GAP_SCALE,
+  VAN_FOLLOW_MIN_SEP,
+  VAN_MATCH_GAP,
   buildTrafficLoops,
   driveSpeedForTraffic,
   leadTrafficSpeed,
@@ -60,7 +68,10 @@ describe("city traffic", () => {
 
   it("never lets cars pass through the delivery van", () => {
     const loops = buildTrafficLoops(TRAFFIC_LOOP_MAX);
-    for (const t of [0, 2_000, 7_500, 14_000, 22_000]) {
+    // Dense sweep: at the faster pace, cars meet the van mid-corner where a single
+    // shove back along the lane opens less straight-line gap than it does on a straight.
+    const times = Array.from({ length: 60 }, (_, i) => i * 900);
+    for (const t of [...times, 2_000, 7_500, 14_000, 22_000]) {
       const raw = trafficCars(t, loops);
       if (raw.length === 0) continue;
       const van = { x: raw[0]!.x, y: raw[0]!.y, heading: raw[0]!.angle };
@@ -128,6 +139,11 @@ describe("city traffic", () => {
     const cars = trafficCars(5_000, loops, van);
     const reacted = cars.find((c) => c.id === lead.id)!;
     expect(reacted.speed).toBeGreaterThan(0);
+    // The car the van queues behind leaves the wider follow clearance.
+    expect(Math.hypot(reacted.x - van.x, reacted.y - van.y)).toBeGreaterThanOrEqual(
+      VAN_FOLLOW_MIN_SEP - 1,
+    );
+    expect(VAN_FOLLOW_MIN_SEP).toBeCloseTo(TRAFFIC_MIN_SEP * VAN_FOLLOW_GAP_SCALE, 6);
   });
 
   it("reports lead speed when a car is ahead in the same lane", () => {
@@ -157,10 +173,63 @@ describe("city traffic", () => {
     };
     const player = { x: 0, y: 0, heading: 0 };
     expect(driveSpeedForTraffic(player, [], cruise)).toBe(cruise);
-    expect(driveSpeedForTraffic(player, [{ ...lead, x: 150 }], cruise)).toBe(Math.min(cruise, 140));
-    expect(driveSpeedForTraffic(player, [{ ...lead, x: 120 }], cruise)).toBe(Math.min(cruise, 120));
-    const nose = driveSpeedForTraffic(player, [{ ...lead, x: 80, speed: 0 }], cruise);
+    // Clear of the follow band: close the gap at lead speed + 20.
+    expect(driveSpeedForTraffic(player, [{ ...lead, x: VAN_MATCH_GAP + 8 }], cruise)).toBe(
+      Math.min(cruise, 140),
+    );
+    // Inside the follow band: match the lead car.
+    expect(driveSpeedForTraffic(player, [{ ...lead, x: VAN_MATCH_GAP - 8 }], cruise)).toBe(
+      Math.min(cruise, 120),
+    );
+    const nose = driveSpeedForTraffic(
+      player,
+      [{ ...lead, x: VAN_CRAWL_GAP - 8, speed: 0 }],
+      cruise,
+    );
     expect(nose).toBeGreaterThanOrEqual(cruise * 0.2);
     expect(nose).toBeLessThan(cruise);
+  });
+
+  it("keeps ambient cars at the scaled traffic pace", () => {
+    const loops = buildTrafficLoops(TRAFFIC_LOOP_MAX);
+    const cars = trafficCars(6_000, loops);
+    expect(cars.length).toBeGreaterThan(0);
+    const tiers = [0, 1, 2].map((i) => (TRAFFIC_BASE_SPEED + i * TRAFFIC_SPEED_STEP) * TRAFFIC_SPEED_SCALE);
+    for (const car of cars) {
+      expect(tiers.some((t) => Math.abs(car.speed - t) < 1e-6), `${car.id} @ ${car.speed}`).toBe(true);
+      // The 15% trim must land every tier above the old unscaled base pace.
+      expect(car.speed).toBeGreaterThan(TRAFFIC_BASE_SPEED);
+    }
+    expect(Math.max(...cars.map((c) => c.speed))).toBeCloseTo(
+      (TRAFFIC_BASE_SPEED + 2 * TRAFFIC_SPEED_STEP) * TRAFFIC_SPEED_SCALE,
+      6,
+    );
+  });
+
+  it("holds the van further back than the raw separation, still inside its look-ahead", () => {
+    expect(VAN_FOLLOW_GAP_SCALE).toBeGreaterThan(1);
+    expect(VAN_CRAWL_GAP).toBeCloseTo(TRAFFIC_MIN_SEP * 0.92 * VAN_FOLLOW_GAP_SCALE, 6);
+    expect(VAN_MATCH_GAP).toBeCloseTo(TRAFFIC_MIN_SEP * 1.2 * VAN_FOLLOW_GAP_SCALE, 6);
+    // A lead car must still be detectable at the widest band, or the van would never react.
+    expect(VAN_MATCH_GAP).toBeLessThan(TRAFFIC_LOOK_AHEAD);
+    // Crawl band clears the hard car↔car separation so the van settles behind, not inside it.
+    expect(VAN_CRAWL_GAP).toBeGreaterThanOrEqual(TRAFFIC_MIN_SEP);
+
+    const cruise = 380;
+    const lead = { id: "lead", x: 0, y: 0, key: "tex-car", depth: 5, angle: 0, speed: 120 };
+    const player = { x: 0, y: 0, heading: 0 };
+    // At the old match-band edge the van now already matches speed instead of closing in.
+    const atOldEdge = TRAFFIC_MIN_SEP * 1.2 + 1;
+    expect(atOldEdge).toBeLessThan(VAN_MATCH_GAP);
+    expect(driveSpeedForTraffic(player, [{ ...lead, x: atOldEdge }], cruise)).toBe(120);
+  });
+
+  it("never stalls the van behind a stopped lead car", () => {
+    const cruise = 380;
+    const lead = { id: "lead", x: 40, y: 0, key: "tex-car", depth: 5, angle: 0, speed: 0 };
+    const player = { x: 0, y: 0, heading: 0 };
+    for (const gap of [VAN_CRAWL_GAP * 0.5, VAN_CRAWL_GAP - 1, VAN_MATCH_GAP - 1, VAN_MATCH_GAP + 1]) {
+      expect(driveSpeedForTraffic(player, [{ ...lead, x: gap }], cruise)).toBeGreaterThan(0);
+    }
   });
 });
