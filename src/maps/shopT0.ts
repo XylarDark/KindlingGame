@@ -24,26 +24,77 @@ export const PEOPLE_SCALE = 0.873;
 export const BAG_SCALE = 0.7;
 export const PERSON_DISPLAY_H = Math.round(PERSON_NATIVE_H * PEOPLE_SCALE);
 
-/** HUD text sits in the corners; wall props tuck under the ceiling band. */
-export const WALL_PROP_TOP = 44;
-
 /** Shirt mark sits above the laminate; head stays under the TVs. */
 export const KEYLEAD = { x: COUNTER_MID, y: COUNTER_TOP + 68 };
+
+const COUNTER_SIGN_H = 64;
+/** Shade band + painted edge along the bottom of the counter face. */
+export const COUNTER_FACE_SHADE_H = 28;
+/**
+ * Shop sign on the counter face, centred under the key lead — and centred in the
+ * clean face above the bottom shade band, not in the full face. `y` is its middle.
+ * The HUD score and clock hang off this box, so the whole group rides together.
+ */
+export const COUNTER_SIGN = {
+  x: KEYLEAD.x,
+  y: COUNTER_TOP + Math.floor((COUNTER_FRONT - COUNTER_FACE_SHADE_H - COUNTER_TOP) / 2),
+  w: 320,
+  h: COUNTER_SIGN_H,
+};
 
 export const BACK_DOOR_W = 200;
 export const BACK_DOOR_H = 372;
 export const BACK_DOOR = { x: 400 + (COUNTER_LEFT - 256), y: KEYLEAD.y };
-export const BAG_STACK = { x: KEYLEAD.x - 220, y: COUNTER_TOP };
-export const PACK_SPOT = { x: COUNTER_RIGHT - 120, y: COUNTER_TOP };
-export const RECEIPT_SPOT = { x: COUNTER_RIGHT - 48, y: COUNTER_TOP - 8 };
-/** Packed bags on the right of the counter; labels need a full slot between them. */
-export const OUT_BAG_GAP = 172;
-export const OUT_BAG_RIGHT = COUNTER_RIGHT - 64;
+/** Bag supply on the key-lead's right; the planter balances it on their left. */
+export const BAG_STACK = { x: KEYLEAD.x + 190, y: COUNTER_TOP };
+export const COUNTER_PLANT = { x: KEYLEAD.x - 220, y: COUNTER_TOP };
+/** Where slips print. The receipt rail hangs off the counter under this spot. */
+export const RECEIPT_SPOT = { x: COUNTER_RIGHT - 48, y: COUNTER_TOP };
+/**
+ * Counter bags print their label on their own face, so they bake wider than the
+ * road bag and draw 1:1 (see `counterBag` in pixelArt). The pass-through sill
+ * caps the height, so all the room for type had to come from width.
+ */
+export const COUNTER_BAG_W = 112;
+export const COUNTER_BAG_H = 84;
+/**
+ * The printed panel on a counter bag's face, as offsets from the sprite's
+ * bottom-centre origin. The live count owns the upper band; the baked
+ * DELIVERY / PICKUP word owns the shorter band beneath it.
+ */
+export const BAG_PANEL = { w: 80, countCy: -43, countH: 34 };
 
-/** Label sits 10% of bag height above the sprite top. */
-export function bagCaptionY(footY: number): number {
-  const bagH = Math.round(120 * BAG_SCALE);
-  return footY - bagH - Math.round(bagH * 0.1) - 8;
+/** Packed deliveries pile at the counter's right end; pickups tuck in behind. */
+export const READY_BAG = { x: COUNTER_RIGHT - 248, y: COUNTER_TOP };
+export const PICKUP_BAG = { x: READY_BAG.x + 104, y: COUNTER_TOP };
+
+/**
+ * Receipts clipped to the counter face under the slip spot: one row per packed
+ * bag, oldest at the top. The left edge has to clear the HUD clock readout.
+ */
+export const RECEIPT_RAIL = {
+  right: RECEIPT_SPOT.x + 32,
+  top: COUNTER_TOP + 2,
+  w: 252,
+  pad: 4,
+  rowH: 18,
+  maxRows: 6,
+  /** Row text starts right of the pickup / delivery accent tab. */
+  inset: 22,
+};
+
+export function receiptRailBox(rowCount: number): { left: number; top: number; w: number; h: number } {
+  return {
+    left: RECEIPT_RAIL.right - RECEIPT_RAIL.w,
+    top: RECEIPT_RAIL.top,
+    w: RECEIPT_RAIL.w,
+    h: RECEIPT_RAIL.pad * 2 + Math.max(1, rowCount) * RECEIPT_RAIL.rowH,
+  };
+}
+
+/** Middle of row `index`, counting from the oldest slip at the top. */
+export function receiptRowY(index: number): number {
+  return RECEIPT_RAIL.top + RECEIPT_RAIL.pad + index * RECEIPT_RAIL.rowH + RECEIPT_RAIL.rowH / 2;
 }
 
 export const BENCH_INSET = 0;
@@ -60,18 +111,16 @@ export const DOOR = {
   x: Math.floor(DOOR_W / 2 + (COUNTER_LEFT_PREV - DOOR_W) / 2) - SCREEN_5 + 36,
   y: COUNTER_FRONT + PERSON_DISPLAY_H + 2,
 };
-/** Street and staff door lintel — windows no longer share this. */
-export const FRAME_TOP = COUNTER_FRONT - DOOR_H;
-
 /** Feet on the lobby boards; head stays just below the counter front. */
 export const CUSTOMER_SPOT = { x: COUNTER_MID, y: COUNTER_FRONT + PERSON_DISPLAY_H + 2 };
 /** Speech sits in the lobby, left of the walk-in — not on their head or the plaque. */
 export const CUSTOMER_BUBBLE_DX = -220;
+/** Bubbles must clear the lobby sandwich board on the far left. */
+export const CUSTOMER_BUBBLE_MIN_X = 300;
 export const CUSTOMER_BUBBLE_Y = COUNTER_FRONT + 96;
 
 export const TV_COUNT = 3;
 export const TV_COLS = 3;
-export const TV_ROWS = 1;
 export const STRAINS_PER_TV = 3;
 /** 15% larger than the original 304×220 bank, then 5% shorter for headroom. */
 const TV_BASE_W = 304;
@@ -86,7 +135,6 @@ export const TV_GAP_Y = 0;
 /** Dark bezel / recessed-glass inset. Keep strain slots inside this. */
 export const TV_BEZEL = Math.round(16 * TV_SCALE);
 export const TV_GRID_W = TV_COLS * TV_W + (TV_COLS - 1) * TV_GAP_X;
-export const TV_GRID_H = TV_ROWS * TV_H + Math.max(0, TV_ROWS - 1) * TV_GAP_Y;
 export const CEILING_POT_LEFT = 150;
 export const CEILING_POT_RIGHT = 1760;
 /** Menu TVs centered over the key-lead. */
@@ -94,7 +142,6 @@ export const TV_GRID_MID = KEYLEAD.x;
 export const TV_GRID_LEFT = Math.floor(TV_GRID_MID - TV_GRID_W / 2);
 /** Keep the bank on the wall under the cans; shorter height lifts the bottom slightly. */
 export const TV_GRID_TOP = TV_BASE_TOP + TV_BASE_H - TV_H;
-export const TV_Y = TV_GRID_TOP + TV_H / 2;
 
 /** Grey-over-white chair rail; the pass-through oak sill sits on this band. */
 export const CHAIR_RAIL_Y = COUNTER_TOP - 114;
@@ -111,18 +158,24 @@ export const WINDOW_LEFT_INSET = 24;
 export const WINDOW_RIGHT_INSET = 76;
 const WINDOW_BASE_W = GAME_WIDTH - BENCH_LEFT - WINDOW_LEFT_INSET - WINDOW_RIGHT_INSET;
 const WINDOW_BASE_MID = BENCH_LEFT + WINDOW_LEFT_INSET + Math.floor(WINDOW_BASE_W / 2);
+/** 2% wider for easier driver taps on mobile. */
+const WINDOW_TAP_W = Math.round(WINDOW_BASE_W * 1.02);
+/** Another 5% of glass, added to the right edge only — left jamb stays put. */
+const WINDOW_RIGHT_GROW = Math.round(WINDOW_TAP_W * 0.05);
+/** A further 5%, right edge again. Even px so the left jamb keeps its whole-pixel column. */
+const WINDOW_RIGHT_GROW_2 = 2 * Math.round(((WINDOW_TAP_W + WINDOW_RIGHT_GROW) * 0.05) / 2);
+/** All right-side growth so far; `x` shifts by half of it so only the right edge moves. */
+const WINDOW_RIGHT_TOTAL = WINDOW_RIGHT_GROW + WINDOW_RIGHT_GROW_2;
 export const WINDOW = {
-  x: WINDOW_BASE_MID,
-  /** 2% wider for easier driver taps on mobile. */
-  w: Math.round(WINDOW_BASE_W * 1.02),
+  x: WINDOW_BASE_MID + Math.round(WINDOW_RIGHT_TOTAL / 2),
+  w: WINDOW_TAP_W + WINDOW_RIGHT_TOTAL,
   h: BENCH.y - WINDOW_CLEAR - WINDOW_TOP,
 };
-export const DRIVER = { x: WINDOW.x, y: BENCH.y + 48 };
-export const WINDOW_MID = WINDOW_TOP + Math.floor(WINDOW.h / 2);
+/** Driver keeps their original spot; only the glass grew. */
+export const DRIVER = { x: WINDOW_BASE_MID, y: BENCH.y + 48 };
 
 export const TABLET_W = 176;
 export const TABLET_H = 112;
-export const TABLET_INSET = 10;
 export const TABLET_HEADER_H = 16;
 export const TABLET_HOME_H = 0;
 /** Oak shelf flush with the chair rail. */
@@ -173,10 +226,6 @@ export function tvPos(index: number): { x: number; y: number } {
   };
 }
 
-export function tvX(index: number): number {
-  return tvPos(index).x;
-}
-
 export function strainSlotH(): number {
   return Math.floor((TV_H - TV_BEZEL * 2) / STRAINS_PER_TV);
 }
@@ -188,12 +237,6 @@ export function strainPos(index: number): { x: number; y: number } {
   const slotH = strainSlotH();
   const blockTop = p.y - TV_H / 2 + TV_BEZEL;
   return { x: p.x, y: blockTop + slot * slotH + slotH / 2 };
-}
-
-export const JAR_Y = TV_Y;
-export const COUNTER_BAG = PACK_SPOT;
-export function jarX(index: number): number {
-  return tvX(index);
 }
 
 /** Five cans, even gaps across the ceiling band. Not locked to TV centers. */

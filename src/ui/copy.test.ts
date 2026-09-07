@@ -8,11 +8,12 @@ import {
   PAUSE_HINT,
   WELCOME_HINT,
   WELCOME_TITLE,
-  deliveryBagLabel,
   driverReadyCopy,
   formatSlaClock,
   interactButtonCopy,
   isSlaUrgent,
+  receiptOverflowLine,
+  receiptSlipLine,
 } from "./copy";
 
 describe("shop copy", () => {
@@ -46,7 +47,14 @@ describe("shop copy", () => {
     expect(isSlaUrgent(11 * MS_PER_GAME_MINUTE)).toBe(false);
     expect(isSlaUrgent(10 * MS_PER_GAME_MINUTE)).toBe(true);
     expect(isSlaUrgent(-1)).toBe(true);
-    expect(deliveryBagLabel("House 1", "Ash Park", 47 * MS_PER_GAME_MINUTE)).toBe("House 1\nAsh Park  ·  47m");
-    expect(deliveryBagLabel("House 1", "Ash Park", 0)).toBe("House 1\nAsh Park  ·  LATE");
+  });
+
+  it("prints one-line receipt slips", () => {
+    expect(receiptSlipLine("House 1", "Ash Park", 47 * MS_PER_GAME_MINUTE)).toBe("House 1  ·  Ash Park  ·  47m");
+    expect(receiptSlipLine("House 1", "Ash Park", 0)).toBe("House 1  ·  Ash Park  ·  LATE");
+    expect(receiptSlipLine("Pickup", "Ash Park", null)).toBe("Pickup  ·  Ash Park");
+    // One line only — the rail gives each slip a single row.
+    expect(receiptSlipLine("House 1", "Ash Park", 0)).not.toContain("\n");
+    expect(receiptOverflowLine(2)).toBe("+2 more");
   });
 });

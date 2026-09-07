@@ -27,8 +27,8 @@ describe("people bake contract", () => {
     expect(src).toContain("makeType");
     expect(src).toContain("fitTypeToWidth");
     expect(src).not.toMatch(/label\.setScale/);
-    expect(src).toContain('stampKindling(scene, "tex-driver", 96, 36, 12, 104)');
-    expect(src).toContain('stampKindling(scene, "tex-driver-sit", 112, 36, 12, 120)');
+    expect(src).toContain('stampKindling(scene, "tex-driver", 96, 31, 13.2, 104)');
+    expect(src).toContain('stampKindling(scene, "tex-driver-sit", 120, 31, 13.2, 120)');
     expect(src).toContain('stampKindling(scene, "tex-keylead", 96, 208, 23, 120)');
   });
 

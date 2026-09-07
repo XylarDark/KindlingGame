@@ -1,19 +1,24 @@
 import Phaser from "phaser";
+import { drawReceiptRail } from "../art/receiptRail";
 import { shopGrade } from "../art/dayNightGrade";
 import { applyDayNight, attachDayNight, dayNightFrom, type DayNightPipeline } from "../art/dayNightPipeline";
 import { drawShopCounter, drawShopInterior, paintShopDayNight, paintWindowGlow } from "../art/shopInterior";
 import {
+  BAG_PANEL,
   BAG_STACK,
-  BAG_SCALE,
-  COUNTER_TOP,
   COUNTER_FRONT,
   CUSTOMER_SPOT,
   CUSTOMER_BUBBLE_DX,
+  CUSTOMER_BUBBLE_MIN_X,
   CUSTOMER_BUBBLE_Y,
   DRIVER,
   KEYLEAD,
-  OUT_BAG_GAP,
-  OUT_BAG_RIGHT,
+  PICKUP_BAG,
+  READY_BAG,
+  RECEIPT_RAIL,
+  RECEIPT_SPOT,
+  receiptRailBox,
+  receiptRowY,
   PEOPLE_SCALE,
   PERSON_DISPLAY_H,
   TABLET,
@@ -21,7 +26,6 @@ import {
   TABLET_W,
   TV_BEZEL,
   TV_W,
-  bagCaptionY,
   ceilingPots,
   strainPos,
   strainSlotH,
@@ -31,19 +35,45 @@ import { enableItemHit } from "../input/hit";
 import { getSim } from "../session";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import { skyAt } from "../sim/dayNight";
-import type { CustomerView, OrderView, SimSnapshot } from "../sim/gameSim";
-import { isPackedOnCounter } from "../sim/orders";
+import type { CustomerView, SimSnapshot } from "../sim/gameSim";
 import { nextShopHint } from "../sim/tutorialHints";
-import { deliveryBagLabel, driverReadyCopy, isSlaUrgent } from "../ui/copy";
+import { driverReadyCopy } from "../ui/copy";
+import { readyTally, receiptSlips } from "../ui/receipts";
 import { wireHover } from "../ui/chrome";
 import { addUiText } from "../ui/text";
 import { Color, Type } from "../ui/theme";
 import { fitTypeToWidth } from "../ui/typekit";
+
+/** Strain names on the wall screens run 21% over the heading step. */
+const TV_LABEL_PX = "24.2px";
+
+/**
+ * Customer / driver action messages run 20% over the body step — they are the
+ * copy that tells the player which tap comes next, read across the lobby.
+ */
+const MSG_PX = "19.2px";
+const MSG_PAD = { x: 12, y: 7 };
+/** Lime counter prompt carries the longest two-line copy, so it keeps a fatter chip. */
+const PROMPT_PAD = { x: 14, y: 10 };
+
+/**
+ * Keep a walk-in's speech bubble in the open lobby: prefer the left of the
+ * customer, mirror to their right when the sandwich board is in the way, then
+ * clamp so the chip never runs off screen.
+ */
+function bubbleX(customerX: number, bubbleW: number): number {
+  const half = bubbleW / 2;
+  const min = CUSTOMER_BUBBLE_MIN_X + half;
+  const max = GAME_WIDTH - 24 - half;
+  const left = customerX + CUSTOMER_BUBBLE_DX;
+  const x = left < min ? customerX - CUSTOMER_BUBBLE_DX : left;
+  return Phaser.Math.Clamp(x, Math.min(min, max), max);
+}
+
 export class ShopScene extends Phaser.Scene {
   private keyLead!: Phaser.GameObjects.Image;
   private driver!: Phaser.GameObjects.Image;
   private bagRack!: Phaser.GameObjects.Image;
-  private bagRackLabel!: Phaser.GameObjects.Text;
   private tabletScreen!: Phaser.GameObjects.Graphics;
   private tabletHit!: Phaser.GameObjects.Rectangle;
   private tabletLabel!: Phaser.GameObjects.Text;
@@ -53,7 +83,13 @@ export class ShopScene extends Phaser.Scene {
   private counterPrompt!: Phaser.GameObjects.Text;
   private customers = new Map<string, Phaser.GameObjects.Image>();
   private bubbles = new Map<string, Phaser.GameObjects.Text>();
-  private outBags = new Map<string, Phaser.GameObjects.GameObject[]>();
+  private readyBag!: Phaser.GameObjects.Image;
+  private readyCount!: Phaser.GameObjects.Text;
+  private pickupBag!: Phaser.GameObjects.Image;
+  private pickupCount!: Phaser.GameObjects.Text;
+  private receiptSlip!: Phaser.GameObjects.Image;
+  private receiptRail!: Phaser.GameObjects.Graphics;
+  private receiptRows: Phaser.GameObjects.Text[] = [];
   private tvs: Phaser.GameObjects.Rectangle[] = [];
   private tvLabels: Phaser.GameObjects.Text[] = [];
   private jarSkus: string[] = [];
@@ -79,20 +115,9 @@ export class ShopScene extends Phaser.Scene {
     this.events.on(Phaser.Scenes.Events.PRE_RENDER, () => this.syncLighting(getSim().snapshot().gameMs));
     this.makeHotspots();
 
-    this.bagRack = this.add.image(BAG_STACK.x, BAG_STACK.y, "tex-bag").setOrigin(0.5, 1).setScale(BAG_SCALE).setDepth(8);
+    this.bagRack = this.add.image(BAG_STACK.x, BAG_STACK.y, "tex-bag-bags").setOrigin(0.5, 1).setDepth(8);
     enableItemHit(this.bagRack);
     this.bagRack.on("pointerdown", () => getSim().shopClick({ type: "bagRack" }));
-    this.bagRackLabel = addUiText(this, BAG_STACK.x, bagCaptionY(BAG_STACK.y), "BAGS", {
-      size: Type.body,
-      color: Color.inkHex,
-      backgroundColor: Color.creamHex,
-      padding: { x: 8, y: 4 },
-      fontStyle: "700",
-      maxWidth: 112,
-      maxHeight: 32,
-    })
-      .setOrigin(0.5)
-      .setDepth(9);
 
     this.keyLead = this.add
       .image(KEYLEAD.x, KEYLEAD.y, "tex-keylead")
@@ -100,6 +125,7 @@ export class ShopScene extends Phaser.Scene {
       .setScale(PEOPLE_SCALE)
       .setDepth(5);
     drawShopCounter(this);
+    this.makeReadyBoard();
 
     const tab = tabletLayout();
     this.tabletScreen = this.add.graphics().setDepth(10);
@@ -138,14 +164,14 @@ export class ShopScene extends Phaser.Scene {
       .setVisible(false);
 
     this.keyLeadBubble = addUiText(this, KEYLEAD.x - 168, KEYLEAD.y - PERSON_DISPLAY_H - 24, "", {
-      size: Type.body,
+      size: MSG_PX,
       color: Color.inkHex,
       backgroundColor: Color.creamHex,
-      padding: { x: 10, y: 6 },
+      padding: MSG_PAD,
       align: "center",
       fontStyle: "600",
-      maxWidth: 280,
-      maxHeight: 72,
+      maxWidth: 340,
+      maxHeight: 104,
     })
       .setOrigin(0.5)
       .setDepth(12)
@@ -157,28 +183,28 @@ export class ShopScene extends Phaser.Scene {
     wireHover(this.driver);
 
     this.driverBubble = addUiText(this, DRIVER.x - 24, DRIVER.y - PERSON_DISPLAY_H - 8, "", {
-      size: Type.body,
+      size: MSG_PX,
       color: Color.inkHex,
       backgroundColor: Color.creamHex,
-      padding: { x: 10, y: 6 },
+      padding: MSG_PAD,
       align: "center",
       fontStyle: "600",
-      maxWidth: 280,
-      maxHeight: 88,
+      maxWidth: 336,
+      maxHeight: 124,
     })
       .setOrigin(1, 1)
       .setDepth(12)
       .setVisible(false);
 
     this.counterPrompt = addUiText(this, CUSTOMER_SPOT.x + 268, COUNTER_FRONT + 104, "", {
-      size: Type.body,
+      size: MSG_PX,
       color: Color.inkHex,
       backgroundColor: Color.limeHex,
-      padding: { x: 12, y: 8 },
+      padding: PROMPT_PAD,
       align: "center",
       fontStyle: "700",
-      maxWidth: 360,
-      maxHeight: 72,
+      maxWidth: 380,
+      maxHeight: 96,
     })
       .setOrigin(0.5)
       .setDepth(8)
@@ -228,11 +254,12 @@ export class ShopScene extends Phaser.Scene {
     this.driver.setTint(highlightGo ? Color.flash : 0xffffff);
     if (this.driver.input) this.driver.input.enabled = highlightGo;
 
-    this.bagRack.setAlpha(next?.kind === "bagRack" ? tabletPulse : 1);
-    this.bagRack.setTint(next?.kind === "bagRack" ? Color.flash : 0xffffff);
-    this.bagRackLabel.setText(next?.kind === "bagRack" ? "Tap to pack" : "BAGS");
-    this.bagRackLabel.setAlpha(1);
-    this.bagRackLabel.setColor(Color.creamHex);
+    // The prompt is printed on the bag's own panel, so it flashes with the sprite
+    // instead of needing a chip held at full alpha above it.
+    const packNext = next?.kind === "bagRack";
+    this.bagRack.setTexture(packNext ? "tex-bag-pack" : "tex-bag-bags");
+    this.bagRack.setAlpha(packNext ? tabletPulse : 1);
+    this.bagRack.setTint(packNext ? Color.flash : 0xffffff);
 
     this.tvs.forEach((tv, i) => {
       const sku = getSim().catalog.find((s) => s.id === this.jarSkus[i]);
@@ -294,43 +321,101 @@ export class ShopScene extends Phaser.Scene {
     this.queueBadge.setText(String(count));
   }
 
-  private syncOutgoing(snap: SimSnapshot): void {
-    const ready = snap.orders.filter((o) => isPackedOnCounter(o));
-    const ids = new Set(ready.map((o) => o.id));
-    for (const [id, objs] of this.outBags) {
-      if (!ids.has(id)) {
-        for (const obj of objs) obj.destroy();
-        this.outBags.delete(id);
-      }
-    }
-    ready.forEach((o, i) => {
-      const x = OUT_BAG_RIGHT - i * OUT_BAG_GAP;
-      const y = COUNTER_TOP;
-      let objs = this.outBags.get(o.id);
-      if (!objs) {
-        const bag = this.add.image(x, y, "tex-bag").setOrigin(0.5, 1).setScale(BAG_SCALE).setDepth(8);
-        const label = addUiText(this, x, bagCaptionY(y), outgoingBagText(o), {
+  /**
+   * Packed bags used to march one sprite and one chip per order across the whole
+   * counter. Now two labelled bags stand at its right end — deliveries in front,
+   * pickups behind — each printing its own count, and the slips stack on a rail
+   * clipped to the counter face, oldest at the top and newest at the bottom.
+   */
+  private makeReadyBoard(): void {
+    this.pickupBag = this.add
+      .image(PICKUP_BAG.x, PICKUP_BAG.y, "tex-bag-pickup")
+      .setOrigin(0.5, 1)
+      .setDepth(7.8)
+      .setVisible(false);
+    this.pickupCount = this.bagCount(PICKUP_BAG, 7.9);
+    this.readyBag = this.add
+      .image(READY_BAG.x, READY_BAG.y, "tex-bag-delivery")
+      .setOrigin(0.5, 1)
+      .setDepth(8)
+      .setVisible(false);
+    this.readyCount = this.bagCount(READY_BAG, 8.1);
+    this.receiptSlip = this.add
+      .image(RECEIPT_SPOT.x, RECEIPT_SPOT.y, "tex-receipt")
+      .setOrigin(0.5, 1)
+      .setScale(0.8)
+      .setDepth(8)
+      .setVisible(false);
+
+    this.receiptRail = this.add.graphics().setDepth(8);
+    const box = receiptRailBox(RECEIPT_RAIL.maxRows);
+    for (let i = 0; i < RECEIPT_RAIL.maxRows; i += 1) {
+      this.receiptRows.push(
+        addUiText(this, box.left + RECEIPT_RAIL.inset, receiptRowY(i), "", {
           size: Type.caption,
           color: Color.inkHex,
-          backgroundColor: Color.creamHex,
-          padding: { x: 5, y: 2 },
-          align: "center",
           fontStyle: "600",
-          maxWidth: OUT_BAG_GAP - 16,
-          maxHeight: 64,
+          strokeThickness: 0,
+          noWrap: true,
+          maxWidth: RECEIPT_RAIL.w - RECEIPT_RAIL.inset - 10,
+          maxHeight: RECEIPT_RAIL.rowH - 2,
         })
-          .setOrigin(0.5)
-          .setDepth(9);
-        objs = [bag, label];
-        this.outBags.set(o.id, objs);
-      }
-      (objs[0] as Phaser.GameObjects.Image).setPosition(x, y);
-      const label = objs[1] as Phaser.GameObjects.Text;
-      label.setPosition(x, bagCaptionY(y));
-      label.setText(outgoingBagText(o));
-      label.setColor(o.type === "delivery" && isSlaUrgent(o.slaRemainingMs) ? Color.dangerHex : Color.inkHex);
-      fitTypeToWidth(label, OUT_BAG_GAP - 16);
+          .setOrigin(0, 0.5)
+          .setDepth(9)
+          .setVisible(false),
+      );
+    }
+  }
+
+  /** The count printed on a bag's label panel — the word under it is baked in. */
+  private bagCount(spot: { x: number; y: number }, depth: number): Phaser.GameObjects.Text {
+    return addUiText(this, spot.x, spot.y + BAG_PANEL.countCy, "", {
+      size: Type.title,
+      color: Color.inkHex,
+      fontStyle: "700",
+      strokeThickness: 0,
+      noWrap: true,
+      maxWidth: BAG_PANEL.w - 8,
+      maxHeight: BAG_PANEL.countH,
+    })
+      .setOrigin(0.5)
+      .setDepth(depth)
+      .setVisible(false);
+  }
+
+  private syncOutgoing(snap: SimSnapshot): void {
+    const slips = receiptSlips(snap.orders, RECEIPT_RAIL.maxRows);
+    const tally = readyTally(snap.orders);
+
+    // Each bag shows only while it has something in it, so an all-pickup or
+    // all-delivery counter reads as one bag rather than a zero next to a count.
+    this.showBagCount(this.readyBag, this.readyCount, tally.delivery, tally.urgent);
+    this.showBagCount(this.pickupBag, this.pickupCount, tally.pickup, false);
+    this.receiptSlip.setVisible(tally.delivery + tally.pickup > 0);
+
+    drawReceiptRail(this.receiptRail, slips.map((s) => ({ kind: s.kind, urgent: s.urgent })));
+    this.receiptRows.forEach((row, i) => {
+      const slip = slips[i];
+      row.setVisible(!!slip);
+      if (!slip) return;
+      if (row.text !== slip.line) row.setText(slip.line);
+      row.setColor(slip.urgent ? Color.dangerHex : Color.inkHex);
     });
+  }
+
+  private showBagCount(
+    bag: Phaser.GameObjects.Image,
+    count: Phaser.GameObjects.Text,
+    value: number,
+    urgent: boolean,
+  ): void {
+    bag.setVisible(value > 0);
+    count.setVisible(value > 0);
+    if (value === 0) return;
+    const label = String(value);
+    // setText refits the type box, so only pay for it when the count changes.
+    if (count.text !== label) count.setText(label);
+    count.setColor(urgent ? Color.dangerHex : Color.inkHex);
   }
 
   private syncCustomers(list: CustomerView[], pulse: number, focusId: string | null): void {
@@ -351,15 +436,15 @@ export class ShopScene extends Phaser.Scene {
         sprite.on("pointerdown", () => getSim().shopClick({ type: "customer", orderId: customer.orderId }));
         wireHover(sprite);
         this.customers.set(customer.orderId, sprite);
-        const bubble = addUiText(this, customer.x + CUSTOMER_BUBBLE_DX, CUSTOMER_BUBBLE_Y, "", {
-          size: Type.body,
+        const bubble = addUiText(this, bubbleX(customer.x, 0), CUSTOMER_BUBBLE_Y, "", {
+          size: MSG_PX,
           color: Color.inkHex,
           backgroundColor: Color.creamHex,
-          padding: { x: 10, y: 6 },
+          padding: MSG_PAD,
           align: "center",
           fontStyle: "600",
-          maxWidth: 280,
-          maxHeight: 80,
+          maxWidth: 328,
+          maxHeight: 92,
         })
           .setOrigin(0.5)
           .setDepth(7);
@@ -370,10 +455,10 @@ export class ShopScene extends Phaser.Scene {
       sprite.setAlpha(focus ? pulse : 1);
       sprite.setTint(focus ? Color.flash : 0xffffff);
       const bubble = this.bubbles.get(customer.orderId);
-      bubble
-        ?.setPosition(customer.x + CUSTOMER_BUBBLE_DX, CUSTOMER_BUBBLE_Y)
-        .setText(customer.bubble)
-        .setAlpha(1);
+      if (bubble) {
+        bubble.setText(customer.bubble).setAlpha(1);
+        bubble.setPosition(bubbleX(customer.x, bubble.width), CUSTOMER_BUBBLE_Y);
+      }
       if (bubble && focus) {
         bubble.setBackgroundColor(Color.limeHex);
         bubble.setColor(Color.inkHex);
@@ -398,7 +483,7 @@ export class ShopScene extends Phaser.Scene {
       const maxW = glassW - 16;
       const maxH = slotH - 8;
       const label = addUiText(this, p.x, p.y, sku.name, {
-        size: Type.heading,
+        size: TV_LABEL_PX,
         color: Color.creamHex,
         align: "center",
         fontStyle: "700",
@@ -412,9 +497,4 @@ export class ShopScene extends Phaser.Scene {
       this.tvLabels.push(label);
     });
   }
-}
-
-function outgoingBagText(o: OrderView): string {
-  if (o.type === "delivery") return deliveryBagLabel(o.destLabel, o.customerName, o.slaRemainingMs);
-  return `${o.destLabel}\n${o.customerName}`;
 }

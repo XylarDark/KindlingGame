@@ -8,8 +8,9 @@ import {
   PERSON_SIT_W,
   PERSON_W,
 } from "./art/peopleSize";
-import { cells } from "./art/px";
+import { cells, PX } from "./art/px";
 import { MARK } from "./ui/copy";
+import { Color } from "./ui/theme";
 import { fitTypeToWidth, makeType } from "./ui/typekit";
 
 export { PEOPLE_PX, PERSON_H, PERSON_HAT_H, PERSON_SIT_H, PERSON_SIT_W, PERSON_W };
@@ -49,13 +50,16 @@ export function generateTextures(scene: Phaser.Scene): void {
   mailbox(scene);
   bench(scene);
   bag(scene);
+  counterBags(scene);
   vehicle(scene);
   person(scene, "tex-keylead", "keylead", Pal.skin, Pal.hairBrown, Pal.leaf, Pal.hairBrownLite);
   person(scene, "tex-driver", "driver", Pal.skin, Pal.hairBlack, Pal.amber, Pal.hairBlackLite);
   person(scene, "tex-customer", "customer", Pal.skin, Pal.hairAuburn, Pal.glass, Pal.hairAuburnLite);
   personSit(scene);
-  stampKindling(scene, "tex-driver", 96, 36, 12, 104);
-  stampKindling(scene, "tex-driver-sit", 112, 36, 12, 120);
+  // cx values are the cap panel centres: standing panel spans 40–152px, seated 56–184px.
+  // cy rides just above panel centre so the mark clears the brim and glasses.
+  stampKindling(scene, "tex-driver", 96, 31, 13.2, 104);
+  stampKindling(scene, "tex-driver-sit", 120, 31, 13.2, 120);
   stampKindling(scene, "tex-keylead", 96, 208, 23, 120);
   receipt(scene);
   jar(scene, "tex-flower", 0x4a8a52, 0x3a2a18, true);
@@ -494,6 +498,54 @@ function bag(scene: Phaser.Scene): void {
   });
 }
 
+/**
+ * Counter bags carry their own printed label, so they bake at 112×84 and draw
+ * 1:1 — the sill above the counter caps the height, so the room for type had to
+ * come from width. `tex-bag` stays the smaller sheet for the road and the door.
+ */
+const CBAG = { w: 28, h: 21, panelX: 4, panelY: 6, panelW: 20, panelH: 13 };
+const COUNTER_BAG_PX = { w: CBAG.w * PX, h: CBAG.h * PX };
+
+/** Kraft sack with a blank label panel — `stampText` prints the wording. */
+function counterBag(scene: Phaser.Scene, key: string, panel: number): void {
+  bake(scene, key, COUNTER_BAG_PX.w, COUNTER_BAG_PX.h, (g) => {
+    cells(g, 1, 4, 26, 17, Pal.ink);
+    cells(g, 2, 5, 24, 15, Pal.leaf);
+    cells(g, 2, 5, 2, 15, Pal.leafDark);
+    cells(g, 24, 5, 2, 15, Pal.leafDark);
+    cells(g, 2, 19, 24, 1, Pal.leafDark);
+    cells(g, CBAG.panelX, CBAG.panelY, CBAG.panelW, CBAG.panelH, panel);
+    cells(g, CBAG.panelX, CBAG.panelY + CBAG.panelH - 1, CBAG.panelW, 1, Pal.creamSoft);
+    // Handles over the sack mouth, drawn last so they read in front of it.
+    cells(g, 7, 0, 5, 6, Pal.ink);
+    cells(g, 8, 1, 3, 4, Pal.leaf);
+    cells(g, 16, 0, 5, 6, Pal.ink);
+    cells(g, 17, 1, 3, 4, Pal.leaf);
+  });
+}
+
+/**
+ * The four labelled counter bags. Fixed wording bakes into the pixels: it stays
+ * on the grid, costs no Text object, and tints with the sprite when the supply
+ * bag flashes as the next tap. Only the live counts stay as Text.
+ */
+function counterBags(scene: Phaser.Scene): void {
+  const mid = COUNTER_BAG_PX.w / 2;
+  const panelTop = CBAG.panelY * PX;
+  const panelBottom = (CBAG.panelY + CBAG.panelH) * PX;
+  const panelW = CBAG.panelW * PX - 8;
+  /** Lower band of the panel; the count owns the taller band above it. */
+  const wordCy = panelBottom - 9;
+  const ink = { color: Color.inkHex, strokeThickness: 0 };
+
+  counterBag(scene, "tex-bag-cream", Pal.cream);
+  counterBag(scene, "tex-bag-lime", Pal.lime);
+  stampText(scene, "tex-bag-cream", "tex-bag-bags", "BAGS", mid, (panelTop + panelBottom) / 2, 30, panelW, ink);
+  stampText(scene, "tex-bag-lime", "tex-bag-pack", "TAP TO\nPACK", mid, (panelTop + panelBottom) / 2, 19, panelW, ink);
+  stampText(scene, "tex-bag-cream", "tex-bag-delivery", "DELIVERY", mid, wordCy, 15, panelW, ink);
+  stampText(scene, "tex-bag-cream", "tex-bag-pickup", "PICKUP", mid, wordCy, 15, panelW, ink);
+}
+
 function vehicle(scene: Phaser.Scene): void {
   bake(scene, "tex-vehicle", 128, 80, (g) => {
     cells(g, 4, 16, 24, 3, Pal.shadow);
@@ -620,31 +672,61 @@ function drawHair(g: G, kit: Kit, hair: number, hairLite: number, hat: boolean):
   }
 }
 
-function stampKindling(scene: Phaser.Scene, key: string, cx: number, cy: number, fontSize: number, maxWidth: number): void {
-  const frame = scene.textures.get(key).get();
+interface StampStyle {
+  color?: string;
+  stroke?: string;
+  strokeThickness?: number;
+  letterSpacing?: number;
+}
+
+/**
+ * Bake wording into a texture. Pass a different `outKey` to keep the source
+ * sheet intact, so one bake can carry several printed labels.
+ */
+function stampText(
+  scene: Phaser.Scene,
+  srcKey: string,
+  outKey: string,
+  content: string,
+  cx: number,
+  cy: number,
+  fontSize: number,
+  maxWidth: number,
+  style: StampStyle = {},
+): void {
+  const frame = scene.textures.get(srcKey).get();
   const w = frame.width;
   const h = frame.height;
-  const stroke = Math.max(3, Math.round(fontSize * 0.18));
-  const label = makeType(scene, 0, 0, MARK, {
+  const box = Math.max(24, maxWidth - 4);
+  const lines = content.split("\n").length;
+  const label = makeType(scene, 0, 0, content, {
     size: `${fontSize}px`,
     fontStyle: "700",
-    color: "#fff6e0",
-    stroke: "#1a301e",
-    strokeThickness: stroke,
-    letterSpacing: Math.max(1, Math.round(fontSize * 0.08)),
-    maxWidth: Math.max(24, maxWidth - 4),
-    maxHeight: Math.max(16, Math.round(fontSize * 1.4)),
+    color: style.color ?? "#fff6e0",
+    stroke: style.stroke ?? "#1a301e",
+    strokeThickness: style.strokeThickness ?? Math.max(3, Math.round(fontSize * 0.18)),
+    letterSpacing: style.letterSpacing,
+    align: "center",
+    noWrap: lines > 1,
+    maxWidth: box,
+    maxHeight: Math.max(16, Math.round(fontSize * 1.4 * lines)),
   });
   label.setOrigin(0.5, 0.5);
-  fitTypeToWidth(label, Math.max(24, maxWidth - 4));
+  fitTypeToWidth(label, box);
   const rt = scene.add.renderTexture(0, 0, w, h);
   rt.setVisible(false);
-  rt.draw(key, 0, 0);
+  rt.draw(srcKey, 0, 0);
   rt.draw(label, cx, cy);
-  scene.textures.remove(key);
-  rt.saveTexture(key);
+  if (outKey === srcKey) scene.textures.remove(outKey);
+  rt.saveTexture(outKey);
   label.destroy();
   rt.destroy();
+}
+
+function stampKindling(scene: Phaser.Scene, key: string, cx: number, cy: number, fontSize: number, maxWidth: number): void {
+  stampText(scene, key, key, MARK, cx, cy, fontSize, maxWidth, {
+    letterSpacing: Math.max(1, Math.round(fontSize * 0.08)),
+  });
 }
 
 function person(scene: Phaser.Scene, key: string, kit: Kit, skin: number, hair: number, iris: number, hairLite: number): void {

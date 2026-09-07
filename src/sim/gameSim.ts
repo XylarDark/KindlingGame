@@ -85,6 +85,8 @@ export interface OrderView {
   destinationId?: string;
   destLabel: string;
   slaRemainingMs: number | null;
+  /** Ticket age — the receipt rail stacks packed bags oldest-first. */
+  createdAtGameMs: number;
   late: boolean;
 }
 
@@ -881,6 +883,7 @@ export class GameSim {
       destinationId: order.destinationId,
       destLabel: destLabel(order),
       slaRemainingMs,
+      createdAtGameMs: order.createdAtGameMs,
       late: order.type === "delivery" && isDeliveryLate(order, this.clock.gameMs),
     };
   }

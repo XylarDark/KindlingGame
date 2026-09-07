@@ -38,11 +38,16 @@ export function isSlaUrgent(remainingMs: number | null): boolean {
   return remainingMs !== null && remainingMs <= SLA_URGENT_MS;
 }
 
-/** Packed delivery bag: dest, name, and remaining hour. */
-export function deliveryBagLabel(destLabel: string, customerName: string, slaRemainingMs: number | null): string {
+/** One printed slip on the counter rail: where it goes, who it is for, time left. */
+export function receiptSlipLine(destLabel: string, customerName: string, slaRemainingMs: number | null): string {
   const clock = formatSlaClock(slaRemainingMs);
-  if (!clock) return `${destLabel}\n${customerName}`;
-  return `${destLabel}\n${customerName}  ·  ${clock}`;
+  if (!clock) return `${destLabel}  ·  ${customerName}`;
+  return `${destLabel}  ·  ${customerName}  ·  ${clock}`;
+}
+
+/** Slips past the end of the rail collapse into one row. */
+export function receiptOverflowLine(hidden: number): string {
+  return `+${hidden} more`;
 }
 
 export function driverReadyCopy(bagCount: number): string {
