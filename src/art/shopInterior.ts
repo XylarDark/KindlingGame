@@ -10,10 +10,12 @@ import {
   CHAIR_RAIL_GREY_H,
   CHAIR_RAIL_WHITE_H,
   CHAIR_RAIL_Y,
+  COUNTER_FACE_SHADE_H,
   COUNTER_FRONT,
   COUNTER_LEFT,
-  COUNTER_MID,
+  COUNTER_PLANT,
   COUNTER_RIGHT,
+  COUNTER_SIGN,
   COUNTER_TOP,
   DOOR,
   DOOR_H,
@@ -44,6 +46,8 @@ import { paintSky } from "./skyPaint";
 
 const WALL = 0xe6dfd4;
 const WAINSCOT = 0xddd4c8;
+/** Sign field — plain white so the leaf border and ink mark carry the contrast. */
+const SIGN_WHITE = 0xffffff;
 const WAINSCOT_LINE = 0xc4b9ac;
 
 const PAINT = 0xf2f2f0;
@@ -55,6 +59,19 @@ const PAINT_PANEL = 0xc4c6c8;
 const JAMB = 0x6e7070;
 const JAMB_DARK = 0x4a4c4e;
 const JAMB_HI = 0xa4a6a6;
+
+/**
+ * Delivery window only. The wall partition and both doors keep the neutral PAINT/JAMB
+ * greys; the driver's glass gets the same greys pulled a few shades cooler so the bay
+ * reads as its own steel-framed service hatch without leaving the shop palette.
+ */
+const WIN_PAINT = 0xe9eef4;
+const WIN_PAINT_HI = 0xf2f7fc;
+const WIN_PAINT_SHADE = 0xc6cdd4;
+const WIN_PAINT_EDGE = 0x9aa4ae;
+const WIN_JAMB = 0x64696e;
+const WIN_JAMB_DARK = 0x42474c;
+const WIN_JAMB_HI = 0x99a1a8;
 
 const JAR = [0x3d6a44, 0xc4a060, 0xc86a38, 0x5a9a62, 0xb89258, 0x7a4a28];
 
@@ -601,6 +618,23 @@ function streetDoorGlass(): { x: number; y: number; w: number; h: number } {
   };
 }
 
+/**
+ * Sash, centre mullion and chair rail over the delivery glass. Painted after the
+ * sky in both the live day/night pass and the baked dusk backdrop, so the outside
+ * never bleeds over the frame.
+ */
+function paintWindowSashAndRail(g: Phaser.GameObjects.Graphics): void {
+  const winLeft = WINDOW.x - WINDOW.w / 2;
+  const winTop = WINDOW_TOP;
+  const winH = WINDOW.h;
+  fill(g, winLeft, winTop, WINDOW.w, 8, WIN_PAINT_HI);
+  fill(g, winLeft, winTop, 8, winH, WIN_PAINT_HI);
+  fill(g, winLeft + WINDOW.w - 8, winTop, 8, winH, WIN_PAINT_EDGE);
+  fill(g, WINDOW.x - 4, winTop, 8, winH, WIN_PAINT_EDGE);
+  fill(g, winLeft, CHAIR_RAIL_Y, WINDOW.w, CHAIR_RAIL_GREY_H, WIN_PAINT_EDGE);
+  fill(g, winLeft, CHAIR_RAIL_Y + CHAIR_RAIL_GREY_H, WINDOW.w, CHAIR_RAIL_WHITE_H, WIN_PAINT_HI);
+}
+
 /** Live sky in the delivery window only. Do not paint streetDoorGlass — the door is opaque. */
 export function paintShopDayNight(g: Phaser.GameObjects.Graphics, gameMs: number): void {
   g.clear();
@@ -609,12 +643,7 @@ export function paintShopDayNight(g: Phaser.GameObjects.Graphics, gameMs: number
   const winTop = WINDOW_TOP;
   const winH = WINDOW.h;
   paintOutside(g, winLeft, winTop, WINDOW.w, winH, sky, "wide", gameMs);
-  fill(g, winLeft, winTop, WINDOW.w, 8, PAINT_HI);
-  fill(g, winLeft, winTop, 8, winH, PAINT_HI);
-  fill(g, winLeft + WINDOW.w - 8, winTop, 8, winH, PAINT_EDGE);
-  fill(g, WINDOW.x - 4, winTop, 8, winH, PAINT_EDGE);
-  fill(g, winLeft, CHAIR_RAIL_Y, WINDOW.w, CHAIR_RAIL_GREY_H, PAINT_EDGE);
-  fill(g, winLeft, CHAIR_RAIL_Y + CHAIR_RAIL_GREY_H, WINDOW.w, CHAIR_RAIL_WHITE_H, PAINT_HI);
+  paintWindowSashAndRail(g);
 }
 
 function drawDuskOutside(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number, accent: "moon" | "lamp"): void {
@@ -631,6 +660,13 @@ function paintDoorHoursPanel(g: Phaser.GameObjects.Graphics, x: number, y: numbe
   fill(g, x + PX * 2, y + h - PX * 3, w - PX * 4, PX, Pal.kraft);
 }
 
+/**
+ * Small optical shift so the hours line doesn't sit dead-centre in the pane.
+ * Stepped one screen pixel right (was 6): the 1920px design space shows at
+ * roughly 1024px, so a screen pixel is ~2 design px.
+ */
+const HOURS_NUDGE_X = 4;
+
 function drawStreetDoorHours(scene: Phaser.Scene): void {
   const pane = streetDoorGlass();
   const cx = pane.x + pane.w / 2;
@@ -645,13 +681,15 @@ function drawStreetDoorHours(scene: Phaser.Scene): void {
   })
     .setOrigin(0.5)
     .setDepth(1);
-  const hours = addUiText(scene, cx, pane.y + Math.floor(pane.h * 0.64), HOURS, {
+  // Nudged a hair left of the pane centre so the hours read under the mark's weight.
+  const hours = addUiText(scene, cx - HOURS_NUDGE_X, pane.y + Math.floor(pane.h * 0.64), HOURS, {
     size: Type.body,
     color: Color.inkHex,
     fontStyle: "600",
     align: "center",
     lineSpacing: 3,
     strokeThickness: 0,
+    noWrap: true,
     maxWidth: maxW,
     maxHeight: Math.floor(pane.h * 0.4),
   })
@@ -895,21 +933,16 @@ export function drawShopInterior(scene: Phaser.Scene): void {
   const winTop = WINDOW_TOP;
   const winH = WINDOW.h;
   const reveal = 8;
-  fill(g, winLeft - reveal, winTop - reveal, WINDOW.w + reveal * 2, winH + reveal, JAMB_DARK);
-  fill(g, winLeft - reveal + 4, winTop - reveal + 4, WINDOW.w + reveal * 2 - 4, winH + reveal - 4, JAMB);
-  fill(g, winLeft - reveal, winTop - reveal, WINDOW.w + reveal * 2, 8, JAMB_HI);
-  fill(g, winLeft - reveal, winTop - reveal, WINDOW.w + reveal * 2, 4, PAINT_HI);
-  fill(g, winLeft - reveal, winTop, 8, winH, JAMB_DARK);
-  fill(g, winLeft + WINDOW.w, winTop, 8, winH, JAMB);
+  fill(g, winLeft - reveal, winTop - reveal, WINDOW.w + reveal * 2, winH + reveal, WIN_JAMB_DARK);
+  fill(g, winLeft - reveal + 4, winTop - reveal + 4, WINDOW.w + reveal * 2 - 4, winH + reveal - 4, WIN_JAMB);
+  fill(g, winLeft - reveal, winTop - reveal, WINDOW.w + reveal * 2, 8, WIN_JAMB_HI);
+  fill(g, winLeft - reveal, winTop - reveal, WINDOW.w + reveal * 2, 4, WIN_PAINT_HI);
+  fill(g, winLeft - reveal, winTop, 8, winH, WIN_JAMB_DARK);
+  fill(g, winLeft + WINDOW.w, winTop, 8, winH, WIN_JAMB);
 
   drawDuskOutside(g, winLeft, winTop, WINDOW.w, winH, "moon");
 
-  fill(g, winLeft, winTop, WINDOW.w, 8, PAINT_HI);
-  fill(g, winLeft, winTop, 8, winH, PAINT_HI);
-  fill(g, winLeft + WINDOW.w - 8, winTop, 8, winH, PAINT_EDGE);
-  fill(g, WINDOW.x - 4, winTop, 8, winH, PAINT_EDGE);
-  fill(g, winLeft, CHAIR_RAIL_Y, WINDOW.w, CHAIR_RAIL_GREY_H, PAINT_EDGE);
-  fill(g, winLeft, CHAIR_RAIL_Y + CHAIR_RAIL_GREY_H, WINDOW.w, CHAIR_RAIL_WHITE_H, PAINT_HI);
+  paintWindowSashAndRail(g);
 
   drawBoardFloor(g);
   for (const x of pots) potFloorPool(g, x);
@@ -941,11 +974,68 @@ export function drawShopInterior(scene: Phaser.Scene): void {
   const sillY = winTop + winH;
   const sillH = 12;
   fill(g, winLeft - 6, sillY + sillH, WINDOW.w + 12, 4, 0x1a1008, 0.25);
-  fill(g, winLeft - 6, sillY, WINDOW.w + 12, sillH, PAINT);
-  fill(g, winLeft - 6, sillY, WINDOW.w + 12, 4, PAINT_HI);
-  fill(g, winLeft - 6, sillY + sillH - 4, WINDOW.w + 12, 4, PAINT_SHADE);
+  fill(g, winLeft - 6, sillY, WINDOW.w + 12, sillH, WIN_PAINT);
+  fill(g, winLeft - 6, sillY, WINDOW.w + 12, 4, WIN_PAINT_HI);
+  fill(g, winLeft - 6, sillY + sillH - 4, WINDOW.w + 12, 4, WIN_PAINT_SHADE);
 
   drawStaffDoor(scene);
+}
+
+/** Half-widths (logical px) from leaflet base to tip — fat mid-blade, fine point. */
+const LEAFLET_PROFILE = [1, 2, 3, 4, 4, 4, 3, 3, 2, 1];
+
+/**
+ * One serrated fan leaflet, stepped along (dirX, dirY) from its base. Alternate
+ * rows carry a tooth so the silhouette reads as a cannabis blade, and every row
+ * gets a dark side edge so overlapping leaflets stay three separate leaves.
+ */
+function fanLeaflet(
+  g: Phaser.GameObjects.Graphics,
+  baseX: number,
+  baseY: number,
+  dirX: number,
+  dirY: number,
+  span: number,
+): void {
+  const step = span / LEAFLET_PROFILE.length;
+  LEAFLET_PROFILE.forEach((units, i) => {
+    const hw = units * PX;
+    const tooth = i % 2 === 0 ? PX : 0;
+    const x = baseX + dirX * step * i;
+    const y = baseY + dirY * step * i;
+    const half = hw + tooth;
+    fill(g, x - half - PX, y, (half + PX) * 2, step + PX, Pal.leafDark);
+    fill(g, x - half, y, half * 2, step + PX, Pal.leaf);
+    fill(g, x - PX, y, PX * 2, step + PX, Color.leafBright, 0.45);
+  });
+}
+
+/** Three-leaf planter on the counter, left of the key lead. */
+function drawCounterPlant(g: Phaser.GameObjects.Graphics, cx: number, footY: number): void {
+  const rimW = 68;
+  const rimH = 14;
+  const potH = 44;
+  const potTop = footY - potH;
+  const rimTop = potTop - rimH;
+
+  fill(g, cx - rimW / 2 + 8, footY - 4, rimW - 12, 8, 0x1a1008, 0.35);
+  fill(g, cx - 30, potTop, 60, 14, Pal.rust);
+  fill(g, cx - 28, potTop + 14, 56, 16, Pal.rust);
+  fill(g, cx - 24, potTop + 30, 48, 14, Pal.rustDark);
+  fill(g, cx - 28, potTop, 8, potH, Color.leafBright, 0.12);
+  fill(g, cx + 16, potTop, 8, potH - 12, Pal.rustDark, 0.5);
+  fill(g, cx - rimW / 2, rimTop, rimW, rimH, Pal.rust);
+  fill(g, cx - rimW / 2, rimTop, rimW, 4, Pal.amber);
+  fill(g, cx - rimW / 2 + 8, rimTop + rimH - 4, rimW - 16, 4, Pal.rustDark);
+  fill(g, cx - 24, rimTop + 4, 48, 6, Pal.shadow);
+
+  const stemTop = rimTop - 56;
+  fill(g, cx - 4, stemTop, 8, rimTop - stemTop + 4, Pal.leafDark);
+  fill(g, cx - 4, stemTop, 4, rimTop - stemTop + 4, Pal.leaf, 0.5);
+  // Side blades spread from lower on the stem, so the trio fans out cleanly.
+  fanLeaflet(g, cx - 16, stemTop + 24, -0.62, -0.8, 64);
+  fanLeaflet(g, cx + 16, stemTop + 24, 0.62, -0.8, 64);
+  fanLeaflet(g, cx, stemTop, 0, -1, 76);
 }
 
 export function drawShopCounter(scene: Phaser.Scene): Phaser.GameObjects.Graphics {
@@ -963,7 +1053,7 @@ export function drawShopCounter(scene: Phaser.Scene): Phaser.GameObjects.Graphic
   fill(g, COUNTER_LEFT, COUNTER_TOP, w, faceH, PAINT);
   fill(g, COUNTER_LEFT, COUNTER_TOP, 88, faceH, 0x2a2218, 0.08);
   fill(g, COUNTER_RIGHT - 88, COUNTER_TOP, 88, faceH, 0x2a2218, 0.08);
-  fill(g, COUNTER_LEFT, COUNTER_FRONT - 28, w, 28, 0x1a1410, 0.1);
+  fill(g, COUNTER_LEFT, COUNTER_FRONT - COUNTER_FACE_SHADE_H, w, COUNTER_FACE_SHADE_H, 0x1a1410, 0.1);
   fill(g, COUNTER_LEFT, COUNTER_FRONT - 8, w, 8, PAINT_EDGE);
 
   fill(g, COUNTER_LEFT, topBack, w, depth, grey);
@@ -971,16 +1061,19 @@ export function drawShopCounter(scene: Phaser.Scene): Phaser.GameObjects.Graphic
   fill(g, COUNTER_LEFT, COUNTER_TOP - 8, w, 8, greyLite);
 
   fill(g, BAG_STACK.x - 24, BAG_STACK.y - 8, 48, 8, greyEdge);
+  drawCounterPlant(g, COUNTER_PLANT.x, COUNTER_PLANT.y);
 
-  const cx = COUNTER_MID;
-  const plaqueH = 64;
-  const plaqueW = 320;
-  const plaqueTop = COUNTER_TOP + Math.floor((faceH - plaqueH) / 2);
-  fill(g, cx - plaqueW / 2, plaqueTop, plaqueW, plaqueH, 0xb49464);
-  fill(g, cx - plaqueW / 2 + 8, plaqueTop + 4, plaqueW - 16, plaqueH - 8, 0xccb080);
-  fill(g, cx - plaqueW / 2 + 8, plaqueTop + 4, plaqueW - 16, 4, 0xd0b888);
-  fill(g, cx - plaqueW / 2 + 8, plaqueTop + plaqueH - 6, plaqueW - 16, 6, 0xa07c54);
-  addMark(scene, cx, plaqueTop + plaqueH / 2, {
+  // Shop sign under the key lead: leaf border around a white field, centred on them.
+  const cx = COUNTER_SIGN.x;
+  const plaqueH = COUNTER_SIGN.h;
+  const plaqueW = COUNTER_SIGN.w;
+  const plaqueBorder = 8;
+  const plaqueLeft = cx - Math.floor(plaqueW / 2);
+  const plaqueTop = COUNTER_SIGN.y - plaqueH / 2;
+  fill(g, plaqueLeft, plaqueTop, plaqueW, plaqueH, Pal.leafDark);
+  fill(g, plaqueLeft + 3, plaqueTop + 3, plaqueW - 6, plaqueH - 6, Pal.leaf);
+  fill(g, plaqueLeft + plaqueBorder, plaqueTop + plaqueBorder, plaqueW - plaqueBorder * 2, plaqueH - plaqueBorder * 2, SIGN_WHITE);
+  addMark(scene, cx, plaqueTop + Math.floor(plaqueH / 2), {
     size: "25px",
     color: Color.inkHex,
     maxWidth: plaqueW - 40,
