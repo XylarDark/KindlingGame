@@ -4,6 +4,7 @@ import { playCameraClick, playUiSfx } from "../audio/sfx";
 import { clampInput } from "../input/controls";
 import { enableItemHit, syncItemHit } from "../input/hit";
 import { CITY, MAP_PX_H, MAP_PX_W, TILE, houseById, tileToWorld } from "../maps/cityT0";
+import { COUNTER_SIGN } from "../maps/shopT0";
 import { GAME_HEIGHT, GAME_WIDTH, NPC_INTERACT_COOLDOWN_MS, SCORE_DELIVERY_LATE, SCORE_DELIVERY_ON_TIME, SCORE_FAIL, SCORE_INSTORE, SCORE_PICKUP } from "../sim/constants";
 import { getSim, startSession } from "../session";
 import type { SimSnapshot } from "../sim/gameSim";
@@ -16,8 +17,28 @@ import { Color, Type } from "../ui/theme";
 import { refitType } from "../ui/typekit";
 import { designSafeInset, HUD_TOUCH_MIN_DESIGN, readCssSafeArea, VIEWFIT_EVENT, viewFromScale } from "../ui/viewFit";
 
+/** Readouts sit either side of the counter sign, 10% over the display ramp. */
+const HUD_READOUT_PX = 40;
+const HUD_CAPTION_PX = 18;
+const HUD_SIGN_GAP = 28;
+/** Corner fallback keeps clear of the ceiling band on the road and at doors. */
+const HUD_CORNER_TOP = 76;
+const HUD_SCORE_GAP = 16;
+
+/**
+ * No chip behind the readouts, so the ink outline is what separates them from
+ * both the bright shop wall and the night street — heavier than a hairline.
+ */
+function readoutOutline(px: number): { stroke: string; strokeThickness: number } {
+  return { stroke: Color.inkHex, strokeThickness: Math.max(2, Math.round(px * 0.12)) };
+}
+
 const SETTINGS_W = 440;
 const SETTINGS_H = 560;
+/** Settings panel runs 10% over the shared ramp — it is read at arm's length. */
+const SET_TITLE_PX = "22px";
+const SET_BODY_PX = "17.6px";
+const SET_HINT_PX = "14.3px";
 const VOL_TRACK = { x: 24, y: 168, w: 312, h: 16 };
 /** Delivery phone — screen room for two-line status + title. */
 const PHONE_W = 268;
@@ -26,6 +47,18 @@ const PHONE_COG_GAP = 16;
 const PHONE_SCREEN = { x: -108, y: -128, w: 216, h: 248 };
 const RESULTS_W = 740;
 const RESULTS_H = 640;
+/**
+ * ID card runs 20% over the shared ramp — the name/DOB read is the gate on the
+ * sale, taken at a glance on a phone held at arm's length.
+ */
+const ID_TITLE_PX = "19.2px";
+const ID_NAME_PX = "24px";
+const ID_DOB_PX = "19.2px";
+const ID_HINT_PX = "15.6px";
+/** Card, ring, and line offsets grew with the type so the four lines keep their gaps. */
+const ID_CARD_W = 672;
+const ID_CARD_H = 384;
+const ID_RING_PAD = 12;
 
 export class HudScene extends Phaser.Scene {
   private scoreText!: Phaser.GameObjects.Text;
@@ -80,6 +113,8 @@ export class HudScene extends Phaser.Scene {
   private lastScoreFlashId = 0;
   private lastSfxId = 0;
   private scorePopLayer!: Phaser.GameObjects.Container;
+  private readoutsInShop = true;
+  private readoutCorner = { left: 28, right: GAME_WIDTH - 28, top: HUD_CORNER_TOP };
 
   constructor() {
     super("hud");
@@ -88,34 +123,42 @@ export class HudScene extends Phaser.Scene {
   create(): void {
     this.input.setTopOnly(false);
 
-    this.scoreText = addUiText(this, 28, 28, "", {
-      size: Type.display,
-      color: Color.inkHex,
+    // Readouts sit over bright shop walls AND dark night streets, so contrast comes
+    // from an ink outline on the glyphs rather than a chip behind them.
+    this.scoreText = addUiText(this, 0, 0, "", {
+      size: `${HUD_READOUT_PX}px`,
+      color: Color.creamHex,
       fontStyle: "700",
-      strokeThickness: 0,
+      align: "right",
       maxWidth: 360,
-      maxHeight: 48,
-    }).setDepth(20);
-    this.scoreCaption = addUiText(this, 28, 78, "SCORE", {
-      size: Type.body,
-      color: Color.muteHex,
-      fontStyle: "700",
-      strokeThickness: 0,
-      letterSpacing: 2,
-      maxWidth: 160,
-      maxHeight: 24,
-    }).setDepth(20);
-    this.scorePopLayer = this.add.container(28, 28).setDepth(30);
-
-    this.clockText = addUiText(this, GAME_WIDTH - 28, 28, "", {
-      size: Type.display,
-      color: Color.inkHex,
-      fontStyle: "700",
-      strokeThickness: 0,
-      maxWidth: 360,
-      maxHeight: 48,
+      maxHeight: 62,
+      ...readoutOutline(HUD_READOUT_PX),
     })
-      .setOrigin(1, 0)
+      .setOrigin(1, 0.5)
+      .setDepth(20);
+    this.scoreCaption = addUiText(this, 0, 0, "SCORE", {
+      size: `${HUD_CAPTION_PX}px`,
+      color: Color.creamHex,
+      fontStyle: "700",
+      align: "right",
+      letterSpacing: 2,
+      maxWidth: 200,
+      maxHeight: 34,
+      ...readoutOutline(HUD_CAPTION_PX),
+    })
+      .setOrigin(1, 0.5)
+      .setDepth(20);
+    this.scorePopLayer = this.add.container(0, 0).setDepth(30);
+
+    this.clockText = addUiText(this, 0, 0, "", {
+      size: `${HUD_READOUT_PX}px`,
+      color: Color.creamHex,
+      fontStyle: "700",
+      maxWidth: 360,
+      maxHeight: 62,
+      ...readoutOutline(HUD_READOUT_PX),
+    })
+      .setOrigin(0, 0.5)
       .setDepth(20);
 
     this.phoneBody = this.add
@@ -133,6 +176,7 @@ export class HudScene extends Phaser.Scene {
       lineSpacing: 4,
       strokeThickness: 0,
       letterSpacing: 0,
+      noWrap: true,
       maxWidth: PHONE_SCREEN.w - 28,
       maxHeight: 52,
     }).setOrigin(0.5);
@@ -144,6 +188,7 @@ export class HudScene extends Phaser.Scene {
       lineSpacing: 4,
       strokeThickness: 0,
       padding: { x: 10, y: 6 },
+      noWrap: true,
       maxWidth: PHONE_SCREEN.w - 16,
       maxHeight: 72,
     }).setOrigin(0.5);
@@ -186,40 +231,42 @@ export class HudScene extends Phaser.Scene {
     this.idDim.setInteractive({ useHandCursor: false });
     this.idDim.on("pointerdown", (p: Phaser.Input.Pointer) => p.event.stopPropagation());
 
-    this.idName = addUiText(this, 0, -28, "", {
-      size: Type.heading,
+    this.idName = addUiText(this, 0, -34, "", {
+      size: ID_NAME_PX,
       color: Color.inkHex,
       align: "center",
       fontStyle: "600",
       strokeThickness: 0,
-      maxWidth: 500,
-      maxHeight: 40,
+      maxWidth: 600,
+      maxHeight: 48,
     }).setOrigin(0.5);
-    this.idTitle = addUiText(this, 0, -118, "CUSTOMER ID", {
-      size: Type.body,
+    this.idTitle = addUiText(this, 0, -142, "CUSTOMER ID", {
+      size: ID_TITLE_PX,
       color: Color.inkHex,
       fontStyle: "700",
       strokeThickness: 0,
-      maxWidth: 500,
-      maxHeight: 28,
+      maxWidth: 600,
+      maxHeight: 34,
     }).setOrigin(0.5);
-    this.idDob = addUiText(this, 0, 22, "", {
-      size: Type.body,
+    this.idDob = addUiText(this, 0, 26, "", {
+      size: ID_DOB_PX,
       color: "#3a2418",
       strokeThickness: 0,
-      maxWidth: 500,
-      maxHeight: 28,
+      maxWidth: 600,
+      maxHeight: 34,
     }).setOrigin(0.5);
-    this.idHint = addUiText(this, 0, 88, "Tap the card to confirm 19+", {
-      size: Type.caption,
+    this.idHint = addUiText(this, 0, 106, "Tap the card to confirm 19+", {
+      size: ID_HINT_PX,
       color: "#3d7a45",
       fontStyle: "600",
       strokeThickness: 0,
-      maxWidth: 500,
-      maxHeight: 36,
+      maxWidth: 600,
+      maxHeight: 44,
     }).setOrigin(0.5);
-    this.idFlashRing = this.add.rectangle(0, 0, 572, 332, 0x000000, 0).setStrokeStyle(8, Color.lime, 1);
-    this.idBg = this.add.rectangle(0, 0, 560, 320, 0xf4e8c1, 0.97).setStrokeStyle(6, 0x3d7a45);
+    this.idFlashRing = this.add
+      .rectangle(0, 0, ID_CARD_W + ID_RING_PAD, ID_CARD_H + ID_RING_PAD, 0x000000, 0)
+      .setStrokeStyle(8, Color.lime, 1);
+    this.idBg = this.add.rectangle(0, 0, ID_CARD_W, ID_CARD_H, 0xf4e8c1, 0.97).setStrokeStyle(6, 0x3d7a45);
     enableItemHit(this.idBg);
     this.idBg.on("pointerdown", (p: Phaser.Input.Pointer) => {
       p.event.stopPropagation();
@@ -298,19 +345,16 @@ export class HudScene extends Phaser.Scene {
     const inset = designSafeInset(viewFromScale(this.scale), readCssSafeArea(document.getElementById("game-root")));
     const left = 28 + inset.left;
     const right = GAME_WIDTH - 28 - inset.right;
-    const top = 28 + inset.top;
     const bottom = GAME_HEIGHT - 40 - inset.bottom;
-    this.scoreText.setPosition(left, top);
-    this.scoreCaption.setPosition(left, top + 50);
-    this.scorePopLayer.setPosition(left + 120, top + 24);
-    this.clockText.setPosition(right, top);
+    this.readoutCorner = { left, right, top: HUD_CORNER_TOP + inset.top };
+    this.placeReadouts();
     const cogSize = HUD_TOUCH_MIN_DESIGN;
     const cogX = GAME_WIDTH - 24 - inset.right;
     const cogY = GAME_HEIGHT - 20 - inset.bottom;
     this.cog.setPosition(cogX, cogY);
     this.cog.setDisplaySize(cogSize, cogSize);
     syncItemHit(this.cog);
-    this.cogCaption.setPosition(cogX - 8, cogY - cogSize - 8);
+    this.cogCaption.setPosition(cogX - cogSize / 2, cogY - cogSize - 8);
     this.settingsPanel.setPosition(cogX - SETTINGS_W, cogY - cogSize - 32 - SETTINGS_H);
 
     // Keep the phone clear of the settings cog (bottom-right).
@@ -328,9 +372,41 @@ export class HudScene extends Phaser.Scene {
     this.padLabel.setPosition(this.padCenter.x, this.padCenter.y - 128);
   }
 
+  /**
+   * In the shop the readouts flank the counter sign; out on the road there is no
+   * sign to flank, so they fall back to the screen corners.
+   */
+  private placeReadouts(): void {
+    // The label tracks the value's measured width, so extra digits push it further
+    // out instead of ever running under it. Re-run whenever the value text changes.
+    const valueW = this.scoreText.width;
+    if (this.readoutsInShop) {
+      const signLeft = COUNTER_SIGN.x - COUNTER_SIGN.w / 2 - HUD_SIGN_GAP;
+      const signRight = COUNTER_SIGN.x + COUNTER_SIGN.w / 2 + HUD_SIGN_GAP;
+      this.scoreText.setOrigin(1, 0.5).setPosition(signLeft, COUNTER_SIGN.y);
+      this.scoreCaption.setOrigin(1, 0.5).setPosition(signLeft - valueW - HUD_SCORE_GAP, COUNTER_SIGN.y);
+      this.clockText.setOrigin(0, 0.5).setPosition(signRight, COUNTER_SIGN.y);
+      this.scorePopLayer.setPosition(signLeft, COUNTER_SIGN.y - 46);
+      return;
+    }
+    // Corner fallback reads the same way, but digits grow right into open screen.
+    const { left, right, top } = this.readoutCorner;
+    this.scoreCaption.setOrigin(0, 0.5).setPosition(left, top);
+    const valueX = left + this.scoreCaption.width + HUD_SCORE_GAP;
+    this.scoreText.setOrigin(0, 0.5).setPosition(valueX, top);
+    this.clockText.setOrigin(1, 0.5).setPosition(right, top);
+    this.scorePopLayer.setPosition(valueX + valueW + 16, top);
+  }
+
   private paintHud(snap: SimSnapshot): void {
-    this.scoreText.setText(String(snap.score));
+    const scoreLabel = String(snap.score);
+    const scoreResized = scoreLabel !== this.scoreText.text;
+    this.scoreText.setText(scoreLabel);
     this.clockText.setText(snap.clockLabel);
+    const inShop = snap.playerRole !== "driver";
+    const modeChanged = inShop !== this.readoutsInShop;
+    this.readoutsInShop = inShop;
+    if (scoreResized || modeChanged) this.placeReadouts();
     this.consumeScoreFlash(snap);
     this.consumeSfx(snap);
     this.syncResults(snap);
@@ -494,7 +570,7 @@ export class HudScene extends Phaser.Scene {
       depth: 41,
     });
     const title = addUiText(this, 24, 16, "SETTINGS", {
-      size: Type.heading,
+      size: SET_TITLE_PX,
       color: Color.inkHex,
       fontStyle: "700",
       strokeThickness: 0,
@@ -502,7 +578,7 @@ export class HudScene extends Phaser.Scene {
       maxHeight: 36,
     });
     const musicLabel = addUiText(this, 24, 64, "Music", {
-      size: Type.body,
+      size: SET_BODY_PX,
       color: Color.inkHex,
       fontStyle: "600",
       strokeThickness: 0,
@@ -510,7 +586,7 @@ export class HudScene extends Phaser.Scene {
       maxHeight: 28,
     });
     this.musicValue = addUiText(this, SETTINGS_W - 28, 72, "", {
-      size: Type.heading,
+      size: SET_TITLE_PX,
       color: Color.inkHex,
       fontStyle: "700",
       strokeThickness: 0,
@@ -527,7 +603,7 @@ export class HudScene extends Phaser.Scene {
     });
 
     const volumeLabel = addUiText(this, 24, 124, "Volume", {
-      size: Type.body,
+      size: SET_BODY_PX,
       color: Color.inkHex,
       fontStyle: "600",
       strokeThickness: 0,
@@ -535,7 +611,7 @@ export class HudScene extends Phaser.Scene {
       maxHeight: 28,
     });
     this.volumePct = addUiText(this, SETTINGS_W - 28, 132, "", {
-      size: Type.body,
+      size: SET_BODY_PX,
       color: Color.inkHex,
       fontStyle: "700",
       strokeThickness: 0,
@@ -569,6 +645,8 @@ export class HudScene extends Phaser.Scene {
       variant: "primary",
       minWidth: SETTINGS_W - 48,
       caption: END_SHIFT_CAPTION,
+      labelSize: SET_TITLE_PX,
+      captionSize: SET_HINT_PX,
       depth: 41,
     });
     this.endShiftBtn = endShift;
@@ -579,10 +657,12 @@ export class HudScene extends Phaser.Scene {
       variant: "amber",
       minWidth: SETTINGS_W - 48,
       caption: "Clock back to 9 AM · clears the door stop",
+      labelSize: SET_TITLE_PX,
+      captionSize: SET_HINT_PX,
       depth: 41,
     });
     const resetHint = addUiText(this, 24, 496, "Packed bags stay. Late timers start over.", {
-      size: Type.caption,
+      size: SET_HINT_PX,
       color: Color.muteHex,
       fontStyle: "600",
       strokeThickness: 0,
@@ -619,16 +699,17 @@ export class HudScene extends Phaser.Scene {
       else this.openSettings();
     };
     this.cog.on("pointerdown", toggleSettings);
-    this.cogCaption = addUiText(this, cogX - 8, cogY - cogSize - 8, "Music · Settings", {
-      size: Type.body,
+    this.cogCaption = addUiText(this, cogX - cogSize / 2, cogY - cogSize - 8, "Settings", {
+      size: SET_BODY_PX,
       color: Color.creamHex,
       backgroundColor: Color.bannerInk,
       padding: { x: 12, y: 6 },
       fontStyle: "600",
+      align: "center",
       maxWidth: 240,
       maxHeight: 36,
     })
-      .setOrigin(1, 1)
+      .setOrigin(0.5, 1)
       .setDepth(42);
     enableItemHit(this.cogCaption);
     this.cogCaption.on("pointerdown", toggleSettings);
@@ -815,7 +896,9 @@ export class HudScene extends Phaser.Scene {
       padding: { x: 10, y: 4 },
       maxWidth: 160,
       maxHeight: 40,
-    }).setOrigin(0, 0.5);
+    }).setOrigin(this.readoutsInShop ? 1 : 0, 0.5);
+    // Pop rises outboard of the score so it never crosses the sign or the caption.
+    this.placeReadouts();
     this.scorePopLayer.add(label);
     this.tweens.add({
       targets: this.scoreText,
