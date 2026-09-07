@@ -3,3 +3,6 @@ dist
 .DS_Store
 *.local
 .vite
+
+# QA screenshot scratch. Curated stills belong in docs/promo/.
+docs/qa-shots/

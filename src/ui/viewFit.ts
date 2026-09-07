@@ -173,7 +173,7 @@ export const VIEWFIT_EVENT = "kindling-viewfit";
 
 const VIEWFIT_REG = "kindlingViewfit";
 
-export function viewfitSignature(view: ViewSize, inset: SafeInset): string {
+function viewfitSignature(view: ViewSize, inset: SafeInset): string {
   return `${Math.round(view.width)}x${Math.round(view.height)}:${inset.left},${inset.right},${inset.top},${inset.bottom}`;
 }
 
