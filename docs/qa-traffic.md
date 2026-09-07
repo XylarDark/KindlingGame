@@ -1,8 +1,8 @@
 # Kindling — QA: traffic system
 
-**Date:** 2026-09-06  
+**Date:** 2026-09-06 (pace + follow-gap pass 2026-09-07)  
 **Scope:** Ambient loop traffic + auto/manual drive speed coupling only.  
-**Methods:** `npm test` (167) · [`scripts/qa-traffic.ts`](../scripts/qa-traffic.ts) (9/9) · unit cases in [`src/maps/traffic.test.ts`](../src/maps/traffic.test.ts)
+**Methods:** `npm test` (194) · [`scripts/qa-traffic.ts`](../scripts/qa-traffic.ts) (9/9) · unit cases in [`src/maps/traffic.test.ts`](../src/maps/traffic.test.ts)
 
 **Status:** Findings fixed in-repo. Traffic remains decorative soft-braking (not a teachable driving lesson).
 
@@ -27,6 +27,15 @@
 | T-manual | P2 | Pad/WASD used full cruise, ignoring lead | Same traffic gate in `tickManualDrive` |
 | T-hitch | P2 | Large `dt` could tunnel through gaps | Slice `tickDrive` ≤50ms |
 | T-comment | P2 | “Go around” comment vs in-lane hold | Comments aligned; dead `approxLoopLen` removed |
+| T-corner | P1 | At the quicker pace, one separation shove mid-corner could leave a car still inside the van | Re-measure separation until it genuinely clears |
+
+---
+
+## 2a. Pace and follow gap (2026-09-07)
+
+Ambient cars run **15% faster** and the van settles **10% further back** from the car it queues behind — following rather than tailgating. Both trims stay inside the van's look-ahead, so it still reacts to the car it holds behind.
+
+Cars meeting the van mid-corner is the case the speed-up exposed: shoving a car back along its lane opens less straight-line gap on a curve than on a straight, so separation is now re-measured in a loop instead of corrected once. Pinned by a dense time sweep in the traffic unit test; the end-to-end drive test covers two traffic phases at the auto-drive's own 50ms slice.
 
 ---
 

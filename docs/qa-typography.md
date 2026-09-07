@@ -27,7 +27,7 @@
 - **tiny** — resolved size under 12px
 - **overlap** — intersecting bounds, *after* converting each scene's bounds to screen space with `(x - cam.scrollX) * cam.zoom`
 
-That camera step matters: comparing the scrolling map's world coords against screen-space HUD reports false overlaps. Sampling on a 250 ms interval for 20–40 s catches transient collisions from walk-ins, score pops, and phone state changes that single frames miss.
+That camera step matters: comparing the scrolling map's world coords against screen-space HUD reports false overlaps. Audit at **zoom 1 only** — the HUD renders at zoom 1 whatever the shop camera is doing, so a zoomed inspection pass reports HUD-over-world collisions that do not exist. Read the fit box with `text.getData("typekitBox")`, not as a property: a harness that reads `text.typekitBox` gets `undefined` and silently reports zero overflow. Sampling on a 250 ms interval for 20–40 s catches transient collisions from walk-ins, score pops, and phone state changes that single frames miss.
 
 Result: shop, drive, door, settings, and results all sample clean. The only remaining reported intersections are map house numbers behind the opaque phone panel and cog chip, where the HUD fully occludes the world text.
 
@@ -35,27 +35,27 @@ Re-run after the ID / wall-screen / message size bump (2026-09-07): 130 samples 
 
 ## Visual QA notes (iterative)
 
-Fixed from screenshots (`?howto=1`, `?shot=drive`, shop live):
+Fixed from screenshots (`?howto=1`, `?shot=drive`, shop live). Shots are QA scratch — captured, checked, not kept in-repo; `docs/promo/` holds the curated stills.
 
-- GPS pin: 3-line layout (house / name / SLA); wider box + padding so name is not clipped
+- GPS pin: 3-line layout (house / name / SLA), `noWrap`; wider box + padding so the name is not clipped; raised to depth 13, above the van/walker sprites that were clipping it
 - Phone status: two lines (`Tap to call` / name); larger status chrome; stable padding + refit
-- Welcome card: tightened height so title/hint are not floating in empty space
+- Welcome card: title/hint at 36.3/21.8px (`WELCOME_*_SIZE` in `TitleScene`) — well over the ramp, it is the first thing read; card height 216 so they are not floating in empty space
 - How-to cards: shorter delivery copy; card height matched to content
 - Toast / cog caption: more padding; toast cleared from cog column
 - Score / clock: cream with a thick ink outline (no chip) — flat ink was unreadable on the dark drive/door backdrops
-- Score pop: parked right of the score chip (it was crossing the `SCORE` caption)
+- Score pop: parked outboard of the score value — left of it at the counter sign, right of it in the corner fallback (it was crossing the `SCORE` caption)
 - Buttons: label + caption are one vertically centred stack, not pinned to opposite edges
-- Bag rack: was cream-on-cream (rendered blank) — now ink on the cream chip
-- GPS pin: raised above the van/walker sprites, which were clipping it
+- Bag supply: the floating chip above the rack is gone. `BAGS` is baked into the bag texture (`stampText` → `tex-bag-bags`), and the next-action prompt swaps the whole sprite to `tex-bag-pack` (`TAP TO\nPACK`) so the words pulse and tint with the bag instead of needing their alpha held separately
 - Walk-in bubbles: mirror to the customer's right and clamp on screen, clearing the lobby sandwich board
 - Counter group (sign + score + clock): centred in the clean counter face, above the bottom shade band and painted edge
 - How-to stack: lifted off dead centre so its tap hint clears the counter sign behind it
-- Local type steps at +10% over the ramp: welcome copy, settings panel (`labelSize`/`captionSize` on `addHudButton`)
-- ID card at +20% (`ID_*_PX` in `HudScene`): title/name/DOB/hint at 19.2/24/19.2/15.6px, card 560×320 → 672×384 with the flash ring and the four line offsets scaled to match, so the longest `UNDER 19` DOB and deny hint keep their old margins (`docs/qa-shots/type-id-card-*`)
-- Wall-screen strain names to 24.2px (`TV_LABEL_PX`, +10% again): the widest generated name measures 230px against the 290px wrap width, so the `glassW - 16` / `slotH - 8` slot box needed no widening — all nine labels resolve at 24.2px, none shrunk
-- Customer / driver action messages at +20% (`MSG_PX` in `ShopScene`): walk-in bubbles, counter prompt, key-lead callout and driver bubble at 19.2px with chip padding 10/6 → 12/7 (prompt 12/8 → 14/10) and boxes grown to 328×92 / 380×96 / 340×104 / 336×124 — the three-line `ready to leave` driver copy measures 305×94 and the bubbles still clear the sandwich board, the tablet label, and the screen edges (`docs/qa-shots/type-shop-*`)
-- Door hours: nudged 4px left of the pane centre, under the mark's optical weight (was 6px; 2 design px ≈ 1 screen px at the ~1024px canvas, so the line reads a hair further right and still clearly off-centre — `docs/qa-shots/type-door-hours-*`)
-- Packed bags: the per-order bag + chip row (up to 6 chips marching left over the key-lead) is now one pile with a `N DELIVERY · N PICKUP` chip plus a 6-row receipt rail on the counter face; rail rows are caption-size, `noWrap`, and the rail's left edge clears the HUD clock (shots in `docs/qa-shots/counter-ready-*`)
+- Settings panel at +10% over the ramp (`SET_*_PX` in `HudScene`, reaching the buttons via `labelSize`/`captionSize` on `addHudButton`) — read at arm's length
+- ID card at +20% (`ID_*_PX` in `HudScene`): title/name/DOB/hint at 19.2/24/19.2/15.6px, card 560×320 → 672×384 with the flash ring and the four line offsets scaled to match, so the longest `UNDER 19` DOB and deny hint keep their old margins
+- Wall-screen strain names to 24.2px (`TV_LABEL_PX`, +21% over the heading step — two +10% steps): the widest generated name measures 230px against the 290px wrap width, so the `glassW - 16` / `slotH - 8` slot box needed no widening — all nine labels resolve at 24.2px, none shrunk
+- Customer / driver action messages at +20% (`MSG_PX` in `ShopScene`): walk-in bubbles, counter prompt, key-lead callout and driver bubble at 19.2px with chip padding 10/6 → 12/7 (prompt 12/8 → 14/10) and boxes grown to 328×92 / 380×96 / 340×104 / 336×124 — the three-line `ready to leave` driver copy measures 305×94 and the bubbles still clear the sandwich board, the tablet label, and the screen edges
+- Door hours: nudged 4px left of the pane centre (`HOURS_NUDGE_X`), under the mark's optical weight; was 6px, and 2 design px ≈ 1 screen px at the ~1024px canvas, so the line reads a hair further right and still clearly off-centre
+- Bag audit re-run (2026-09-07, zoom 1): 1 / 6 / 12 packed bags — 22, 28 and 30 visible texts, every one carrying a fit box, no overflow, nothing under 12px, no overlaps. Both counts hold the full 27px unshrunk (18×33 in the 72×34 box), and the 12-bag case has the same footprint as the 6-bag one
+- Packed bags: the per-order bag + chip row (up to 6 chips marching left over the key-lead) is gone. One delivery bag and one pickup bag now stand on the counter, each printing its live count on its own baked label panel (`BAG_PANEL`, title-size, `noWrap`), and a 6-row receipt rail carries the per-order detail on the counter face. Rail rows are caption-size, `noWrap`, one line each, oldest ticket at the top; a 7th packed bag collapses the tail into `+N more`. Measured live at six slips: rail box left edge 1236 against a clock ending at 1207, so the rail clears the HUD clock
 
 Canvas uses CSS `object-fit: fill` — non-uniform stretch can still make type look “squashed” on odd viewports; that is separate from design-space fit.
 
