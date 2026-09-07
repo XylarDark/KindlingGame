@@ -20,7 +20,13 @@ const TYPEKIT_DATA = "kindlingTypekit";
 const TYPEKIT_BOX = "typekitBox";
 const MIN_FIT_PX = TYPE_MIN_FIT_PX;
 
-type TypeBox = { maxWidth?: number; maxHeight?: number; minPx?: number; basePx?: number };
+type TypeBox = {
+  maxWidth?: number;
+  maxHeight?: number;
+  minPx?: number;
+  basePx?: number;
+  noWrap?: boolean;
+};
 
 function enableCanvasSmoothing(text: Phaser.GameObjects.Text): void {
   const ctx = text.context;
@@ -84,12 +90,15 @@ export function fitTypeToBox(
 
   const widthLimit = maxWidth ?? box.maxWidth;
   const heightLimit = maxHeight ?? box.maxHeight;
+  const noWrap = box.noWrap ?? false;
 
   const applySize = (size: number): void => {
     text.setFontSize(size);
     applyTracking(text, text.text, text.getData("typekitTracking"));
     const pad = padExtents(text);
-    if (widthLimit && widthLimit > 0) {
+    if (noWrap) {
+      text.setStyle({ wordWrap: { width: 0 } });
+    } else if (widthLimit && widthLimit > 0) {
       // Phaser wrap ignores letter-spacing; keep a small safety gutter.
       const gutter = Math.max(4, Math.round(size * 0.35));
       const wrapW = Math.max(8, widthLimit - pad.x - gutter);
@@ -114,6 +123,7 @@ export function fitTypeToBox(
     maxHeight: heightLimit,
     minPx: floor,
     basePx,
+    noWrap,
   } satisfies TypeBox);
   return polishText(text, text.scene);
 }
@@ -165,6 +175,8 @@ export interface TypeStyle {
   maxHeight?: number;
   /** Floor for shrink-to-fit (default {@link TYPE_MIN_FIT_PX}). */
   minPx?: number;
+  /** Keep authored line breaks — shrink to fit width instead of wrapping. */
+  noWrap?: boolean;
 }
 
 function canvasStyle(options: TypeStyle): Phaser.Types.GameObjects.Text.TextStyle {
@@ -172,7 +184,7 @@ function canvasStyle(options: TypeStyle): Phaser.Types.GameObjects.Text.TextStyl
   const fontSize = options.size ?? Type.body;
   const px = parseFontPx(fontSize);
   const padX = ((options.padding?.x ?? 0) * 2);
-  const rawWrap = options.wordWrap?.width ?? options.maxWidth;
+  const rawWrap = options.noWrap ? undefined : (options.wordWrap?.width ?? options.maxWidth);
   const wrapW = rawWrap ? Math.max(8, rawWrap - padX - Math.max(4, Math.round(px * 0.35))) : undefined;
   return {
     fontFamily: UI_FONT,
@@ -201,6 +213,7 @@ function finishType(
     maxHeight: options.maxHeight,
     minPx: options.minPx ?? MIN_FIT_PX,
     basePx,
+    noWrap: options.noWrap ?? false,
   } satisfies TypeBox);
   applyTracking(text, content, options.letterSpacing);
   if (options.letterSpacing !== undefined) text.setData("typekitTracking", options.letterSpacing);

@@ -37,6 +37,9 @@ export function addHudButton(
     depth?: number;
     minWidth?: number;
     caption?: string;
+    /** Overrides for panels that run their own type step (e.g. settings). */
+    labelSize?: string;
+    captionSize?: string;
   } = {},
 ): Phaser.GameObjects.Container {
   const originX = opts.originX ?? 1;
@@ -50,7 +53,7 @@ export function addHudButton(
         : { fill: 0x241c16, text: Color.creamHex, stroke: Color.panelStroke, caption: Color.muteHex };
 
   const text = addUiText(scene, 0, 0, label, {
-    size: Type.heading,
+    size: opts.labelSize ?? Type.heading,
     color: palette.text,
     fontStyle: "700",
     align: "center",
@@ -59,7 +62,7 @@ export function addHudButton(
     maxHeight: 36,
   }).setOrigin(0.5);
   const caption = addUiText(scene, 0, 0, opts.caption ?? "", {
-    size: Type.caption,
+    size: opts.captionSize ?? Type.caption,
     color: palette.caption,
     fontStyle: "600",
     align: "center",
@@ -68,14 +71,16 @@ export function addHudButton(
     maxHeight: 40,
   }).setOrigin(0.5);
 
+  const CAP_GAP = 6;
   const paint = (pressed: boolean): void => {
     const cap = String(container.getData("caption") ?? "");
     caption.setText(cap);
     caption.setVisible(!!cap);
     const inner = Math.max(text.width, cap ? caption.width : 0);
     const w = Math.max(opts.minWidth ?? 260, inner + 56);
-    const extra = cap ? caption.height + 10 : 0;
-    const h = Math.max(HUD_BUTTON_MIN_H, text.height + extra + 36);
+    // Label + caption are one centered stack — never pinned to opposite edges.
+    const stackH = text.height + (cap ? CAP_GAP + caption.height : 0);
+    const h = Math.max(HUD_BUTTON_MIN_H, stackH + 32);
     const left = -w * originX;
     const top = -h * originY;
     bg.clear();
@@ -83,13 +88,9 @@ export function addHudButton(
     bg.fillRoundedRect(left, top, w, h, 4);
     bg.lineStyle(3, palette.stroke, 1);
     bg.strokeRoundedRect(left, top, w, h, 4);
-    if (cap) {
-      text.setPosition(left + w / 2, top + 18 + text.height / 2);
-      caption.setPosition(left + w / 2, top + h - 16 - caption.height / 2);
-    } else {
-      text.setPosition(left + w / 2, top + h / 2);
-      caption.setPosition(left + w / 2, top + h / 2);
-    }
+    const stackTop = top + (h - stackH) / 2;
+    text.setPosition(left + w / 2, stackTop + text.height / 2);
+    caption.setPosition(left + w / 2, stackTop + text.height + CAP_GAP + caption.height / 2);
     container.setSize(w, h);
     container.setInteractive(
       new Phaser.Geom.Rectangle(left, top, w, h),
