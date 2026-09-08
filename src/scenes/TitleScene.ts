@@ -1,9 +1,11 @@
 import Phaser from "phaser";
 import { startSessionMusic, unlockAudio } from "../audio/music";
+import { COUNTER_SIGN } from "../maps/shopT0";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import { beginPlay, shouldShowHowTo } from "../session";
 import { addHudButton, addPanel, HUD_BUTTON_MIN_H } from "../ui/chrome";
 import { HOWTO_HINT, HOWTO_STEPS, PAUSE_HINT, WELCOME_HINT, WELCOME_TITLE } from "../ui/copy";
+import { SIGN_FRAME_W, signPlaqueRings } from "../ui/signPlaque";
 import { addUiText } from "../ui/text";
 import { Color, Type } from "../ui/theme";
 import { fitTypeToWidth } from "../ui/typekit";
@@ -14,12 +16,15 @@ const WELCOME_TITLE_SIZE = "36.3px";
 const WELCOME_HINT_SIZE = "21.8px";
 /** How-to stack lift, keeping its tap hint off the counter sign behind it. */
 const HOWTO_LIFT = 44;
+/** Gap from the design edge to the pause plaque's frame, before safe insets. */
+const PAUSE_MARGIN = 48;
 
 export class TitleScene extends Phaser.Scene {
   private started = false;
   private phase: "welcome" | "howto" | "paused" = "paused";
   private welcomeLayer: Phaser.GameObjects.GameObject[] = [];
   private pauseHint?: Phaser.GameObjects.Text;
+  private pausePlaque?: Phaser.GameObjects.Graphics;
 
   constructor() {
     super("title");
@@ -45,15 +50,19 @@ export class TitleScene extends Phaser.Scene {
 
     if (showOverlays) this.drawWelcome();
     else {
-      this.pauseHint = addUiText(this, GAME_WIDTH / 2, GAME_HEIGHT - 48, PAUSE_HINT, {
+      // The plaque is painted from the hint's measured bounds, so no background
+      // colour here — the graphics below own the white field as well as the frame.
+      this.pausePlaque = this.add.graphics().setDepth(42);
+      this.pauseHint = addUiText(this, COUNTER_SIGN.x, GAME_HEIGHT - PAUSE_MARGIN, PAUSE_HINT, {
         size: Type.title,
         color: Color.inkHex,
-        backgroundColor: Color.creamHex,
         padding: { x: 36, y: 14 },
         fontStyle: "700",
+        // One line at every viewport today, but a tight safe area could wrap it.
+        align: "center",
         lineSpacing: 0,
         strokeThickness: 0,
-        maxWidth: GAME_WIDTH - 96,
+        maxWidth: GAME_WIDTH - (PAUSE_MARGIN + SIGN_FRAME_W) * 2,
         maxHeight: 68,
       })
         .setOrigin(0.5, 1)
@@ -62,7 +71,12 @@ export class TitleScene extends Phaser.Scene {
       const relayout = (): void => this.layoutPauseHint();
       this.scale.on(Phaser.Scale.Events.RESIZE, relayout);
       this.game.events.on(VIEWFIT_EVENT, relayout);
-      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.game.events.off(VIEWFIT_EVENT, relayout));
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+        this.game.events.off(VIEWFIT_EVENT, relayout);
+        // The scale manager outlives the scene; a stale listener would relayout
+        // a destroyed Text on the next resize.
+        this.scale.off(Phaser.Scale.Events.RESIZE, relayout);
+      });
     }
 
     this.input.keyboard?.on("keydown", (event: KeyboardEvent) => {
@@ -72,12 +86,44 @@ export class TitleScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * Sit the hint on the shop's own axis — the counter plaque, key lead and TV
+   * bank all centre on `COUNTER_SIGN.x`, so screen centre is the odd one out.
+   * Falls back toward screen centre only when a safe inset would push the
+   * plaque's frame off the edge.
+   */
   private layoutPauseHint(): void {
-    if (!this.pauseHint) return;
+    const hint = this.pauseHint;
+    if (!hint) return;
     const inset = designSafeInset(viewFromScale(this.scale), readCssSafeArea(document.getElementById("game-root")));
-    const pauseInset = 48 + Math.max(inset.left, inset.right);
-    this.pauseHint.setPosition(GAME_WIDTH / 2, GAME_HEIGHT - 48 - inset.bottom);
-    fitTypeToWidth(this.pauseHint, GAME_WIDTH - pauseInset * 2);
+    const left = PAUSE_MARGIN + inset.left;
+    const right = GAME_WIDTH - PAUSE_MARGIN - inset.right;
+    // The frame rides outside the glyph box, so the type budget loses it twice.
+    fitTypeToWidth(hint, right - left - SIGN_FRAME_W * 2);
+    const half = hint.width / 2 + SIGN_FRAME_W;
+    hint.setPosition(
+      Phaser.Math.Clamp(COUNTER_SIGN.x, left + half, right - half),
+      GAME_HEIGHT - PAUSE_MARGIN - inset.bottom,
+    );
+    this.paintPausePlaque();
+  }
+
+  /** Repaint the plaque against the hint's current measured bounds. */
+  private paintPausePlaque(): void {
+    const hint = this.pauseHint;
+    const plaque = this.pausePlaque;
+    if (!hint || !plaque) return;
+    plaque.clear();
+    const field = {
+      x: hint.x - hint.width * hint.originX,
+      y: hint.y - hint.height * hint.originY,
+      w: hint.width,
+      h: hint.height,
+    };
+    for (const ring of signPlaqueRings(field)) {
+      plaque.fillStyle(ring.color, 1);
+      plaque.fillRect(ring.x, ring.y, ring.w, ring.h);
+    }
   }
 
   private drawWelcome(): void {
