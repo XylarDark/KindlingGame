@@ -12,6 +12,6 @@
     "lib": ["ES2020", "DOM"],
     "types": ["vite/client"]
   },
-  "include": ["src"],
-  "exclude": ["src/**/*.test.ts"]
+  "include": ["src", "scripts/lib"],
+  "exclude": ["src/**/*.test.ts", "scripts/**/*.test.ts"]
 }
