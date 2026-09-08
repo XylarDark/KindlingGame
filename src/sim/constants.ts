@@ -25,10 +25,21 @@ export const NPC_INTERACT_COOLDOWN_MS = 360;
 export const KEYLEAD_WALK_SPEED = 620;
 export const BACKROOM_MS = 420;
 
-/** Incoming tablet tickets arrive in waves of 1–2, 10–58s apart. */
+/** Incoming tablet tickets arrive in waves of 1–2. */
 export const TABLET_QUEUE_MAX = 6;
-export const TICKET_WAVE_MIN_MS = 10_000;
-export const TICKET_WAVE_MAX_MS = 58_000;
+/** The beat the tablet was originally paced to: a wave every 10–58s. */
+const TICKET_WAVE_BASE_MIN_MS = 10_000;
+const TICKET_WAVE_BASE_MAX_MS = 58_000;
+/**
+ * Tablet work now arrives at three quarters of that rate. Stretching the gap by 4/3
+ * rather than thinning the waves keeps a wave worth 1–2 jobs, so the shop still gets
+ * its bursts — there is simply more room between them. Waves land every 13.3–77.3s,
+ * averaging one every 45.3s instead of 34s: about 2.0 tickets a minute, down from 2.6.
+ */
+export const TICKET_WAVE_GAP_SCALE = 4 / 3;
+export const TICKET_WAVE_MIN_MS = Math.round(TICKET_WAVE_BASE_MIN_MS * TICKET_WAVE_GAP_SCALE);
+export const TICKET_WAVE_MAX_MS = Math.round(TICKET_WAVE_BASE_MAX_MS * TICKET_WAVE_GAP_SCALE);
+/** The opening beat is scripted onboarding, not steady-state pacing — left at its old pace. */
 export const FIRST_TICKET_WAVE_MS = 2_000;
 /**
  * Foot traffic through the front door: one walk-in every 24–60s, and never two at once.

@@ -26,7 +26,9 @@ import {
 import {
   OPENING_FIRST_AT_MS,
   OPENING_ORDER_GAP_MS,
+  TICKET_WAVE_GAP_SCALE,
   TICKET_WAVE_MAX_MS,
+  TICKET_WAVE_MIN_MS,
   WALKIN_GAP_MAX_MS,
   WALKIN_GAP_MIN_MS,
 } from "./constants";
@@ -602,8 +604,15 @@ describe("GameSim order loops", () => {
     expect(types).toHaveLength(4);
   });
 
-  it("caps random ticket waves at 58 seconds apart", () => {
-    expect(TICKET_WAVE_MAX_MS).toBe(58_000);
+  it("paces the tablet at three quarters of its original rate", () => {
+    // Was a flat "caps waves at 58 seconds". The cap moved when arrivals were slowed, so
+    // the claim is now the thing that actually matters: the gap, and therefore the rate.
+    expect(TICKET_WAVE_MIN_MS).toBe(13_333);
+    expect(TICKET_WAVE_MAX_MS).toBe(77_333);
+    const meanGap = (TICKET_WAVE_MIN_MS + TICKET_WAVE_MAX_MS) / 2;
+    expect(meanGap / ((10_000 + 58_000) / 2)).toBeCloseTo(1 / 0.75, 3);
+    // Waves stayed 1–2 tickets; only the gap between them grew.
+    expect(TICKET_WAVE_GAP_SCALE).toBeCloseTo(4 / 3, 6);
   });
 
   it("calls out strain and customer after the tablet is tapped", () => {
