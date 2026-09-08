@@ -25,10 +25,16 @@ const BAG_HIT_PAD = 80;
 /**
  * The "what to do next" copy runs 25% over the shared ramp. Held as local
  * constants rather than a ramp change: `Type` feeds every screen in the game.
+ *
+ * The prompt then takes a further 25% on top of that (20px -> 25px). It used to share
+ * the naming job with a chip under the bag; that chip is gone, so this sentence is now
+ * the only text that says what to tap and it has to carry the instruction alone.
+ * `maxHeight` on the prompt must move with this number — `fitTypeToBox` only ever
+ * shrinks, so a box left at the old height renders the larger seed at the old size and
+ * turns this constant into a lie.
  */
-const DOOR_PROMPT_PX = "20px";
+const DOOR_PROMPT_PX = "25px";
 const DOOR_TITLE_PX = "33.75px";
-const DOOR_CAPTION_PX = "16.25px";
 /** Gap between a sprite's edge and the chip anchored off it. */
 const DOOR_CHIP_GAP = 20;
 /** Keep a wide chip on screen when the sprite it hangs off is near an edge. */
@@ -63,7 +69,6 @@ export class DoorScene extends Phaser.Scene {
   private bag!: Phaser.GameObjects.Image;
   private prompt!: Phaser.GameObjects.Text;
   private houseLabel!: Phaser.GameObjects.Text;
-  private bagCaption!: Phaser.GameObjects.Text;
   private floorY = 0;
   /** Cached so the per-frame chip placement does not re-read CSS safe areas. */
   private insetTop = 0;
@@ -117,20 +122,6 @@ export class DoorScene extends Phaser.Scene {
       getSim().queueInteract();
     });
 
-    // Sits under the bag, so the sentence and the thing it names read as one unit.
-    this.bagCaption = addUiText(this, this.bag.x, this.bag.y, "", {
-      size: DOOR_CAPTION_PX,
-      color: Color.inkHex,
-      backgroundColor: Color.limeHex,
-      padding: { x: 10, y: 4 },
-      fontStyle: "700",
-      maxWidth: 260,
-      maxHeight: 44,
-    })
-      .setOrigin(0.5, 0)
-      .setDepth(7)
-      .setVisible(false);
-
     // Anchored over the customer's head rather than parked at a fixed y — the
     // instruction names them, so it should be pointing at them.
     this.prompt = addUiText(this, CUSTOMER_X, 0, "", {
@@ -141,7 +132,10 @@ export class DoorScene extends Phaser.Scene {
       align: "center",
       fontStyle: "600",
       maxWidth: 720,
-      maxHeight: 90,
+      // Scaled with DOOR_PROMPT_PX: 90 * 1.25 = 112.5, rounded up. Rounding down is the
+      // same trap in miniature — fitTypeToBox only shrinks, so a box even slightly short
+      // of the type it holds silently renders the text smaller than the seed asks for.
+      maxHeight: 113,
     })
       .setOrigin(0.5, 1)
       .setDepth(8);
@@ -157,34 +151,21 @@ export class DoorScene extends Phaser.Scene {
     const inset = designSafeInset(viewFromScale(this.scale), readCssSafeArea(document.getElementById("game-root")));
     this.insetTop = inset.top;
     this.houseLabel.setPosition(DOORSTEP_DOOR_X, 56 + inset.top);
-    this.placeChips();
-  }
-
-  /** Re-anchor the sprite-hung chips. Cheap enough to run every frame — the bag moves. */
-  private placeChips(): void {
-    this.placePrompt(this.insetTop);
-    this.placeBagCaption();
+    this.placePrompt();
   }
 
   /**
-   * Prompt bottom edge sits a gap above the customer's head, derived from the
-   * sprite's own `displayHeight` so it tracks any change to PEOPLE_SCALE.
+   * Prompt bottom edge sits a gap above the customer's head, derived from the sprite's
+   * own `displayHeight` so it tracks any change to PEOPLE_SCALE, and floored so a chip
+   * that wraps to two lines cannot climb into the top safe inset. Cheap enough to run
+   * every frame — the sentence changes width as the action changes.
    */
-  private placePrompt(insetTop: number): void {
+  private placePrompt(): void {
     const headTop = this.customer.y - this.customer.displayHeight * this.customer.originY;
     const half = this.prompt.displayWidth / 2 + DOOR_CHIP_MARGIN;
     const x = Phaser.Math.Clamp(this.customer.x, half, GAME_WIDTH - half);
-    const floor = insetTop + this.prompt.displayHeight + DOOR_CHIP_GAP;
+    const floor = this.insetTop + this.prompt.displayHeight + DOOR_CHIP_GAP;
     this.prompt.setPosition(x, Math.max(floor, headTop - DOOR_CHIP_GAP));
-  }
-
-  private placeBagCaption(): void {
-    const below = this.bag.y + this.bag.displayHeight * (1 - this.bag.originY);
-    const half = this.bagCaption.displayWidth / 2 + DOOR_CHIP_MARGIN;
-    this.bagCaption.setPosition(
-      Phaser.Math.Clamp(this.bag.x, half, GAME_WIDTH - half),
-      below + DOOR_CHIP_GAP * 0.5,
-    );
   }
 
   update(): void {
@@ -287,13 +268,7 @@ export class DoorScene extends Phaser.Scene {
             : drop.hint || "They're at the door.",
     );
     this.prompt.setAlpha(1);
-
-    this.bagCaption.setVisible(nextHand || nextPhoto);
-    this.bagCaption.setText(nextHand ? "Tap bag to hand over" : "Tap bag for photo");
-    this.bagCaption.setAlpha(1);
-    this.bagCaption.setBackgroundColor(Color.limeHex);
-    this.bagCaption.setColor(Color.inkHex);
-    this.placeChips();
+    this.placePrompt();
   }
 }
 

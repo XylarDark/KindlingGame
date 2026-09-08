@@ -28,6 +28,13 @@ function constant(name: string): number {
   return Number(hit[1]);
 }
 
+/** Read a `const NAME = "<n>px"` seed out of the source, or throw. */
+function pxConstant(name: string): number {
+  const hit = new RegExp(`const ${name} = "([\\d.]+)px";`).exec(src);
+  if (!hit) throw new Error(`px constant not found: ${name}`);
+  return Number(hit[1]);
+}
+
 describe("doorstep tap target flash", () => {
   it("throbs on a period a person can see, not a strobe", () => {
     // gameMs advances 1:1 with real milliseconds (GameSim.tick feeds Phaser's frame
@@ -82,5 +89,45 @@ describe("doorstep tap target flash", () => {
     const idle = between(src, "} else {\n      this.bag.setAlpha(1);", "if (nextAsk)", "bag idle branch");
     expect(idle).toContain("this.bag.setScale(DOOR_BAG_SCALE);");
     expect(idle).toContain("this.bag.clearTint();");
+  });
+});
+
+describe("doorstep prompt", () => {
+  it("seeds the prompt 25% over the previous 20px", () => {
+    expect(pxConstant("DOOR_PROMPT_PX")).toBeCloseTo(25, 5);
+  });
+
+  it("grows the prompt's box with its font, because fitTypeToBox only shrinks", () => {
+    // The trap: raise the seed and leave the box, and the text renders at the old size
+    // while the constant claims otherwise — a change that looks done and does nothing.
+    const box = between(src, "this.prompt = addUiText(", ".setOrigin(0.5, 1)", "prompt box");
+    const height = /maxHeight: (\d+)/.exec(box);
+    if (!height) throw new Error("prompt maxHeight not found");
+    expect(Number(height[1])).toBeGreaterThanOrEqual(90 * 1.25);
+  });
+
+  it("still floors the chip against the top safe inset", () => {
+    // A taller chip pushes harder on this clamp; losing it puts the prompt under the
+    // notch on a short viewport.
+    const fn = between(src, "private placePrompt(", "\n  }", "placePrompt");
+    expect(fn).toContain("this.insetTop + this.prompt.displayHeight + DOOR_CHIP_GAP");
+    expect(fn).toContain("Math.max(floor,");
+  });
+});
+
+describe("doorstep bag caption", () => {
+  it("is gone, along with everything that only existed to serve it", () => {
+    // Removing the object but leaving its update code behind is the failure mode here:
+    // a permanently hidden chip that still costs a setText and a placement every frame.
+    for (const dead of [
+      "bagCaption",
+      "placeBagCaption",
+      "placeChips",
+      "DOOR_CAPTION_PX",
+      "Tap bag to hand over",
+      "Tap bag for photo",
+    ]) {
+      expect(src).not.toContain(dead);
+    }
   });
 });
