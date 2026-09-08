@@ -930,7 +930,7 @@ describe("key lead covering the counter while the van is out", () => {
     sendVanOut(sim);
     const idle = sim.snapshot().shopCover;
     expect(idle.active).toBe(true);
-    expect(idle.line).toBe("Counter is clear");
+    expect(idle.line).toBe("Nobody waiting");
     expect(idle.served).toBe(0);
 
     const walk = sim.spawnOrder("inStore", { ageOk: true });

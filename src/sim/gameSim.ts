@@ -947,7 +947,8 @@ export class GameSim {
       return `Packing ${sku?.name ?? "a bag"} for ${ticket.customerName}`;
     }
     if (pickup) return `Waiting on ${pickup.customerName}`;
-    return "Counter is clear";
+    // The HUD already prefixes this with COUNTER, so saying it again reads as a stutter.
+    return "Nobody waiting";
   }
 
   /** Names both the person being kept waiting and the depth that is keeping them there. */
