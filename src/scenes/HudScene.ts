@@ -1,9 +1,20 @@
 import Phaser from "phaser";
 import { getMusicPrefs, setMusicEnabled, setMusicVolume, syncMusicToClock } from "../audio/music";
 import { playCameraClick, playUiSfx } from "../audio/sfx";
+import { customerPortraitKey } from "../art/people";
+import { PORTRAIT_H, PORTRAIT_W } from "../art/peopleSize";
+import {
+  PHONE_APP_CELLS,
+  PHONE_CHASSIS_CELLS,
+  PHONE_PX,
+  PHONE_SCALE,
+  PHONE_TEX,
+  phoneDesignRect,
+} from "../art/phoneArt";
 import { clampInput } from "../input/controls";
 import { enableItemHit, syncItemHit } from "../input/hit";
-import { CITY, MAP_PX_H, MAP_PX_W, TILE, houseById, tileToWorld } from "../maps/cityT0";
+import { houseById, lotWorldRect } from "../maps/cityT0";
+import { cityMinimapGeometry, fitCityPanel, minimapProjection, type WorldRect } from "../maps/cityMinimap";
 import { COUNTER_SIGN } from "../maps/shopT0";
 import { GAME_HEIGHT, GAME_WIDTH, NPC_INTERACT_COOLDOWN_MS, SCORE_DELIVERY_LATE, SCORE_DELIVERY_ON_TIME, SCORE_FAIL, SCORE_INSTORE, SCORE_PICKUP } from "../sim/constants";
 import { getSim, startSession } from "../session";
@@ -19,7 +30,11 @@ import { designSafeInset, HUD_TOUCH_MIN_DESIGN, readCssSafeArea, VIEWFIT_EVENT, 
 
 /** Readouts sit either side of the counter sign, 10% over the display ramp. */
 const HUD_READOUT_PX = 40;
+/** The score carries a further 10%: it is the number the player is playing for. */
+const HUD_SCORE_PX = 44;
 const HUD_CAPTION_PX = 18;
+/** Order banner runs 25% over the ramp — read across the room, mid-task. */
+const HUD_TOAST_PX = "20px";
 const HUD_SIGN_GAP = 28;
 /** Corner fallback keeps clear of the ceiling band on the road and at doors. */
 const HUD_CORNER_TOP = 76;
@@ -40,25 +55,92 @@ const SET_TITLE_PX = "22px";
 const SET_BODY_PX = "17.6px";
 const SET_HINT_PX = "14.3px";
 const VOL_TRACK = { x: 24, y: 168, w: 312, h: 16 };
-/** Delivery phone — screen room for two-line status + title. */
-const PHONE_W = 268;
-const PHONE_H = 328;
+
+/**
+ * Delivery phone. Every dimension below is derived from `PHONE_SCALE` and the cell
+ * grid in `phoneArt`, because the previous hand-written set drifted out of step with
+ * the texture and pushed the tutorial's flash ring off centre. Nothing here may be
+ * typed in independently.
+ */
+const PHONE_W = PHONE_TEX.w * PHONE_SCALE;
+const PHONE_H = PHONE_TEX.h * PHONE_SCALE;
+/** The visible body, inside the margin the side buttons live in. */
+const PHONE_CHASSIS = phoneDesignRect(PHONE_CHASSIS_CELLS);
+/** Where the delivery app may paint: glass, minus the baked status bar and home strip. */
+const PHONE_APP = phoneDesignRect(PHONE_APP_CELLS);
+/** One cell of ring, which is exactly the button margin — symmetric by construction. */
+const PHONE_FLASH_PAD = PHONE_PX * PHONE_SCALE;
+const PHONE_FLASH_STROKE = Math.round(PHONE_PX * PHONE_SCALE * 0.36);
 const PHONE_COG_GAP = 16;
-const PHONE_SCREEN = { x: -108, y: -128, w: 216, h: 248 };
+/** App chrome: a title bar, the map, and a status bar the map is fitted around. */
+const PHONE_HEADER_H = 34;
+const PHONE_STATUS_H = 58;
+const PHONE_MAP_GAP = 4;
+const PHONE_TITLE_PX = "20px";
+const PHONE_STATUS_PX = "20px";
+const PAD_LABEL_PX = "16.25px";
+
+/**
+ * The map panel carries the city's own 1.43:1 aspect. The old 204x108 panel was
+ * 1.89:1, so a quarter of it was letterbox the city could never reach.
+ */
+const PHONE_MAP = ((): { x: number; y: number; w: number; h: number } => {
+  const fitted = fitCityPanel({
+    x: PHONE_APP.x + 6,
+    y: PHONE_APP.y + PHONE_HEADER_H + PHONE_MAP_GAP,
+    w: PHONE_APP.w - 12,
+    h: PHONE_APP.h - PHONE_HEADER_H - PHONE_STATUS_H - PHONE_MAP_GAP * 2,
+  });
+  // Integers, so the baked static layer lands on whole texture pixels.
+  return {
+    x: Math.round(fitted.x),
+    y: Math.round(fitted.y),
+    w: Math.round(fitted.w),
+    h: Math.round(fitted.h),
+  };
+})();
+
+/** Four tones plus the shop's lime — any more and nothing reads at 197px wide. */
+const MAP_INK = {
+  outside: 0x141a1e,
+  block: 0x2c3a30,
+  street: 0x515a60,
+  drive: 0x3e454a,
+  house: 0xb89258,
+} as const;
+
 const RESULTS_W = 740;
 const RESULTS_H = 640;
+
 /**
- * ID card runs 20% over the shared ramp — the name/DOB read is the gate on the
- * sale, taken at a glance on a phone held at arm's length.
+ * ID card. Laid out as a real card: header band, portrait, labelled fields beside
+ * it, signature strip, and a verdict band along the bottom. The type runs 20% over
+ * the shared ramp — the name/DOB read is the gate on the sale, taken at a glance.
  */
+const ID_CARD_W = 760;
+const ID_CARD_H = 440;
+const ID_RING_PAD = 16;
+const ID_PAD = 24;
+const ID_HEADER_H = 56;
+/** Portrait box, in the card's own aspect so the baked photo is never stretched. */
+const ID_PHOTO_W = 180;
+const ID_PHOTO_H = Math.round((ID_PHOTO_W * PORTRAIT_H) / PORTRAIT_W);
+const ID_PHOTO_FRAME = 4;
 const ID_TITLE_PX = "19.2px";
-const ID_NAME_PX = "24px";
-const ID_DOB_PX = "19.2px";
-const ID_HINT_PX = "15.6px";
-/** Card, ring, and line offsets grew with the type so the four lines keep their gaps. */
-const ID_CARD_W = 672;
-const ID_CARD_H = 384;
-const ID_RING_PAD = 12;
+const ID_KIND_PX = "15.6px";
+const ID_NAME_PX = "31.2px";
+const ID_LABEL_PX = "13.2px";
+const ID_DOB_PX = "22.8px";
+/** The verdict line is the one the player acts on, so it is the loudest thing here. */
+const ID_HINT_PX = "24px";
+const ID_SIG_PX = "13.2px";
+const ID_OK_INK = 0x3d7a45;
+const ID_DENY_INK = 0xc45a3a;
+const ID_CARD_FILL = 0xf4e8c1;
+
+/** Card-local x of the fields column: right of the portrait. */
+const ID_FIELD_X = -ID_CARD_W / 2 + ID_PAD + ID_PHOTO_W + 28;
+const ID_FIELD_W = ID_CARD_W / 2 - ID_PAD - ID_FIELD_X;
 
 export class HudScene extends Phaser.Scene {
   private scoreText!: Phaser.GameObjects.Text;
@@ -71,6 +153,9 @@ export class HudScene extends Phaser.Scene {
   private phoneBody!: Phaser.GameObjects.Image;
   private phoneHit!: Phaser.GameObjects.Rectangle;
   private phoneFlash!: Phaser.GameObjects.Rectangle;
+  private phoneChrome!: Phaser.GameObjects.Graphics;
+  /** Static city, baked once. The city has no RNG, so it never needs redrawing. */
+  private phoneMapBase!: Phaser.GameObjects.RenderTexture;
   private phoneMap!: Phaser.GameObjects.Graphics;
   private phoneTitle!: Phaser.GameObjects.Text;
   private phoneStatus!: Phaser.GameObjects.Text;
@@ -80,8 +165,16 @@ export class HudScene extends Phaser.Scene {
   private idDob!: Phaser.GameObjects.Text;
   private idHint!: Phaser.GameObjects.Text;
   private idTitle!: Phaser.GameObjects.Text;
+  private idKind!: Phaser.GameObjects.Text;
+  private idNumber!: Phaser.GameObjects.Text;
+  private idExpiry!: Phaser.GameObjects.Text;
+  private idPhoto!: Phaser.GameObjects.Image;
+  private idFurniture!: Phaser.GameObjects.Graphics;
+  private idSignature!: Phaser.GameObjects.Graphics;
   private idBg!: Phaser.GameObjects.Rectangle;
   private idFlashRing!: Phaser.GameObjects.Rectangle;
+  /** Last card drawn, so the furniture and signature are redrawn only on a change. */
+  private idDrawnFor = "";
   private flash!: Phaser.GameObjects.Rectangle;
   private toastText!: Phaser.GameObjects.Text;
   private coverText!: Phaser.GameObjects.Text;
@@ -127,13 +220,13 @@ export class HudScene extends Phaser.Scene {
     // Readouts sit over bright shop walls AND dark night streets, so contrast comes
     // from an ink outline on the glyphs rather than a chip behind them.
     this.scoreText = addUiText(this, 0, 0, "", {
-      size: `${HUD_READOUT_PX}px`,
+      size: `${HUD_SCORE_PX}px`,
       color: Color.creamHex,
       fontStyle: "700",
       align: "right",
       maxWidth: 360,
-      maxHeight: 62,
-      ...readoutOutline(HUD_READOUT_PX),
+      maxHeight: 68,
+      ...readoutOutline(HUD_SCORE_PX),
     })
       .setOrigin(1, 0.5)
       .setDepth(20);
@@ -162,39 +255,42 @@ export class HudScene extends Phaser.Scene {
       .setOrigin(0, 0.5)
       .setDepth(20);
 
-    this.phoneBody = this.add
-      .image(0, 0, "tex-phone")
-      .setDisplaySize(PHONE_W, PHONE_H);
+    this.phoneBody = this.add.image(0, 0, "tex-phone").setDisplaySize(PHONE_W, PHONE_H);
+    // Ring the chassis, not the sprite: the sprite carries a transparent margin for
+    // the side buttons, and ringing that is what made the flash look off centre.
     this.phoneFlash = this.add
-      .rectangle(0, 0, PHONE_W + 10, PHONE_H + 10, Color.lime, 0)
-      .setStrokeStyle(4, Color.lime, 1);
+      .rectangle(0, 0, PHONE_CHASSIS.w + PHONE_FLASH_PAD, PHONE_CHASSIS.h + PHONE_FLASH_PAD, Color.lime, 0)
+      .setStrokeStyle(PHONE_FLASH_STROKE, Color.lime, 1);
+    this.phoneChrome = this.add.graphics();
+    this.phoneMapBase = this.add.renderTexture(PHONE_MAP.x, PHONE_MAP.y, PHONE_MAP.w, PHONE_MAP.h).setOrigin(0, 0);
+    this.bakePhoneMap();
     this.phoneMap = this.add.graphics();
-    this.phoneTitle = addUiText(this, 0, PHONE_SCREEN.y + 28, "KINDLING\nDELIVERY", {
-      size: Type.body,
+    this.phoneTitle = addUiText(this, 0, PHONE_APP.y + PHONE_HEADER_H / 2, "KINDLING DELIVERY", {
+      size: PHONE_TITLE_PX,
       color: Color.limeHex,
       fontStyle: "700",
       align: "center",
-      lineSpacing: 4,
       strokeThickness: 0,
       letterSpacing: 0,
       noWrap: true,
-      maxWidth: PHONE_SCREEN.w - 28,
-      maxHeight: 52,
+      maxWidth: PHONE_APP.w - 16,
+      maxHeight: PHONE_HEADER_H,
     }).setOrigin(0.5);
-    this.phoneStatus = addUiText(this, 0, PHONE_SCREEN.y + PHONE_SCREEN.h - 40, "Tap to call", {
-      size: Type.body,
+    this.phoneStatus = addUiText(this, 0, PHONE_APP.y + PHONE_APP.h - PHONE_STATUS_H / 2, "Tap to call", {
+      size: PHONE_STATUS_PX,
       color: Color.creamHex,
       fontStyle: "600",
       align: "center",
-      lineSpacing: 4,
+      lineSpacing: 2,
       strokeThickness: 0,
-      padding: { x: 10, y: 6 },
+      padding: { x: 10, y: 4 },
       noWrap: true,
-      maxWidth: PHONE_SCREEN.w - 16,
-      maxHeight: 72,
+      maxWidth: PHONE_APP.w - 12,
+      maxHeight: PHONE_STATUS_H,
     }).setOrigin(0.5);
+    // Hit area is the chassis: the transparent button margin must not take taps.
     this.phoneHit = this.add
-      .rectangle(0, 0, PHONE_W - 8, PHONE_H - 8, 0x000000, 0.001)
+      .rectangle(0, 0, PHONE_CHASSIS.w, PHONE_CHASSIS.h, 0x000000, 0.001)
       .setInteractive({ useHandCursor: true });
     this.phoneHit.on("pointerdown", (p: Phaser.Input.Pointer) => {
       p.event.stopPropagation();
@@ -204,6 +300,8 @@ export class HudScene extends Phaser.Scene {
       .container(GAME_WIDTH - 160, GAME_HEIGHT - 220, [
         this.phoneFlash,
         this.phoneBody,
+        this.phoneChrome,
+        this.phoneMapBase,
         this.phoneMap,
         this.phoneTitle,
         this.phoneStatus,
@@ -211,16 +309,17 @@ export class HudScene extends Phaser.Scene {
       ])
       .setDepth(22)
       .setVisible(false);
+    this.paintPhoneChrome();
 
     this.toastText = addUiText(this, GAME_WIDTH / 2, GAME_HEIGHT - 36, "", {
-      size: Type.body,
+      size: HUD_TOAST_PX,
       color: Color.creamHex,
       backgroundColor: Color.bannerInk,
-      padding: { x: 18, y: 10 },
+      padding: { x: 22, y: 13 },
       align: "center",
       fontStyle: "600",
-      maxWidth: 720,
-      maxHeight: 64,
+      maxWidth: 900,
+      maxHeight: 80,
     })
       .setOrigin(0.5, 1)
       .setDepth(20);
@@ -247,56 +346,7 @@ export class HudScene extends Phaser.Scene {
     this.idDim.setInteractive({ useHandCursor: false });
     this.idDim.on("pointerdown", (p: Phaser.Input.Pointer) => p.event.stopPropagation());
 
-    this.idName = addUiText(this, 0, -34, "", {
-      size: ID_NAME_PX,
-      color: Color.inkHex,
-      align: "center",
-      fontStyle: "600",
-      strokeThickness: 0,
-      maxWidth: 600,
-      maxHeight: 48,
-    }).setOrigin(0.5);
-    this.idTitle = addUiText(this, 0, -142, "CUSTOMER ID", {
-      size: ID_TITLE_PX,
-      color: Color.inkHex,
-      fontStyle: "700",
-      strokeThickness: 0,
-      maxWidth: 600,
-      maxHeight: 34,
-    }).setOrigin(0.5);
-    this.idDob = addUiText(this, 0, 26, "", {
-      size: ID_DOB_PX,
-      color: "#3a2418",
-      strokeThickness: 0,
-      maxWidth: 600,
-      maxHeight: 34,
-    }).setOrigin(0.5);
-    this.idHint = addUiText(this, 0, 106, "Tap the card to confirm 19+", {
-      size: ID_HINT_PX,
-      color: "#3d7a45",
-      fontStyle: "600",
-      strokeThickness: 0,
-      maxWidth: 600,
-      maxHeight: 44,
-    }).setOrigin(0.5);
-    this.idFlashRing = this.add
-      .rectangle(0, 0, ID_CARD_W + ID_RING_PAD, ID_CARD_H + ID_RING_PAD, 0x000000, 0)
-      .setStrokeStyle(8, Color.lime, 1);
-    this.idBg = this.add.rectangle(0, 0, ID_CARD_W, ID_CARD_H, 0xf4e8c1, 0.97).setStrokeStyle(6, 0x3d7a45);
-    enableItemHit(this.idBg);
-    this.idBg.on("pointerdown", (p: Phaser.Input.Pointer) => {
-      p.event.stopPropagation();
-      getSim().queueInteract();
-    });
-    this.idPanel = this.add.container(GAME_WIDTH / 2, GAME_HEIGHT / 2, [
-      this.idFlashRing,
-      this.idBg,
-      this.idTitle,
-      this.idName,
-      this.idDob,
-      this.idHint,
-    ]);
-    this.idPanel.setDepth(25).setVisible(false);
+    this.buildIdCard();
 
     this.flash = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0xffffff, 0).setDepth(24);
 
@@ -304,13 +354,13 @@ export class HudScene extends Phaser.Scene {
     this.drawPad();
     this.padKnob = this.add.circle(this.padCenter.x, this.padCenter.y, 40, Color.cream, 0.92).setDepth(20);
     this.padLabel = addUiText(this, this.padCenter.x, this.padCenter.y - 128, "Heading to stop…", {
-      size: Type.caption,
+      size: PAD_LABEL_PX,
       color: Color.creamHex,
       backgroundColor: Color.bannerInk,
-      padding: { x: 10, y: 6 },
+      padding: { x: 13, y: 8 },
       fontStyle: "600",
-      maxWidth: 240,
-      maxHeight: 40,
+      maxWidth: 300,
+      maxHeight: 50,
     })
       .setOrigin(0.5, 1)
       .setDepth(20);
@@ -342,6 +392,208 @@ export class HudScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.game.events.off(VIEWFIT_EVENT, relayout));
 
     this.paintHud(getSim().snapshot());
+  }
+
+  /**
+   * The ID card, built to read like a government-issued one: header band, portrait of
+   * the person actually standing at the door, labelled fields beside it rather than
+   * four centred lines, an ID number, a signature strip, and a verdict band.
+   */
+  private buildIdCard(): void {
+    const halfW = ID_CARD_W / 2;
+    const halfH = ID_CARD_H / 2;
+    const headerMid = -halfH + ID_HEADER_H / 2;
+    const photoX = -halfW + ID_PAD + ID_PHOTO_W / 2;
+    const photoTop = -halfH + ID_HEADER_H + ID_PAD;
+
+    this.idFlashRing = this.add
+      .rectangle(0, 0, ID_CARD_W + ID_RING_PAD, ID_CARD_H + ID_RING_PAD, 0x000000, 0)
+      .setStrokeStyle(8, Color.lime, 1);
+    // Fully opaque: at 0.97 the doorstep's own prompt chip ghosted through the card.
+    this.idBg = this.add.rectangle(0, 0, ID_CARD_W, ID_CARD_H, ID_CARD_FILL, 1).setStrokeStyle(6, ID_OK_INK);
+    enableItemHit(this.idBg);
+    this.idBg.on("pointerdown", (p: Phaser.Input.Pointer) => {
+      p.event.stopPropagation();
+      getSim().queueInteract();
+    });
+    // Bands, guilloche lines, photo frame and field rules: redrawn only when the
+    // verdict colour changes, so a held card costs nothing per frame.
+    this.idFurniture = this.add.graphics();
+    this.idSignature = this.add.graphics();
+
+    this.idTitle = addUiText(this, -halfW + ID_PAD, headerMid, "PROVINCE OF KINDLING", {
+      size: ID_TITLE_PX,
+      color: Color.creamHex,
+      fontStyle: "700",
+      letterSpacing: 2,
+      strokeThickness: 0,
+      noWrap: true,
+      maxWidth: ID_CARD_W * 0.6,
+      maxHeight: ID_HEADER_H - 12,
+    }).setOrigin(0, 0.5);
+    this.idKind = addUiText(this, halfW - ID_PAD, headerMid, "IDENTITY CARD  ·  CLASS G", {
+      size: ID_KIND_PX,
+      color: Color.creamHex,
+      fontStyle: "600",
+      letterSpacing: 1,
+      strokeThickness: 0,
+      noWrap: true,
+      maxWidth: ID_CARD_W * 0.4,
+      maxHeight: ID_HEADER_H - 16,
+    }).setOrigin(1, 0.5);
+
+    this.idPhoto = this.add
+      .image(photoX, photoTop + ID_PHOTO_H / 2, customerPortraitKey(0))
+      .setDisplaySize(ID_PHOTO_W, ID_PHOTO_H);
+
+    this.idName = addUiText(this, ID_FIELD_X, 0, "", {
+      size: ID_NAME_PX,
+      color: Color.inkHex,
+      fontStyle: "700",
+      strokeThickness: 0,
+      maxWidth: ID_FIELD_W,
+      maxHeight: 46,
+    }).setOrigin(0, 0.5);
+    this.idDob = addUiText(this, ID_FIELD_X, 0, "", {
+      size: ID_DOB_PX,
+      color: "#3a2418",
+      fontStyle: "600",
+      strokeThickness: 0,
+      maxWidth: ID_FIELD_W,
+      maxHeight: 34,
+    }).setOrigin(0, 0.5);
+    this.idNumber = addUiText(this, ID_FIELD_X, 0, "", {
+      size: ID_DOB_PX,
+      color: "#3a2418",
+      fontStyle: "600",
+      letterSpacing: 1,
+      strokeThickness: 0,
+      maxWidth: ID_FIELD_W,
+      maxHeight: 34,
+    }).setOrigin(0, 0.5);
+    // Cream on the verdict colour rather than colour on cream: the deny line used to
+    // be small red text on a cream card, the faintest thing on the busiest screen.
+    this.idHint = addUiText(this, 0, halfH - ID_PAD - 20, "Tap the card to confirm 19+", {
+      size: ID_HINT_PX,
+      color: Color.creamHex,
+      fontStyle: "700",
+      align: "center",
+      strokeThickness: 0,
+      noWrap: true,
+      maxWidth: ID_CARD_W - ID_PAD * 4,
+      maxHeight: 40,
+    }).setOrigin(0.5);
+
+    this.idExpiry = addUiText(this, ID_FIELD_X, 0, "", {
+      size: ID_DOB_PX,
+      color: "#3a2418",
+      fontStyle: "600",
+      strokeThickness: 0,
+      maxWidth: ID_FIELD_W,
+      maxHeight: 34,
+    }).setOrigin(0, 0.5);
+
+    const labels = ["NAME", "DATE OF BIRTH", "ID NO.", "EXPIRES"].map((text) =>
+      addUiText(this, ID_FIELD_X, 0, text, {
+        size: ID_LABEL_PX,
+        color: "#8a7a58",
+        fontStyle: "700",
+        letterSpacing: 2,
+        strokeThickness: 0,
+        noWrap: true,
+        maxWidth: ID_FIELD_W,
+        maxHeight: 22,
+      }).setOrigin(0, 0.5),
+    );
+    const sigLabel = addUiText(this, photoX, 0, "SIGNATURE", {
+      size: ID_SIG_PX,
+      color: "#8a7a58",
+      fontStyle: "700",
+      letterSpacing: 2,
+      strokeThickness: 0,
+      noWrap: true,
+      maxWidth: ID_PHOTO_W,
+      maxHeight: 20,
+    }).setOrigin(0.5, 0);
+
+    // Field rows: label sits on the value's shoulder, so each pair reads as one field.
+    const rowTop = photoTop + 6;
+    const rowStep = 74;
+    labels.forEach((label, i) => {
+      const y = rowTop + i * rowStep;
+      label.setPosition(ID_FIELD_X, y);
+      const value = [this.idName, this.idDob, this.idNumber, this.idExpiry][i]!;
+      value.setPosition(ID_FIELD_X, y + 30);
+    });
+    const sigTop = photoTop + ID_PHOTO_H + 14;
+    sigLabel.setPosition(photoX, sigTop + 44);
+
+    this.idPanel = this.add.container(GAME_WIDTH / 2, GAME_HEIGHT / 2, [
+      this.idFlashRing,
+      this.idBg,
+      this.idFurniture,
+      this.idPhoto,
+      this.idSignature,
+      this.idTitle,
+      this.idKind,
+      ...labels,
+      this.idName,
+      this.idDob,
+      this.idNumber,
+      this.idExpiry,
+      sigLabel,
+      this.idHint,
+    ]);
+    this.idPanel.setDepth(25).setVisible(false);
+  }
+
+  /**
+   * Card chrome for one verdict. Cheap, but only redrawn when the card or its verdict
+   * changes — `idDrawnFor` is the guard.
+   */
+  private paintIdCard(card: { name: string; dob: string; ageOk: boolean; age: number }, idNo: string): void {
+    const key = `${card.name}|${card.dob}|${card.ageOk}|${idNo}`;
+    if (key === this.idDrawnFor) return;
+    this.idDrawnFor = key;
+
+    const halfW = ID_CARD_W / 2;
+    const halfH = ID_CARD_H / 2;
+    const ink = card.ageOk ? ID_OK_INK : ID_DENY_INK;
+    const photoX = -halfW + ID_PAD;
+    const photoTop = -halfH + ID_HEADER_H + ID_PAD;
+    const sigTop = photoTop + ID_PHOTO_H + 14;
+    const g = this.idFurniture;
+
+    g.clear();
+    g.fillStyle(ink, 1);
+    g.fillRect(-halfW, -halfH, ID_CARD_W, ID_HEADER_H);
+    // Security tint under the fields — the flat cream read as paper, not as a card.
+    g.fillStyle(ink, 0.06);
+    g.fillRect(ID_FIELD_X - 16, photoTop - 8, ID_FIELD_W + 32, ID_PHOTO_H + 16);
+    g.lineStyle(1, ink, 0.16);
+    for (let y = photoTop; y < halfH - ID_PAD - 52; y += 12) {
+      g.lineBetween(ID_FIELD_X - 16, y, ID_FIELD_X + ID_FIELD_W + 16, y);
+    }
+    // Photo frame, drawn as a plate under the portrait so the pixels sit in a bezel.
+    g.fillStyle(ink, 1);
+    g.fillRect(
+      photoX - ID_PHOTO_FRAME,
+      photoTop - ID_PHOTO_FRAME,
+      ID_PHOTO_W + ID_PHOTO_FRAME * 2,
+      ID_PHOTO_H + ID_PHOTO_FRAME * 2,
+    );
+    // Signature strip: an off-white band the way a laminated one looks.
+    g.fillStyle(0xfdf6e0, 1);
+    g.fillRect(photoX, sigTop, ID_PHOTO_W, 42);
+    g.lineStyle(1, ink, 0.35);
+    g.strokeRect(photoX, sigTop, ID_PHOTO_W, 42);
+    // Verdict band along the foot.
+    g.fillStyle(ink, 1);
+    g.fillRect(-halfW + ID_PAD, halfH - ID_PAD - 40, ID_CARD_W - ID_PAD * 2, 40);
+
+    this.idSignature.clear();
+    this.idSignature.lineStyle(2.5, 0x2a3550, 0.85);
+    drawSignature(this.idSignature, card.name, photoX + 12, sigTop + 26, ID_PHOTO_W - 24);
   }
 
   update(_time: number, delta: number): void {
@@ -378,8 +630,10 @@ export class HudScene extends Phaser.Scene {
     const cogTop = cogY - cogSize;
     const phoneRight = Math.min(GAME_WIDTH - 16 - inset.right, cogLeft - PHONE_COG_GAP);
     const phoneBottom = Math.min(GAME_HEIGHT - 16 - inset.bottom, cogTop - PHONE_COG_GAP);
-    this.phone.setPosition(phoneRight - PHONE_W * 0.5, phoneBottom - PHONE_H * 0.5);
-    this.phoneBody.setDisplaySize(PHONE_W, PHONE_H);
+    // Placed by the chassis, not the sprite box: the sprite's outer cell is the
+    // transparent button margin, and measuring the gap to the cog from that would
+    // put a visible 14px more air there than PHONE_COG_GAP asks for.
+    this.phone.setPosition(phoneRight - PHONE_CHASSIS.w * 0.5, phoneBottom - PHONE_CHASSIS.h * 0.5);
     // Toast stays clear of the cog column.
     this.toastText.setPosition(GAME_WIDTH / 2 - 40, bottom);
     this.padCenter = { x: 196 + inset.left, y: GAME_HEIGHT - 220 - inset.bottom };
@@ -515,12 +769,19 @@ export class HudScene extends Phaser.Scene {
     this.idDob.setAlpha(1);
     this.idHint.setAlpha(1);
     if (drop.idCard) {
-      this.idName.setText(drop.idCard.name);
-      const band = drop.idCard.ageOk ? "19+" : "UNDER 19";
-      this.idDob.setText(`DOB  ${drop.idCard.dob}   ·   ${band}`);
-      this.idHint.setText(drop.idCard.ageOk ? "Tap the card to confirm 19+" : "Under 19 — tap to deny and leave");
-      this.idHint.setColor(drop.idCard.ageOk ? "#3d7a45" : Color.dangerHex);
-      this.idBg.setStrokeStyle(6, drop.idCard.ageOk ? 0x3d7a45 : 0xc45a3a);
+      const card = drop.idCard;
+      this.idName.setText(card.name.toUpperCase());
+      this.idDob.setText(`${card.dob}   ·   ${card.ageOk ? "19+" : "UNDER 19"}`);
+      this.idNumber.setText(card.idNumber);
+      this.idExpiry.setText(card.expires);
+      this.idHint.setText(card.ageOk ? "Tap the card to confirm 19+" : "UNDER 19 — tap to deny and leave");
+      this.idBg.setStrokeStyle(6, card.ageOk ? ID_OK_INK : ID_DENY_INK);
+      // The photo is the same pool index the doorstep sprite is drawn from.
+      const face = customerPortraitKey(drop.customerLook ?? 0);
+      if (this.idPhoto.texture.key !== face) {
+        this.idPhoto.setTexture(face).setDisplaySize(ID_PHOTO_W, ID_PHOTO_H);
+      }
+      this.paintIdCard(card, card.idNumber);
     }
 
     if (drop.photoTaken && !this.sawPhoto) {
@@ -1044,72 +1305,104 @@ export class HudScene extends Phaser.Scene {
     this.padRing.strokeCircle(x, y, 76);
   }
 
-  /** Mini city map on the delivery phone screen. */
+  /** App chrome behind the title and status bars. Fixed, so painted once. */
+  private paintPhoneChrome(): void {
+    const g = this.phoneChrome;
+    g.clear();
+    g.fillStyle(0x0c1014, 1);
+    g.fillRect(PHONE_APP.x, PHONE_APP.y, PHONE_APP.w, PHONE_HEADER_H);
+    g.fillRect(PHONE_APP.x, PHONE_APP.y + PHONE_APP.h - PHONE_STATUS_H, PHONE_APP.w, PHONE_STATUS_H);
+    g.fillStyle(0x0a0d10, 1);
+    g.fillRect(PHONE_APP.x, PHONE_APP.y + PHONE_HEADER_H, PHONE_APP.w, PHONE_APP.h - PHONE_HEADER_H - PHONE_STATUS_H);
+    g.lineStyle(1, 0x2e3a44, 1);
+    g.strokeRect(PHONE_MAP.x - 1, PHONE_MAP.y - 1, PHONE_MAP.w + 2, PHONE_MAP.h + 2);
+  }
+
+  /**
+   * The whole neighbourhood, baked once. The city is deterministic, so the streets,
+   * blocks, all fourteen lots, their driveways and the shop never change — the old
+   * map re-issued 1120 fills a frame to redraw exactly this.
+   */
+  private bakePhoneMap(): void {
+    const geo = cityMinimapGeometry();
+    // Panel-local coordinates: the render texture is its own little canvas.
+    const p = minimapProjection({ x: 0, y: 0, w: PHONE_MAP.w, h: PHONE_MAP.h });
+    const g = this.make.graphics({ x: 0, y: 0 }, false);
+    const fill = (rects: readonly WorldRect[], color: number, alpha = 1): void => {
+      g.fillStyle(color, alpha);
+      for (const r of rects) {
+        const box = p.rect(r);
+        g.fillRect(box.x, box.y, box.w, box.h);
+      }
+    };
+
+    g.fillStyle(MAP_INK.outside, 1);
+    g.fillRect(0, 0, PHONE_MAP.w, PHONE_MAP.h);
+    fill(geo.blocks, MAP_INK.block);
+    // Whole bands, not per-tile squares: that is what removes the seams.
+    fill([...geo.streetsEW, ...geo.streetsNS], MAP_INK.street);
+    fill(
+      geo.stalls.map((s) => s.rect),
+      MAP_INK.drive,
+    );
+    fill(geo.shopStalls, MAP_INK.drive);
+    fill(
+      geo.houses.map((h) => h.rect),
+      MAP_INK.house,
+    );
+    fill([geo.shop], Color.lime);
+
+    this.phoneMapBase.clear();
+    this.phoneMapBase.draw(g, 0, 0);
+    g.destroy();
+  }
+
+  /** The moving part: route, destination lot, and the van with its heading. */
   private paintPhoneMap(snap: SimSnapshot): void {
     const g = this.phoneMap;
     g.clear();
-    const mapX = PHONE_SCREEN.x + 6;
-    const mapY = PHONE_SCREEN.y + 64;
-    const mapW = PHONE_SCREEN.w - 12;
-    const mapH = PHONE_SCREEN.h - 140;
-    g.fillStyle(0x1a2228, 1);
-    g.fillRoundedRect(mapX, mapY, mapW, mapH, 6);
-    g.lineStyle(1, 0x2e3a44, 1);
-    g.strokeRoundedRect(mapX, mapY, mapW, mapH, 6);
+    const p = minimapProjection(PHONE_MAP);
+    const dot = Math.max(2, Math.round(PHONE_MAP.h * 0.03));
 
-    // App chrome behind title / status
-    g.fillStyle(0x0c1014, 1);
-    g.fillRect(PHONE_SCREEN.x + 4, PHONE_SCREEN.y + 6, PHONE_SCREEN.w - 8, 56);
-    g.fillRect(PHONE_SCREEN.x + 4, PHONE_SCREEN.y + PHONE_SCREEN.h - 72, PHONE_SCREEN.w - 8, 66);
-
-    const scale = Math.min(mapW / MAP_PX_W, mapH / MAP_PX_H);
-    const ox = mapX + (mapW - MAP_PX_W * scale) * 0.5;
-    const oy = mapY + (mapH - MAP_PX_H * scale) * 0.5;
-    const toMap = (wx: number, wy: number): { x: number; y: number } => ({
-      x: ox + wx * scale,
-      y: oy + wy * scale,
-    });
-
-    // Roads
-    g.fillStyle(0x3a4248, 1);
-    const kinds = CITY.kinds;
-    const step = Math.max(1, Math.floor(TILE * scale) < 1.2 ? 2 : 1);
-    for (let r = 0; r < kinds.length; r += step) {
-      for (let c = 0; c < kinds[r]!.length; c += step) {
-        const k = kinds[r]![c];
-        if (k !== "road" && k !== "parking") continue;
-        const p = toMap(c * TILE, r * TILE);
-        const s = Math.max(1.2, TILE * scale * step);
-        g.fillRect(p.x, p.y, s, s);
+    const route = getSim().routeWorldPath();
+    if (route.length > 1) {
+      g.lineStyle(Math.max(1.5, PHONE_MAP.h * 0.014), Color.cream, 0.45);
+      g.beginPath();
+      const start = p.toMap(route[0]!.x, route[0]!.y);
+      g.moveTo(start.x, start.y);
+      for (let i = 1; i < route.length; i++) {
+        const step = p.toMap(route[i]!.x, route[i]!.y);
+        g.lineTo(step.x, step.y);
       }
+      g.strokePath();
     }
 
-    // Kindling shop
-    const shop = CITY.shopLot;
-    const shopPt = toMap(shop.origin.c * TILE, shop.origin.r * TILE);
-    g.fillStyle(Color.lime, 0.9);
-    g.fillRect(shopPt.x, shopPt.y, Math.max(3, shop.w * TILE * scale), Math.max(3, shop.h * TILE * scale));
-
-    // Destination pin
+    // Destination lot, tinted apart from the other thirteen. The old map pinned the
+    // parking stall, which is not the building the player is looking for.
     const stopId = snap.run?.nextStopId ?? snap.dropoff.houseId;
-    if (stopId) {
-      const house = houseById(stopId);
-      if (house) {
-        const stop = tileToWorld(house.stop);
-        const pin = toMap(stop.x, stop.y);
-        g.fillStyle(Color.amber, 1);
-        g.fillCircle(pin.x, pin.y, 4);
-        g.lineStyle(1.5, Color.cream, 1);
-        g.strokeCircle(pin.x, pin.y, 4);
-      }
+    const house = stopId ? houseById(stopId) : null;
+    if (house) {
+      const box = p.rect(lotWorldRect(house.house, house.lotW, house.lotH));
+      g.fillStyle(Color.amber, 1);
+      g.fillRect(box.x, box.y, box.w, box.h);
+      g.lineStyle(2, Color.cream, 0.9);
+      g.strokeRect(box.x - 1, box.y - 1, box.w + 2, box.h + 2);
     }
 
-    // Van
-    const van = toMap(snap.vehicle.x, snap.vehicle.y);
+    const van = p.toMap(snap.vehicle.x, snap.vehicle.y);
+    // Heading tick: which way the van is pointing, in the same radians the sim steers by.
+    const tick = dot * 2.4;
+    g.lineStyle(Math.max(2, dot * 0.7), 0xffffff, 0.95);
+    g.lineBetween(
+      van.x,
+      van.y,
+      van.x + Math.cos(snap.vehicle.heading) * tick,
+      van.y + Math.sin(snap.vehicle.heading) * tick,
+    );
     g.fillStyle(0xffffff, 1);
-    g.fillCircle(van.x, van.y, 3.5);
+    g.fillCircle(van.x, van.y, dot);
     g.fillStyle(Color.neon, 1);
-    g.fillCircle(van.x, van.y, 2.2);
+    g.fillCircle(van.x, van.y, dot * 0.6);
   }
 
   private syncDoorScene(snap: SimSnapshot): void {
@@ -1169,6 +1462,28 @@ export class HudScene extends Phaser.Scene {
   private onPointerUp(p: Phaser.Input.Pointer): void {
     if (this.pointerId === p.id) this.pointerId = null;
   }
+}
+
+/**
+ * A signature that is the same every time for the same name, without needing a
+ * handwriting font: a stroke whose bumps are driven by the name's own characters.
+ */
+function drawSignature(g: Phaser.GameObjects.Graphics, name: string, x: number, y: number, w: number): void {
+  const steps = 40;
+  const seed = name.length || 1;
+  g.beginPath();
+  g.moveTo(x, y + 6);
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    const code = name.charCodeAt(i % Math.max(1, name.length)) || 65;
+    // Tapered envelope: a signature starts big on the capital and trails off, which a
+    // constant-amplitude wave does not — that reads as a heart monitor.
+    const envelope = Math.sin(Math.pow(t, 0.55) * Math.PI) * (1 - t * 0.45);
+    const wave = Math.sin(t * Math.PI * 4.6 + code * 0.19) * 11 * envelope;
+    const drift = Math.sin(t * Math.PI * 9 + seed * 0.9) * 2.6 * envelope;
+    g.lineTo(x + w * t, y + 6 - 10 * envelope + wave + drift);
+  }
+  g.strokePath();
 }
 
 function formatBreakdown(results: ShiftResults): string {

@@ -891,7 +891,7 @@ function person(scene: Phaser.Scene, key: string, kit: Kit, look: Look): void {
  * photo and the person at the door cannot drift apart as the art changes.
  */
 /** Rows of headroom in the portrait, so a bun or coils never touch the frame. */
-const PORTRAIT_DY = 3;
+const PORTRAIT_DY = 5;
 
 function personPortrait(scene: Phaser.Scene, key: string, look: Look): void {
   const backdrop = 0xbecad3;
@@ -1066,9 +1066,9 @@ function phone(scene: Phaser.Scene): void {
   const status = PHONE_STATUS_CELLS;
   const island = PHONE_ISLAND_CELLS;
   const home = PHONE_HOME_CELLS;
-  const rimLite = 0x565b66;
-  const rim = 0x33373f;
-  const rimDark = 0x191b21;
+  const rimLite = 0x6a707c;
+  const rim = 0x3a3f49;
+  const rimDark = 0x1c1f25;
   const bezel = 0x07070b;
   const screen = 0x0d1218;
   const pip = 0xa6b0b8;
@@ -1080,19 +1080,13 @@ function phone(scene: Phaser.Scene): void {
   bake(scene, "tex-phone", PHONE_TEX.w, PHONE_TEX.h, (g) => {
     const right = chassis.x + chassis.w;
     const bottom = chassis.y + chassis.h;
-    // Polished band, with the corners stepped in twice for the rounded shell.
-    phcells(g, chassis.x + 2, chassis.y, chassis.w - 4, 1, rimLite);
-    phcells(g, chassis.x + 1, chassis.y + 1, chassis.w - 2, 1, rimLite);
-    phcells(g, chassis.x, chassis.y + 2, chassis.w, chassis.h - 4, rim);
-    phcells(g, chassis.x + 1, bottom - 2, chassis.w - 2, 1, rimDark);
-    phcells(g, chassis.x + 2, bottom - 1, chassis.w - 4, 1, rimDark);
-    phcells(g, chassis.x, chassis.y + 2, 1, chassis.h - 4, rimLite);
-    phcells(g, right - 1, chassis.y + 2, 1, chassis.h - 4, rimDark);
-
-    // Matte bezel inside the band.
-    phcells(g, chassis.x + 2, chassis.y + 1, chassis.w - 4, 1, bezel);
-    phcells(g, chassis.x + 1, chassis.y + 2, chassis.w - 2, chassis.h - 4, bezel);
-    phcells(g, chassis.x + 2, bottom - 2, chassis.w - 4, 1, bezel);
+    // Polished band, corners stepped in one cell for the rounded shell. The band is
+    // the bezel: one cell of it, so the glass reaches almost to the edge.
+    phcells(g, chassis.x + 1, chassis.y, chassis.w - 2, 1, rimLite);
+    phcells(g, chassis.x, chassis.y + 1, chassis.w, chassis.h - 2, rim);
+    phcells(g, chassis.x + 1, bottom - 1, chassis.w - 2, 1, rimDark);
+    phcells(g, chassis.x, chassis.y + 1, 1, chassis.h - 2, rimLite);
+    phcells(g, right - 1, chassis.y + 1, 1, chassis.h - 2, rimDark);
 
     // Side buttons live in the margin columns the old bake was clipping off.
     phcells(g, chassis.x - 1, 8, 1, 2, rim);
@@ -1100,26 +1094,26 @@ function phone(scene: Phaser.Scene): void {
     phcells(g, chassis.x - 1, 16, 1, 3, rimLite);
     phcells(g, right, 11, 1, 5, rimLite);
 
+    // Matte black under the glass, so the corners the band steps around stay dark.
+    phcells(g, glass.x, glass.y, glass.w, glass.h, bezel);
     phcells(g, glass.x, glass.y, glass.w, glass.h, screen);
 
-    // Status bar: signal pips left, battery right, island between them.
-    phcells(g, status.x, status.y + 1, 1, 1, pipDim);
-    phcells(g, status.x + 1, status.y + 1, 1, 1, pip);
+    // Status bar sits on a lifted ground, or the black island vanishes into the glass.
+    phcells(g, status.x, status.y, status.w, status.h, 0x161d24);
+    // Signal: ascending bars. Battery: a filled cell with a dim tip.
+    phcells(g, status.x + 1, status.y + 1, 1, 1, pipDim);
     phcells(g, status.x + 2, status.y, 1, 2, pip);
     phcells(g, status.x + 3, status.y, 1, 2, pip);
     const battery = status.x + status.w - 4;
-    phcells(g, battery, status.y, 3, 2, pipDim);
-    phcells(g, battery, status.y, 2, 2, pip);
-    phcells(g, battery + 3, status.y, 1, 2, pipDim);
+    phcells(g, battery, status.y, 3, 2, pip);
+    phcells(g, battery + 3, status.y + 1, 1, 1, pipDim);
 
-    // Dynamic island, narrowed on its top row so it reads as a pill.
+    // Dynamic island: a plain pill, narrowed on its top row, with one lens dot.
     phcells(g, island.x + 1, island.y, island.w - 2, 1, bezel);
     phcells(g, island.x, island.y + 1, island.w, 1, bezel);
-    phcells(g, island.x + 1, island.y + 1, 4, 1, 0x171b21);
-    phcells(g, island.x + 5, island.y, 2, 2, 0x1d2f3f);
-    phcells(g, island.x + 5, island.y, 1, 1, 0x3a627e);
+    phcells(g, island.x + island.w - 3, island.y + 1, 1, 1, 0x2a3f4e);
 
-    phcells(g, home.x + 5, home.y, home.w - 10, 1, 0x4c515a);
+    phcells(g, home.x + 6, home.y, home.w - 12, 1, 0x4c515a);
   });
 }
 

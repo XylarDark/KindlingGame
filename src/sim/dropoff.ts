@@ -5,6 +5,10 @@ export interface IdCard {
   dob: string;
   ageOk: boolean;
   age: number;
+  /** Printed licence number. Derived from the same identity, so it never shifts. */
+  idNumber: string;
+  /** Printed expiry. Always in the future — an expired card is not a game rule here. */
+  expires: string;
 }
 
 export interface DropoffView {
@@ -91,5 +95,19 @@ export function idCardFor(name: string, ageOrSeed: number | string): IdCard {
     dob: `${day} ${month} ${year}`,
     ageOk: age >= DROPOFF_MIN_AGE,
     age,
+    idNumber: licenceNumber(h),
+    expires: `${day} ${month} ${2027 + ((h >>> 16) % 5)}`,
   };
+}
+
+/**
+ * Two letters and seven digits, grouped the way a licence is. Taken from the same
+ * hash as the date of birth, so re-deriving a card never changes the number on it.
+ */
+function licenceNumber(h: number): string {
+  const letters = "ABCDEFGHJKLMNPRSTVWXYZ";
+  const a = letters[h % letters.length]!;
+  const b = letters[(h >>> 5) % letters.length]!;
+  const digits = String(100000 + ((h >>> 3) % 900000));
+  return `${a}${b} ${digits.slice(0, 3)} ${digits.slice(3)}${(h >>> 11) % 10}`;
 }

@@ -62,6 +62,19 @@ describe("phone art grid", () => {
     expect(glass.y).toBe(0);
   });
 
+  it("keeps the bezel to a single cell on every side", () => {
+    // Two cells is 28 design pixels a side on a 280px body: it read as a tablet in a
+    // case, and it cost the map 40px of width it had nowhere else to find.
+    expect(PHONE_GLASS_CELLS.x - PHONE_CHASSIS_CELLS.x).toBe(1);
+    expect(PHONE_GLASS_CELLS.y - PHONE_CHASSIS_CELLS.y).toBe(1);
+    expect(
+      PHONE_CHASSIS_CELLS.x + PHONE_CHASSIS_CELLS.w - (PHONE_GLASS_CELLS.x + PHONE_GLASS_CELLS.w),
+    ).toBe(1);
+    expect(
+      PHONE_CHASSIS_CELLS.y + PHONE_CHASSIS_CELLS.h - (PHONE_GLASS_CELLS.y + PHONE_GLASS_CELLS.h),
+    ).toBe(1);
+  });
+
   it("nests glass inside chassis and app inside glass", () => {
     expect(contains(PHONE_CHASSIS_CELLS, PHONE_GLASS_CELLS)).toBe(true);
     expect(contains(PHONE_GLASS_CELLS, PHONE_APP_CELLS)).toBe(true);

@@ -42,20 +42,24 @@ export const PHONE_SCALE = 1.75;
  */
 export const PHONE_CHASSIS_CELLS: CellRect = { x: 1, y: 1, w: 20, h: 24 };
 
-/** Glass, inside a two-cell bezel: polished rim outside, matte black inside. */
-export const PHONE_GLASS_CELLS: CellRect = { x: 3, y: 3, w: 16, h: 20 };
+/**
+ * Glass, inside a single-cell bezel. One cell is 14 design pixels against a 280px
+ * body — 5% a side. Two cells looked like a tablet in a protective case, and it cost
+ * the map 40px of width it had nowhere else to get.
+ */
+export const PHONE_GLASS_CELLS: CellRect = { x: 2, y: 2, w: 18, h: 22 };
 
 /** Status bar: signal, wifi, battery. Baked, so the app must not paint over it. */
-export const PHONE_STATUS_CELLS: CellRect = { x: 3, y: 3, w: 16, h: 2 };
+export const PHONE_STATUS_CELLS: CellRect = { x: 2, y: 2, w: 18, h: 2 };
 
 /** Where the delivery app is allowed to paint. */
-export const PHONE_APP_CELLS: CellRect = { x: 3, y: 5, w: 16, h: 17 };
+export const PHONE_APP_CELLS: CellRect = { x: 2, y: 4, w: 18, h: 19 };
 
 /** Home indicator strip along the bottom of the glass. */
-export const PHONE_HOME_CELLS: CellRect = { x: 3, y: 22, w: 16, h: 1 };
+export const PHONE_HOME_CELLS: CellRect = { x: 2, y: 23, w: 18, h: 1 };
 
 /** Dynamic island, straddling the status bar the way the real one does. */
-export const PHONE_ISLAND_CELLS: CellRect = { x: 7, y: 3, w: 8, h: 2 };
+export const PHONE_ISLAND_CELLS: CellRect = { x: 7, y: 2, w: 8, h: 2 };
 
 export interface DesignRect {
   /** Left edge, relative to the sprite's centre. */
