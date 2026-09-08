@@ -14,6 +14,7 @@ import {
   SHIFT_MS,
 } from "./constants";
 import { GameSim } from "./gameSim";
+import { tutorialHints } from "./tutorialHints";
 import { CITY, houseById, tileToWorld } from "../maps/cityT0";
 import {
   TRAFFIC_LANE_WIDTH,
@@ -681,7 +682,11 @@ describe("GameSim order loops", () => {
     expect(sim.snapshot().highlightSkuId).toBeNull();
   });
 
-  it("resets the clock to 9:00 and clears a door stop so leftover SLAs are not LATE", () => {
+  it("resets the clock to 9:00 and clears a door stop rather than restarting its SLA", () => {
+    // Was "clears a door stop so leftover SLAs are not LATE", and asserted the in-flight
+    // delivery survived as `onRun` with its hour restarted. That claim described a clock
+    // rewind, and a rewind is what stranded a walk-in on the floor after a reset. The
+    // button is now a cold start, so the right claim is that the run is gone entirely.
     const sim = GameSim.create({ seed: 4, autoSpawn: false });
     const order = fillTicket(sim, "delivery", { destinationId: "house-1" });
     sim.hitTheRoad();
@@ -694,10 +699,10 @@ describe("GameSim order loops", () => {
     const snap = sim.snapshot();
     expect(snap.clockLabel).toBe("09:00");
     expect(snap.dropoff.phase).toBe("none");
-    expect(sim.orderById(order.id)?.status).toBe("onRun");
-    const view = snap.orders.find((o) => o.id === order.id)!;
-    expect(view.late).toBe(false);
-    expect(view.slaRemainingMs).toBeGreaterThan(MS_PER_GAME_HOUR - 50);
+    expect(sim.orderById(order.id)).toBeUndefined();
+    expect(snap.orders).toHaveLength(0);
+    expect(snap.run).toBeNull();
+    expect(snap.playerRole).toBe("keyLead");
   });
 
   it("leaves each sealed bag on the counter", () => {
@@ -1136,5 +1141,186 @@ describe("the key lead can be outrun by the counter", () => {
     expect(cover.served).toBeGreaterThanOrEqual(4);
     expect(cover.lost).toBeGreaterThan(cover.served);
     expect(sim.score).toBeLessThanOrEqual(0);
+  });
+});
+
+describe("resetting the day returns a cold start", () => {
+  /**
+   * Leave the shop in the worst state a player could hand it over in: a walk-in standing
+   * at the counter, a pickup on the shelf, packed bags in the bin, an unpacked ticket on
+   * the tablet, the van out on a multi-stop run, and a dropoff mid-flow at a door.
+   */
+  function makeMessy(sim: GameSim): { walkInId: string } {
+    fillTicket(sim, "pickup");
+    fillTicket(sim, "delivery", { destinationId: "house-1" });
+    fillTicket(sim, "delivery", { destinationId: "house-4" });
+    sim.spawnOrder("delivery", { destinationId: "house-7", ageOk: true });
+
+    expect(sim.hitTheRoad()).toBe(true);
+    for (let i = 0; i < 1_500 && sim.snapshot().autoDriving; i++) sim.tick(50);
+    if (sim.snapshot().dropoff.phase === "atCurb") {
+      stepDropoff(sim);
+      sim.tick(CALL_CONNECT_MS + 32);
+      stepDropoff(sim);
+    }
+
+    // Spawned last and walked only as far as the counter, so they cannot time out first.
+    const walkIn = sim.spawnOrder("inStore", { ageOk: true });
+    waitForCustomerAtCounter(sim, walkIn.id);
+    return { walkInId: walkIn.id };
+  }
+
+  /**
+   * Fields that legitimately differ from a brand-new sim, each for a stated reason. Kept
+   * deliberately short: anything not named here must come back at its cold-start value.
+   * A reset hands the player a *new* day rather than a rerun of the old one, which is why
+   * the name stream advances — the seeded `rng` advances with it, and being a per-instance
+   * closure it is compared by shape below rather than by identity.
+   */
+  const CARRIES_OVER = new Set([
+    "toast", // names the reset instead of welcoming the player
+    "nameSeed", // a new day brings new customers, not yesterday's again
+    "scoreFlashSeq", // monotonic UI event id the HUD dedupes against its last-seen id
+    "sfxSeq", // likewise for the sound cue
+  ]);
+
+  /** Every own field of the sim, plus the clock, which lives behind a GameClock. */
+  function fields(sim: GameSim): Record<string, unknown> {
+    const bag: Record<string, unknown> = { "clock.gameMs": sim.clock.gameMs };
+    for (const key of Object.keys(sim)) {
+      if (CARRIES_OVER.has(key)) continue;
+      const value = (sim as unknown as Record<string, unknown>)[key];
+      // Closures are never reference-equal across instances. Recording the type still
+      // fails if a function field goes missing or stops being a function.
+      bag[key] = typeof value === "function" ? "fn" : value;
+    }
+    return bag;
+  }
+
+  /**
+   * The regression guard. Reflective on purpose: it reads the sim's own field list, so a
+   * field added by a future feature is covered without anyone remembering to add it here.
+   * A reset written as a list of assignments drifts; this fails the moment it does.
+   */
+  it.each([
+    ["resetToMorning", (sim: GameSim) => sim.resetToMorning()],
+    ["startNewDay", (sim: GameSim) => sim.startNewDay()],
+  ])("leaves no field behind after %s", (_label, reset) => {
+    const sim = GameSim.create({ seed: 4, autoSpawn: false });
+    makeMessy(sim);
+    reset(sim);
+    // Sanity-check the mess was real before trusting the comparison that follows.
+    expect(Object.keys(fields(sim)).length).toBeGreaterThan(20);
+    expect(fields(sim)).toEqual(fields(GameSim.create({ seed: 4, autoSpawn: false })));
+  });
+
+  it("clears a walk-in left standing on the shop floor — the reported case", () => {
+    const sim = GameSim.create({ seed: 4, autoSpawn: false });
+    const { walkInId } = makeMessy(sim);
+    // The customer is genuinely on the floor, not merely queued as an order.
+    expect(sim.snapshot().customers.some((c) => c.orderId === walkInId)).toBe(true);
+
+    sim.resetToMorning();
+
+    // ShopScene reconciles its sprites against this list every frame and destroys any it
+    // no longer finds, so an empty list here is what removes the stranded customer.
+    expect(sim.snapshot().customers).toEqual([]);
+    expect(sim.orderById(walkInId)).toBeUndefined();
+  });
+
+  it("empties the tablet, the bin, the shelf and the run", () => {
+    const sim = GameSim.create({ seed: 4, autoSpawn: false });
+    makeMessy(sim);
+    const before = sim.snapshot();
+    expect(before.tabletQueueCount + before.bagsInBin.length + before.bagsOnPickup.length).toBeGreaterThan(0);
+    expect(before.run).not.toBeNull();
+
+    sim.resetToMorning();
+
+    const after = sim.snapshot();
+    expect(after.orders).toEqual([]);
+    expect(after.tabletQueueCount).toBe(0);
+    expect(after.tabletTicket).toBeNull();
+    expect(after.bagsInBin).toEqual([]);
+    expect(after.bagsOnPickup).toEqual([]);
+    expect(after.run).toBeNull();
+    expect(after.dropoff.phase).toBe("none");
+    expect(after.playerRole).toBe("keyLead");
+    expect(after.handSkuId).toBeNull();
+    expect(after.selectedOrderId).toBeNull();
+    expect(after.clockLabel).toBe("09:00");
+    expect(after.score).toBe(0);
+  });
+
+  it("zeroes the counter-cover tallies, so the next run starts from nothing", () => {
+    const sim = GameSim.create({ seed: 5, autoSpawn: false });
+    fillTicket(sim, "delivery", { destinationId: "house-1" });
+    expect(sim.hitTheRoad()).toBe(true);
+    for (let i = 0; i < 6; i++) sim.spawnOrder("delivery", { ageOk: true });
+    sim.spawnOrder("inStore", { ageOk: true });
+    runCover(sim, () => sim.snapshot().shopCover.lost > 0, 1_600);
+
+    const busy = sim.snapshot().shopCover;
+    expect(busy.packed + busy.served + busy.lost).toBeGreaterThan(0);
+
+    sim.resetToMorning();
+
+    expect(sim.snapshot().shopCover).toEqual({
+      active: false,
+      line: "Nobody waiting",
+      waiting: 0,
+      packed: 0,
+      served: 0,
+      lost: 0,
+    });
+  });
+
+  it("restarts the walk-in and ticket-wave timers instead of firing them instantly", () => {
+    const sim = GameSim.create({ seed: 4 });
+    for (let t = 0; t < 200_000; t += 500) sim.tick(500);
+    sim.resetToMorning();
+    expect(sim.snapshot().orders).toEqual([]);
+
+    // A reset must not dump the backlog of every wave the old clock had already passed.
+    sim.tick(50);
+    expect(sim.snapshot().orders.length).toBeLessThanOrEqual(1);
+  });
+
+  it("comes back playable after ending the shift early", () => {
+    const sim = GameSim.create({ seed: 6, autoSpawn: false });
+    fillTicket(sim, "inStore");
+    expect(sim.snapshot().canEndShiftEarly).toBe(true);
+    expect(sim.endShiftEarly()).toBe(true);
+    expect(sim.snapshot().shiftEnded).toBe(true);
+
+    sim.resetToMorning();
+
+    const snap = sim.snapshot();
+    expect(snap.shiftEnded).toBe(false);
+    expect(snap.shiftResults).toBeNull();
+    expect(snap.canEndShiftEarly).toBe(false);
+    expect(snap.score).toBe(0);
+    // Playable, not frozen: the sim still advances and still accepts a sale.
+    sim.tick(100);
+    expect(sim.snapshot().clockLabel).toBe("09:00");
+    fillTicket(sim, "inStore");
+    expect(sim.score).toBe(SCORE_INSTORE);
+  });
+
+  it("puts the tutorial back on its first step", () => {
+    const sim = GameSim.create({ seed: 4, autoSpawn: false });
+    makeMessy(sim);
+    // Mid-run the hint points at the doorstep, not at the shop floor.
+    expect(tutorialHints(sim.snapshot())[0]?.kind).not.toBe("tablet");
+
+    sim.resetToMorning();
+
+    // Nothing to do on an empty floor, and the first ticket draws the hint back to the
+    // tablet — the same first step a player sees on a cold start.
+    expect(tutorialHints(sim.snapshot())).toEqual([]);
+    const fresh = sim.spawnOrder("pickup", { ageOk: true });
+    expect(tutorialHints(sim.snapshot())).toEqual([
+      expect.objectContaining({ kind: "tablet", orderId: fresh.id }),
+    ]);
   });
 });

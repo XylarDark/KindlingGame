@@ -279,29 +279,18 @@ export class GameSim {
     return new GameSim(options);
   }
 
-  /** Jump the shift back to 09:00 and clear a door stop so leftover SLAs cannot pin the player LATE. */
+  /**
+   * Settings → RESET DAY TO 9:00 AM. Deliberately the same operation as `startNewDay`,
+   * not a second implementation of it.
+   *
+   * This used to rewind the clock and restart SLA timers while leaving the floor as it
+   * was, which stranded whatever was mid-flight: a walk-in kept standing at the counter
+   * with no way to serve them, and the van stayed out on a run that no longer existed.
+   * Twenty-five fields survived a reset in all. Two reset paths meant one of them was
+   * always a field list drifting behind the other, so there is now only one.
+   */
   resetToMorning(): void {
-    if (this.shiftEnded) {
-      this.startNewDay();
-      return;
-    }
-    this.clock.gameMs = 0;
-    this.clearDropoff();
-    for (const order of this.orders) {
-      if (!isOpen(order)) continue;
-      if (order.slaStartGameMs !== undefined) {
-        order.slaStartGameMs = 0;
-        order.late = false;
-      }
-      if (order.arriveAtGameMs !== undefined) delete order.arriveAtGameMs;
-    }
-    this.lastAutoSpawn = 0;
-    this.nextTicketWaveAt = this.autoSpawn ? FIRST_TICKET_WAVE_MS : 0;
-    this.nextWalkInAt = this.autoSpawn ? WALKIN_GAP_MIN_MS : 0;
-    const hasWalkIn = this.orders.some((o) => o.type === "inStore" && isOpen(o));
-    this.spawnQueue =
-      this.autoSpawn && !hasWalkIn ? [{ atMs: OPENING_FIRST_AT_MS, type: "inStore" }] : [];
-    this.toast = "New day. Clock is 9:00 AM.";
+    this.startNewDay();
   }
 
   /** End the shift early (settings) or when the clock hits 23:00. */
@@ -323,14 +312,20 @@ export class GameSim {
     return true;
   }
 
-  /** Results → New day: 09:00, score 0, fresh floor, shop playable. */
+  /**
+   * The one definition of a fresh session: 09:00, score 0, empty floor, shop playable.
+   * Both the results card's New Day and the settings reset land here, so a field added
+   * to the sim only has to be cleared in one place. `gameSim.test.ts` compares a reset
+   * sim against a newly constructed one field by field, so forgetting one fails a test
+   * rather than stranding a customer.
+   */
   startNewDay(): void {
     this.shiftEnded = false;
     this.score = 0;
     this.under19Fails = 0;
     this.scoredActions = 0;
     this.scoreFlash = null;
-    this.scoreFlashSeq = 0;
+    this.sfxCue = null;
     this.clock.gameMs = 0;
     this.clearDropoff();
     this.playerRole = "keyLead";
@@ -356,6 +351,7 @@ export class GameSim {
     this.coverServed = 0;
     this.coverLost = 0;
     this.coverLostName = null;
+    this.coverLostAt = 0;
     this.queuedInteract = false;
     this.input = { dx: 0, dy: 0 };
     this.dropoffInteractReadyAt = 0;
@@ -368,6 +364,11 @@ export class GameSim {
       this.nextTicketWaveAt = 0;
       this.nextWalkInAt = 0;
     }
+    // Three things deliberately carry over, and the reset test allows exactly these.
+    // `scoreFlashSeq` / `sfxSeq` are monotonic UI event ids that the HUD dedupes against
+    // its own last-seen id; rewinding them to 0 made the HUD swallow the first flash and
+    // sound of the new day. `nameSeed` carries so a new day brings new customers rather
+    // than replaying yesterday's. The toast names the reset instead of saying welcome.
     this.toast = "New day. Clock is 9:00 AM.";
   }
 
