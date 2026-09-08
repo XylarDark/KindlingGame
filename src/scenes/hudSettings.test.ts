@@ -68,6 +68,18 @@ describe("settings cog panel", () => {
     expect(src.match(/captionSize: SET_BTN_CAP_PX/g)).toHaveLength(2);
   });
 
+  it("stands the cog caption down while the panel covers it, and brings it back", () => {
+    // The panel is anchored to the same corner and closes over the caption's top 16px.
+    // Hiding it is also what stops it taking clicks from under the panel, since Phaser
+    // will not hit-test what it would not render — so the cog has to remain the way out,
+    // and it does: nothing is drawn over the cog. Verified in-browser by clicking the
+    // caption's own coordinates while the panel is open and finding them dead.
+    const open = between(src, "private openSettings(", "\n  }", "openSettings");
+    const close = between(src, "private closeSettings(", "\n  }", "closeSettings");
+    expect(open).toContain("this.setCogCaptionShown(false)");
+    expect(close).toContain("this.setCogCaptionShown(true)");
+  });
+
   it("keeps a hud button's hit area on the box it paints", () => {
     // Phaser adds displayOrigin to the local point before testing the hit area, and a
     // Container's origin is its centre. A rect given in the same coordinates as the fill

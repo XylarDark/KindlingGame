@@ -1156,6 +1156,7 @@ export class HudScene extends Phaser.Scene {
     this.settingsDim.setVisible(true);
     this.armSettingsDim(true);
     this.settingsPanel.setVisible(true);
+    this.setCogCaptionShown(false);
     this.refreshMusicControls();
     this.refreshEndShiftButton();
   }
@@ -1165,6 +1166,22 @@ export class HudScene extends Phaser.Scene {
     this.settingsDim.setVisible(false);
     this.armSettingsDim(false);
     this.settingsPanel.setVisible(false);
+    this.setCogCaptionShown(true);
+  }
+
+  /**
+   * The caption sits 8px above a cog that is itself 20px off the bottom edge, so the
+   * panel — anchored to the same corner and 486px tall — closes over the caption's top
+   * 16px. The chip is the higher depth, so it wins that overlap and clips the panel's
+   * bottom corner. It labels nothing while the panel is up (the panel says SETTINGS
+   * across its own head), so it stands down instead.
+   *
+   * Visibility is the whole mechanism, deliberately: Phaser will not hit-test an object
+   * it would not render, so this also stops the caption closing the panel from underneath
+   * it. The cog is the control that closes the panel, and it is never covered.
+   */
+  private setCogCaptionShown(shown: boolean): void {
+    this.cogCaption.setVisible(shown);
   }
 
   private refreshEndShiftButton(): void {
