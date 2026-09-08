@@ -30,10 +30,12 @@ import {
   parsePlanText,
   parseShotSpec,
   parseSize,
+  parseStartClicks,
   parseStep,
   profileDirBasename,
   profileDirFromCommandLine,
   remainingMs,
+  resolveNavigationUrl,
   suggestFreeLane,
   type LockRecord,
   type ProcessInfo,
@@ -335,42 +337,45 @@ describe("killRoots", () => {
 
 describe("budget arithmetic", () => {
   it("honours an explicit budget", () => {
-    expect(computeBudgetMs({ explicit: "5000", waitMs: 2500, noClick: false, steps: [] })).toBe(5000);
+    expect(computeBudgetMs({ explicit: "5000", waitMs: 2500, startClicks: 1, steps: [] })).toBe(5000);
   });
 
   it("clamps an explicit budget to the ceiling", () => {
-    expect(computeBudgetMs({ explicit: String(MAX_BUDGET_MS * 4), waitMs: 0, noClick: true, steps: [] })).toBe(MAX_BUDGET_MS);
+    expect(computeBudgetMs({ explicit: String(MAX_BUDGET_MS * 4), waitMs: 0, startClicks: 0, steps: [] })).toBe(MAX_BUDGET_MS);
   });
 
   it("rejects a nonsense budget", () => {
     for (const bad of ["0", "-1", "soon", ""]) {
-      expect(() => computeBudgetMs({ explicit: bad, waitMs: 0, noClick: true, steps: [] })).toThrow(/--budget must be a positive/);
+      expect(() => computeBudgetMs({ explicit: bad, waitMs: 0, startClicks: 0, steps: [] })).toThrow(/--budget must be a positive/);
     }
   });
 
-  it("charges the settle wait and a second render gate when it clicks to start play", () => {
-    const clicked = computeBudgetMs({ waitMs: 2500, noClick: false, steps: [] });
-    const notClicked = computeBudgetMs({ waitMs: 2500, noClick: true, steps: [] });
-    // Starting play costs another settle plus the shop scene's own first paint.
+  it("charges a settle wait and another render gate for every start click", () => {
+    const clicked = computeBudgetMs({ waitMs: 2500, startClicks: 1, steps: [] });
+    const notClicked = computeBudgetMs({ waitMs: 2500, startClicks: 0, steps: [] });
+    // Each advance click costs another settle plus the next screen's own first paint.
     expect(clicked - notClicked).toBe(2500 + READY_TIMEOUT_MS);
     expect(notClicked).toBe(LAUNCH_OVERHEAD_MS + READY_TIMEOUT_MS + 2500);
+    // Walking the how-to flow takes two, and the budget has to grow with it or the
+    // watchdog kills a run that was doing exactly what it was told.
+    expect(computeBudgetMs({ waitMs: 2500, startClicks: 2, steps: [] }) - clicked).toBe(2500 + READY_TIMEOUT_MS);
   });
 
   it("charges the render gate, which runs on every path", () => {
-    expect(computeBudgetMs({ waitMs: 0, noClick: true, steps: [] })).toBeGreaterThanOrEqual(READY_TIMEOUT_MS);
+    expect(computeBudgetMs({ waitMs: 0, startClicks: 0, steps: [] })).toBeGreaterThanOrEqual(READY_TIMEOUT_MS);
   });
 
   it("adds every explicit wait plus a per-step allowance, so a long plan is not cut off", () => {
     const steps = [parseStep("wait:30000"), parseStep("shot:a.png"), parseStep("wait:5000")];
-    const budget = computeBudgetMs({ waitMs: 1000, noClick: true, steps });
+    const budget = computeBudgetMs({ waitMs: 1000, startClicks: 0, steps });
     expect(budget).toBe(LAUNCH_OVERHEAD_MS + READY_TIMEOUT_MS + 1000 + 35_000 + 3 * PER_STEP_ALLOWANCE_MS);
     expect(budget).toBeLessThan(MAX_BUDGET_MS);
   });
 
   it("never returns less than the floor or more than the ceiling", () => {
-    expect(computeBudgetMs({ waitMs: 0, noClick: true, steps: [] })).toBeGreaterThanOrEqual(MIN_BUDGET_MS);
+    expect(computeBudgetMs({ waitMs: 0, startClicks: 0, steps: [] })).toBeGreaterThanOrEqual(MIN_BUDGET_MS);
     const huge = Array.from({ length: 200 }, () => parseStep("wait:60000"));
-    expect(computeBudgetMs({ waitMs: 0, noClick: true, steps: huge })).toBe(MAX_BUDGET_MS);
+    expect(computeBudgetMs({ waitMs: 0, startClicks: 0, steps: huge })).toBe(MAX_BUDGET_MS);
   });
 
   it("measures the time left against a deadline", () => {
@@ -420,6 +425,115 @@ describe("classifyReadiness", () => {
     // entirely, and that has to keep working.
     expect(classifyReadiness({ ...base, frame: NO_GAME_FRAME, pollCount: 1 }).kind).toBe("waiting");
     expect(classifyReadiness({ ...base, frame: NO_GAME_FRAME, pollCount: READY_ABSENT_POLLS }).kind).toBe("not-a-game");
+  });
+
+  it("ignores scenes entirely when the caller did not name one", () => {
+    // The default has to stay frame-only, or every existing caller starts asserting
+    // something it never asked for.
+    expect(classifyReadiness({ ...base, frame: 500, activeScenes: ["title"] }).kind).toBe("ready");
+    expect(classifyReadiness({ ...base, frame: 500, activeScenes: [] }).kind).toBe("ready");
+  });
+
+  it("is not ready while the requested scene is absent, however many frames have painted", () => {
+    // This is the whole point: the game paints the screen it is on, so a frame count
+    // cannot distinguish "the shop rendered" from "the title screen rendered".
+    const state = classifyReadiness({ ...base, frame: 5_000, activeScenes: ["title"], requiredScene: "shop" });
+    expect(state).toEqual({ kind: "waiting", frame: 5_000 });
+  });
+
+  it("is ready when the requested scene is among those running", () => {
+    expect(classifyReadiness({ ...base, frame: 500, activeScenes: ["shop", "hud"], requiredScene: "hud" }).kind).toBe("ready");
+  });
+
+  it("distinguishes a slow render from the wrong screen on expiry", () => {
+    // A frame shortfall is a slow machine and is forgiven; a scene that never arrived
+    // is a wrong answer, and the caller has to be told rather than handed a picture.
+    expect(classifyReadiness({ frame: 12, elapsedMs: READY_TIMEOUT_MS, pollCount: 40, requiredScene: "shop", activeScenes: ["title"] })).toEqual({
+      kind: "wrong-scene",
+      frame: 12,
+      wanted: "shop",
+      active: ["title"],
+    });
+    expect(classifyReadiness({ frame: 5_000, elapsedMs: READY_TIMEOUT_MS, pollCount: 40, requiredScene: "shop", activeScenes: ["title"] }).kind).toBe(
+      "wrong-scene",
+    );
+    expect(classifyReadiness({ frame: 12, elapsedMs: READY_TIMEOUT_MS, pollCount: 40, requiredScene: "shop", activeScenes: ["shop"] }).kind).toBe(
+      "gave-up",
+    );
+  });
+
+  it("reports a scene miss even when the scene list could not be read", () => {
+    const state = classifyReadiness({ frame: 500, elapsedMs: READY_TIMEOUT_MS, pollCount: 40, requiredScene: "shop", activeScenes: null });
+    expect(state).toEqual({ kind: "wrong-scene", frame: 500, wanted: "shop", active: [] });
+  });
+
+  it("still short circuits on a page with no game, even under a scene assertion", () => {
+    expect(
+      classifyReadiness({ frame: NO_GAME_FRAME, elapsedMs: 0, pollCount: READY_ABSENT_POLLS, requiredScene: "shop" }).kind,
+    ).toBe("not-a-game");
+  });
+});
+
+describe("parseStartClicks", () => {
+  it("sends one advance click by default, which is what starts play", () => {
+    expect(parseStartClicks(undefined, false)).toBe(1);
+  });
+
+  it("treats --no-click as zero", () => {
+    expect(parseStartClicks(undefined, true)).toBe(0);
+    expect(parseStartClicks("0", true)).toBe(0);
+  });
+
+  it("takes an explicit count, so the how-to flow can be walked a screen at a time", () => {
+    expect(parseStartClicks("0", false)).toBe(0);
+    expect(parseStartClicks("2", false)).toBe(2);
+  });
+
+  it("refuses a contradiction instead of silently picking one", () => {
+    expect(() => parseStartClicks("2", true)).toThrow(/contradict/);
+  });
+
+  it("rejects a count that is not a small whole number", () => {
+    for (const bad of ["-1", "1.5", "many", "99"]) {
+      expect(() => parseStartClicks(bad, false)).toThrow(/--start-clicks must be an integer/);
+    }
+  });
+});
+
+describe("resolveNavigationUrl", () => {
+  const defaultQuery = "?howto=0";
+
+  it("appends the default query to a bare origin", () => {
+    expect(resolveNavigationUrl({ base: "http://127.0.0.1:5174", defaultQuery })).toBe("http://127.0.0.1:5174/?howto=0");
+    expect(resolveNavigationUrl({ base: "http://127.0.0.1:5174/", defaultQuery })).toBe("http://127.0.0.1:5174/?howto=0");
+  });
+
+  it("lets an explicit --query replace the default", () => {
+    expect(resolveNavigationUrl({ base: "http://127.0.0.1:5174", query: "?howto=1", defaultQuery })).toBe("http://127.0.0.1:5174/?howto=1");
+  });
+
+  it("uses a query carried by --url instead of gluing the default onto it", () => {
+    // The old concatenation produced "http://127.0.0.1:5174/?howto=1/?howto=0", which
+    // loads fine and leaves `howto` as "1/?howto=0" -- neither "1" nor "0", so the game
+    // fell back to its dev default and quietly showed the wrong screen.
+    expect(resolveNavigationUrl({ base: "http://127.0.0.1:5174/?howto=1", defaultQuery })).toBe("http://127.0.0.1:5174/?howto=1");
+    expect(resolveNavigationUrl({ base: "http://127.0.0.1:5174/?howto=1&hour=20", defaultQuery })).toBe(
+      "http://127.0.0.1:5174/?howto=1&hour=20",
+    );
+  });
+
+  it("refuses two competing queries rather than choosing one", () => {
+    expect(() => resolveNavigationUrl({ base: "http://127.0.0.1:5174/?howto=1", query: "?howto=0", defaultQuery })).toThrow(
+      /Put the parameters in one place/,
+    );
+  });
+
+  it("supplies a missing leading ? so a query cannot become a path segment", () => {
+    expect(resolveNavigationUrl({ base: "http://127.0.0.1:5174", query: "howto=1", defaultQuery })).toBe("http://127.0.0.1:5174/?howto=1");
+  });
+
+  it("accepts an empty query as a request for the bare page", () => {
+    expect(resolveNavigationUrl({ base: "http://127.0.0.1:5174", query: "", defaultQuery })).toBe("http://127.0.0.1:5174/");
   });
 });
 

@@ -351,9 +351,10 @@ export function killRoots(matched: readonly LaneProcess[]): LaneProcess[] {
 export interface BudgetInput {
   /** Raw `--budget` value, when the caller pinned one. */
   explicit?: string | undefined;
-  /** The `--wait` settle time, charged once for navigate and again for the start click. */
+  /** The `--wait` settle time, charged once for navigate and once per start click. */
   waitMs: number;
-  noClick: boolean;
+  /** Canvas-centre clicks sent before the plan runs; see {@link parseStartClicks}. */
+  startClicks: number;
   steps: readonly Step[];
 }
 
@@ -373,13 +374,79 @@ export function computeBudgetMs(input: BudgetInput): number {
     return Math.min(Math.round(explicit), MAX_BUDGET_MS);
   }
   const waits = input.steps.reduce((sum, step) => (step.kind === "wait" ? sum + step.ms : sum), 0);
-  const settle = input.waitMs + (input.noClick ? 0 : input.waitMs);
-  // The render gate runs before the start click and again after it, and each can spend
-  // its full timeout on a slow machine, so both are charged to the budget rather than
-  // silently eating into it.
-  const gates = READY_TIMEOUT_MS + (input.noClick ? 0 : READY_TIMEOUT_MS);
+  const settle = input.waitMs * (1 + input.startClicks);
+  // The render gate runs once before the start clicks and again after each of them, and
+  // each can spend its full timeout on a slow machine, so every one is charged to the
+  // budget rather than silently eating into it.
+  const gates = READY_TIMEOUT_MS * (1 + input.startClicks);
   const total = LAUNCH_OVERHEAD_MS + gates + settle + waits + input.steps.length * PER_STEP_ALLOWANCE_MS;
   return Math.min(Math.max(total, MIN_BUDGET_MS), MAX_BUDGET_MS);
+}
+
+/** Ceiling on `--start-clicks`. Past this the caller wants a plan, not a bigger number. */
+export const MAX_START_CLICKS = 8;
+
+/**
+ * How many canvas-centre clicks to send before the plan runs.
+ *
+ * The game boots paused and one click starts play, which is why a click was hard-coded
+ * here for so long. But `?howto=1` puts two screens in front of that — welcome, then
+ * how-to — so "one click" means something different depending on the URL, and a run
+ * asking for the how-to overlay could not say how far in it wanted to be. Making the
+ * count explicit turns a hidden assumption about the game's flow into an argument.
+ */
+export function parseStartClicks(raw: string | undefined, noClick: boolean): number {
+  if (noClick) {
+    if (raw !== undefined && Number(raw) !== 0) {
+      throw new Error(`--no-click and --start-clicks ${raw} contradict each other; pass one or the other`);
+    }
+    return 0;
+  }
+  if (raw === undefined) return 1;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0 || n > MAX_START_CLICKS) {
+    throw new Error(`--start-clicks must be an integer 0-${MAX_START_CLICKS}, got ${raw}. Use a plan for anything beyond that.`);
+  }
+  return n;
+}
+
+// ---------------------------------------------------------------------------
+// Navigation URL
+// ---------------------------------------------------------------------------
+
+/**
+ * Composes the URL to navigate to from `--url` and `--query`.
+ *
+ * This used to be a bare `` `${base}/${query}` ``, which quietly produced
+ * `http://host/?howto=1/?howto=0` whenever `--url` already carried a query. That URL
+ * is perfectly valid: the path is `/`, so Vite serves the game, the render gate
+ * passes and a good-looking screenshot comes back — of the wrong screen, because
+ * `howto` parsed as `1/?howto=0`, matched neither `1` nor `0`, and
+ * `shouldShowHowTo()` fell back to its dev default of off. Nothing anywhere errored.
+ *
+ * So the two sources are now reconciled explicitly, and a caller that supplies a query
+ * in both places is told rather than silently given one of them.
+ */
+export function resolveNavigationUrl(input: { base: string; query?: string | undefined; defaultQuery: string }): string {
+  const base = input.base.replace(/\/+$/, "");
+  const at = base.indexOf("?");
+  if (at >= 0) {
+    if (input.query !== undefined) {
+      throw new Error(
+        `--url already carries the query "${base.slice(at)}" and --query was given as "${input.query}". ` +
+          `Put the parameters in one place: concatenating them yields a URL that loads and then ignores both.`,
+      );
+    }
+    return base;
+  }
+  return `${base}/${normaliseQuery(input.query ?? input.defaultQuery)}`;
+}
+
+/** A query missing its leading `?` would become a path segment and serve the game with no parameters at all. */
+function normaliseQuery(query: string): string {
+  const trimmed = query.trim();
+  if (trimmed === "" || trimmed.startsWith("?") || trimmed.startsWith("#")) return trimmed;
+  return `?${trimmed}`;
 }
 
 export function remainingMs(deadlineAt: number, now: number): number {
@@ -423,11 +490,16 @@ export type ReadyState =
   | { kind: "ready"; frame: number }
   | { kind: "waiting"; frame: number }
   | { kind: "not-a-game" }
-  | { kind: "gave-up"; frame: number };
+  | { kind: "gave-up"; frame: number }
+  | { kind: "wrong-scene"; frame: number; wanted: string; active: readonly string[] };
 
 export interface ReadinessInput {
   /** Current render frame, or {@link NO_GAME_FRAME} when the global is absent. */
   frame: number;
+  /** Keys of the scenes currently running, or null when they were not read. */
+  activeScenes?: readonly string[] | null;
+  /** Scene the caller asserted the run would end on, via `--ready-scene`. */
+  requiredScene?: string | null;
   elapsedMs: number;
   pollCount: number;
   minFrames?: number;
@@ -437,17 +509,26 @@ export interface ReadinessInput {
 /**
  * Decides whether the page has rendered enough to photograph.
  *
- * Giving up is a normal outcome, not an error: a slow machine still gets its capture,
- * with a note saying the gate expired. Only a genuinely absent game global short
- * circuits, so `--url` pointed at something else still works.
+ * Two outcomes on expiry, and the difference is the point. A **frame** shortfall is
+ * forgiven: the machine is slow, the capture is taken anyway with a note, and that is
+ * a judgement call about rendering speed rather than about correctness. A **scene**
+ * the caller explicitly named and never got is an error, because frames advance on
+ * whatever screen the game happens to be showing — this repo has already photographed
+ * the wrong screen twice while the gate reported green. Only a genuinely absent game
+ * global short circuits, so `--url` pointed at something else still works.
  */
 export function classifyReadiness(input: ReadinessInput): ReadyState {
   const minFrames = input.minFrames ?? DEFAULT_MIN_READY_FRAMES;
   const timeoutMs = input.timeoutMs ?? READY_TIMEOUT_MS;
-  if (input.frame >= minFrames) return { kind: "ready", frame: input.frame };
+  const wanted = input.requiredScene ?? null;
+  const active = input.activeScenes ?? null;
   if (input.frame < 0 && input.pollCount >= READY_ABSENT_POLLS) return { kind: "not-a-game" };
-  if (input.elapsedMs >= timeoutMs) return { kind: "gave-up", frame: input.frame };
-  return { kind: "waiting", frame: input.frame };
+  const painted = input.frame >= minFrames;
+  const onScene = wanted === null || (active !== null && active.includes(wanted));
+  if (painted && onScene) return { kind: "ready", frame: input.frame };
+  if (input.elapsedMs < timeoutMs) return { kind: "waiting", frame: input.frame };
+  if (!onScene) return { kind: "wrong-scene", frame: input.frame, wanted: wanted!, active: active ?? [] };
+  return { kind: "gave-up", frame: input.frame };
 }
 
 // ---------------------------------------------------------------------------

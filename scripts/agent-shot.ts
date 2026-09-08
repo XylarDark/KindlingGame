@@ -26,6 +26,23 @@
  * `--size 1920x1080` makes CSS pixels equal the game's design coordinates 1:1, so
  * design-space positions can be clicked directly.
  *
+ * ## Landing on the screen you meant
+ *
+ * The game boots paused and a canvas-centre click advances it, but how far that gets
+ * you depends on the URL: straight into the shop normally, or through the welcome card
+ * and then the how-to overlay under `?howto=1`. Two flags make that explicit:
+ *
+ *   --start-clicks N   how many advance clicks to send (default 1, `--no-click` is 0)
+ *   --ready-scene key  assert the run ends on this scene, and fail loudly if it does not
+ *
+ *   # the welcome card, untouched
+ *   npx tsx scripts/agent-shot.ts --lane 5 --query "?howto=1" --no-click --ready-scene title
+ *   # the how-to overlay, one click in
+ *   npx tsx scripts/agent-shot.ts --lane 5 --query "?howto=1" --start-clicks 1 --ready-scene title
+ *
+ * Put the query in `--url` **or** `--query`, never both — they used to be concatenated,
+ * which produced a URL that loaded happily and applied neither.
+ *
  * ## Why this script exists, and why it cannot hang or leak
  *
  * The `cursor-ide-browser` MCP tools drive a **single shared tab**. Three agents
@@ -86,7 +103,9 @@ import {
   parseLane,
   parsePlanText,
   parseSize,
+  parseStartClicks,
   parseStep,
+  resolveNavigationUrl,
   type ShotClip,
   type Step,
 } from "./lib/laneProtocol";
@@ -123,13 +142,17 @@ function rawSteps(): string[] {
 
 const LANE = parseLane(arg("lane", process.env.KINDLING_LANE ?? "0"));
 const PORT = lanePort(LANE);
-const BASE = arg("url", process.env.KINDLING_URL ?? "http://127.0.0.1:5174")!.replace(/\/$/, "");
-const QUERY = arg("query", "?howto=0")!;
+const BASE = arg("url", process.env.KINDLING_URL ?? "http://127.0.0.1:5174")!;
+// `--url` and `--query` are reconciled rather than concatenated; a URL carrying its own
+// query used to be glued to the default one and silently loaded with neither in effect.
+const NAV_URL = resolveNavigationUrl({ base: BASE, query: arg("query"), defaultQuery: "?howto=0" });
 const OUT = arg("out", process.env.KINDLING_SHOT_OUT ?? join(process.env.TEMP ?? "/tmp", "kindling-shots"))!;
 const NAME = arg("name", `lane${LANE}-${new Date().toISOString().replace(/[:.]/g, "-")}.png`)!;
 const [W, H] = parseSize(arg("size", "1280x720") ?? "1280x720");
 const WAIT = Number(arg("wait", "2500"));
-const NO_CLICK = flag("no-click");
+const START_CLICKS = parseStartClicks(arg("start-clicks"), flag("no-click"));
+/** Scene the run asserts it will end up on, so a capture of the wrong screen fails instead of lying. */
+const READY_SCENE = arg("ready-scene") ?? null;
 const PROFILE = laneProfileDir(LANE);
 const CHROME =
   process.env.CHROME_PATH ??
@@ -328,7 +351,8 @@ async function awaitPageTarget(watchdog: Watchdog): Promise<{ webSocketDebuggerU
 }
 
 /**
- * Waits until the game has drawn enough frames to be worth photographing.
+ * Waits until the game has drawn enough frames to be worth photographing, and — when
+ * the caller named one — until the scene it asked for is actually the one running.
  *
  * Headless Chrome renders in software, so first paint of this game at 1920x1080 on a
  * cold profile can land after the `--wait` settle has already elapsed. The result was
@@ -336,19 +360,48 @@ async function awaitPageTarget(watchdog: Watchdog): Promise<{ webSocketDebuggerU
  * would have been reported as one. Counting real frames adapts to the machine instead
  * of guessing a sleep, and it is bounded, so a page that never renders still returns.
  *
+ * Frames alone cannot answer "am I looking at the right screen", because the game
+ * renders whatever it is on. `--ready-scene` closes that gap, and it fails the run
+ * rather than noting it: a frame shortfall is a slow machine, but a scene that never
+ * arrived means the capture would have shown something other than what was asked for.
+ *
  * `--no-ready-wait` restores the old fixed-sleep behaviour; `--min-frames` retunes it.
  */
-async function awaitRendered(evaluate: (expression: string) => Promise<unknown>, baseline = 0): Promise<void> {
-  if (flag("no-ready-wait")) return;
+async function awaitRendered(
+  evaluate: (expression: string) => Promise<unknown>,
+  baseline = 0,
+  requiredScene: string | null = null,
+): Promise<void> {
+  if (flag("no-ready-wait")) {
+    if (requiredScene !== null) {
+      note(`lane ${LANE}: --no-ready-wait turns the gate off, so --ready-scene ${requiredScene} is NOT being checked`);
+    }
+    return;
+  }
   const minFrames = baseline + Number(arg("min-frames", String(DEFAULT_MIN_READY_FRAMES)));
   const startedAt = Date.now();
   for (let poll = 1; ; poll += 1) {
-    const frame = await readFrame(evaluate);
-    const state = classifyReadiness({ frame, elapsedMs: Date.now() - startedAt, pollCount: poll, minFrames });
+    const { frame, activeScenes } = await readReadiness(evaluate);
+    const state = classifyReadiness({
+      frame,
+      activeScenes,
+      requiredScene,
+      elapsedMs: Date.now() - startedAt,
+      pollCount: poll,
+      minFrames,
+    });
     if (state.kind === "ready") return;
     if (state.kind === "not-a-game") {
       note(`lane ${LANE}: no game global on this page, skipping the render gate`);
       return;
+    }
+    if (state.kind === "wrong-scene") {
+      throw new Error(
+        `lane ${LANE}: --ready-scene ${state.wanted} was never reached within ${Date.now() - startedAt}ms. ` +
+          `Active instead: ${state.active.length === 0 ? "(none)" : state.active.join(", ")}, at frame ${state.frame}.\n` +
+          `  The game paints whichever screen it is on, so this is exactly the failure a frame count cannot see.\n` +
+          `  Check the query the page actually received and how many --start-clicks it takes to get there.`,
+      );
     }
     if (state.kind === "gave-up") {
       note(
@@ -361,10 +414,28 @@ async function awaitRendered(evaluate: (expression: string) => Promise<unknown>,
   }
 }
 
+/**
+ * Render frame and running scene keys in one round-trip.
+ *
+ * Scene keys are read rather than inferred, which is the prevention this repo wrote
+ * down after an audit passed while measuring the wrong thing.
+ */
+async function readReadiness(
+  evaluate: (expression: string) => Promise<unknown>,
+): Promise<{ frame: number; activeScenes: string[] | null }> {
+  const raw = (await evaluate(
+    "(function () { var g = window.kindlingGame; if (!g || !g.loop) return null;" +
+      " return { frame: g.loop.frame, scenes: g.scene.scenes" +
+      ".filter(function (s) { return s.scene.isActive(); })" +
+      ".map(function (s) { return s.scene.key; }) }; })()",
+  )) as { frame?: unknown; scenes?: unknown } | null;
+  if (raw === null || typeof raw.frame !== "number") return { frame: NO_GAME_FRAME, activeScenes: null };
+  return { frame: raw.frame, activeScenes: Array.isArray(raw.scenes) ? (raw.scenes as string[]) : null };
+}
+
 /** Current render frame, or {@link NO_GAME_FRAME} when this page has no game on it. */
 async function readFrame(evaluate: (expression: string) => Promise<unknown>): Promise<number> {
-  const raw = await evaluate("(function () { var g = window.kindlingGame; return g && g.loop ? g.loop.frame : -1; })()");
-  return typeof raw === "number" ? raw : NO_GAME_FRAME;
+  return (await readReadiness(evaluate)).frame;
 }
 
 async function capture(cdp: Cdp, watchdog: Watchdog, name: string, clip: ShotClip | null): Promise<void> {
@@ -390,7 +461,12 @@ async function main(): Promise<void> {
   // Grammar errors throw here, before Chrome is launched, so a bad plan costs nothing
   // and cannot reach CDP as a NaN coordinate that silently captures the wrong thing.
   const plan: Step[] = rawSteps().map(parseStep);
-  const budgetMs = computeBudgetMs({ explicit: arg("budget", process.env.KINDLING_SHOT_BUDGET_MS), waitMs: WAIT, noClick: NO_CLICK, steps: plan });
+  const budgetMs = computeBudgetMs({
+    explicit: arg("budget", process.env.KINDLING_SHOT_BUDGET_MS),
+    waitMs: WAIT,
+    startClicks: START_CLICKS,
+    steps: plan,
+  });
 
   installExitGuards();
   const watchdog = new Watchdog(budgetMs);
@@ -416,8 +492,8 @@ async function main(): Promise<void> {
     cdp.send("Emulation.setDeviceMetricsOverride", { width: W, height: H, deviceScaleFactor: 1, mobile: false }),
   );
 
-  step = `navigating to ${BASE}/${QUERY}`;
-  await watchdog.run("Page.navigate", () => cdp.send("Page.navigate", { url: `${BASE}/${QUERY}` }));
+  step = `navigating to ${NAV_URL}`;
+  await watchdog.run("Page.navigate", () => cdp.send("Page.navigate", { url: NAV_URL }));
   await sleep(WAIT);
 
   const click = async (x: number, y: number): Promise<void> => {
@@ -472,20 +548,35 @@ async function main(): Promise<void> {
   // arrive before its input plugin is live, and on a cold profile that window extends
   // past the settle -- the click was silently lost and the capture came back showing
   // "Paused - tap to start".
+  //
+  // Only the last gate carries the `--ready-scene` assertion. The earlier ones exist to
+  // prove input is live, and the run is deliberately mid-flow while they run.
   step = "waiting for the game to render";
-  await awaitRendered(evaluate);
+  await awaitRendered(evaluate, 0, START_CLICKS === 0 ? READY_SCENE : null);
 
-  // The game boots paused; a click on the canvas starts play.
-  if (!NO_CLICK) {
-    step = "clicking the canvas to start play";
+  // The game boots paused, and a click on the canvas advances it. How far one click
+  // gets you depends on the URL: straight into the shop normally, but `?howto=1` puts
+  // the welcome card and then the how-to overlay in front of that. `--start-clicks`
+  // says how many of those steps to take, so a run can stop on the screen it wants.
+  for (let i = 0; i < START_CLICKS; i += 1) {
+    step = `start click ${i + 1}/${START_CLICKS}`;
     const before = await readFrame(evaluate);
     await click(W / 2, H / 2);
     await sleep(WAIT);
-    // The gate above was satisfied by the title screen. Starting play swaps in the shop
-    // scene, whose own first paint has to be waited out separately, so re-arm the gate
-    // relative to the frame we clicked on.
-    step = "waiting for the shop to render";
-    await awaitRendered(evaluate, Math.max(before, 0));
+    // The gate above was satisfied by the screen we just left. The next one has its own
+    // first paint, and `loop.frame` is monotonic, so re-arm relative to the frame we
+    // clicked on rather than against an absolute threshold already met.
+    step = `waiting for the game to render after start click ${i + 1}/${START_CLICKS}`;
+    await awaitRendered(evaluate, Math.max(before, 0), i === START_CLICKS - 1 ? READY_SCENE : null);
+  }
+
+  if (START_CLICKS > 0) {
+    // Park the pointer off-canvas. A start click that lands on a control leaves it in
+    // its hover paint, and the capture then shows a button in a state no player put it
+    // in -- the how-to screen's own PLAY button sits directly under the canvas centre.
+    step = "parking the pointer";
+    await watchdog.run("park pointer", () => cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 0, y: 0, buttons: 0 }));
+    await sleep(120);
   }
 
   for (const [index, item] of plan.entries()) {

@@ -202,19 +202,52 @@ describe("a capture is not taken before the game has painted", () => {
     expect(countOf(gate, /return;/g)).toBeGreaterThanOrEqual(3);
   });
 
-  it("charges both gates to the wall-clock budget", () => {
+  it("charges every gate to the wall-clock budget, including the extra start clicks", () => {
     // A gate that can spend 12s while the budget does not know about it would just
     // move the timeout failure somewhere less honest.
     const budget = bodyOf(sourceOf("lib/laneProtocol.ts"), "export function computeBudgetMs(");
     expect(budget).toContain("READY_TIMEOUT_MS");
-    expect(budget).toContain("noClick");
+    expect(budget).toContain("startClicks");
   });
 
-  it("re-arms the gate after the start click, relative to the frame it clicked on", () => {
-    // The pre-click gate is satisfied by the title screen; the shop scene has its own
+  it("re-arms the gate after each start click, relative to the frame it clicked on", () => {
+    // The earlier gate is satisfied by the screen being left; the next one has its own
     // first paint, and an absolute threshold would already be met.
     const main = bodyOf(agentShot, "async function main()");
-    expect(main).toContain("awaitRendered(evaluate, Math.max(before, 0))");
+    expect(main).toContain("awaitRendered(evaluate, Math.max(before, 0)");
+  });
+
+  it("fails the run when --ready-scene names a screen the game never reached", () => {
+    // Frames advance on whatever screen the game is on, so a frame count cannot tell a
+    // capture of the shop from a capture of the title. This repo has already shipped
+    // that mistake twice; when a caller asserts the scene, a miss must be an error and
+    // not a note, or the gate is green while measuring the wrong thing again.
+    const gate = bodyOf(agentShot, "async function awaitRendered(");
+    expect(gate).toContain('state.kind === "wrong-scene"');
+    expect(gate).toMatch(/state\.kind === "wrong-scene"[\s\S]{0,400}throw new Error\(/);
+  });
+
+  it("reads the scene keys instead of inferring them from the URL", () => {
+    // Deriving "which screen should be up" from the query would couple this script to
+    // the game's flow and rot silently the next time that flow changes.
+    const read = bodyOf(agentShot, "async function readReadiness(");
+    expect(read).toContain("isActive()");
+    expect(read).toContain("scene.key");
+  });
+});
+
+describe("the URL a run navigates to is the one it asked for", () => {
+  it("reconciles --url and --query instead of concatenating them", () => {
+    // `${BASE}/${QUERY}` turned "--url .../?howto=1" into ".../?howto=1/?howto=0",
+    // which loads happily and applies neither parameter.
+    expect(agentShot).toContain("resolveNavigationUrl(");
+    expect(agentShot).not.toMatch(/\$\{BASE\}\/\$\{QUERY\}/);
+    expect(bodyOf(agentShot, "async function main()")).toContain("url: NAV_URL");
+  });
+
+  it("refuses a query given in both places rather than silently dropping one", () => {
+    const resolve = bodyOf(sourceOf("lib/laneProtocol.ts"), "export function resolveNavigationUrl(");
+    expect(resolve).toContain("throw new Error(");
   });
 });
 
@@ -260,7 +293,7 @@ describe("the profile directory is not left behind", () => {
 
 describe("the documented CLI surface is intact", () => {
   it("still accepts every flag other agents depend on", () => {
-    for (const flagName of ["lane", "url", "query", "size", "wait", "no-click", "out", "name", "step", "plan"]) {
+    for (const flagName of ["lane", "url", "query", "size", "wait", "no-click", "out", "name", "step", "plan", "start-clicks", "ready-scene"]) {
       // `arg()` takes a bare name, while the repeated --step scan compares "--step".
       expect(agentShot, `--${flagName} must keep working`).toMatch(new RegExp(`"(?:--)?${flagName}"`));
     }

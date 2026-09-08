@@ -17,7 +17,21 @@ npx tsx scripts/agent-shot.ts --lane 4 --query "?howto=0&shot=drive" --wait 4000
 
 A lane number picks a dedicated debug port (`9400 + lane`) and its own Chrome profile, so any number of lanes capture in parallel. Verified with three simultaneous. Pick a lane no one else is using and keep it for your whole session; lane `0` is the default and therefore the one most likely to collide. Output goes to `%TEMP%\kindling-shots` and the script prints the absolute path it wrote.
 
-Useful flags: `--url`, `--query`, `--size WxH`, `--wait ms`, `--no-click`, `--out`, `--name`. The game boots paused, so the script clicks the canvas centre to start play unless you pass `--no-click`.
+Useful flags: `--url`, `--query`, `--size WxH`, `--wait ms`, `--no-click`, `--start-clicks N`, `--ready-scene key`, `--out`, `--name`. The game boots paused, so the script clicks the canvas centre to start play unless you pass `--no-click`.
+
+Put a query in `--url` **or** `--query`, never both. They used to be concatenated, so `--url ".../?howto=1"` became `.../?howto=1/?howto=0` — a URL that loads, renders and photographs perfectly while applying neither parameter. Supplying both is now refused before Chrome starts.
+
+### Landing on the screen you meant
+
+One canvas-centre click gets you into the shop normally, but `?howto=1` puts the welcome card and then the how-to overlay in front of that, so "one click" means different things on different URLs. Say how far in you want to be, and assert where you landed:
+
+```
+npx tsx scripts/agent-shot.ts --lane 5 --query "?howto=1" --no-click        --ready-scene title   # welcome
+npx tsx scripts/agent-shot.ts --lane 5 --query "?howto=1" --start-clicks 1  --ready-scene title   # how-to
+npx tsx scripts/agent-shot.ts --lane 5                                      --ready-scene shop    # play
+```
+
+`--ready-scene` is the only part of the gate that **fails the run**. A frame shortfall is forgiven as a slow machine, but a scene you named and never reached means the capture would have shown something else — the failure a frame count structurally cannot see. Use it on anything you intend to assert against. The pointer is parked off-canvas after the start clicks, so a control the click landed on is not photographed mid-hover.
 
 Why the shared browser cannot simply be fixed is recorded in [docs/operational/automation-gaps.md](docs/operational/automation-gaps.md); re-check it if the Cursor browser tools change.
 
