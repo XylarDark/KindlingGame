@@ -7,10 +7,27 @@
  *   npx tsx scripts/agent-shot.ts --lane 1 --name shop.png
  *   npx tsx scripts/agent-shot.ts --lane 2 --query "?howto=0&shot=drive" --wait 4000
  *
- * Prints the absolute path of the PNG it wrote.
+ * With no steps it writes one PNG and prints its absolute path. Steps drive an ordered
+ * sequence instead, so a run can click a control and read the resulting state:
+ *
+ *   click:x,y    left click at CSS pixels in the emulated viewport
+ *   clickeval:expr    click where `expr` says, for targets that move between runs
+ *   drag:x1,y1,x2,y2  press, move in steps, release — the only way to work a slider
+ *   wait:ms      sleep
+ *   shot:name    capture a PNG under the output directory
+ *                `shot:name.png@x,y,w,h[,scale]` crops and magnifies (scale 3 default)
+ *   eval:expr    evaluate JS in the page, printed as `EVAL <json>`
+ *
+ * Pass them inline with repeated `--step`, or — required for anything with double
+ * quotes, which the Windows `npx` cmd shim strips — one per line in a `--plan` file:
+ *
+ *   npx tsx scripts/agent-shot.ts --lane 7 --size 1920x1080 --plan tmp/settings.steps
+ *
+ * `--size 1920x1080` makes CSS pixels equal the game's design coordinates 1:1, so
+ * design-space positions can be clicked directly.
  */
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 function arg(name: string, fallback?: string): string | undefined {
@@ -21,6 +38,28 @@ function arg(name: string, fallback?: string): string | undefined {
 
 function flag(name: string): boolean {
   return process.argv.includes(`--${name}`);
+}
+
+/**
+ * Repeated `--step` values, in the order given, followed by any `--plan` file.
+ *
+ * Prefer `--plan` for anything containing double quotes: `npx` on Windows is a cmd
+ * shim that silently strips them, so an inline `--step eval:...` arrives as invalid JS.
+ */
+function steps(): string[] {
+  const out: string[] = [];
+  process.argv.forEach((a, i) => {
+    if (a === "--step" && process.argv[i + 1] !== undefined) out.push(process.argv[i + 1]!);
+  });
+  const plan = arg("plan");
+  if (plan !== undefined) {
+    const text = readFileSync(plan, "utf8").replace(/\r\n/g, "\n");
+    for (const line of text.split("\n")) {
+      const trimmed = line.trim();
+      if (trimmed !== "" && !trimmed.startsWith("#")) out.push(trimmed);
+    }
+  }
+  return out;
 }
 
 const LANE = Number(arg("lane", process.env.KINDLING_LANE ?? "0"));
@@ -111,18 +150,109 @@ async function main(): Promise<void> {
     await cdp.send("Page.navigate", { url: `${BASE}/${QUERY}` });
     await sleep(WAIT);
 
+    const click = async (x: number, y: number): Promise<void> => {
+      for (const type of ["mousePressed", "mouseReleased"]) {
+        await cdp.send("Input.dispatchMouseEvent", { type, x, y, button: "left", clickCount: 1 });
+      }
+    };
+
+    /** Sliders only respond to pointermove between press and release, so interpolate. */
+    const drag = async (x1: number, y1: number, x2: number, y2: number): Promise<void> => {
+      await cdp.send("Input.dispatchMouseEvent", { type: "mousePressed", x: x1, y: y1, button: "left", buttons: 1, clickCount: 1 });
+      const legs = 8;
+      for (let i = 1; i <= legs; i += 1) {
+        const t = i / legs;
+        await cdp.send("Input.dispatchMouseEvent", {
+          type: "mouseMoved",
+          x: x1 + (x2 - x1) * t,
+          y: y1 + (y2 - y1) * t,
+          button: "left",
+          buttons: 1,
+        });
+        await sleep(20);
+      }
+      await cdp.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: x2, y: y2, button: "left", buttons: 0, clickCount: 1 });
+    };
+
+    /**
+     * `name.png` for the full viewport, or `name.png@x,y,w,h[,scale]` for a magnified
+     * crop — the only practical way to judge whether small HUD type is legible.
+     */
+    const capture = async (spec: string): Promise<void> => {
+      const [name, region] = spec.split("@");
+      const params: Record<string, unknown> = { format: "png" };
+      if (region !== undefined) {
+        const [x, y, w, h, scale] = region.split(",").map(Number);
+        if ([x, y, w, h].some((n) => n === undefined || Number.isNaN(n))) {
+          throw new Error(`shot crop needs "name.png@x,y,w,h[,scale]", got "${spec}"`);
+        }
+        params.clip = { x: x!, y: y!, width: w!, height: h!, scale: scale ?? 3 };
+        params.captureBeyondViewport = true;
+      }
+      const shot = (await cdp.send("Page.captureScreenshot", params)) as { data: string };
+      const path = join(OUT, name!);
+      writeFileSync(path, Buffer.from(shot.data, "base64"));
+      console.log(path);
+    };
+
     // The game boots paused; a click on the canvas starts play.
     if (!NO_CLICK) {
-      for (const type of ["mousePressed", "mouseReleased"]) {
-        await cdp.send("Input.dispatchMouseEvent", { type, x: W / 2, y: H / 2, button: "left", clickCount: 1 });
-      }
+      await click(W / 2, H / 2);
       await sleep(WAIT);
     }
 
-    const shot = (await cdp.send("Page.captureScreenshot", { format: "png" })) as { data: string };
-    const path = join(OUT, NAME);
-    writeFileSync(path, Buffer.from(shot.data, "base64"));
-    console.log(path);
+    const evaluate = async (expression: string): Promise<unknown> => {
+      // awaitPromise lets a step await a dynamic import; it is a no-op on plain values.
+      const res = (await cdp.send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true })) as {
+        result: { value: unknown };
+        exceptionDetails?: { text: string; exception?: { description?: string } };
+      };
+      if (res.exceptionDetails) {
+        // `text` is a bare "Uncaught" on a syntax error; the description carries the reason.
+        const why = res.exceptionDetails.exception?.description ?? res.exceptionDetails.text;
+        throw new Error(`eval failed: ${why}\n  expression: ${expression}`);
+      }
+      return res.result.value;
+    };
+
+    const plan = steps();
+    for (const step of plan) {
+      const [kind, ...rest] = step.split(":");
+      const body = rest.join(":");
+      if (kind === "click") {
+        const [x, y] = body.split(",").map(Number);
+        await click(x!, y!);
+      } else if (kind === "drag") {
+        const [x1, y1, x2, y2] = body.split(",").map(Number);
+        if ([x1, y1, x2, y2].some((n) => n === undefined || Number.isNaN(n))) {
+          throw new Error(`drag needs four numbers "drag:x1,y1,x2,y2", got "${body}"`);
+        }
+        await drag(x1!, y1!, x2!, y2!);
+      } else if (kind === "wait") {
+        await sleep(Number(body));
+      } else if (kind === "shot") {
+        await capture(body);
+      } else if (kind === "eval") {
+        // Screenshots of a backgrounded tab can be stale; read state instead of trusting pixels.
+        console.log(`EVAL ${JSON.stringify(await evaluate(body))}`);
+      } else if (kind === "clickeval") {
+        // Half this game's click targets move — walk-ins walk in, and the ticket seed is
+        // Date.now() — so a plan has to compute the point at the moment it clicks.
+        const at = await evaluate(body);
+        const [x, y] = String(at).split(",").map(Number);
+        if (x === undefined || y === undefined || Number.isNaN(x) || Number.isNaN(y)) {
+          throw new Error(`clickeval must return "x,y", got ${JSON.stringify(at)}\n  expression: ${body}`);
+        }
+        console.log(`CLICKEVAL ${x},${y}`);
+        await click(x, y);
+      } else {
+        throw new Error(
+          `unknown step "${step}" (expected click:x,y | clickeval:expr | drag:x1,y1,x2,y2 | wait:ms | shot:name | eval:expr)`,
+        );
+      }
+    }
+
+    if (plan.length === 0) await capture(NAME);
     cdp.close();
   } finally {
     chrome.kill();
