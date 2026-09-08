@@ -4,7 +4,7 @@
 
 **When to add an entry:** after you debug a non-obvious failure and have a verified fix. **Read this file before** touching audits, source-scanning tests, or Phaser input wiring.
 
-**The theme of every entry below:** each of these bugs **passed its own check by doing nothing**. A green check is not evidence unless you know what it measured.
+**The theme of every entry below:** none of these bugs were caught by the thing that should have caught them. Some passed a check that measured **nothing**; some were hidden by the one value at which right and wrong agree; some had no check at all, only a constant or a comment asserting they were fine. A green check is not evidence unless you know what it measured — and a claim in the source is not a check.
 
 ---
 
@@ -52,15 +52,24 @@ broken implementation and a correct one agree. A round number is the usual accom
 - **Fix:** offset the rectangle by the container's own `displayOrigin`, which is origin-agnostic by construction rather than tuned per call site. Commit `8af52e3`, in `src/ui/chrome.ts`; it affected the settings panel, the results panel and the Title screen.
 - **Prevention:** a hit area is only verified by clicking **near its edges** — a few pixels outside each of the four, then the centre and both inside corners, reading the result back with `eval` rather than trusting pixels. A centre-only check passes on a rectangle that is half off the control, so it is not evidence of anything. And treat an **even-numbered dimension as a hazard** wherever geometry gets halved: it can place your one test point exactly on a boundary and hide an off-by-half error indefinitely. The Title screen's own button, the one origin variant (0.5) the others do not cover, is reachable for this check with `--query "?howto=1" --start-clicks 1 --ready-scene title`; see [AGENTS.md](../AGENTS.md).
 
+### A box with 1px of margin looked exactly like the bug it was not
+
+- **Date:** 2026-09-08
+- **Symptom:** nothing visible, which is what makes it worth recording. The doorstep prompt's `maxHeight` was raised from 90 to 113 to carry a 25px seed, on the correct reasoning that `fitTypeToBox` only ever shrinks. The change was then credited with fixing a rendering fault that had never been happening.
+- **Cause:** the two-line prompt measures **89px**, and the old ceiling was **90**. The box had exactly 1px of margin, so the text had always rendered at its full 25px. The raise bought headroom for the next edit to the copy; it repaired nothing. Nobody had measured the 89, so the margin's size was unknown and quietly assumed to be negative.
+- **How it was caught, which is the part to steal:** the old number was put **back** on the live object, and the text rendered identically at 25px. Reverting a change to see whether the symptom returns is the cheapest test of a fix that exists, and it is almost never run — the change is green, so the change gets the credit.
+- **Fix:** none was needed. The taller box was kept as deliberate headroom, and its comment in `src/scenes/DoorScene.ts` records the derivation (90 × 1.25 = 112.5, rounded **up**, because rounding down is this same trap in miniature). The 89-against-90 measurement lives here, since that is the number which says the raise bought headroom rather than repaired a fault. Commit `24870c1`.
+- **Prevention:** the same species as the hit box above with a thinner accomplice — 1px rather than half of an even 132 — and the same trap underneath: a measurement that happens to sit on the correct side of a boundary says nothing about how far it is from it. **Measure the margin, not just the pass.** And before crediting a change with a fix, revert it and confirm the symptom comes back.
+
 ---
 
 ## Claims in the source that nothing enforced
 
 Distinct from both sections above, and the reason this one is separate: there was no check
-here to fool. The bug lived in the gap between what the source **said** — a constant naming
-a font size, a header comment naming a derivation — and what the code did. Nothing measured
-either claim, so both read as true right up until someone changed the thing one of them
-said everything depended on.
+here to fool. These bugs lived in the gap between what the source **said** — a constant
+naming a font size, a header comment naming a derivation, a colour token named `flash` —
+and what the code did. Nothing measured any of those claims, so each read as true until
+someone finally looked at the thing it described: the rendered pixels.
 
 ### A size constant read 20px, the caption rendered 18, and a comment vouched for geometry it did not control
 
@@ -69,6 +78,15 @@ said everything depended on.
 - **Cause:** two unenforced claims compounding. First, `fitTypeToBox` **only ever shrinks**, so a seed larger than its box renders smaller and the constant stops describing the screen: the two-line caption measures **64px** tall at 20px, and the band it had to fit was **58px**. Second, the reason the band was 58: the app chrome heights were typed in as raw numbers — `34`, `58`, `4` — immediately beneath a header comment stating that *every* phone dimension derived from `PHONE_SCALE` and that "nothing here may be typed in independently". That comment was true of the chassis, the glass, the app rect, the hit area and the map, and false of the three numbers directly under it. The contradiction cost nothing while the scale sat still, and became visible the moment it moved: the glass grew and the title and status bars stayed put — a bigger phone running a smaller app.
 - **Fix:** state the chrome in cells so it genuinely derives (`PHONE_CELL * 2.5`, `* 4`, `* 0.25`), which puts the band at 64.4px and lets the caption reach its authored 20px — read back off the live text object, not inferred from the constant. The band now carries a comment naming it the tightest box on the phone and quoting the two numbers that make it tight (64 of 64.4), so the next person who wants a taller map can see what they would be spending. Commit `be757d4`, in `src/scenes/HudScene.ts` and `src/art/phoneArt.ts`.
 - **Prevention:** **assert the effective rendered size, never the declared constant.** A test pinning `PHONE_STATUS_PX` would have passed identically in the broken state and the fixed one; only `style.fontSize` off the object in a browser distinguishes them. And read a comment asserting a derivation as an unverified claim rather than a guarantee — nothing fails when a hand-written number quietly replaces a derived one, so the drift is silent by construction and the person who finds it is never the person who caused it. The same shape is worth watching for wherever a constant names a size: see the `RESET TO 9 AM` label, which was pinned at 18px next to a sibling's 26px until the copy was cut.
+
+### A tint named `flash` multiplied a green sprite by green, and changed nothing
+
+- **Date:** 2026-09-08
+- **Symptom:** the doorstep delivery bag was supposed to flash while it was the next tap target, and it did not. The code looked correct and had presumably been trusted for a long time: it animated `alpha` and applied `Color.flash`, the shared "next tap target" token. Every property read back exactly as it had been set.
+- **Cause:** a Phaser tint **multiplies**. `Color.flash` is a near-white lime (`0xb8ffb0`) and the bag is already green, so the tint had almost nothing left to scale. Sampling the rendered framebuffer over the bag at both extremes of a white-to-flash blend moved the average about **five values per channel** — invisible. The only value that did move was alpha, and it moved *downward*, to 0.7, which against a busy doorstep reads as unfinished art rather than as a call to action.
+- **The expensive part, and why this entry is filed here:** the obvious next move — *animating* that existing tint rather than holding it constant — produced two stills that were **indistinguishable**. A change that looks done, reads back correctly, and does nothing. The source said `flash`, the token was literally named `flash`, and nothing anywhere enforced that anything flashed.
+- **Fix:** move **luminance**, the one channel a green sprite has left. Alpha pinned at 1, the same token swung between 45% and full brightness so the peak still lands exactly on `Color.flash` and the shared colour identity is untouched, plus a 12% scale swell, because motion reads as "tap me" better than colour at this sprite size. Measured luma over the bag body then moved **35 → 78** per cycle, a 2.2x swing, repeatable. Commit `a1051d6`, in `src/scenes/DoorScene.ts`.
+- **Prevention:** a multiplicative tint **cannot brighten a sprite that already shares its hue** — check the hue relationship before reaching for one. Note the same alpha-plus-`Color.flash` pattern is still in use on the customer sprite a few lines away, and is correct there: a person is not green, so the multiply has room to work. The hue check is the lesson, not the pattern. And verify a visual effect by **sampling rendered pixels**, never by reading back the property you just set — here every property was exactly what the code asked for.
 
 ---
 
@@ -163,6 +181,15 @@ said everything depended on.
 - **Cause:** sprites inherit the game's day/night pipeline, which needs lighting state the ad-hoc scene never set up. Graphics shapes do not go through that pipeline, so they were unaffected — which is what makes it deceptive: the scene plainly works, only the subject is missing.
 - **Fix:** `setPipeline("MultiPipeline")` on sprites drawn into a scene built for inspection rather than play.
 - **Prevention:** true of any harness scene, not just contact sheets. If a capture shows a working background and a black subject, suspect the pipeline before suspecting the art — and note this is a harness limitation, not a game bug: the same textures render correctly in the real scenes.
+
+### Two stills of an animation, taken half a period apart, disproved a working effect
+
+- **Date:** 2026-09-08
+- **Symptom:** two screenshots taken to prove the doorstep bag's new brightness pulse worked appeared to show it doing nothing at all. The frame labelled "lit" was in fact the trough of the cycle.
+- **Cause:** capture latency. The shots were taken *between* phase gates, and the oscillator advanced roughly **half a period** between the frame being asked for and the frame arriving — so the label on each still was a guess about when it had been taken. The effect was fine and the measurement was not, which is the more dangerous way round: believing this evidence would have meant reverting a correct fix and hunting a bug that did not exist.
+- **Fix:** one screenshot **per phase gate**, with the phase read back immediately after each shot, so every frame is attributable to a known point in the cycle instead of to the moment its step was issued.
+- **Settled fact, recorded so nobody re-derives it:** **`gameMs` advances 1:1 with real time** — measured at **1.0103** and **0.9952** in separate runs. `GameSim.tick` feeds Phaser's frame delta into the clock unscaled, and `MS_PER_GAME_MINUTE` is an interpretation constant that does not multiply it. So an oscillator written against `gameMs` runs at real-time speed: the door flash measured **1125ms** and **1144ms** per period off the rendered object against a predicted 1131ms. That makes it a legible throb rather than a strobe, and driving it from game time rather than wall time is what freezes it correctly when the sim pauses instead of animating a frozen scene.
+- **Prevention:** a single still can never demonstrate an animation, and two stills only do it if each one is independently anchored to the cycle. Pair them with a numeric read-back over time — the luma sampling in the tint entry above is what actually proved that pulse; the stills only illustrated it.
 
 ---
 
