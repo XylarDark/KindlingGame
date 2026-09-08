@@ -1,6 +1,6 @@
 ---
 name: documentation
-description: Use when writing or updating code comments, README or API docs, or adding any file under docs/ - covers comment intent, the canonical docs/ layout from DOCS_LAYOUT.md, and verifying links with npm run check:doc-links.
+description: Use when writing or updating code comments, README or API docs, or adding any file under docs/ - covers comment intent, the canonical docs/ layout from DOCS_LAYOUT.md, and checking relative links by hand after a move or rename.
 ---
 
 # Documentation
@@ -35,44 +35,29 @@ semantic source of truth for what belongs where.
 **The docs root is an exhaustive list of entry points.** Only these files belong at
 `docs/`:
 
-| File | Purpose |
-| --- | --- |
-| `README.md` | Docs index |
-| `DOCS_LAYOUT.md` | The canonical structure itself |
-| `BEST-PRACTICES.md` | Cross-cutting practices |
-| `TROUBLESHOOTING.md` | Common failures and fixes |
-| `KNOWN_ERRORS.md` | Recurring errors and fixes (append-only) |
-| `SETUP-GUIDE.md` | Getting started with this template |
-| `SYNC.md` | Syncing from the template |
-| `DevEnvTemplate_RULES_SYNC.md` | Append-only log of template rule changes |
+Read `docs/DOCS_LAYOUT.md` for the current inventory rather than trusting a copy here;
+`DOCS_LAYOUT.md` and `KNOWN_ERRORS.md` are the two entry points this skill depends on.
 
 Everything else goes in a topic subdirectory:
 
 | Directory | Contents |
 | --- | --- |
 | `guides/` | How-to and long-form guides |
-| `architecture/` | System design, diagrams, ADR supplements |
-| `best-practices/` | Per-stack practice guides (`python.md`, `fastapi.md`) |
 | `operational/` | Automation gaps, recurring maintenance |
-| `templates/` | Fork-specific stubs (`templates/unity/`, `templates/unreal/`) |
-| `archive/` | Superseded plans, RFCs, and release notes |
+| `promo/` | Curated promotional stills |
 
-`DOCS_LAYOUT.md` lists further optional folders (`adr/`, `runbooks/`, `setup/`,
-`security/`, `deployment/`, `api/`). Create a subdirectory only once you have a document to
-put in it, and add its row to `DOCS_LAYOUT.md` in the same change.
+Create a subdirectory only once you have a document to put in it, and add its row to
+`DOCS_LAYOUT.md` in the same change.
 
 Rules for new docs:
 
-1. Put the file in the subdirectory that fits. Do not add it to the docs root unless it is
-   one of the entry points above.
+1. Put the file in the subdirectory that fits. Do not add it to the docs root unless
+   `DOCS_LAYOUT.md` lists it as an entry point.
 2. If no folder fits, add the folder and a one-line purpose to `DOCS_LAYOUT.md` **first**,
    then write the document.
-3. `docs/archive/` is read-only by convention. Do not update archived documents to match
-   current behavior — their value is recording what was decided at the time. Anything still
-   true belongs in a live document.
-4. `config/docs-organization.yaml` drives pattern-based moves (see
-   `docs/guides/docs-organization.md`). Automation may relocate a misplaced file, but author
-   it in the right folder anyway.
+3. If you add an `archive/` folder, treat it as read-only by convention. Do not update
+   archived documents to match current behavior — their value is recording what was decided
+   at the time. Anything still true belongs in a live document.
 
 ## Links
 
@@ -80,14 +65,12 @@ Rules for new docs:
   from the current file.
 - Use descriptive link text, never "click here".
 - Use relative paths for internal links and absolute URLs for external ones.
-- Verify links before committing:
+- This repo has no automated link checker. After moving or renaming a document, grep for
+  the old filename and fix every hit by hand:
 
-  ```bash
-  npm run check:doc-links
+  ```powershell
+  git grep -n "old-name.md"
   ```
-
-  This resolves every relative markdown link in the repo and fails on any that is broken.
-  Run it after moving or renaming a document.
 
 ## Maintenance
 
@@ -102,5 +85,5 @@ Rules for new docs:
 - [ ] Complex logic explained by a comment that gives the reason
 - [ ] Examples run as written
 - [ ] New docs placed per `DOCS_LAYOUT.md`
-- [ ] `npm run check:doc-links` passes
+- [ ] Relative links still resolve after any move or rename
 - [ ] No outdated documentation left behind

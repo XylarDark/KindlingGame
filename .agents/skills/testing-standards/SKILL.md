@@ -1,6 +1,6 @@
 ---
 name: testing-standards
-description: Use when adding or updating tests, setting up a test framework, or reviewing coverage - covers the test pyramid, AAA structure, isolation, per-tier time budgets, and this repo's node --test layout.
+description: Use when adding or updating tests, setting up a test framework, or reviewing coverage - covers the test pyramid, AAA structure, isolation, per-tier time budgets, and this repo's Vitest layout.
 ---
 
 # Testing standards
@@ -17,29 +17,29 @@ paths; 100% is not the goal.
 
 ## How tests run in this repo
 
-- Runner: the Node.js built-in test runner (`node --test`). No Jest, Vitest, or Mocha.
-- Location: `tests/unit/**/*.test.js` and `tests/integration/**/*.test.js`.
-- Tests are plain JavaScript and exercise the compiled output, so `npm test` builds first.
+- Runner: **Vitest**. `npm test` runs `vitest run` once and exits.
+- Location: tests sit next to the code they cover, as `*.test.ts` beside the module, across
+  both `src/` and `scripts/`.
+- Tests import TypeScript source directly. There is no build step before testing.
 
 | Command | Runs |
 | --- | --- |
-| `npm test` | Build, then all tests |
-| `npm run test:unit` | Build, then `tests/unit/` |
-| `npm run test:integration` | Build, then `tests/integration/` |
-| `npm run test:watch` | Build, then watch mode |
+| `npm test` | The whole suite, once |
+| `npm run typecheck` | `tsc --noEmit`, no tests |
+| `npm run build` | `tsc --noEmit`, then the Vite production build |
+| `npm run verify` | Typecheck, tests, and build, with evidence per stage |
 
 Pass extra flags through the `--` separator, or npm swallows them:
 
 ```bash
-npm test -- --test-name-pattern="validates input"   # correct
-npm test --test-name-pattern="validates input"      # wrong: npm eats the flag
+npm test -- -t "validates input"   # correct
+npm test -t "validates input"      # wrong: npm eats the flag
 ```
 
 ## Structure: arrange, act, assert
 
-```js
-const test = require('node:test');
-const assert = require('node:assert/strict');
+```ts
+import { expect, test } from 'vitest';
 
 test('calculates total with tax', () => {
   // Arrange
@@ -50,7 +50,7 @@ test('calculates total with tax', () => {
   const total = calculateTotal(items, taxRate);
 
   // Assert
-  assert.equal(total, 33);
+  expect(total).toBe(33);
 });
 ```
 
@@ -85,8 +85,8 @@ instead of stalling CI.
 
 ## Adding a test framework to a new project
 
-When a project has no test setup yet (this applies to host projects; this repo already uses
-`node --test`):
+When a project has no test setup yet (this repo already uses Vitest, so this section does not
+apply here):
 
 1. **Dependencies first.** Add the runner, test utilities, type definitions, and any
    environment package (such as `jsdom`) to `devDependencies` before writing tests.

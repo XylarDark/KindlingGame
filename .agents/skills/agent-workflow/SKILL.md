@@ -5,30 +5,36 @@ description: Use when carrying out any coding task in this repo end-to-end - cov
 
 # Agent workflow
 
-Baseline behavior for agents working in DevEnvTemplate: how to gather context, run
+Baseline behavior for agents working in KindlingGame: how to gather context, run
 commands, generate code, record errors, and finish cleanly.
 
 ## Project facts
 
-- Node.js **24+** is required. TypeScript is strict, ES2020, CommonJS.
+- Vite and TypeScript, no framework. Strict mode, ES2020 target, ESNext modules with
+  bundler resolution. The package is **ESM** (`"type": "module"`), so use `import`, not
+  `require`; a CommonJS helper must carry a `.cjs` extension. Tests run on Vitest.
 - `AGENTS.md` at the repo root (plus any nested `AGENTS.md`) is the canonical
   always-loaded project context. Treat it as always true.
 - Documentation lives under `docs/` per `docs/DOCS_LAYOUT.md`. The docs root holds
-  only entry points; topic docs belong in `docs/guides/`, `docs/architecture/`,
-  `docs/best-practices/`, `docs/operational/`, or `docs/archive/`.
+  only entry points; topic docs belong in `docs/guides/`, `docs/operational/`, or
+  `docs/promo/`.
 
 ## Commands
 
 ```
-npm run doctor            # health check
+npm run dev               # vite dev server on port 5174
+npm run build             # tsc --noEmit, then vite build
+npm test                  # vitest run
+npm run typecheck         # tsc --noEmit
+npm run verify            # typecheck, tests, build, with evidence per stage
+npm run doctor            # health check via the embedded .devenv/ doctor
 npm run doctor:fix        # health check with auto-fix
-npm run build             # tsc --build
-npm test                  # build, then run tests/**/*.test.js
-npm run lint              # eslint
-npm run format            # prettier --write
-npm run clean             # remove build output
-npm run check:doc-links   # validate documentation links
+npm run shot              # capture a screenshot of the running game
+npm run shot:cleanup      # remove capture scratch files
 ```
+
+There is no lint or format script here. Run `npm run verify` before reporting work
+complete. For anything involving captures, read the `game-capture` skill first.
 
 **Always use the `--` separator when passing a flag through an npm script.** npm
 consumes flags that appear before it, so the script never sees them:

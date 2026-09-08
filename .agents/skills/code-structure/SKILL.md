@@ -80,12 +80,15 @@ Design checklist:
 
 ## Language and tooling conventions in this repo
 
-- TypeScript in strict mode, targeting ES2022, on Node.js 24+.
-- Lint with ESLint flat config in `eslint.config.js`. The legacy `.eslintrc.*` format is
-  dead — ESLint 10 ignores it entirely, so never add one.
-- Run `npm run lint`, or `npm run lint -- --fix` to autofix. Always use the `--` separator
-  when passing a flag through an npm script; `npm run lint --fix` gives the flag to npm
-  instead of to ESLint.
+- TypeScript in strict mode, targeting ES2020 with ESNext modules and bundler resolution.
+  The package is ESM, so use `import`; a CommonJS helper needs a `.cjs` extension.
+- **ESLint is not configured here.** There is no `eslint.config.*` and no `lint` script, so
+  `tsc --noEmit` via `npm run typecheck` is the only static gate. Do not write instructions
+  that assume a linter. If you add one, use ESLint flat config in `eslint.config.js`; the
+  legacy `.eslintrc.*` format is dead and ESLint 10 ignores it entirely.
+- Always use the `--` separator when passing a flag through an npm script. npm consumes
+  flags before it, so `npm test -- -t "name"` reaches Vitest and `npm test -t "name"` does
+  not.
 
 ## Performance
 
