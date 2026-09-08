@@ -3,7 +3,14 @@ import { getMusicPrefs, setMusicEnabled, setMusicVolume, syncMusicToClock } from
 import { playCameraClick, playUiSfx } from "../audio/sfx";
 import { customerPortraitKey } from "../art/people";
 import { PORTRAIT_H, PORTRAIT_W } from "../art/peopleSize";
-import { PHONE_APP_CELLS, PHONE_CHASSIS_CELLS, PHONE_SCALE, PHONE_TEX, phoneDesignRect } from "../art/phoneArt";
+import {
+  PHONE_APP_CELLS,
+  PHONE_CHASSIS_CELLS,
+  PHONE_PX,
+  PHONE_SCALE,
+  PHONE_TEX,
+  phoneDesignRect,
+} from "../art/phoneArt";
 import { clampInput } from "../input/controls";
 import { enableItemHit, syncItemHit } from "../input/hit";
 import { houseById, lotWorldRect } from "../maps/cityT0";
@@ -115,10 +122,21 @@ const PHONE_CHASSIS = phoneDesignRect(PHONE_CHASSIS_CELLS);
 /** Where the delivery app may paint: glass, minus the baked status bar and home strip. */
 const PHONE_APP = phoneDesignRect(PHONE_APP_CELLS);
 const PHONE_COG_GAP = 16;
-/** App chrome: a title bar, the map, and a status bar the map is fitted around. */
-const PHONE_HEADER_H = 34;
-const PHONE_STATUS_H = 58;
-const PHONE_MAP_GAP = 4;
+/**
+ * App chrome: a title bar, the map, and a status bar the map is fitted around. These
+ * were the one part of the phone the header comment above was wrong about — 34, 58 and
+ * 4 were typed in, so growing `PHONE_SCALE` grew the glass and left the bars behind,
+ * which reads as a bigger phone running a smaller app. Stated in cells instead, at the
+ * fractions closest to the numbers they replace (2.5 cells was 34, 4 cells was 58).
+ *
+ * The status band is the tightest box on the phone: the two-line "Tap to call <name>"
+ * measures 64px against the 64.4px this gives it, so it holds its authored 20px — at 58
+ * it could not, and was being shrunk. Do not take height out of it without re-measuring.
+ */
+const PHONE_CELL = PHONE_PX * PHONE_SCALE;
+const PHONE_HEADER_H = PHONE_CELL * 2.5;
+const PHONE_STATUS_H = PHONE_CELL * 4;
+const PHONE_MAP_GAP = PHONE_CELL * 0.25;
 const PHONE_TITLE_PX = "20px";
 const PHONE_STATUS_PX = "20px";
 const PAD_LABEL_PX = "16.25px";

@@ -31,10 +31,13 @@ export const PHONE_TEX = {
 } as const;
 
 /**
- * Design pixels per texture pixel. 22×26 cells at ×1.75 puts the chassis at
- * exactly 280×336 — the size the phone was specced to grow to.
+ * Design pixels per texture pixel. 22×26 cells at ×1.75 put the chassis at exactly
+ * 280×336, the size the phone was first specced to; ×1.15 on top of that is this
+ * 2.0125, for a 322×386.4 body. The 15% is why the numbers stopped being round —
+ * every consumer derives from this factor, so fractions land where they belong
+ * instead of being rounded back into a hand-written dimension.
  */
-export const PHONE_SCALE = 1.75;
+export const PHONE_SCALE = 2.0125;
 
 /**
  * The body. One cell of margin on every side: the side buttons live in the

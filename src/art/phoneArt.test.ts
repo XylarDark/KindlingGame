@@ -94,10 +94,14 @@ describe("phone art grid", () => {
     expect(app.y).toBeGreaterThanOrEqual(status.y + status.h);
   });
 
-  it("lands the chassis on the 280x336 it was specced to", () => {
+  it("lands the chassis on the 322x386.4 it grew to: the 280x336 spec plus 15%", () => {
     const chassis = phoneDesignRect(PHONE_CHASSIS_CELLS, PHONE_SCALE);
-    expect(chassis.w).toBe(280);
-    expect(chassis.h).toBe(336);
+    expect(chassis.w).toBeCloseTo(322, 6);
+    expect(chassis.h).toBeCloseTo(386.4, 6);
+    // The growth was applied to the one scale factor, not retyped as a new body size,
+    // so the original spec is still legible in the result.
+    expect(chassis.w / 1.15).toBeCloseTo(280, 6);
+    expect(chassis.h / 1.15).toBeCloseTo(336, 6);
   });
 
   it("centres the dynamic island on the glass", () => {
