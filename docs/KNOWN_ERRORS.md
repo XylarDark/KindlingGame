@@ -36,6 +36,24 @@
 
 ---
 
+## Bugs hidden by a coincidence in the numbers
+
+Distinct from the section above, and worth keeping apart from it. Those checks passed
+by measuring **nothing**. These ones did run and did measure something real — they
+passed because the single value they happened to probe is the one value at which a
+broken implementation and a correct one agree. A round number is the usual accomplice.
+
+### Every HUD button's hit box sat half a button up and to the left of its paint
+
+- **Date:** 2026-09-07
+- **Symptom:** roughly three quarters of every HUD button's visible area was dead to clicks, and an equal slab of adjacent blank panel was live. Nobody noticed, because clicking a button in the middle — which is what everyone does — worked.
+- **Cause:** `addHudButton` handed its hit rectangle to `setInteractive` in the same coordinates it had just used to fill the background. Phaser's `pointWithinHitArea` adds `displayOrigin` to the local point before testing it, and a **Container's origin is its centre**, so the effective hit region sat half a button up and to the left of the paint. For `End Shift`: hit `[1431,1725]x[568.5,667.5]` against a visible `[1578,1872]x[618,717]`.
+- **Why it hid for so long — the part worth remembering:** every button was an even **132px** tall. Half of 132 is a whole number, so a dead-centre click landed *exactly* on the displaced rectangle's corner, and Phaser's bounds test is inclusive, so it passed. Shrinking the settings buttons to an odd **99px** made the half-height fractional; the centre click fell 0.5px outside, and a long-latent bug surfaced looking like a brand-new regression in the resize. It was proved by clicking (1435, 573) — well outside the visible button — and watching it fire.
+- **Fix:** offset the rectangle by the container's own `displayOrigin`, which is origin-agnostic by construction rather than tuned per call site. Commit `8af52e3`, in `src/ui/chrome.ts`; it affected the settings panel, the results panel and the Title screen.
+- **Prevention:** a hit area is only verified by clicking **near its edges** — a few pixels outside each of the four, then the centre and both inside corners, reading the result back with `eval` rather than trusting pixels. A centre-only check passes on a rectangle that is half off the control, so it is not evidence of anything. And treat an **even-numbered dimension as a hazard** wherever geometry gets halved: it can place your one test point exactly on a boundary and hide an off-by-half error indefinitely. The Title screen's own button, the one origin variant (0.5) the others do not cover, is reachable for this check with `--query "?howto=1" --start-clicks 1 --ready-scene title`; see [AGENTS.md](../AGENTS.md).
+
+---
+
 ## Environment traps
 
 ### `npm run dev -- --port 5174` silently targets the wrong host
@@ -91,8 +109,18 @@
 - **Date:** 2026-09-07
 - **Symptom:** with the render gate in place, a capture came back rendering correctly but showing `Paused - tap to start` at 09:00. The click that starts play had silently done nothing.
 - **Cause:** two mistakes compounding. The gate ran *after* the start click, so the click still raced Phaser's input plugin and was dropped when it arrived first — Phaser discards pointer events received before the plugin is live, with no error. Moving the gate ahead of the click exposed the second problem: with `--no-click` the active scene is `title`, not `shop`, so the gate was satisfied by the title screen painting, and the shop's own first paint still raced the settle afterwards.
-- **Fix:** gate twice. Once before the click, so input is live when it lands; once after, re-armed against the frame number captured at click time, because `loop.frame` is monotonic and an absolute threshold is already met by then. Both gates are charged to the wall-clock budget.
-- **Prevention:** this is the repo's own warning in miniature — the gate was green while measuring something that did not answer the question. When a readiness check passes, ask *which* scene satisfied it: `eval` the active scene keys, do not infer them from the fact that frames advanced.
+- **Also seen from the other end, and this is the symptom you will search for:** the settings **cog click simply did not open the panel**. The hit test found the cog, the pointer position was right, the handler never fired, and nothing errored. It cost four capture runs to establish that this was not a code regression, because a pre-change baseline reproduced it exactly — the same dropped-pointer race, presenting as a dead control rather than as a paused game.
+- **Fix:** gate twice. Once before the click, so input is live when it lands; once after, re-armed against the frame number captured at click time, because `loop.frame` is monotonic and an absolute threshold is already met by then. Both gates are charged to the wall-clock budget. Commit `d7b9106`.
+- **Durable workaround for any plan that opens something:** make the opening step **idempotent** rather than assuming the first click landed. A `clickeval:` that returns the cog's position when the panel is shut and a harmless piece of panel dead space when it is already open can be run unconditionally and repeated safely — so a lost click costs one extra step instead of an entire run and a false bug report.
+- **Prevention:** this is the repo's own warning in miniature — the gate was green while measuring something that did not answer the question. When a readiness check passes, ask *which* scene satisfied it: `eval` the active scene keys, do not infer them from the fact that frames advanced. `--ready-scene` now does exactly that and fails the run on a miss.
+
+### A capture obeyed its URL, applied none of it, and returned a perfect screenshot
+
+- **Date:** 2026-09-07
+- **Symptom:** `scripts/agent-shot.ts --url "http://127.0.0.1:5174/?howto=1"` produced a clean, correctly rendered capture of the shop — with no welcome or how-to overlay anywhere. The conclusion drawn at the time was that "neither `--query` nor `--url` got the parameter to the page", and that the Title screen's overlays were simply unreachable from a capture run. Both halves of that were wrong.
+- **Cause:** the script composed its target as `` `${BASE}/${QUERY}` `` unconditionally, so a `--url` that already carried a query was glued to the default one: `http://127.0.0.1:5174/?howto=1/?howto=0`. That URL is entirely valid. Its path is `/`, so Vite serves the game and everything downstream succeeds — but `howto` parses as the single value `1/?howto=0`, which matches neither `"1"` nor `"0"`, so `shouldShowHowTo()` fell through to its `isLiveBuild()` default of **off**. No error, no warning, no clue.
+- **Fix:** `resolveNavigationUrl` in `scripts/lib/laneProtocol.ts` reconciles the two sources instead of concatenating them — a query on `--url` is used as-is, `--query` supplies one when the URL has none, a query missing its leading `?` is repaired rather than turned into a path segment, and a query given in *both* places throws before Chrome is launched instead of silently picking one.
+- **Prevention:** the render gate could not have caught this, and that is the general lesson: counting frames proves the page painted, never that it painted the screen you asked for. `--ready-scene <key>` makes the run assert which scene it ended on and **fails** when that scene never arrives — deliberately harsher than the frame gate, which forgives a shortfall as a slow machine. Verified by running the old failing invocation against the fix (`howto` now reads `"1"`) and by asking for `--ready-scene shop` on a URL that stays on `title`, which exits non-zero and names the scenes it found instead.
 
 ### Teardown was unbounded, and deleting a locked profile took 38 seconds
 
