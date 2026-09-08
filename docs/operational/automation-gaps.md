@@ -67,5 +67,13 @@ Procedure: [automation-standards.mdc](../../.cursor/rules/automation-standards.m
 - **Feature / area:** starting the shared Vite dev server on a fixed port (5174).
 - **What is needed:** one command that reliably serves the game on port 5174 so capture scripts have a stable URL.
 - **Why automation fails:** the `dev` script is `vite --host`. npm appends forwarded arguments to the end of the script, so `npm run dev -- --port 5174` folds the port into the `--host` value; Chrome then tries to resolve a hostname of `5174`. The failure looks like a DNS problem, not an argument-passing problem.
-- **Interim:** call Vite directly — `npx vite --host --port 5174 --strictPort`. Check `http://127.0.0.1:5174/` before assuming the server is down, and prefer `127.0.0.1` over `localhost` to match the capture scripts. Only one server should ever be running.
-- **Suggested follow-up:** pin the port inside `vite.config.ts` (`server.port` / `server.strictPort`), or split a `dev:5174` script, so the working invocation is the default one. Not done yet because it changes shared developer workflow and other work is in flight — worth a deliberate decision.
+- **Resolved 2026-09-07:** the port is now pinned in `vite.config.ts` (`server.port: 5174`, `server.strictPort: true`), so plain `npm run dev` serves the port every capture script expects and a second server refuses to start rather than sliding to 5175. The underlying npm limit is unchanged and unfixable — `npm run dev -- --port 5174` still folds the port into `--host` — so **do not pass a port through the npm script**; change the config instead. Check `http://127.0.0.1:5174/` before assuming the server is down, and prefer `127.0.0.1` over `localhost` to match the capture scripts.
+
+## A capture cannot tell "still painting" from "broken" without asking the game
+
+- **Date:** 2026-09-07
+- **Feature / area:** deciding when a headless capture is safe to take.
+- **What is needed:** a general "the page has finished rendering" signal.
+- **Why automation fails:** there isn't one for a WebGL canvas. CDP's load and lifecycle events fire long before Phaser's first frame; `Page.captureScreenshot` will happily return the page background. Reading pixels back is no help either — Phaser leaves `preserveDrawingBuffer` off, so a WebGL readback comes back blank whether or not the game drew. Headless Chrome renders through SwiftShader, so first paint at 1920x1080 is slow enough to lose the race, and it is slower still on a cold profile.
+- **Interim:** the gate is **game-specific** — it polls `window.kindlingGame.loop.frame`, which means it only works for this game. It degrades honestly rather than hanging: three polls with no `kindlingGame` global classify the page as "not a game" and the run proceeds, so `--url` against an arbitrary page still works. `--no-ready-wait` falls back to the old fixed sleep.
+- **Suggested follow-up:** none available. Any generic replacement would be a heuristic on pixels, which this canvas cannot supply. If the game ever exposes a "first paint done" event, gate on that instead of a frame count.

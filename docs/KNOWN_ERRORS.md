@@ -78,6 +78,22 @@
 - **Fix:** gate the first capture on real rendered frames — poll `window.kindlingGame.loop.frame` until it passes a threshold, bounded by its own timeout and charged to the run budget. `--no-ready-wait` restores the old fixed sleep, `--min-frames` retunes it.
 - **Prevention:** a fixed sleep cannot express "has painted"; it encodes an assumption about machine speed that software rendering breaks. When a capture looks broken, **read state with `eval` before believing the pixels** — that is what separated "still painting" from "crashed on boot" here in one step.
 
+### The render gate passed, and it was measuring the wrong scene
+
+- **Date:** 2026-09-07
+- **Symptom:** with the render gate in place, a capture came back rendering correctly but showing `Paused - tap to start` at 09:00. The click that starts play had silently done nothing.
+- **Cause:** two mistakes compounding. The gate ran *after* the start click, so the click still raced Phaser's input plugin and was dropped when it arrived first — Phaser discards pointer events received before the plugin is live, with no error. Moving the gate ahead of the click exposed the second problem: with `--no-click` the active scene is `title`, not `shop`, so the gate was satisfied by the title screen painting, and the shop's own first paint still raced the settle afterwards.
+- **Fix:** gate twice. Once before the click, so input is live when it lands; once after, re-armed against the frame number captured at click time, because `loop.frame` is monotonic and an absolute threshold is already met by then. Both gates are charged to the wall-clock budget.
+- **Prevention:** this is the repo's own warning in miniature — the gate was green while measuring something that did not answer the question. When a readiness check passes, ask *which* scene satisfied it: `eval` the active scene keys, do not infer them from the fact that frames advanced.
+
+### Teardown was unbounded, and deleting a locked profile took 38 seconds
+
+- **Date:** 2026-09-07
+- **Symptom:** one run's teardown took **37.8 seconds** — longer than the capture it was cleaning up after — and reported a profile it could not remove.
+- **Cause:** `rmSync` with `maxRetries` set retries *per directory entry*. Chrome had not yet released its file handles, and a profile holds several thousand files, so the backoff multiplied across every one of them. The watchdog does not cover teardown, so nothing bounded it.
+- **Fix:** `removeProfileDir` now takes an explicit budget (5s default), sets `maxRetries: 0` so the retry loop is the caller's and not the filesystem's, and logs when it gives up. A leftover profile is a disk cost the reaper collects later, not a reason to hold the process open.
+- **Prevention:** anything that runs after the watchdog stops needs its own bound. Measure teardown duration and print it — that number is what surfaced this at all.
+
 ### A process query matched its own command line
 
 - **Date:** 2026-09-07
