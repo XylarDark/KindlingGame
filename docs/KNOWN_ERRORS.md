@@ -54,6 +54,24 @@ broken implementation and a correct one agree. A round number is the usual accom
 
 ---
 
+## Claims in the source that nothing enforced
+
+Distinct from both sections above, and the reason this one is separate: there was no check
+here to fool. The bug lived in the gap between what the source **said** — a constant naming
+a font size, a header comment naming a derivation — and what the code did. Nothing measured
+either claim, so both read as true right up until someone changed the thing one of them
+said everything depended on.
+
+### A size constant read 20px, the caption rendered 18, and a comment vouched for geometry it did not control
+
+- **Date:** 2026-09-08
+- **Symptom:** none, which is the point. The delivery phone's two-line `Tap to call <name>` had been rendering at about **18px while `PHONE_STATUS_PX` read `"20px"`**, for an unknown length of time. Nothing looked wrong, nothing failed, and no check covered it. It surfaced only because the phone was being grown 15% for an unrelated request and its status band was measured on the way past.
+- **Cause:** two unenforced claims compounding. First, `fitTypeToBox` **only ever shrinks**, so a seed larger than its box renders smaller and the constant stops describing the screen: the two-line caption measures **64px** tall at 20px, and the band it had to fit was **58px**. Second, the reason the band was 58: the app chrome heights were typed in as raw numbers — `34`, `58`, `4` — immediately beneath a header comment stating that *every* phone dimension derived from `PHONE_SCALE` and that "nothing here may be typed in independently". That comment was true of the chassis, the glass, the app rect, the hit area and the map, and false of the three numbers directly under it. The contradiction cost nothing while the scale sat still, and became visible the moment it moved: the glass grew and the title and status bars stayed put — a bigger phone running a smaller app.
+- **Fix:** state the chrome in cells so it genuinely derives (`PHONE_CELL * 2.5`, `* 4`, `* 0.25`), which puts the band at 64.4px and lets the caption reach its authored 20px — read back off the live text object, not inferred from the constant. The band now carries a comment naming it the tightest box on the phone and quoting the two numbers that make it tight (64 of 64.4), so the next person who wants a taller map can see what they would be spending. Commit `be757d4`, in `src/scenes/HudScene.ts` and `src/art/phoneArt.ts`.
+- **Prevention:** **assert the effective rendered size, never the declared constant.** A test pinning `PHONE_STATUS_PX` would have passed identically in the broken state and the fixed one; only `style.fontSize` off the object in a browser distinguishes them. And read a comment asserting a derivation as an unverified claim rather than a guarantee — nothing fails when a hand-written number quietly replaces a derived one, so the drift is silent by construction and the person who finds it is never the person who caused it. The same shape is worth watching for wherever a constant names a size: see the `RESET TO 9 AM` label, which was pinned at 18px next to a sibling's 26px until the copy was cut.
+
+---
+
 ## Environment traps
 
 ### `npm run dev -- --port 5174` silently targets the wrong host
