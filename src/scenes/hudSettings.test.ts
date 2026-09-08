@@ -3,7 +3,24 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "HudScene.ts"), "utf8");
+const here = dirname(fileURLToPath(import.meta.url));
+/** core.autocrlf is true here, so a checkout delivers CRLF — normalise before matching. */
+const read = (rel: string): string => readFileSync(join(here, rel), "utf8").replace(/\r\n/g, "\n");
+
+const src = read("HudScene.ts");
+const chrome = read("../ui/chrome.ts");
+
+/**
+ * Slice between two markers. Throws on a miss rather than returning the rest of the
+ * file: a fail-open scan here once let a whole audit pass by matching nothing.
+ */
+function between(text: string, start: string, end: string, what: string): string {
+  const from = text.indexOf(start);
+  if (from === -1) throw new Error(`${what}: start marker not found: ${JSON.stringify(start)}`);
+  const to = text.indexOf(end, from + start.length);
+  if (to === -1) throw new Error(`${what}: end marker not found: ${JSON.stringify(end)}`);
+  return text.slice(from, to);
+}
 
 describe("settings cog panel", () => {
   it("offers music, volume, end shift, and a 9am reset without tutorial toggles", () => {
@@ -18,5 +35,36 @@ describe("settings cog panel", () => {
     expect(src).toContain("startNewDay");
     expect(src).toContain("setMusicEnabled");
     expect(src).toContain("setMusicVolume");
+  });
+
+  it("reads the dim's punch-out off the live panel box, not the layout constants", () => {
+    // Restating SETTINGS_W/H here is what would let the panel be resized while the hole
+    // in the dim stayed put — the dim would then close the panel on the same click that
+    // worked a control, which is the bug this punch-out exists to prevent.
+    const fn = between(src, "private overSettingsPanel(", "\n  }", "overSettingsPanel");
+    expect(fn).toContain("this.settingsPanel");
+    expect(fn).toContain("width");
+    expect(fn).toContain("height");
+    expect(fn).not.toContain("SETTINGS_W");
+    expect(fn).not.toContain("SETTINGS_H");
+    // A Container is 0x0 until sized, which would shrink the punch-out to nothing.
+    expect(src).toContain("this.settingsPanel.setSize(SETTINGS_W, SETTINGS_H);");
+  });
+
+  it("derives the panel box from the button box so one scale moves the whole panel", () => {
+    expect(src).toContain("const SETTINGS_W = SET_BTN_W + SET_PAD * 2;");
+    expect(src).toContain("const SETTINGS_H = SET_HINT_Y + SET_HINT_H + SET_PAD;");
+    expect(src.match(/minWidth: SET_BTN_W/g)).toHaveLength(2);
+    expect(src.match(/minHeight: SET_BTN_H/g)).toHaveLength(2);
+  });
+
+  it("keeps a hud button's hit area on the box it paints", () => {
+    // Phaser adds displayOrigin to the local point before testing the hit area, and a
+    // Container's origin is its centre. A rect given in the same coordinates as the fill
+    // therefore sits half a button up and left of it: most of the button dead, and a
+    // matching slab of empty panel live.
+    const paint = between(chrome, "container.setSize(w, h);", "container.input!.cursor", "addHudButton paint");
+    expect(paint).toContain("left + container.displayOriginX");
+    expect(paint).toContain("top + container.displayOriginY");
   });
 });

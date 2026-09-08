@@ -21,7 +21,7 @@ import { getSim, startSession } from "../session";
 import type { SimSnapshot } from "../sim/gameSim";
 import type { ShiftResults } from "../sim/shiftResults";
 import { tutorialHints } from "../sim/tutorialHints";
-import { addHudButton, addPanel } from "../ui/chrome";
+import { addHudButton, addPanel, HUD_BUTTON_MIN_H } from "../ui/chrome";
 import { END_SHIFT_CAPTION, END_SHIFT_LABEL, RESULTS_NEW_DAY, RESULTS_TITLE } from "../ui/copy";
 import { addUiText } from "../ui/text";
 import { Color, Type } from "../ui/theme";
@@ -48,13 +48,62 @@ function readoutOutline(px: number): { stroke: string; strokeThickness: number }
   return { stroke: Color.inkHex, strokeThickness: Math.max(2, Math.round(px * 0.12)) };
 }
 
-const SETTINGS_W = 440;
-const SETTINGS_H = 560;
-/** Settings panel runs 10% over the shared ramp — it is read at arm's length. */
-const SET_TITLE_PX = "22px";
+/** Vertical centre of a top-anchored settings row label, for the value opposite it. */
+function rowMidY(label: Phaser.GameObjects.Text): number {
+  return label.y + label.height / 2;
+}
+
+/**
+ * Union band of a settings row's label and its right-aligned value. Measuring the row
+ * rather than typing a height in is what keeps the row's hit box on its visible ink
+ * when the type step moves.
+ */
+function rowBand(
+  label: Phaser.GameObjects.Text,
+  value: Phaser.GameObjects.Text,
+): { mid: number; height: number } {
+  const top = Math.min(label.y, value.y - value.height / 2);
+  const bottom = Math.max(label.y + label.height, value.y + value.height / 2);
+  return { mid: (top + bottom) / 2, height: bottom - top };
+}
+
+/**
+ * Settings panel. The buttons were 392x132 -- 132 being the touch floor, half again
+ * what the label stack needs -- so they now run at three quarters of that, and the
+ * panel is derived from the button box rather than the reverse. Nothing below is a
+ * free number: change SET_BTN_SCALE and the whole panel follows.
+ */
+const SET_PAD = 24;
+const SET_BTN_SCALE = 0.75;
+const SET_BTN_W = Math.round((440 - SET_PAD * 2) * SET_BTN_SCALE);
+const SET_BTN_H = Math.round(HUD_BUTTON_MIN_H * SET_BTN_SCALE);
+const SET_BTN_GAP = 16;
+/** Buttons run full-bleed inside the padding, so the panel is as wide as they are. */
+const SETTINGS_W = SET_BTN_W + SET_PAD * 2;
+const SET_ROW_TOP = 64;
+const SET_VOL_ROW_TOP = 124;
+const VOL_KNOB_R = 12;
+const VOL_TRACK = { x: SET_PAD, y: 176, w: Math.round(312 * SET_BTN_SCALE), h: 16 };
+const SET_STACK_TOP = 208;
+const SET_END_SHIFT_Y = SET_STACK_TOP;
+const SET_RESET_Y = SET_END_SHIFT_Y + SET_BTN_H + SET_BTN_GAP;
+const SET_HINT_Y = SET_RESET_Y + SET_BTN_H + SET_BTN_GAP;
+/** One line, and the type step is capped to it, so the closing pad stays at SET_PAD. */
+const SET_HINT_H = 24;
+const SETTINGS_H = SET_HINT_Y + SET_HINT_H + SET_PAD;
+
+/**
+ * Panel type steps. Rows and the end-shift button take a bump because their boxes have
+ * the room; the reset copy does not, and is left alone deliberately -- see makeSettings.
+ */
+const SET_TITLE_PX = "28px";
+const SET_ROW_PX = "22px";
+const SET_VALUE_PX = "24px";
+const SET_BTN_LABEL_PX = "26px";
+const SET_BTN_CAP_PX = "16px";
+/** Cog caption, outside the panel -- left on the shared ramp. */
 const SET_BODY_PX = "17.6px";
 const SET_HINT_PX = "14.3px";
-const VOL_TRACK = { x: 24, y: 168, w: 312, h: 16 };
 
 /**
  * Delivery phone. Every dimension below is derived from `PHONE_SCALE` and the cell
@@ -189,6 +238,7 @@ export class HudScene extends Phaser.Scene {
   private settingsDim!: Phaser.GameObjects.Rectangle;
   private settingsPanel!: Phaser.GameObjects.Container;
   private musicValue!: Phaser.GameObjects.Text;
+  private volumeTrack!: Phaser.GameObjects.Rectangle;
   private volumeFill!: Phaser.GameObjects.Rectangle;
   private volumeKnob!: Phaser.GameObjects.Arc;
   private volumePct!: Phaser.GameObjects.Text;
@@ -880,32 +930,35 @@ export class HudScene extends Phaser.Scene {
       stroke: Color.woodTrim,
       depth: 41,
     });
-    const title = addUiText(this, 24, 16, "SETTINGS", {
+    const title = addUiText(this, SET_PAD, 16, "SETTINGS", {
       size: SET_TITLE_PX,
       color: Color.inkHex,
       fontStyle: "700",
       strokeThickness: 0,
-      maxWidth: SETTINGS_W - 48,
-      maxHeight: 36,
+      maxWidth: SET_BTN_W,
+      maxHeight: 38,
     });
-    const musicLabel = addUiText(this, 24, 64, "Music", {
-      size: SET_BODY_PX,
+    const musicLabel = addUiText(this, SET_PAD, SET_ROW_TOP, "Music", {
+      size: SET_ROW_PX,
       color: Color.inkHex,
       fontStyle: "600",
       strokeThickness: 0,
       maxWidth: 180,
-      maxHeight: 28,
+      maxHeight: 30,
     });
-    this.musicValue = addUiText(this, SETTINGS_W - 28, 72, "", {
-      size: SET_TITLE_PX,
+    this.musicValue = addUiText(this, SETTINGS_W - SET_PAD, rowMidY(musicLabel), "", {
+      size: SET_VALUE_PX,
       color: Color.inkHex,
       fontStyle: "700",
       strokeThickness: 0,
       maxWidth: 140,
       maxHeight: 32,
     }).setOrigin(1, 0.5);
+    // Hit box is measured off the two texts that make up the row, so it cannot grow an
+    // invisible margin when the type step changes. Width is the button column.
+    const musicBand = rowBand(musicLabel, this.musicValue);
     const musicHit = this.add
-      .rectangle(SETTINGS_W / 2, 76, SETTINGS_W - 24, 48, 0x000000, 0.001)
+      .rectangle(SETTINGS_W / 2, musicBand.mid, SET_BTN_W, musicBand.height, 0x000000, 0.001)
       .setInteractive({ useHandCursor: true });
     musicHit.on("pointerdown", (p: Phaser.Input.Pointer) => {
       p.event.stopPropagation();
@@ -913,27 +966,39 @@ export class HudScene extends Phaser.Scene {
       this.refreshMusicControls();
     });
 
-    const volumeLabel = addUiText(this, 24, 124, "Volume", {
-      size: SET_BODY_PX,
+    const volumeLabel = addUiText(this, SET_PAD, SET_VOL_ROW_TOP, "Volume", {
+      size: SET_ROW_PX,
       color: Color.inkHex,
       fontStyle: "600",
       strokeThickness: 0,
       maxWidth: 180,
-      maxHeight: 28,
+      maxHeight: 30,
     });
-    this.volumePct = addUiText(this, SETTINGS_W - 28, 132, "", {
-      size: SET_BODY_PX,
+    this.volumePct = addUiText(this, SETTINGS_W - SET_PAD, rowMidY(volumeLabel), "", {
+      size: SET_ROW_PX,
       color: Color.inkHex,
       fontStyle: "700",
       strokeThickness: 0,
       maxWidth: 100,
-      maxHeight: 28,
+      maxHeight: 30,
     }).setOrigin(1, 0.5);
-    const track = this.add.rectangle(VOL_TRACK.x, VOL_TRACK.y, VOL_TRACK.w, VOL_TRACK.h, 0xd8c8b0).setOrigin(0, 0.5);
+    this.volumeTrack = this.add
+      .rectangle(VOL_TRACK.x, VOL_TRACK.y, VOL_TRACK.w, VOL_TRACK.h, 0xd8c8b0)
+      .setOrigin(0, 0.5);
     this.volumeFill = this.add.rectangle(VOL_TRACK.x, VOL_TRACK.y, 8, VOL_TRACK.h, Color.leaf).setOrigin(0, 0.5);
-    this.volumeKnob = this.add.circle(VOL_TRACK.x, VOL_TRACK.y, 12, Color.woodTrim);
+    this.volumeKnob = this.add.circle(VOL_TRACK.x, VOL_TRACK.y, VOL_KNOB_R, Color.woodTrim);
+    // The knob overhangs both ends of the track by its radius, so that -- not the track
+    // -- is the slider's visible extent, and the hit box is built from it. The pointer
+    // to value mapping reads the track instead, so widening this cannot skew the value.
     this.volumeHit = this.add
-      .rectangle(VOL_TRACK.x + VOL_TRACK.w / 2, VOL_TRACK.y, VOL_TRACK.w, 44, 0x000000, 0.001)
+      .rectangle(
+        VOL_TRACK.x + VOL_TRACK.w / 2,
+        VOL_TRACK.y,
+        VOL_TRACK.w + VOL_KNOB_R * 2,
+        VOL_KNOB_R * 2,
+        0x000000,
+        0.001,
+      )
       .setInteractive({ useHandCursor: true });
     this.volumeHit.on("pointerdown", (p: Phaser.Input.Pointer) => {
       p.event.stopPropagation();
@@ -950,35 +1015,43 @@ export class HudScene extends Phaser.Scene {
       this.draggingVol = false;
     });
 
-    const endShift = addHudButton(this, 24, 200, END_SHIFT_LABEL, () => this.endShiftEarly(), {
+    // "END SHIFT" is nine characters, so it clears the narrower label box with room to
+    // spare and takes the bump.
+    const endShift = addHudButton(this, SET_PAD, SET_END_SHIFT_Y, END_SHIFT_LABEL, () => this.endShiftEarly(), {
       originX: 0,
       originY: 0,
       variant: "primary",
-      minWidth: SETTINGS_W - 48,
+      minWidth: SET_BTN_W,
+      minHeight: SET_BTN_H,
       caption: END_SHIFT_CAPTION,
-      labelSize: SET_TITLE_PX,
-      captionSize: SET_HINT_PX,
+      labelSize: SET_BTN_LABEL_PX,
+      captionSize: SET_BTN_CAP_PX,
       depth: 41,
     });
     this.endShiftBtn = endShift;
 
-    const reset = addHudButton(this, 24, 348, "RESET DAY TO 9:00 AM", () => this.resetDayToNine(), {
+    // The label is not bumped: "RESET DAY TO 9:00 AM" is already wider than the label
+    // box the narrower button gives it, so fitTypeToBox shrinks it to fit and a larger
+    // seed would render at exactly the same size. The caption does take the bump, but
+    // only because it got shorter — see resetDayToNine for why the copy changed.
+    const reset = addHudButton(this, SET_PAD, SET_RESET_Y, "RESET DAY TO 9:00 AM", () => this.resetDayToNine(), {
       originX: 0,
       originY: 0,
       variant: "amber",
-      minWidth: SETTINGS_W - 48,
-      caption: "Clock back to 9 AM · clears the door stop",
-      labelSize: SET_TITLE_PX,
-      captionSize: SET_HINT_PX,
+      minWidth: SET_BTN_W,
+      minHeight: SET_BTN_H,
+      caption: "Clears the floor · score to zero",
+      labelSize: SET_ROW_PX,
+      captionSize: SET_BTN_CAP_PX,
       depth: 41,
     });
-    const resetHint = addUiText(this, 24, 496, "Packed bags stay. Late timers start over.", {
+    const resetHint = addUiText(this, SET_PAD, SET_HINT_Y, "Clean slate — bags, tickets and runs go.", {
       size: SET_HINT_PX,
       color: Color.muteHex,
       fontStyle: "600",
       strokeThickness: 0,
-      maxWidth: SETTINGS_W - 48,
-      maxHeight: 36,
+      maxWidth: SET_BTN_W,
+      maxHeight: SET_HINT_H,
     });
 
     this.settingsPanel = this.add.container(panelX, panelY, [
@@ -989,7 +1062,7 @@ export class HudScene extends Phaser.Scene {
       musicHit,
       volumeLabel,
       this.volumePct,
-      track,
+      this.volumeTrack,
       this.volumeFill,
       this.volumeKnob,
       this.volumeHit,
@@ -998,6 +1071,13 @@ export class HudScene extends Phaser.Scene {
       resetHint,
     ]);
     this.settingsPanel.setDepth(41).setVisible(false);
+    // The dim's punch-out is read off this size, so it has to be set and non-zero: a
+    // Container defaults to 0x0, which would silently shrink the punch-out to nothing
+    // and put us back to the dim closing the panel on the click that worked a control.
+    this.settingsPanel.setSize(SETTINGS_W, SETTINGS_H);
+    if (this.settingsPanel.width <= 0 || this.settingsPanel.height <= 0) {
+      throw new Error("settings panel needs a non-zero size for the dim punch-out to track it");
+    }
 
     const cogX = GAME_WIDTH - 24;
     const cogY = GAME_HEIGHT - 20;
@@ -1035,10 +1115,14 @@ export class HudScene extends Phaser.Scene {
     input.enabled = on;
   }
 
-  /** Design-space panel rect — the dim spans the screen, so its local coords are design coords. */
+  /**
+   * Design-space panel rect — the dim spans the screen, so its local coords are design
+   * coords. Read off the panel container rather than the layout constants, so resizing
+   * the panel moves the punch-out with it instead of leaving a stale hole.
+   */
   private overSettingsPanel(x: number, y: number): boolean {
-    const { x: px, y: py } = this.settingsPanel;
-    return x >= px && x <= px + SETTINGS_W && y >= py && y <= py + SETTINGS_H;
+    const { x: px, y: py, width, height } = this.settingsPanel;
+    return x >= px && x <= px + width && y >= py && y <= py + height;
   }
 
   private openSettings(): void {
@@ -1073,12 +1157,21 @@ export class HudScene extends Phaser.Scene {
   }
 
   private setVolumeFromPointer(p: Phaser.Input.Pointer): void {
-    const bounds = this.volumeHit.getBounds();
+    // Map against the track, which is what the fill and knob are drawn from. Reading the
+    // hit box here instead would skew every value the moment the hit box stopped being
+    // exactly the track's width.
+    const bounds = this.volumeTrack.getBounds();
     const t = Phaser.Math.Clamp((p.x - bounds.left) / Math.max(1, bounds.width), 0, 1);
     setMusicVolume(t, this.game);
     this.refreshMusicControls();
   }
 
+  /**
+   * `resetToMorning` is a genuine cold start — it delegates to `startNewDay`, so the
+   * floor, the tablet queue, packed bags and any run in flight all go. The button's
+   * caption and hint used to promise a clock rewind that kept your bags, which was true
+   * of an older implementation and survived it; both now describe a full reset.
+   */
   private resetDayToNine(): void {
     getSim().resetToMorning();
     syncMusicToClock(0);
