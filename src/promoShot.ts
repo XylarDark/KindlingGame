@@ -35,6 +35,29 @@ export function houseQuery(): string {
 
 const DEFAULT_SHOT_HOUSE = "house-1";
 
+/**
+ * `?drivems=6900` seeds the mid-run still that far into the drive instead of the default.
+ *
+ * How a van *approaches* a stall is only photographable if you can stop the clock while it
+ * is still approaching, and that window is a second or so at the end of a run that varies
+ * per lot. Out-of-range or malformed values fall back to the default, so a typo produces
+ * the ordinary promo still rather than a blank road.
+ */
+export function driveMsQuery(): number {
+  try {
+    const raw = new URLSearchParams(globalThis.location?.search ?? "").get("drivems");
+    if (!raw || !/^\d+$/.test(raw)) return DEFAULT_DRIVE_MS;
+    const ms = Number(raw);
+    return ms > 0 && ms <= MAX_DRIVE_MS ? ms : DEFAULT_DRIVE_MS;
+  } catch {
+    return DEFAULT_DRIVE_MS;
+  }
+}
+
+const DEFAULT_DRIVE_MS = 7_000;
+/** Longer than the slowest lot's drive; past this the van is parked and the value is a typo. */
+const MAX_DRIVE_MS = 120_000;
+
 function waitFetch(sim: GameSim): void {
   for (let i = 0; i < 300; i++) {
     if (sim.snapshot().keyLead.phase === "idle" && sim.snapshot().handSkuId) return;
@@ -56,7 +79,7 @@ export function applyPromoShot(sim: GameSim): void {
   sim.hitTheRoad();
 
   if (shot === "drive") {
-    for (let i = 0; i < 140; i++) sim.tick(50);
+    for (let i = Math.round(driveMsQuery() / 50); i > 0; i--) sim.tick(50);
     return;
   }
 

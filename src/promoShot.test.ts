@@ -35,6 +35,35 @@ describe("applyPromoShot", () => {
     }
   });
 
+  it("stops the van mid-approach when ?drivems lands inside the run", () => {
+    // house-2 joins its approach run at 6450ms and parks at 7550ms, so a still seeded
+    // inside that window must catch the van still driving, not already in the stall.
+    vi.stubGlobal("location", { search: "?shot=drive&house=2&drivems=6900" });
+    const moving = GameSim.create({ seed: 5, autoSpawn: false });
+    applyPromoShot(moving);
+    expect(moving.snapshot().autoDriving).toBe(true);
+
+    vi.stubGlobal("location", { search: "?shot=drive&house=2&drivems=9000" });
+    const parked = GameSim.create({ seed: 5, autoSpawn: false });
+    applyPromoShot(parked);
+    expect(parked.snapshot().autoDriving).toBe(false);
+  });
+
+  it("keeps the promo still's own seven seconds when ?drivems is absent or unusable", () => {
+    const reference = (() => {
+      vi.stubGlobal("location", { search: "?shot=drive&house=2" });
+      const sim = GameSim.create({ seed: 5, autoSpawn: false });
+      applyPromoShot(sim);
+      return sim.clock.gameMs;
+    })();
+    for (const search of ["?shot=drive&house=2&drivems=abc", "?shot=drive&house=2&drivems=999999"]) {
+      vi.stubGlobal("location", { search });
+      const sim = GameSim.create({ seed: 5, autoSpawn: false });
+      applyPromoShot(sim);
+      expect(sim.clock.gameMs, search).toBe(reference);
+    }
+  });
+
   it("seeds the porch at CHECK ID with a card", () => {
     vi.stubGlobal("location", { search: "?shot=door" });
     const sim = GameSim.create({ seed: 4, autoSpawn: false });
