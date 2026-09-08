@@ -51,6 +51,17 @@ export function generateCustomerName(seed: number): string {
   return `${first} ${last}`;
 }
 
+/**
+ * Deliberately unisex. Customer *appearance* is derived from this name via
+ * `customerLookIndex`, and the cast varies in gender presentation, so a first name
+ * that reads as strongly gendered would sooner or later be printed on an ID card
+ * beside a portrait that contradicts it — which players read as a bug rather than
+ * as diversity.
+ *
+ * Keeping the pool neutral is what makes the decoupling safe: there is no gender
+ * in the name to disagree with. Adding a strongly gendered given name here would
+ * silently break that, so add only names that sit comfortably on anyone.
+ */
 const FIRST = [
   "Ash",
   "Ren",

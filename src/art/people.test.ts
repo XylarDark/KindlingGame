@@ -213,6 +213,25 @@ describe("customerLookIndex", () => {
     expect(hits.size).toBe(CUSTOMER_LOOK_COUNT);
   });
 
+  it("does not tie a first name to one gender presentation", () => {
+    // The pool of given names is unisex by construction, so appearance is decoupled
+    // from it on purpose. This is the assertion that keeps the decoupling honest: if
+    // a name only ever produced one presentation, a player would start reading the
+    // name as a promise about the portrait — and the first mismatch would look broken.
+    const byFirstName = new Map<string, Set<string>>();
+    for (let seed = 0; seed < 600; seed++) {
+      const name = generateCustomerName(seed);
+      const first = name.split(" ")[0] ?? name;
+      const age = ageForSeed(`ord-${seed}:${name}`);
+      const presents = customerLook(customerLookIndex(name, age)).presents;
+      (byFirstName.get(first) ?? byFirstName.set(first, new Set()).get(first)!).add(presents);
+    }
+    expect(byFirstName.size).toBeGreaterThan(6);
+    for (const [first, seen] of byFirstName) {
+      expect(seen.size, `${first} only ever presents as ${[...seen]}`).toBeGreaterThan(1);
+    }
+  });
+
   it("does not track the date printed on the card", () => {
     // Same person, so same look; the DOB day comes off a different hash.
     const days = new Set<string>();
