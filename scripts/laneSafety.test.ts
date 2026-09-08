@@ -202,8 +202,19 @@ describe("a capture is not taken before the game has painted", () => {
     expect(countOf(gate, /return;/g)).toBeGreaterThanOrEqual(3);
   });
 
-  it("charges the gate to the wall-clock budget", () => {
-    expect(sourceOf("lib/laneProtocol.ts")).toMatch(/LAUNCH_OVERHEAD_MS \+ READY_TIMEOUT_MS/);
+  it("charges both gates to the wall-clock budget", () => {
+    // A gate that can spend 12s while the budget does not know about it would just
+    // move the timeout failure somewhere less honest.
+    const budget = bodyOf(sourceOf("lib/laneProtocol.ts"), "export function computeBudgetMs(");
+    expect(budget).toContain("READY_TIMEOUT_MS");
+    expect(budget).toContain("noClick");
+  });
+
+  it("re-arms the gate after the start click, relative to the frame it clicked on", () => {
+    // The pre-click gate is satisfied by the title screen; the shop scene has its own
+    // first paint, and an absolute threshold would already be met.
+    const main = bodyOf(agentShot, "async function main()");
+    expect(main).toContain("awaitRendered(evaluate, Math.max(before, 0))");
   });
 });
 
