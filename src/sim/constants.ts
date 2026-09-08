@@ -39,6 +39,22 @@ export const WALKIN_GAP_MIN_MS = 24_000;
 export const WALKIN_GAP_MAX_MS = 60_000;
 /** The first unscripted walk-in waits out the opening beats and the first ticket wave. */
 export const FIRST_WALKIN_MS = 12_000;
+
+/**
+ * Covering the counter alone, the key lead is one person with one pair of hands. Every
+ * other job already waiting is one more thing on their mind before they look up and
+ * notice somebody new standing there. One job in front of them and they turn round as
+ * fast as they always did; deep enough and a walk-in's patience runs out first.
+ */
+export const COVER_NOTICE_STEP_MS = 2_600;
+/**
+ * Past this depth the counter is as far gone as it gets — misery stops compounding.
+ * Set clear of the walk-in threshold so the ramp is graded: a pickup's shorter fuse
+ * burns out first, a walk-in's a job or two later, rather than everything at one cliff.
+ */
+export const COVER_NOTICE_MAX_STEPS = 9;
+/** How long the cover readout names the customer who just left. */
+export const COVER_LOSS_LINE_MS = 5_000;
 /** Scripted opening beats: walk-in, pickup, then two deliveries — one gap apart. */
 export const OPENING_ORDER_GAP_MS = 8_000;
 export const OPENING_FIRST_AT_MS = 400;

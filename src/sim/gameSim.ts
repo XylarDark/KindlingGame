@@ -16,6 +16,9 @@ import {
   WALKIN_GAP_MIN_MS,
   WALKIN_GAP_MAX_MS,
   FIRST_WALKIN_MS,
+  COVER_NOTICE_STEP_MS,
+  COVER_NOTICE_MAX_STEPS,
+  COVER_LOSS_LINE_MS,
   OPENING_FIRST_AT_MS,
   OPENING_ORDER_GAP_MS,
   MS_PER_GAME_HOUR,
@@ -219,6 +222,9 @@ export class GameSim {
   private npcCooldown = 0;
   private coverServed = 0;
   private coverLost = 0;
+  /** Names the counter sale that just walked, so the driver's readout says who. */
+  private coverLostName: string | null = null;
+  private coverLostAt = 0;
   private spawnQueue: SpawnEvent[] = [];
   private lastAutoSpawn = 0;
   private nextTicketWaveAt = 0;
@@ -349,6 +355,7 @@ export class GameSim {
     this.npcCooldown = 0;
     this.coverServed = 0;
     this.coverLost = 0;
+    this.coverLostName = null;
     this.queuedInteract = false;
     this.input = { dx: 0, dy: 0 };
     this.dropoffInteractReadyAt = 0;
@@ -524,6 +531,7 @@ export class GameSim {
     this.driverLine = null;
     this.coverServed = 0;
     this.coverLost = 0;
+    this.coverLostName = null;
     this.refreshDriveRoute();
     const walkIn = this.orders.find((o) => o.type === "inStore" && o.status === "atRegister");
     this.toast = walkIn
@@ -910,18 +918,29 @@ export class GameSim {
     };
   }
 
-  /** Mirrors the cover loop's own priority so the readout never names the wrong job. */
+  /**
+   * Mirrors the cover loop's own priority so the readout never names the wrong job — and
+   * says plainly when the key lead is too deep to reach somebody, so a lost sale arrives
+   * with its reason attached instead of as an unexplained score drop.
+   */
   private coverLine(walkIn: Order | undefined, pickup: Order | undefined): string {
+    if (this.coverLostName && this.clock.gameMs - this.coverLostAt < COVER_LOSS_LINE_MS) {
+      return `${this.coverLostName} gave up and left`;
+    }
     if (this.keyLeadPhase !== "idle") {
       const sku = this.fetchSkuId ? skuById(this.catalog, this.fetchSkuId) : undefined;
       return sku ? `In the back for ${sku.name}` : "In the back";
     }
     if (walkIn) {
-      return this.customerAtCounter(walkIn.id)
-        ? `Serving ${walkIn.customerName}`
-        : `${walkIn.customerName} is walking in`;
+      if (!this.customerAtCounter(walkIn.id)) return `${walkIn.customerName} is walking in`;
+      if (!this.coverNoticed(walkIn)) return this.backedUpLine(walkIn);
+      return `Serving ${walkIn.customerName}`;
     }
-    if (pickup && this.customerAtCounter(pickup.id)) return `Handing ${pickup.customerName} their pickup`;
+    if (pickup && this.customerAtCounter(pickup.id)) {
+      return this.coverNoticed(pickup)
+        ? `Handing ${pickup.customerName} their pickup`
+        : this.backedUpLine(pickup);
+    }
     const ticket = this.selectedTicket() ?? this.tabletFront();
     if (ticket) {
       const sku = skuById(this.catalog, ticket.skuId);
@@ -929,6 +948,11 @@ export class GameSim {
     }
     if (pickup) return `Waiting on ${pickup.customerName}`;
     return "Counter is clear";
+  }
+
+  /** Names both the person being kept waiting and the depth that is keeping them there. */
+  private backedUpLine(order: Order): string {
+    return `Buried — ${this.counterLoad()} jobs, ${order.customerName} still waiting`;
   }
 
   private runSnapshot(): DeliveryRun | null {
@@ -1179,8 +1203,10 @@ export class GameSim {
   /**
    * The counter does not close because the van left. While the player drives, the key lead
    * works the floor on their own: walk-ins first, then a pickup customer who is already
-   * standing there, then whatever ticket is next on the tablet. One job at a time, at the
-   * same pace a player manages, so the shop earns exactly what it would have earned anyway.
+   * standing there, then whatever ticket is next on the tablet. One job at a time.
+   *
+   * They are good, not superhuman. See `coverNoticeMs` — a counter the player left deep
+   * takes them longer to look up from, and somebody can leave before they get there.
    */
   private tickCounterCover(dtMs: number): void {
     this.npcCooldown -= dtMs;
@@ -1194,11 +1220,50 @@ export class GameSim {
     }
   }
 
+  /**
+   * Everything the counter is still carrying: people standing at it, tickets stacked on
+   * the tablet, and bags packed for a van that has not come back for them. The bags are
+   * the term that matters — a ticket wave drains in seconds, but a labelled bag sits
+   * there until a driver takes it, so the pile is a direct measure of how long the shop
+   * has been a person short. Come back and run them out and the counter empties again.
+   */
+  private counterLoad(): number {
+    const standing = this.orders.filter(
+      (o) => (o.type === "inStore" && o.status === "atRegister") || o.status === "readyForHandoff",
+    ).length;
+    const packed = this.orders.filter((o) => o.status === "inBin").length;
+    return standing + packed + tabletQueue(this.orders).length;
+  }
+
+  /**
+   * How long it takes the key lead to look up and register a new face. Alone with one
+   * job they turn round instantly; every other job already waiting adds a beat. A
+   * walk-in gives them INSTORE_WALKOUT_MS and a pickup customer rather less, so past a
+   * certain depth the counter starts shedding the people it cannot get to. Deterministic
+   * on purpose: "I left them seven deep" is a reason a player can act on, a dice roll is not.
+   */
+  private coverNoticeMs(): number {
+    const others = Math.max(0, this.counterLoad() - 1);
+    return COVER_NOTICE_STEP_MS * Math.min(others, COVER_NOTICE_MAX_STEPS);
+  }
+
+  /** True once the key lead has had time to notice whoever arrived at the counter. */
+  private coverNoticed(order: Order): boolean {
+    if (order.arriveAtGameMs === undefined) return false;
+    return this.clock.gameMs - order.arriveAtGameMs >= this.coverNoticeMs();
+  }
+
   private coverWalkIn(): boolean {
     const walkIn = this.orders.find((o) => o.type === "inStore" && o.status === "atRegister");
     if (!walkIn) return false;
     // Nothing else can be fetched while someone is crossing the floor, so hold the turn.
     if (!this.customerAtCounter(walkIn.id)) return true;
+    if (!this.coverNoticed(walkIn)) {
+      // Head still down. A bag already in their hands can be closed out; nothing new starts.
+      const ticket = this.selectedTicket();
+      if (ticket && this.handSkuId === ticket.skuId) this.shopClick({ type: "bagRack" });
+      return true;
+    }
     if (this.handSkuId === walkIn.skuId) this.shopClick({ type: "customer", orderId: walkIn.id });
     else this.shopClick({ type: "strain", skuId: walkIn.skuId });
     return true;
@@ -1209,6 +1274,7 @@ export class GameSim {
       (o) => o.status === "readyForHandoff" && this.customerAtCounter(o.id),
     );
     if (!waiting) return false;
+    if (!this.coverNoticed(waiting)) return false;
     this.shopClick({ type: "handoff" });
     return true;
   }
@@ -1640,7 +1706,11 @@ export class GameSim {
   private failOrder(order: Order, reason: string): void {
     if (this.shiftEnded) return;
     order.status = "failed";
-    if (this.playerRole === "driver" && order.type !== "delivery") this.coverLost += 1;
+    if (this.playerRole === "driver" && order.type !== "delivery") {
+      this.coverLost += 1;
+      this.coverLostName = order.customerName;
+      this.coverLostAt = this.clock.gameMs;
+    }
     const delta = scoreForFail();
     this.score += delta;
     this.pushScoreFlash(delta);

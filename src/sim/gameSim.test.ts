@@ -834,15 +834,17 @@ describe("key lead covering the counter while the van is out", () => {
     expect(sim.score).toBe(SCORE_PICKUP);
   });
 
+  // A stack this size is within one person's reach; see "the key lead can be outrun by
+  // the counter" for what happens once it is not.
   it("clears a stacked counter during a long run without losing anyone", () => {
     const sim = GameSim.create({ seed: 5, autoSpawn: false });
     sendVanOut(sim);
-    const ids = Array.from({ length: 6 }, (_, n) =>
+    const ids = Array.from({ length: 4 }, (_, n) =>
       sim.spawnOrder(n % 2 ? "inStore" : "pickup", { ageOk: true }).id,
     );
     runCover(sim, () => ids.every((id) => sim.orderById(id)?.status === "completed"), 1_200);
     expect(ids.map((id) => sim.orderById(id)?.status)).toEqual(ids.map(() => "completed"));
-    expect(sim.score).toBe(3 * SCORE_INSTORE + 3 * SCORE_PICKUP);
+    expect(sim.score).toBe(2 * SCORE_INSTORE + 2 * SCORE_PICKUP);
     expect(sim.snapshot().shopCover.lost).toBe(0);
   });
 
@@ -1043,19 +1045,6 @@ describe("recurring walk-in traffic", () => {
     expect(sim.snapshot().shopCover.served).toBeGreaterThan(servedBefore);
   });
 
-  it("lets the key lead clear a full shift of walk-ins without losing one", () => {
-    const sim = GameSim.create({ seed: 8 });
-    fillTicket(sim, "delivery", { destinationId: "house-1" });
-    expect(sim.hitTheRoad()).toBe(true);
-    const log = watchDoor(sim);
-    expect(log.ids.length).toBeGreaterThanOrEqual(12);
-    expect(log.maxAtOnce).toBe(1);
-    const statuses = log.ids.map((id) => sim.orderById(id)!.status);
-    // A walk-in still crossing the floor at 23:00 is neither sold nor lost.
-    expect(statuses.filter((s) => s === "failed")).toEqual([]);
-    expect(statuses.filter((s) => s === "completed").length).toBeGreaterThanOrEqual(12);
-  });
-
   it("leaves the driver's banner alone when someone walks in behind them", () => {
     const sim = GameSim.create({ seed: 6, autoSpawn: false });
     fillTicket(sim, "delivery", { destinationId: "house-1" });
@@ -1064,5 +1053,79 @@ describe("recurring walk-in traffic", () => {
     expect(banner).not.toBe("");
     sim.spawnOrder("inStore", { ageOk: true });
     expect(sim.snapshot().toast).toBe(banner);
+  });
+});
+
+describe("the key lead can be outrun by the counter", () => {
+  /** Leave the van out with `bags` deliveries already packed and stacked on the counter. */
+  function parkWithPile(sim: GameSim, bags: number): void {
+    fillTicket(sim, "delivery", { destinationId: "house-1" });
+    expect(sim.hitTheRoad()).toBe(true);
+    for (let i = 0; i < bags; i++) sim.spawnOrder("delivery", { ageOk: true });
+    runCover(sim, () => sim.snapshot().shopCover.packed >= bags, 1_600);
+    expect(sim.snapshot().shopCover.packed).toBe(bags);
+  }
+
+  it("covers a shallow counter at full speed, exactly as it always did", () => {
+    const sim = GameSim.create({ seed: 5, autoSpawn: false });
+    parkWithPile(sim, 2);
+    const walk = sim.spawnOrder("inStore", { ageOk: true });
+    runCover(sim, () => sim.orderById(walk.id)?.status !== "atRegister", 800);
+    expect(sim.orderById(walk.id)?.status).toBe("completed");
+    expect(sim.snapshot().shopCover.lost).toBe(0);
+  });
+
+  it("loses a walk-in when the counter is buried under undriven bags", () => {
+    const sim = GameSim.create({ seed: 5, autoSpawn: false });
+    parkWithPile(sim, 8);
+    const walk = sim.spawnOrder("inStore", { ageOk: true });
+    runCover(sim, () => sim.orderById(walk.id)?.status !== "atRegister", 800);
+    expect(sim.orderById(walk.id)?.status).toBe("failed");
+    expect(sim.snapshot().shopCover.lost).toBe(1);
+  });
+
+  it("tells the driver who is waiting, how deep, and who just left", () => {
+    const sim = GameSim.create({ seed: 5, autoSpawn: false });
+    parkWithPile(sim, 8);
+    const walk = sim.spawnOrder("inStore", { ageOk: true });
+
+    // While they are too deep to look up, the readout names the person and the pile.
+    runCover(sim, () => sim.snapshot().shopCover.line.startsWith("Buried"), 400);
+    const waiting = sim.snapshot().shopCover.line;
+    expect(waiting).toContain(walk.customerName);
+    expect(waiting).toMatch(/Buried — \d+ jobs/);
+
+    // The moment they give up, the readout says so by name and the tally ticks over.
+    runCover(sim, () => sim.snapshot().shopCover.lost > 0, 800);
+    expect(sim.snapshot().shopCover.line).toBe(`${walk.customerName} gave up and left`);
+    expect(sim.snapshot().shopCover.lost).toBe(1);
+  });
+
+  it("holds a normal delivery run cleanly and only sheds once parked for good", () => {
+    const sim = GameSim.create({ seed: 8 });
+    fillTicket(sim, "delivery", { destinationId: "house-1" });
+    expect(sim.hitTheRoad()).toBe(true);
+
+    // 90s out is a normal round trip. Nobody should pay for that.
+    for (let t = 0; t < 90_000; t += 500) sim.tick(500);
+    expect(sim.snapshot().shopCover.lost).toBe(0);
+    expect(sim.snapshot().shopCover.served).toBeGreaterThan(0);
+
+    // Five more minutes with nobody running the bags out and the pile wins.
+    for (let t = 0; t < 300_000; t += 500) sim.tick(500);
+    expect(sim.snapshot().shopCover.lost).toBeGreaterThan(0);
+  });
+
+  it("leaves an abandoned shift scoring no better than nothing", () => {
+    const sim = GameSim.create({ seed: 8 });
+    fillTicket(sim, "delivery", { destinationId: "house-1" });
+    expect(sim.hitTheRoad()).toBe(true);
+    for (let t = 0; t < SHIFT_MS; t += 500) sim.tick(500);
+
+    const cover = sim.snapshot().shopCover;
+    // The key lead is good early on — this is a shift going bad, not a broken employee.
+    expect(cover.served).toBeGreaterThanOrEqual(4);
+    expect(cover.lost).toBeGreaterThan(cover.served);
+    expect(sim.score).toBeLessThanOrEqual(0);
   });
 });
