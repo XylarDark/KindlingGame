@@ -338,15 +338,12 @@ async function awaitPageTarget(watchdog: Watchdog): Promise<{ webSocketDebuggerU
  *
  * `--no-ready-wait` restores the old fixed-sleep behaviour; `--min-frames` retunes it.
  */
-async function awaitRendered(evaluate: (expression: string) => Promise<unknown>): Promise<void> {
+async function awaitRendered(evaluate: (expression: string) => Promise<unknown>, baseline = 0): Promise<void> {
   if (flag("no-ready-wait")) return;
-  const minFrames = Number(arg("min-frames", String(DEFAULT_MIN_READY_FRAMES)));
+  const minFrames = baseline + Number(arg("min-frames", String(DEFAULT_MIN_READY_FRAMES)));
   const startedAt = Date.now();
   for (let poll = 1; ; poll += 1) {
-    const raw = await evaluate(
-      "(function () { var g = window.kindlingGame; return g && g.loop ? g.loop.frame : -1; })()",
-    );
-    const frame = typeof raw === "number" ? raw : NO_GAME_FRAME;
+    const frame = await readFrame(evaluate);
     const state = classifyReadiness({ frame, elapsedMs: Date.now() - startedAt, pollCount: poll, minFrames });
     if (state.kind === "ready") return;
     if (state.kind === "not-a-game") {
@@ -362,6 +359,12 @@ async function awaitRendered(evaluate: (expression: string) => Promise<unknown>)
     }
     await sleep(READY_POLL_INTERVAL_MS);
   }
+}
+
+/** Current render frame, or {@link NO_GAME_FRAME} when this page has no game on it. */
+async function readFrame(evaluate: (expression: string) => Promise<unknown>): Promise<number> {
+  const raw = await evaluate("(function () { var g = window.kindlingGame; return g && g.loop ? g.loop.frame : -1; })()");
+  return typeof raw === "number" ? raw : NO_GAME_FRAME;
 }
 
 async function capture(cdp: Cdp, watchdog: Watchdog, name: string, clip: ShotClip | null): Promise<void> {
@@ -465,15 +468,25 @@ async function main(): Promise<void> {
     return res.result.value;
   };
 
+  // Wait for the game to paint *before* clicking. Phaser drops pointer events that
+  // arrive before its input plugin is live, and on a cold profile that window extends
+  // past the settle -- the click was silently lost and the capture came back showing
+  // "Paused - tap to start".
+  step = "waiting for the game to render";
+  await awaitRendered(evaluate);
+
   // The game boots paused; a click on the canvas starts play.
   if (!NO_CLICK) {
     step = "clicking the canvas to start play";
+    const before = await readFrame(evaluate);
     await click(W / 2, H / 2);
     await sleep(WAIT);
+    // The gate above was satisfied by the title screen. Starting play swaps in the shop
+    // scene, whose own first paint has to be waited out separately, so re-arm the gate
+    // relative to the frame we clicked on.
+    step = "waiting for the shop to render";
+    await awaitRendered(evaluate, Math.max(before, 0));
   }
-
-  step = "waiting for the game to render";
-  await awaitRendered(evaluate);
 
   for (const [index, item] of plan.entries()) {
     step = `step ${index + 1}/${plan.length} (${item.kind})`;

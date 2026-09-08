@@ -348,10 +348,11 @@ describe("budget arithmetic", () => {
     }
   });
 
-  it("charges the settle wait twice when it also clicks to start play", () => {
+  it("charges the settle wait and a second render gate when it clicks to start play", () => {
     const clicked = computeBudgetMs({ waitMs: 2500, noClick: false, steps: [] });
     const notClicked = computeBudgetMs({ waitMs: 2500, noClick: true, steps: [] });
-    expect(clicked - notClicked).toBe(2500);
+    // Starting play costs another settle plus the shop scene's own first paint.
+    expect(clicked - notClicked).toBe(2500 + READY_TIMEOUT_MS);
     expect(notClicked).toBe(LAUNCH_OVERHEAD_MS + READY_TIMEOUT_MS + 2500);
   });
 
@@ -363,6 +364,7 @@ describe("budget arithmetic", () => {
     const steps = [parseStep("wait:30000"), parseStep("shot:a.png"), parseStep("wait:5000")];
     const budget = computeBudgetMs({ waitMs: 1000, noClick: true, steps });
     expect(budget).toBe(LAUNCH_OVERHEAD_MS + READY_TIMEOUT_MS + 1000 + 35_000 + 3 * PER_STEP_ALLOWANCE_MS);
+    expect(budget).toBeLessThan(MAX_BUDGET_MS);
   });
 
   it("never returns less than the floor or more than the ceiling", () => {

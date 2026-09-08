@@ -374,9 +374,11 @@ export function computeBudgetMs(input: BudgetInput): number {
   }
   const waits = input.steps.reduce((sum, step) => (step.kind === "wait" ? sum + step.ms : sum), 0);
   const settle = input.waitMs + (input.noClick ? 0 : input.waitMs);
-  // The render gate runs on every path and can spend its full timeout on a slow
-  // machine, so it is charged to the budget rather than silently eating into it.
-  const total = LAUNCH_OVERHEAD_MS + READY_TIMEOUT_MS + settle + waits + input.steps.length * PER_STEP_ALLOWANCE_MS;
+  // The render gate runs before the start click and again after it, and each can spend
+  // its full timeout on a slow machine, so both are charged to the budget rather than
+  // silently eating into it.
+  const gates = READY_TIMEOUT_MS + (input.noClick ? 0 : READY_TIMEOUT_MS);
+  const total = LAUNCH_OVERHEAD_MS + gates + settle + waits + input.steps.length * PER_STEP_ALLOWANCE_MS;
   return Math.min(Math.max(total, MIN_BUDGET_MS), MAX_BUDGET_MS);
 }
 
