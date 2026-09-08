@@ -1,0 +1,50 @@
+---
+description: Kindling project context: stack, commands, layout, and the local conventions agents must follow
+alwaysApply: true
+---
+
+# Kindling project context
+
+Kindling is a browser game: **Phaser 3 + TypeScript**, bundled by **Vite**, tested with **Vitest**. No backend, no database, no secrets, no server-rendered framework. Everything ships as static files.
+
+## Commands
+
+| Task | Command |
+|------|---------|
+| Dev server | `npx vite --host --port 5174 --strictPort` |
+| Type check | `npx tsc --noEmit` |
+| Tests | `npm test` (`vitest run`) |
+| Production build | `npm run build` (`tsc --noEmit` then `vite build`) |
+| Screenshot | `npx tsx scripts/agent-shot.ts --lane N` |
+
+`package.json` defines only `dev`, `build`, `preview` and `test`. There is no lint or format script, and no ESLint, Prettier, Husky, commitlint or changeset setup — do not assume one exists or invent a command for it.
+
+## Layout
+
+- `src/` — game source. `scenes/` (Phaser scenes), `sim/` (simulation), `ui/`, `input/`, `art/`, `audio/`, `maps/`.
+- `src/**/*.test.ts` — tests live beside the code they cover.
+- `scripts/` — capture and audit tooling run through `npx tsx` (`agent-shot.ts`, `qa-*.ts`, `promo-capture.ts`, `audit-loops.ts`).
+- `public/` — static assets served as-is. `docs/promo/` — curated stills. `docs/qa-shots/` — gitignored scratch.
+
+## Local conventions that override generic advice
+
+- **Windows/PowerShell:** `&&` is not a valid statement separator — use `;`.
+- **Screenshots and the dev server:** follow the protocol in [AGENTS.md](../../AGENTS.md). It is authoritative: take your own capture lane rather than the shared `cursor-ide-browser` tab, and never start a second dev server. Both rules exist because of real, silent, expensive failures.
+- **Authored content is real work.** Curated stills in `docs/promo/` and assets under `public/` and `src/art/` are authored artifacts — capture and generation scripts must not bulk-overwrite them. See [18-content-and-data-pipelines.mdc](18-content-and-data-pipelines.mdc).
+- **`core.autocrlf` is `true`** in this repo, so a checkout delivers CRLF. Any code that scans source text must normalise with `.replace(/\r\n/g, "\n")` and **throw** when a marker is missing rather than falling back to a wider scan.
+
+## A green check is not evidence unless you know what it measured
+
+This repo has produced three separate bugs that passed their own checks by doing nothing: a CRLF-broken source scan that failed open, a layout audit that read a Phaser data-manager value as a plain property and so checked nothing, and a non-null assertion that hid an uninitialised Phaser input until the HUD crashed on boot.
+
+Read [docs/KNOWN_ERRORS.md](../../docs/KNOWN_ERRORS.md) before touching audits, source-scanning tests, or Phaser input wiring. It is the canonical incident log for this project — prefer it over `docs/LESSONS_LEARNED.md`, which this repo does not use. Append a new entry whenever you debug a non-obvious failure.
+
+Automation limits that cannot be scripted reliably belong in [docs/operational/automation-gaps.md](../../docs/operational/automation-gaps.md).
+
+## Definition of done
+
+1. `npx tsc --noEmit` clean.
+2. `npm test` fully green.
+3. **A capture proving the game still renders** — `tsc` demonstrably misses boot-time crashes, so type checking and tests alone do not close a change that touches runtime code.
+
+Commit in coherent chunks with a lowercase conventional prefix and a subject that communicates the value of the change.

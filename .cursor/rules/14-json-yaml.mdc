@@ -1,0 +1,56 @@
+---
+name: "JSON/YAML Configuration Standards"
+description: "Follow config formatting and schema validation rules when editing JSON or YAML files to prevent runtime errors"
+alwaysApply: false
+globs: "**/*.json, **/*.yaml, **/*.yml"
+priority: 14
+version: 1.0
+---
+
+# JSON/YAML Configuration Standards
+
+## JSON Standards
+
+- Use consistent indentation (2 spaces)
+- Use double quotes for strings
+- No trailing commas
+- Validate JSON syntax before committing
+- Use meaningful property names
+
+## YAML Standards
+
+- Use 2 spaces for indentation
+- Use consistent quote style
+- Use `---` document separators when needed
+- Avoid tabs (use spaces)
+- Use consistent list style (dash or bracket)
+
+## Configuration Best Practices
+
+- Validate schema when possible
+- Document required fields
+- Provide default values when appropriate
+- Use environment variables for secrets
+- Keep configs version-controlled (except secrets)
+
+## Schema Validation
+
+- Use JSON Schema for JSON files
+- Validate against schemas in CI
+- Document schema changes
+- Version schemas appropriately
+
+## Security
+
+- Never commit secrets in config files
+- Use `.example` files for templates
+- Document required environment variables
+- Validate sensitive fields are not committed
+
+## Configuration Checklist
+
+- [ ] Valid syntax (JSON/YAML)
+- [ ] No secrets committed
+- [ ] Schema validated (if applicable)
+- [ ] Documented required fields
+- [ ] Example files provided

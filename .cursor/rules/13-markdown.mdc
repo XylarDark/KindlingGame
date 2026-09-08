@@ -1,0 +1,57 @@
+---
+name: "Markdown Documentation Standards"
+description: "Follow markdown structure and formatting rules when editing .md files to keep docs consistent and navigable"
+alwaysApply: false
+globs: "**/*.md"
+priority: 13
+version: 1.0
+---
+
+# Markdown Documentation Standards
+
+## Structure
+
+- Use clear headings hierarchy (H1 → H2 → H3)
+- Include table of contents for long documents
+- Use consistent heading styles
+- Break long documents into sections
+
+## Formatting
+
+- Use proper markdown syntax
+- Use code blocks with language identifiers
+- Use lists for step-by-step instructions
+- Use tables for structured data
+- Use blockquotes for important notes
+
+## Code Examples
+
+- Include complete, working examples
+- Show both input and expected output
+- Use syntax highlighting
+- Keep examples up-to-date with code
+- Test examples before committing
+
+## Links and References
+
+- Use descriptive link text (not "click here")
+- Link to related documentation
+- Keep links up-to-date
+- Use relative paths for internal links
+- Use absolute URLs for external links
+
+## Best Practices
+
+- Write for your audience (technical level)
+- Use active voice
+- Be concise but complete
+- Include examples
+- Keep documentation current
+
+## Documentation Checklist
+
+- [ ] Clear structure with headings
+- [ ] Code examples are working
+- [ ] Links are valid
+- [ ] Formatting is consistent
+- [ ] Content is up-to-date

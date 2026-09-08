@@ -1,0 +1,59 @@
+---
+name: "TypeScript Standards"
+description: "Follow TypeScript strict-mode patterns and type safety rules when editing .ts or .tsx files to catch errors at compile time"
+alwaysApply: false
+globs: "**/*.ts, **/*.tsx"
+priority: 10
+version: 1.0
+---
+
+# TypeScript Standards
+
+## Type Safety Principles
+
+**TypeScript-Specific:**
+- Enable `strict: true` in tsconfig.json
+- Use `unknown` instead of `any` when type is truly unknown
+- Define return types explicitly for public APIs
+- Use branded types for IDs to prevent mixing
+- Leverage discriminated unions for state machines
+
+## General Type Safety Principles
+
+- Use the strictest type checking available
+- Prefer compile-time errors over runtime errors
+- Use type inference where it improves readability
+- Avoid `any`/`unknown`/dynamic types unless necessary
+- Define interfaces/types for all data structures
+- Use union types for mutually exclusive states
+
+## Type Safety Checklist
+
+- [ ] All function parameters have types
+- [ ] All return values have types
+- [ ] No use of `any`/`unknown` without justification
+- [ ] External data validated against types
+- [ ] Type errors caught at compile/build time
+
+## TypeScript Best Practices
+
+- Use interfaces for object shapes
+- Use type aliases for unions/intersections
+- Prefer `interface` over `type` for extensibility
+- Use `const` assertions for literal types
+- Use `as const` for immutable data structures
+- Leverage utility types (`Partial`, `Pick`, `Omit`, etc.)
+
+## Module System
+
+- Use ES modules or CommonJS consistently
+- Prefer named exports over default exports
+- Use `export type` for type-only exports
+- Avoid `export *` (be explicit about exports)
+
+## Compilation
+
+- Enable declaration maps for debugging
+- Use source maps for development
+- Compile to appropriate target (ES2020+)
+- Enable incremental compilation for faster builds

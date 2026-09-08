@@ -1,0 +1,57 @@
+---
+name: "JavaScript Standards"
+description: "Follow modern ES2020+ patterns and runtime validation rules when editing .js or .jsx files to ensure safety"
+alwaysApply: false
+globs: "**/*.js, **/*.jsx"
+priority: 11
+version: 1.0
+---
+
+# JavaScript Standards
+
+## Type Safety for Dynamic Languages
+
+**Dynamic Languages (JavaScript, etc.):**
+- Use JSDoc type annotations
+- Add runtime type validation (Zod, Joi, etc.)
+- Use TypeScript if possible
+- Validate external data at boundaries
+
+## Modern JavaScript
+
+- Use ES2020+ features
+- Prefer `const` and `let` over `var`
+- Use arrow functions for callbacks
+- Use template literals for string interpolation
+- Use destructuring for object/array access
+- Use async/await over callbacks
+
+## Code Quality
+
+- Avoid global variables
+- Use strict mode (`'use strict'`)
+- Handle errors properly (try-catch, .catch())
+- Validate inputs at function boundaries
+- Use meaningful variable names
+
+## Module System
+
+- Use ES modules when possible
+- Prefer named exports
+- Avoid default exports when possible
+- Use consistent import/export style
+
+## Best Practices
+
+- Avoid `==` (use `===` for equality)
+- Avoid `eval()` and `Function()` constructor
+- Use `Array` methods (map, filter, reduce) over loops
+- Handle promises properly (don't forget await/catch)
+- Use optional chaining (`?.`) and nullish coalescing (`??`)
+
+## Runtime Validation
+
+- Validate external API responses
+- Validate user input
+- Use schema validation libraries (Zod, Joi, Yup)
+- Type-check at runtime for critical paths
