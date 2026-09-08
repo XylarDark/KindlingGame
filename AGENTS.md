@@ -21,6 +21,20 @@ Useful flags: `--url`, `--query`, `--size WxH`, `--wait ms`, `--no-click`, `--ou
 
 Why the shared browser cannot simply be fixed is recorded in [docs/operational/automation-gaps.md](docs/operational/automation-gaps.md); re-check it if the Cursor browser tools change.
 
+### Working the game and reading its state back
+
+A capture run can drive the game through an ordered step sequence: `click:x,y`, `clickeval:expr` (for targets that move between runs), `drag:x1,y1,x2,y2` (the only way to work a slider, which needs a `pointermove` between press and release), `wait:ms`, `shot:name.png`, `shot:name.png@x,y,w,h[,scale]` for a magnified crop, and `eval:expr`. Run at `--size 1920x1080` so CSS pixels equal design coordinates and you can click design-space positions directly.
+
+**Anything containing double quotes must go in a `--plan` file, one step per line** — `npx` on Windows is a cmd shim that silently strips quotes, so an inline `--step "eval:..."` arrives as invalid JS:
+
+```
+npx tsx scripts/agent-shot.ts --lane 7 --size 1920x1080 --plan tmp/settings.steps
+```
+
+Two things worth knowing before you write a plan. CDP `Input.dispatchMouseEvent`, which these steps use, does reach Phaser, whereas synthetic `PointerEvent`s dispatched through `eval` do not. And `await import("/src/session.ts")` will **not** hand you the live sim — Vite returns a separate module instance that throws `Game session has not started`; wrap `HudScene.paintHud` to stash the snapshot it receives instead.
+
+Prefer `eval` over pixels for anything you assert: a backgrounded tab returns stale screenshots that look live.
+
 ## The dev server is shared — don't start a second one
 
 One vite serves everything on **port 5174**: `npx vite --host --port 5174 --strictPort`. Check `http://127.0.0.1:5174/` before assuming it's down. Prefer `127.0.0.1` over `localhost`, matching the other capture scripts. Note `npm run dev -- --port 5174` does **not** work: the script is `vite --host`, so npm folds the port into `--host` and Chrome tries to resolve a hostname of "5174".
