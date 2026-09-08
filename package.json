@@ -10,7 +10,11 @@
     "test": "vitest run",
     "open": "npx tsx scripts/open-game.ts",
     "shot": "npx tsx scripts/agent-shot.ts",
-    "shot:cleanup": "npx tsx scripts/agent-shot.ts --cleanup"
+    "shot:cleanup": "npx tsx scripts/agent-shot.ts --cleanup",
+    "typecheck": "tsc --noEmit",
+    "verify": "node scripts/verify.mjs",
+    "doctor": "npm run doctor --prefix .devenv",
+    "doctor:fix": "npm run doctor:fix --prefix .devenv"
   },
   "dependencies": {
     "@fontsource/inter": "^5.3.0",

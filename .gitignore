@@ -4,6 +4,11 @@ dist
 *.local
 .vite
 
+# Local environment files. Only .env.example may ever be tracked.
+.env
+.env.*
+!.env.example
+
 # QA screenshot scratch. Curated stills belong in docs/promo/.
 docs/qa-shots/
 

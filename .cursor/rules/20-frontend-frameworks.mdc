@@ -1,0 +1,59 @@
+---
+name: "Frontend Framework Standards"
+description: "Apply component architecture and accessibility patterns when editing UI components to ensure quality UX"
+alwaysApply: false
+globs: "**/components/**, **/pages/**, **/app/**"
+priority: 20
+version: 1.0
+---
+
+# Frontend Best Practices
+
+## Component Architecture
+
+- Small, focused components
+- Separation of concerns (presentation vs logic)
+- Reusable, composable components
+- Props interface clearly defined
+- No business logic in UI components
+
+## State Management
+
+- Keep state local when possible
+- Use state management library when complexity warrants
+- Avoid prop drilling
+- Use URL state for shareable state
+- Sync server and client state
+
+## Performance
+
+- Lazy load routes/components
+- Optimize images (format, size, lazy loading)
+- Minimize bundle size (tree shaking, code splitting)
+- Use virtual scrolling for long lists
+- Debounce/throttle user input
+
+## Accessibility
+
+- Semantic HTML
+- ARIA labels
+- Keyboard navigation
+- Focus management
+- Screen reader support
+
+## Responsive Design
+
+- Mobile-first approach
+- Use relative units (rem, em, %)
+- Test on multiple screen sizes
+- Handle orientation changes
+- Touch-friendly targets (44x44px minimum)
+
+## Frontend Checklist
+
+- [ ] Components are small and focused
+- [ ] State management is appropriate
+- [ ] Performance optimized
+- [ ] Accessible
+- [ ] Works on mobile devices
+- [ ] Responsive design implemented

@@ -1,0 +1,109 @@
+---
+name: "Shell Script Standards"
+description: "Follow cross-platform shell conventions when editing .sh, .ps1, or .bat files to ensure portability and safety"
+alwaysApply: false
+globs: "**/*.sh, **/*.ps1, **/*.bat"
+priority: 15
+version: 1.0
+---
+
+# Shell Script Standards
+
+## Cross-Platform Compatibility
+
+- Test scripts on target platforms
+- Use platform-agnostic commands when possible
+- Handle path separators correctly (`/` vs `\`)
+- Use environment variables for paths
+- Check for command availability before use
+
+## PowerShell-Specific
+
+- Use `;` not `&&` for command chaining
+- Test paths before navigation: `if (Test-Path "path") { ... }`
+- Use `Join-Path` for path construction
+- Use `Push-Location`/`Pop-Location` for temporary navigation
+- Avoid emoji in output (PowerShell parsing issues)
+- Use `-ErrorAction SilentlyContinue` for optional operations
+- **NEVER use `Select-Object -First N` in terminal commands** - causes VPN/network connection issues
+  - ❌ Avoid: `command | Select-Object -First 30`
+  - ✅ Safe: Use direct command without limiting
+  - ✅ Safe: Use command's built-in limiting flags (e.g., `--maxfail=1`)
+  - ✅ Safe: Redirect to file if limiting needed: `command > output.txt; Get-Content output.txt -TotalCount 30`
+  - See the Windows and PowerShell section in `AGENTS.md` for project-specific details
+
+## Bash-Specific
+
+- Use `#!/bin/bash` or `#!/usr/bin/env bash`
+- Enable `set -euo pipefail` for error handling
+- Quote variables to handle spaces
+- Use `[[ ]]` instead of `[ ]` when possible
+- Check command existence before use
+
+## Error Handling
+
+- Check exit codes
+- Handle errors gracefully
+- Provide meaningful error messages
+- Exit with appropriate codes
+- Log errors for debugging
+
+## Best Practices
+
+- Add shebang line (`#!/bin/bash`, `#!/usr/bin/env pwsh`)
+- Make scripts executable
+- Document script purpose and usage
+- Use functions for reusable logic
+- Validate inputs
+- Use meaningful variable names
+
+## Security
+
+- Never execute untrusted scripts
+- Validate user input
+- Avoid `eval` when possible
+- Use parameterized commands
+- Check file permissions
+
+## PowerShell Path Navigation (Enhanced)
+
+**Critical Patterns:**
+- Always validate workspace root before operations
+- Use `Test-Path` before any `Set-Location` or `cd` command
+- Construct full paths with `Join-Path` instead of chaining `cd` commands
+- Use `Push-Location`/`Pop-Location` for temporary navigation
+
+**Workspace Root Validation:**
+```powershell
+# Always validate workspace root first
+$workspaceRoot = "C:\dev"  # Or detect from environment
+if (-not (Test-Path $workspaceRoot)) {
+    Write-Error "Workspace root not found: $workspaceRoot"
+    exit 1
+}
+
+# Then validate project path
+$projectPath = Join-Path $workspaceRoot "project_name"
+if (-not (Test-Path $projectPath)) {
+    Write-Error "Project not found: $projectPath"
+    exit 1
+}
+Set-Location $projectPath
+```
+
+## File Operation Error Handling
+
+**When Files Are Blocked:**
+- If file operations are blocked by gitignore/globalignore:
+  1. Check file status: `git check-ignore -v <file>`
+  2. Use programmatic creation (script) instead of direct file tools
+  3. Document workaround in commit message
+
+## Script Checklist
+
+- [ ] Cross-platform tested
+- [ ] Error handling implemented
+- [ ] Input validation present
+- [ ] Documented purpose and usage
+- [ ] No hardcoded paths
+- [ ] Security considerations addressed

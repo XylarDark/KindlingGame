@@ -1,111 +1,139 @@
 # Working in this repo
 
-Phaser 3 + TypeScript. Windows/PowerShell: `&&` is not a valid statement separator — use `;`.
+Kindling is a browser game: **Phaser 3 + TypeScript**, bundled by **Vite**, tested with **Vitest**.
+No backend, no database, no server-rendered framework. Everything ships as static files.
 
-This file holds the operational protocol — the things that will waste your afternoon if you get them wrong. Supporting detail lives in three places: [`.cursor/rules/`](.cursor/rules/README.md) for engineering standards (`08-project-context.mdc` carries the stack, commands and layout), [`docs/KNOWN_ERRORS.md`](docs/KNOWN_ERRORS.md) for the full forensics on past failures, and [`docs/operational/automation-gaps.md`](docs/operational/automation-gaps.md) for limits that cannot be automated away.
+Windows/PowerShell: `&&` is not a valid statement separator — use `;`.
+
+This file is the canonical, always-loaded context, and it holds the operational protocol — the
+things that will waste your afternoon if you get them wrong. Everything else loads on demand:
+
+- **`.cursor/rules/*.mdc`** — glob-scoped only. They load when you open a matching file
+  (TypeScript, JavaScript, markdown, JSON/YAML, shell, frontend).
+- **`.agents/skills/<name>/SKILL.md`** — procedural knowledge. Each stays dormant until its
+  `description` matches your task. Read one when its trigger applies.
+- **[`docs/KNOWN_ERRORS.md`](docs/KNOWN_ERRORS.md)** — full forensics on past failures.
+- **[`docs/operational/automation-gaps.md`](docs/operational/automation-gaps.md)** — limits that
+  cannot be automated away.
+
+Do not add always-applied rules. Context loaded on every turn measurably degrades accuracy, so the
+budget for this file is roughly 200 lines and the always-apply rule count is zero.
+
+## Commands
+
+| Task | Command |
+|------|---------|
+| Dev server | `npm run dev` |
+| Type check | `npm run typecheck` |
+| Tests | `npm test` |
+| Everything, with evidence | `npm run verify` |
+| Production build | `npm run build` |
+| Screenshot | `npx tsx scripts/agent-shot.ts --lane N` |
+| Show the game to a human | `npm run open` |
+| Repository health check | `npm run doctor` |
+
+There is **no lint or format script**, and no ESLint, Prettier, Husky or commitlint setup. Do not
+assume one exists or invent a command for it. `npm run doctor` reports their absence as a gap; that
+is a known, accepted state, not a task waiting for you.
+
+**Pass script flags after `--`.** `npm run shot:cleanup -- --lane 3` forwards the flag;
+`npm run shot:cleanup --lane 3` gives it to npm, which silently ignores it.
+
+## Layout
+
+- `src/` — game source. `scenes/` (Phaser scenes), `sim/` (simulation), `ui/`, `input/`, `art/`,
+  `audio/`, `maps/`.
+- `src/**/*.test.ts` — tests live beside the code they cover.
+- `scripts/` — capture and audit tooling run through `npx tsx` (`agent-shot.ts`, `qa-*.ts`,
+  `promo-capture.ts`, `audit-loops.ts`).
+- `public/` — static assets served as-is. `docs/promo/` — curated stills. `docs/qa-shots/` —
+  gitignored scratch.
+- `.devenv/` — embedded [DevEnvTemplate](https://github.com/XylarDark/DevEnvTemplate) doctor,
+  gitignored. Run `npm run doctor` from the repo root.
 
 ## Screenshots: take your own lane, never the shared browser
 
-**Do not use the `cursor-ide-browser` tools when more than one agent may be running.** That browser is a single shared tab. Three agents reaching for it at once hung all three for 46 minutes with no error and no output — the failure is silent, so you will not be told it happened.
+**Do not use the `cursor-ide-browser` tools when more than one agent may be running.** That browser
+is a single shared tab. Three agents reaching for it at once hung all three for 46 minutes with no
+error and no output — the failure is silent, so you will not be told it happened. It fails with a
+single caller too: `browser_navigate` has returned `Timed out waiting for glass browser view` twice
+in one hour.
 
-The shared tab fails even with a single caller: `browser_navigate` has returned `Timed out waiting for glass browser view` twice in one hour. Capture through your own isolated Chrome instead:
+Capture through your own isolated Chrome instead:
 
 ```
 npx tsx scripts/agent-shot.ts --lane 3 --name shop.png
-npx tsx scripts/agent-shot.ts --lane 4 --query "?howto=0&shot=drive" --wait 4000
 ```
 
-A lane number picks a dedicated debug port (`9400 + lane`) and its own Chrome profile, so any number of lanes capture in parallel. Verified with three simultaneous. Pick a lane no one else is using and keep it for your whole session; lane `0` is the default and therefore the one most likely to collide. Output goes to `%TEMP%\kindling-shots` and the script prints the absolute path it wrote.
+A lane gets its own debug port and Chrome profile, so lanes capture in parallel. Pick one nobody
+else is using and keep it for your session; lane `0` is the default and the most likely to collide.
 
-Useful flags: `--url`, `--query`, `--size WxH`, `--wait ms`, `--no-click`, `--start-clicks N`, `--ready-scene key`, `--out`, `--name`. The game boots paused, so the script clicks the canvas centre to start play unless you pass `--no-click`.
-
-Put a query in `--url` **or** `--query`, never both. They used to be concatenated, so `--url ".../?howto=1"` became `.../?howto=1/?howto=0` — a URL that loads, renders and photographs perfectly while applying neither parameter. Supplying both is now refused before Chrome starts.
-
-### Landing on the screen you meant
-
-One canvas-centre click gets you into the shop normally, but `?howto=1` puts the welcome card and then the how-to overlay in front of that, so "one click" means different things on different URLs. Say how far in you want to be, and assert where you landed:
-
-```
-npx tsx scripts/agent-shot.ts --lane 5 --query "?howto=1" --no-click        --ready-scene title   # welcome
-npx tsx scripts/agent-shot.ts --lane 5 --query "?howto=1" --start-clicks 1  --ready-scene title   # how-to
-npx tsx scripts/agent-shot.ts --lane 5                                      --ready-scene shop    # play
-```
-
-`--ready-scene` is the only part of the gate that **fails the run**. A frame shortfall is forgiven as a slow machine, but a scene you named and never reached means the capture would have shown something else — the failure a frame count structurally cannot see. Use it on anything you intend to assert against. The pointer is parked off-canvas after the start clicks, so a control the click landed on is not photographed mid-hover.
-
-Why the shared browser cannot simply be fixed is recorded in [docs/operational/automation-gaps.md](docs/operational/automation-gaps.md); re-check it if the Cursor browser tools change.
-
-### If a human asks for the Cursor browser: never pass `position` to a new tab
-
-`browser_navigate` derives its internal `preserveFocus` from the **absence** of `position`. Omit `position` and Cursor builds the view inside the workbench renderer, on a path with no deadline. Pass it, and Cursor asks a separate "glass" window to create the tab and then polls for a webview element for exactly 2000 ms before throwing `Timed out waiting for glass browser view`. The one logged failure died in 2126 ms, which is that deadline and not a slow network.
-
-Concurrency makes it worse for a second reason: tab lists are **filtered by owning agent**, so another agent's tab is invisible to you, reuse is skipped, and you fall through into tab *creation* — the only path that can time out.
-
-The way to show a human the game is therefore two calls: create quietly with `newTab` and no `position`, then reveal by passing the returned `viewId` **with** `position`. Reuse never enters the creation path, so revealing an existing view is safe.
-
-```
-npx tsx scripts/browser-probe.ts    # offline, reads Cursor's logs, cannot hang
-```
-
-Run that first. It reports whether the browser subsystem has failed recently and touches no MCP tool.
-
-**Retry at most once, and only with the call changed** — drop `position`. Repeating an identical call re-enters the same race. This applies only to the failure that *returns an error*: a hanging call cannot be cancelled from inside an agent, so retrying a hang is strictly worse than not. Closing a stale tab (`browser_tabs` close) or releasing a stuck lock repairs a *stale* browser, not a wedged one; for a true wedge the only lever is `Developer: Reload Window`.
-
-### A run cannot hang, leak a browser, or collide with yours
-
-You do not need to manage any of this, but knowing it exists will save you from working around it:
-
-- **Every run is bounded.** A watchdog ends the run within a wall-clock budget derived from the work you asked for, and every CDP call, debug-port poll and process query has its own timeout. On expiry the run prints the step it died on, tears down its Chrome and exits non-zero. Raise it with `--budget <ms>` if a plan legitimately needs longer.
-- **Every exit path tears down.** Return, throw, unhandled rejection and `SIGINT`/`SIGTERM`/`SIGHUP`/`SIGBREAK` all kill the whole Chrome process tree and delete the lane's profile directory. A `taskkill /F` on the run itself is the one case teardown cannot survive — use `--cleanup` afterwards.
-- **Lanes are locked.** A lane held by a live run fails fast and names the holder and a free lane to use instead. A lock whose holder is dead is reclaimed, and the reclaim is logged.
-- **The profile is disposable.** It is deleted at the end of each run, so every capture starts from clean `localStorage`. Pass `--keep-profile` to keep a warm shader cache between runs on the same lane.
-
-If a run is interrupted, or a lane starts refusing for no clear reason, reap it:
-
-```
-npx tsx scripts/agent-shot.ts --cleanup --lane 3         # this lane
-npx tsx scripts/agent-shot.ts --cleanup --all --dry-run  # survey every lane, change nothing
-npm run shot:cleanup -- --lane 3
-```
-
-Cleanup is safe to run at any time. It only ever touches processes whose `--user-data-dir` is exactly a `kindling-shot-laneN` directory, so it cannot reach your own browser. Prefer `--dry-run` for `--all` while other agents may be mid-run, because a run started before lane locking existed holds no lock to protect it.
-
-### Working the game and reading its state back
-
-A capture run can drive the game through an ordered step sequence: `click:x,y`, `clickeval:expr` (for targets that move between runs), `drag:x1,y1,x2,y2` (the only way to work a slider, which needs a `pointermove` between press and release), `wait:ms`, `shot:name.png`, `shot:name.png@x,y,w,h[,scale]` for a magnified crop, and `eval:expr`. Run at `--size 1920x1080` so CSS pixels equal design coordinates and you can click design-space positions directly.
-
-**Anything containing double quotes must go in a `--plan` file, one step per line** — `npx` on Windows is a cmd shim that silently strips quotes, so an inline `--step "eval:..."` arrives as invalid JS:
-
-```
-npx tsx scripts/agent-shot.ts --lane 7 --size 1920x1080 --plan tmp/settings.steps
-```
-
-Two things worth knowing before you write a plan. CDP `Input.dispatchMouseEvent`, which these steps use, does reach Phaser, whereas synthetic `PointerEvent`s dispatched through `eval` do not. And `await import("/src/session.ts")` will **not** hand you the live sim — Vite returns a separate module instance that throws `Game session has not started`; wrap `HudScene.paintHud` to stash the snapshot it receives instead.
-
-Prefer `eval` over pixels for anything you assert: a backgrounded tab returns stale screenshots that look live.
+**Read the `game-capture` skill before any capture work.** It covers the lane mechanics, step plans
+for driving the game, reading runtime state back, run bounding and teardown, lane cleanup, and the
+one safe way to show the game to a human through the Cursor browser. Every item in it is there
+because of a specific expensive failure.
 
 ## The dev server is shared — don't start a second one
 
-One vite serves everything on **port 5174**. `npm run dev` now does the right thing: the port is pinned in `vite.config.ts` (`server.port`, `server.strictPort`) and the script passes the flags explicitly, so there is no longer a wrong way to start it. `npx vite --host --port 5174 --strictPort` remains equivalent.
+One vite serves everything on **port 5174**. `npm run dev` now does the right thing: the port is
+pinned in `vite.config.ts` (`server.port`, `server.strictPort`) and the script passes the flags
+explicitly, so there is no longer a wrong way to start it. `npx vite --host --port 5174
+--strictPort` remains equivalent.
 
-Check `http://127.0.0.1:5174/` before assuming it's down. Prefer `127.0.0.1` over `localhost`, matching the capture scripts. `strictPort` means a second server refuses to start rather than sliding to 5175 where nothing is looking for it.
+Check `http://127.0.0.1:5174/` before assuming it's down. Prefer `127.0.0.1` over `localhost`,
+matching the capture scripts. `strictPort` means a second server refuses to start rather than
+sliding to 5175 where nothing is looking for it.
 
-Do **not** pass the port through npm — `npm run dev -- --port 5174` folds it into the `--host` value, and the browser then tries to resolve a hostname of "5174". You no longer need to.
+Do **not** pass the port through npm — `npm run dev -- --port 5174` folds it into the `--host`
+value, and the browser then tries to resolve a hostname of "5174". You no longer need to.
 
-To put the game in front of a human, use `npm run open` rather than `Start-Process`. It checks the server is actually serving, focuses an existing window that already has the game instead of stacking another tab, and refuses with instructions when the server is down.
+To put the game in front of a human, use `npm run open` rather than `Start-Process`. It checks the
+server is actually serving, focuses an existing window that already has the game instead of stacking
+another tab, and refuses with instructions when the server is down.
 
 ## Failures here are usually silent — verify positively
 
 This codebase has produced three separate bugs that all passed their own checks by doing nothing:
 
-- **A test that read its own source** searched for a newline-anchored `}`. `core.autocrlf` is `true`, so a checkout delivers CRLF, the search never matched, and the fail-open branch scanned every later function instead. If you scan source text, normalise with `.replace(/\r\n/g, "\n")` and **throw** on a miss rather than returning the remainder.
-- **The layout audit** read `text.typekitBox` as a property, but it lives in Phaser's data manager. Every overflow check silently skipped and the audit reported clean. Sanity-check that an audit found a plausible non-zero number of boxed texts before trusting a pass, and run it at camera zoom 1.
-- **A non-null assertion** (`settingsDim.input!.enabled`) hid the fact that `input` is null until `setInteractive()` is called. `tsc` passed; the HUD crashed on boot. Prefer the real API (`setInteractive` / `disableInteractive`) over asserting a nullable away.
+- **A test that read its own source** searched for a newline-anchored `}`. `core.autocrlf` is
+  `true`, so a checkout delivers CRLF, the search never matched, and the fail-open branch scanned
+  every later function instead. If you scan source text, normalise with `.replace(/\r\n/g, "\n")`
+  and **throw** on a miss rather than returning the remainder.
+- **The layout audit** read `text.typekitBox` as a property, but it lives in Phaser's data manager.
+  Every overflow check silently skipped and the audit reported clean. Sanity-check that an audit
+  found a plausible non-zero number of boxed texts before trusting a pass, and run it at camera
+  zoom 1.
+- **A non-null assertion** (`settingsDim.input!.enabled`) hid the fact that `input` is null until
+  `setInteractive()` is called. `tsc` passed; the HUD crashed on boot. Prefer the real API
+  (`setInteractive` / `disableInteractive`) over asserting a nullable away.
 
 So: a green check is not evidence unless you know what it measured.
 
-Each of these is written up in full — symptom, cause, fix, prevention, commit — in [docs/KNOWN_ERRORS.md](docs/KNOWN_ERRORS.md). Read it before you touch an audit, a source-scanning test, or Phaser input wiring, and append an entry whenever you debug a non-obvious failure.
+Each of these is written up in full — symptom, cause, fix, prevention, commit — in
+[docs/KNOWN_ERRORS.md](docs/KNOWN_ERRORS.md). Read it before you touch an audit, a source-scanning
+test, or Phaser input wiring, and append an entry whenever you debug a non-obvious failure.
+
+## Local conventions that override generic advice
+
+- **Authored content is real work.** Curated stills in `docs/promo/` and assets under `public/` and
+  `src/art/` are authored artifacts — capture and generation scripts must not bulk-overwrite them.
+  See the `data-pipeline-safety` skill.
+- **`core.autocrlf` is `true`** in this repo, so a checkout delivers CRLF. See the source-scanning
+  rule above.
+- **No secrets here.** This is a static browser game with no backend. If a change appears to need a
+  credential, that is a design question, not a configuration task. MCP configuration is the one
+  place credentials could appear: reference them as `${env:NAME}`, never inline, starting from
+  `.cursor/mcp.json.example`. See `docs/guides/mcp-hygiene.md`.
 
 ## Definition of done
 
-`npx tsc --noEmit` clean, `npm test` fully green, and — because `tsc` demonstrably misses boot-time crashes — a capture proving the game still renders. Commit in coherent chunks with a lowercase conventional prefix and a subject that communicates the value of the change.
+1. `npm run typecheck` clean.
+2. `npm test` fully green.
+3. **A capture proving the game still renders** — `tsc` demonstrably misses boot-time crashes, so
+   type checking and tests alone do not close a change that touches runtime code.
+
+`npm run verify` runs the first two in order and reports evidence for each, naming any stage that
+did not run. It cannot do the third; that judgement is yours.
+
+Commit in coherent chunks with a lowercase conventional prefix and a subject that communicates the
+value of the change.

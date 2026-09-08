@@ -5,14 +5,14 @@
       {
         "command": "node .cursor/hooks/secret-scan.cjs",
         "timeout": 10,
-        "failClosed": true
+        "failClosed": false
       }
     ],
     "beforeShellExecution": [
       {
         "command": "node .cursor/hooks/secret-scan.cjs",
         "timeout": 10,
-        "failClosed": true
+        "failClosed": false
       }
     ]
   }

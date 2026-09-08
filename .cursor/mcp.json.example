@@ -1,0 +1,24 @@
+{
+  "//": "Copy to .cursor/mcp.json and edit. That path is gitignored, because a real config holds credentials.",
+  "//1": "Never write a secret literally in this file. Reference the environment: ${env:NAME}.",
+  "//2": "Cursor resolves ${env:NAME} in command, args, env, url, headers, and auth values.",
+  "//3": "Read docs/guides/mcp-hygiene.md before adding a server. Two Cursor CVEs landed in this file.",
+
+  "mcpServers": {
+    "example-stdio-server": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@example/mcp-server", "--project", "${workspaceFolder}"],
+      "env": {
+        "EXAMPLE_API_KEY": "${env:EXAMPLE_API_KEY}"
+      }
+    },
+
+    "example-remote-server": {
+      "url": "https://mcp.example.com/v1",
+      "headers": {
+        "Authorization": "Bearer ${env:EXAMPLE_SERVICE_TOKEN}"
+      }
+    }
+  }
+}
