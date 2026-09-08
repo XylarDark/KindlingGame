@@ -6,7 +6,12 @@ description: Use when handling user input, secrets, authentication, environment 
 # Secure coding
 
 Assume every input is hostile and every secret will leak if it is checked in. Apply these
-checks while writing the code, not in a separate audit pass.
+checks while writing the code, not in a separate audit pass — a review that defers them all to
+the end finds them when they are expensive, and usually does not find them at all.
+
+One exception, and it is narrow: the deploy-time items in [The hardening
+pass](#the-hardening-pass) cannot be applied while writing code, because they are properties of
+a deployment rather than of a file.
 
 ## OWASP Top 10 checks
 
@@ -114,3 +119,34 @@ NODE_ENV=development
 - [ ] Error messages leak no internal detail (paths, stack traces, SQL)
 - [ ] HTTPS for all external connections
 - [ ] Security headers configured
+
+## The hardening pass
+
+> **Localize on copy.** The specifics below are Kindling's, and they are short because this is a
+> static browser game with no backend, no credentials, and no user data. A project with something
+> real behind it needs a much longer pass, and a runnable gate rather than a checklist.
+
+This game is already live: `pages.yml` deploys every push to `master`. So the pass is a
+**re-hardening**, run before shipping a change large enough that the game's shape moved, not a
+one-time gate before a first release.
+
+**Run the two audits by hand.** `npm audit --audit-level=high` and `npm audit signatures`. They
+are not in any workflow, and deliberately so — the automation-gap register records that a CI
+security job was removed because every failure emails the owner, and says not to re-add one
+without asking. Hand-running them costs nothing and is the whole of this project's dependency
+gate.
+
+**Nothing here scans for secrets.** There is no editor hook and no CI scan; the residual risk is
+stated plainly in `docs/operational/automation-gaps.md`. Before a deploy, read your own diff for
+anything that looks like a credential, and remember that a secret pasted into a working file can
+reach an agent transcript without ever being committed. If `gitleaks` is installed locally, run
+it; if it is not, say the scan did not happen rather than that it passed.
+
+**The deploy proves less than it looks like it proves.** `pages.yml` runs the tests and the build,
+and neither catches a boot-time crash — the failure this repository has hit repeatedly. The
+workflow ships no capture, so nothing in it demonstrates that the game renders. Capture the
+deployed URL yourself after the deploy finishes.
+
+**Then the things no check can see.** Who can push to `master`, and therefore deploy; whether the
+Pages environment has any protection at all; and whether the live build was made from the commit
+you think it was. Nobody is emailed about these, so someone has to look.

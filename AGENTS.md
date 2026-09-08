@@ -131,6 +131,30 @@ test, or Phaser input wiring, and append an entry whenever you debug a non-obvio
   place credentials could appear: reference them as `${env:NAME}`, never inline, starting from
   `.cursor/mcp.json.example`. See `docs/guides/mcp-hygiene.md`.
 
+## Development phase
+
+Every area is **shaping** or **settled**. Shaping means the design is still being decided and your
+judgment is the success criterion; settled means the shape is agreed and the job is keeping it
+that way.
+
+- `src/sim/**`, `src/maps/**` — settled. The game's rules live here as pure functions with tests.
+- `src/scenes/**`, `src/ui/**`, `src/art/**`, `src/audio/**`, `scripts/**`, `docs/**` — shaping.
+
+**In a shaping area**, spend the budget on what can be looked at: skip tests and doc updates, and
+say in one line what you did not verify. **In a settled area**, every obligation in the skills
+applies as written. **Promotion is deliberate** — moving an area to settled means that same change
+adds the tests, the docs, and the `docs/KNOWN_ERRORS.md` entries that shaping deferred.
+
+**The capture never defers.** Item 3 below is not a nicety: `tsc` and Vitest both pass straight
+through a boot-time crash, and that has happened here. The phase changes what you write, not
+whether you looked at the game.
+
+**Then hardening, once.** This is already live on GitHub Pages on every push to `master`, so the
+gate is a re-hardening rather than a first release: work the hardening pass in the `secure-coding`
+skill before shipping a change large enough that the game's shape moved. It is short on purpose —
+[docs/operational/automation-gaps.md](docs/operational/automation-gaps.md) explains why "low value
+at risk" rather than "equivalent coverage" carries the security posture here.
+
 ## Definition of done
 
 1. `npm run typecheck` clean.
