@@ -30,6 +30,15 @@ export const TABLET_QUEUE_MAX = 6;
 export const TICKET_WAVE_MIN_MS = 10_000;
 export const TICKET_WAVE_MAX_MS = 58_000;
 export const FIRST_TICKET_WAVE_MS = 2_000;
+/**
+ * Foot traffic through the front door: one walk-in every 24–60s, and never two at once.
+ * A walk-in is the only order with a person on the floor who leaves angry, so the door
+ * beats slower than the tablet and the counter only ever owes one of them a jar.
+ */
+export const WALKIN_GAP_MIN_MS = 24_000;
+export const WALKIN_GAP_MAX_MS = 60_000;
+/** The first unscripted walk-in waits out the opening beats and the first ticket wave. */
+export const FIRST_WALKIN_MS = 12_000;
 /** Scripted opening beats: walk-in, pickup, then two deliveries — one gap apart. */
 export const OPENING_ORDER_GAP_MS = 8_000;
 export const OPENING_FIRST_AT_MS = 400;

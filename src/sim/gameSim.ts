@@ -13,6 +13,9 @@ import {
   TICKET_WAVE_MAX_MS,
   TICKET_WAVE_MIN_MS,
   FIRST_TICKET_WAVE_MS,
+  WALKIN_GAP_MIN_MS,
+  WALKIN_GAP_MAX_MS,
+  FIRST_WALKIN_MS,
   OPENING_FIRST_AT_MS,
   OPENING_ORDER_GAP_MS,
   MS_PER_GAME_HOUR,
@@ -24,6 +27,7 @@ import {
   SHIFT_MS,
   VEHICLE_SPEED,
 } from "./constants";
+import { customerLookIndex } from "../art/people";
 import { ageForSeed, emptyDropoff, idCardFor, type DropoffPhase, type DropoffView } from "./dropoff";
 import { destLabel, isOpen, needsFetch, tabletQueue, type Order, type OrderType } from "./orders";
 import { advanceRoute, lerpAngle, routeWorldPoints, snapPathToDriveLanes, type WorldPoint } from "./driveRoute";
@@ -73,6 +77,8 @@ export interface CustomerView {
   x: number;
   bubble: string;
   kind: "inStore" | "pickup";
+  /** Index into the customer appearance pool — stable for the life of the order. */
+  look: number;
 }
 
 export interface OrderView {
@@ -216,6 +222,7 @@ export class GameSim {
   private spawnQueue: SpawnEvent[] = [];
   private lastAutoSpawn = 0;
   private nextTicketWaveAt = 0;
+  private nextWalkInAt = 0;
   private rng: () => number;
   private runOrderIds: string[] = [];
   private nameSeed: number;
@@ -259,6 +266,7 @@ export class GameSim {
       { atMs: deliveryAt, type: "delivery" },
     ];
     this.nextTicketWaveAt = deliveryAt + OPENING_ORDER_GAP_MS + FIRST_TICKET_WAVE_MS;
+    this.nextWalkInAt = this.nextTicketWaveAt + FIRST_WALKIN_MS;
   }
 
   static create(options?: SimOptions): GameSim {
@@ -283,6 +291,7 @@ export class GameSim {
     }
     this.lastAutoSpawn = 0;
     this.nextTicketWaveAt = this.autoSpawn ? FIRST_TICKET_WAVE_MS : 0;
+    this.nextWalkInAt = this.autoSpawn ? WALKIN_GAP_MIN_MS : 0;
     const hasWalkIn = this.orders.some((o) => o.type === "inStore" && isOpen(o));
     this.spawnQueue =
       this.autoSpawn && !hasWalkIn ? [{ atMs: OPENING_FIRST_AT_MS, type: "inStore" }] : [];
@@ -350,6 +359,7 @@ export class GameSim {
     else {
       this.spawnQueue = [];
       this.nextTicketWaveAt = 0;
+      this.nextWalkInAt = 0;
     }
     this.toast = "New day. Clock is 9:00 AM.";
   }
@@ -385,6 +395,7 @@ export class GameSim {
         x: c.x,
         kind: c.kind,
         bubble: this.customerBubble(c),
+        look: this.customerLookFor(c.orderId),
       })),
       orders: this.orders.filter(isOpen).map((o) => this.toView(o)),
       bagsOnPickup: this.orders.filter((o) => o.status === "onPickupShelf" || o.status === "readyForHandoff").map((o) => o.id),
@@ -485,7 +496,9 @@ export class GameSim {
         kind: "inStore",
       });
       // Floor counterPrompt carries walk-in guidance — keep toast free for errors/score.
-      this.toast = "";
+      // Mid-run the toast is the driver's own banner, and the counter is the key lead's
+      // problem, so a walk-in arriving behind them must not wipe it.
+      if (this.playerRole === "keyLead") this.toast = "";
     } else if (type === "pickup") {
       this.toast = `Pickup ticket: ${order.customerName} — ${sku.name}`;
     } else {
@@ -970,6 +983,22 @@ export class GameSim {
     };
   }
 
+  /**
+   * Appearance for an order's customer, from the same name/age pair the ID card is
+   * built from — see `customerLookIndex`. Orders outlive their walk-in sprite, so
+   * this derives on demand rather than being stored on the sprite.
+   */
+  private customerLookFor(orderId: string): number {
+    const order = this.orderById(orderId);
+    if (!order) return 0;
+    return customerLookIndex(order.customerName, order.idAge);
+  }
+
+  /** The lane-snapped route the van is following, for the phone minimap. */
+  routeWorldPath(): readonly WorldPoint[] {
+    return this.driveRoute;
+  }
+
   private customerBubble(customer: CustomerState): string {
     const order = this.orderById(customer.orderId);
     const sku = order ? skuById(this.catalog, order.skuId) : undefined;
@@ -1256,6 +1285,11 @@ export class GameSim {
       const wait = TICKET_WAVE_MIN_MS + Math.floor(this.rng() * (TICKET_WAVE_MAX_MS - TICKET_WAVE_MIN_MS + 1));
       this.nextTicketWaveAt = this.clock.gameMs + wait;
     }
+    if (this.clock.gameMs >= this.nextWalkInAt) {
+      this.spawnWalkIn();
+      const wait = WALKIN_GAP_MIN_MS + Math.floor(this.rng() * (WALKIN_GAP_MAX_MS - WALKIN_GAP_MIN_MS + 1));
+      this.nextWalkInAt = this.clock.gameMs + wait;
+    }
   }
 
   private spawnTicketWave(): void {
@@ -1266,6 +1300,22 @@ export class GameSim {
       const type: OrderType = this.rng() < 0.5 ? "pickup" : "delivery";
       this.spawnOrder(type);
     }
+  }
+
+  /**
+   * The front door keeps opening all day. Only one walk-in stands at the counter at a
+   * time: there is a single customer spot, and an ignored walk-in leaves in
+   * INSTORE_WALKOUT_MS, so a queue of them would be a pile-up no player could clear.
+   * A beat that lands on an occupied counter is dropped and re-armed — the same way a
+   * ticket wave is dropped when the tablet is full — so a slow counter thins its own
+   * traffic instead of burying the player.
+   *
+   * The rate does not change with the player's role. The door does not know whether the
+   * van is out; what changes is who answers it, which is exactly the key lead's job.
+   */
+  private spawnWalkIn(): void {
+    if (this.orders.some((o) => o.type === "inStore" && isOpen(o))) return;
+    this.spawnOrder("inStore");
   }
 
   private tabletFront(): Order | undefined {
@@ -1487,6 +1537,7 @@ export class GameSim {
       orderId: d.orderId,
       houseId: d.houseId,
       customerName: order?.customerName ?? null,
+      customerLook: order ? customerLookIndex(order.customerName, order.idAge) : null,
       skuName: sku?.name ?? null,
       atCurb: d.phase === "atCurb",
       driverOnFoot: false,

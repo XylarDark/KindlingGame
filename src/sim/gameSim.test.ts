@@ -27,6 +27,8 @@ import {
   OPENING_FIRST_AT_MS,
   OPENING_ORDER_GAP_MS,
   TICKET_WAVE_MAX_MS,
+  WALKIN_GAP_MAX_MS,
+  WALKIN_GAP_MIN_MS,
 } from "./constants";
 
 function stepDropoff(sim: GameSim): void {
@@ -956,5 +958,111 @@ describe("key lead covering the counter while the van is out", () => {
     fillTicket(sim, "delivery", { destinationId: "house-2" });
     expect(sim.hitTheRoad()).toBe(true);
     expect(sim.snapshot().shopCover.served).toBe(0);
+  });
+});
+
+describe("recurring walk-in traffic", () => {
+  interface DoorLog {
+    /** Game time each walk-in was first seen on the floor, in spawn order. */
+    spawnedAt: number[];
+    ids: string[];
+    /** Most walk-ins standing at the counter at any one sample. */
+    maxAtOnce: number;
+  }
+
+  /**
+   * Watch the front door for a whole shift. 500ms samples, not 50ms: a shift is 840s of
+   * game time, and fine granularity here would run 16,800 ticks per test for no extra
+   * signal — a walk-in lives ~21s, so nothing can slip between samples.
+   */
+  function watchDoor(sim: GameSim): DoorLog {
+    const log: DoorLog = { spawnedAt: [], ids: [], maxAtOnce: 0 };
+    const seen = new Set<string>();
+    for (let t = 0; t < SHIFT_MS; t += 500) {
+      sim.tick(500);
+      const onFloor = sim.snapshot().orders.filter((o) => o.type === "inStore");
+      log.maxAtOnce = Math.max(log.maxAtOnce, onFloor.length);
+      for (const order of onFloor) {
+        if (seen.has(order.id)) continue;
+        seen.add(order.id);
+        log.ids.push(order.id);
+        log.spawnedAt.push(sim.clock.gameMs);
+      }
+    }
+    return log;
+  }
+
+  function gapsBetween(times: number[]): number[] {
+    return times.slice(1).map((t, i) => t - times[i]!);
+  }
+
+  it("keeps the door swinging all shift, not just at open", () => {
+    const sim = GameSim.create({ seed: 3 });
+    const log = watchDoor(sim);
+    // ~20 walk-ins at a 24-60s beat. The band is wide enough for any seed but far above
+    // the single scripted walk-in that used to be the whole day's foot traffic.
+    expect(log.ids.length).toBeGreaterThanOrEqual(12);
+    expect(log.ids.length).toBeLessThanOrEqual(30);
+    // Spread across the shift, not bunched into the opening.
+    expect(log.spawnedAt[log.spawnedAt.length - 1]).toBeGreaterThan(SHIFT_MS * 0.8);
+  });
+
+  it("holds the door beat to its 24-60s window", () => {
+    const sim = GameSim.create({ seed: 3 });
+    const gaps = gapsBetween(watchDoor(sim).spawnedAt);
+    expect(gaps.length).toBeGreaterThanOrEqual(11);
+    // 500ms of slack each way for the sampling rate above.
+    expect(Math.min(...gaps)).toBeGreaterThanOrEqual(WALKIN_GAP_MIN_MS - 500);
+    expect(Math.max(...gaps)).toBeLessThanOrEqual(WALKIN_GAP_MAX_MS + 500);
+  });
+
+  it("never puts a second walk-in on the counter behind the first", () => {
+    // Nobody serves anyone here, so every walk-in stands until they leave — the worst
+    // case for stacking, and the one that proves the door waits for the spot to clear.
+    const sim = GameSim.create({ seed: 5 });
+    const log = watchDoor(sim);
+    expect(log.maxAtOnce).toBe(1);
+    expect(log.ids.length).toBeGreaterThanOrEqual(12);
+  });
+
+  it("puts a walk-in that arrives mid-run through the key lead's cover loop", () => {
+    const sim = GameSim.create({ seed: 4 });
+    fillTicket(sim, "delivery", { destinationId: "house-1" });
+    expect(sim.hitTheRoad()).toBe(true);
+    const walkInIds = () => sim.snapshot().orders.filter((o) => o.type === "inStore").map((o) => o.id);
+    const atDeparture = new Set(walkInIds());
+    const arrivals = () => walkInIds().filter((id) => !atDeparture.has(id));
+
+    runCover(sim, () => arrivals().length > 0, 1_400);
+    const arrival = arrivals()[0];
+    expect(arrival).toBeDefined();
+    const servedBefore = sim.snapshot().shopCover.served;
+
+    runCover(sim, () => sim.orderById(arrival!)?.status === "completed", 400);
+    expect(sim.orderById(arrival!)?.status).toBe("completed");
+    expect(sim.snapshot().shopCover.served).toBeGreaterThan(servedBefore);
+  });
+
+  it("lets the key lead clear a full shift of walk-ins without losing one", () => {
+    const sim = GameSim.create({ seed: 8 });
+    fillTicket(sim, "delivery", { destinationId: "house-1" });
+    expect(sim.hitTheRoad()).toBe(true);
+    const log = watchDoor(sim);
+    expect(log.ids.length).toBeGreaterThanOrEqual(12);
+    expect(log.maxAtOnce).toBe(1);
+    const statuses = log.ids.map((id) => sim.orderById(id)!.status);
+    // A walk-in still crossing the floor at 23:00 is neither sold nor lost.
+    expect(statuses.filter((s) => s === "failed")).toEqual([]);
+    expect(statuses.filter((s) => s === "completed").length).toBeGreaterThanOrEqual(12);
+  });
+
+  it("leaves the driver's banner alone when someone walks in behind them", () => {
+    const sim = GameSim.create({ seed: 6, autoSpawn: false });
+    fillTicket(sim, "delivery", { destinationId: "house-1" });
+    expect(sim.hitTheRoad()).toBe(true);
+    const banner = sim.snapshot().toast;
+    expect(banner).not.toBe("");
+    sim.spawnOrder("inStore", { ageOk: true });
+    expect(sim.snapshot().toast).toBe(banner);
   });
 });
