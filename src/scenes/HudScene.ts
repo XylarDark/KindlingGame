@@ -30,8 +30,12 @@ import { designSafeInset, HUD_TOUCH_MIN_DESIGN, readCssSafeArea, VIEWFIT_EVENT, 
 
 /** Readouts sit either side of the counter sign, 10% over the display ramp. */
 const HUD_READOUT_PX = 40;
-/** The score carries a further 10%: it is the number the player is playing for. */
-const HUD_SCORE_PX = 44;
+/**
+ * The score carries a further 10%: it is the number the player is playing for. Exported
+ * because the shop tablet's ORDERS label is specified as "the same size as the score",
+ * and a copy of the number over there would be a copy that drifts.
+ */
+export const HUD_SCORE_PX = 44;
 const HUD_CAPTION_PX = 18;
 /** Order banner runs 25% over the ramp — read across the room, mid-task. */
 const HUD_TOAST_PX = "20px";

@@ -43,10 +43,24 @@ import { readyTally, receiptSlips } from "../ui/receipts";
 import { wireHover } from "../ui/chrome";
 import { addUiText } from "../ui/text";
 import { Color, Type } from "../ui/theme";
-import { fitTypeToWidth } from "../ui/typekit";
+import { HUD_SCORE_PX } from "./HudScene";
 
 /** Strain names on the wall screens run 21% over the heading step. */
 const TV_LABEL_PX = "24.2px";
+
+/**
+ * ORDERS is specified as "the same size as the score", so it is seeded from the score's
+ * own constant rather than a copy of the number. The tablet screen cannot actually hold
+ * 44px of it — see `TABLET_LABEL_INSET` — and `fitTypeToBox` only ever shrinks, so the
+ * rendered size is the largest that fits and is measured in-browser, never assumed.
+ */
+const TABLET_LABEL_PX = HUD_SCORE_PX;
+/**
+ * The label used to sit in a box inset 8px a side inside the screen. At caption size
+ * that slack was invisible; against a 44px seed it costs real type size, so the box is
+ * now the screen minus a hairline that keeps the glyphs off the bezel.
+ */
+const TABLET_LABEL_INSET = 4;
 
 /**
  * Customer / driver action messages run 20% over the body step — they are the
@@ -131,16 +145,19 @@ export class ShopScene extends Phaser.Scene {
     const tab = tabletLayout();
     this.tabletScreen = this.add.graphics().setDepth(10);
     this.tabletLabel = addUiText(this, TABLET.x, tab.screenTop + tab.screenH / 2, "ORDERS", {
-      size: Type.caption,
+      size: `${TABLET_LABEL_PX}px`,
       color: Color.creamHex,
       fontStyle: "700",
+      // Caps tracking would spend 8% of a 144px screen on the gaps between six letters.
+      // The word is short enough to read without it, and the size is worth more here.
+      letterSpacing: 0,
+      noWrap: true,
       strokeThickness: 0,
-      maxWidth: tab.screenW - 16,
-      maxHeight: tab.screenH - 16,
+      maxWidth: tab.screenW - TABLET_LABEL_INSET * 2,
+      maxHeight: tab.screenH - TABLET_LABEL_INSET * 2,
     })
       .setOrigin(0.5)
       .setDepth(11);
-    fitTypeToWidth(this.tabletLabel, tab.screenW - 16);
 
     this.tabletHit = this.add.rectangle(TABLET.x, TABLET.y, TABLET_W, TABLET_H, 0x000000, 0.001).setDepth(12);
     enableItemHit(this.tabletHit);
@@ -313,10 +330,12 @@ export class ShopScene extends Phaser.Scene {
       this.tabletScreen.fillStyle(0x1a3a22, 1);
       this.tabletScreen.fillRect(tab.screenLeft, tab.screenTop, tab.screenW, tab.screenH - tab.homeH);
     }
-    this.tabletLabel.setText("ORDERS");
+    // The label is constant, and setText re-runs the whole shrink-to-fit loop — eleven
+    // sizes now that it is seeded at the score's step — so it is set once at build time
+    // rather than every frame. The old per-frame refit also re-narrowed the box to the
+    // screen minus 16, which would have quietly undone TABLET_LABEL_INSET.
     this.tabletLabel.setAlpha(1);
     this.tabletLabel.setColor(Color.creamHex);
-    fitTypeToWidth(this.tabletLabel, tab.screenW - 16);
     const count = snap.tabletQueueCount;
     this.queueBadge.setVisible(count > 1);
     this.queueBadge.setText(String(count));
