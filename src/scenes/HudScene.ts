@@ -594,6 +594,17 @@ export class HudScene extends Phaser.Scene {
       .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, Color.ink, 0.45)
       .setDepth(40)
       .setVisible(false);
+    // create() runs input.setTopOnly(false), so one click is delivered to every
+    // interactive object under it. Without the panel punched out of this hit area the
+    // dim closes the panel on the same click that works a control, and the control's
+    // p.event.stopPropagation() cannot help: Phaser's own dispatch is cancelled through
+    // the fourth EventData callback argument, not the DOM event.
+    this.settingsDim.setInteractive({
+      useHandCursor: false,
+      hitArea: new Phaser.Geom.Rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT),
+      hitAreaCallback: (area: Phaser.Geom.Rectangle, x: number, y: number): boolean =>
+        Phaser.Geom.Rectangle.Contains(area, x, y) && !this.overSettingsPanel(x, y),
+    });
     this.armSettingsDim(false);
     this.settingsDim.on("pointerdown", (p: Phaser.Input.Pointer) => {
       p.event.stopPropagation();
@@ -756,10 +767,11 @@ export class HudScene extends Phaser.Scene {
   }
 
   private armSettingsDim(on: boolean): void {
-    // The dim spans the whole screen, so it must not exist as a hit target while
-    // the panel is closed or it swallows every click behind it.
-    if (on) this.settingsDim.setInteractive({ useHandCursor: false });
-    else this.settingsDim.disableInteractive();
+    // Only `enabled` may be toggled here: setInteractive/disableInteractive would
+    // discard the custom hit area that keeps panel clicks off the dim.
+    const input = this.settingsDim.input;
+    if (!input) throw new Error("settings dim must be made interactive before arming");
+    input.enabled = on;
   }
 
   /** Design-space panel rect — the dim spans the screen, so its local coords are design coords. */
