@@ -567,12 +567,22 @@ describe("GameSim order loops", () => {
   /**
    * The acceptance test for lawful approaches, and the one that would have caught the
    * original fault. When the route reaches a stall from the far lane, the van arrives
-   * across the kerb and has to swing most of a half-circle to square up: house-2 and
-   * house-10 turned 132 degrees, house-6 87, house-13 84, and the four east-west lots 76.
-   * A ceiling on that turn catches the whole class without knowing which lot broke.
+   * across the kerb and has to swing most of a half-circle to square up. Exactly seven of
+   * the city's fourteen lots did that, and this is the whole list, named individually:
+   * house-2 and house-10 turned 132 degrees, house-6 87, house-13 84, and house-5,
+   * house-7 and house-9 76. Do not restate any part of it by orientation — house-13 is
+   * itself one of the four EW-fronting lots (house-5, 7, 9, 13), so calling the
+   * 76-degree group "the four east-west lots" counts house-13 twice and the seven read
+   * as eight. That miscount has already escaped this comment once.
    *
-   * Every lot, not a sample: the four worst all sat on the same side of their street, so
-   * any spot check that missed that side would have passed on a broken city.
+   * The set has a shape, and it is checkable against CITY.houses rather than taken on
+   * trust: every EW-fronting lot was affected (street.c === stop.c: house-5, 7, 9, 13),
+   * plus exactly the three NS-fronting lots whose kerb tile sits west of their stall
+   * (street.c === stop.c - 1: house-2, 6, 10). The other seven all front their street
+   * from the east and always arrived square. So a spot check that sampled only those
+   * would have passed on a broken city, which is why this drives every lot instead of a
+   * sample; a ceiling on the turn then catches the whole class without knowing which lot
+   * broke.
    */
   it("arrives square enough to park at every lot in the city", () => {
     const ARRIVAL_TURN_MAX_DEG = 55;
