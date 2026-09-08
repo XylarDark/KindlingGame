@@ -6,3 +6,10 @@ dist
 
 # QA screenshot scratch. Curated stills belong in docs/promo/.
 docs/qa-shots/
+
+# Embedded DevEnvTemplate doctor. A working copy of another repository; never commit it.
+# Update with: git -C .devenv pull
+.devenv/
+
+# Agent scratch: capture plans and step files, per AGENTS.md.
+tmp/
