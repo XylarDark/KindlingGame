@@ -7,13 +7,38 @@ import {
   PERSON_SIT_H,
   PERSON_SIT_W,
   PERSON_W,
+  PORTRAIT_H,
+  PORTRAIT_W,
 } from "./art/peopleSize";
+import {
+  crewFace,
+  CUSTOMER_LOOKS,
+  customerPortraitKey,
+  customerPortraitKeys,
+  customerTextureKey,
+  customerTextureKeys,
+  OUTFITS,
+  type HairStyle,
+  type Look,
+} from "./art/people";
+import {
+  PHONE_CHASSIS_CELLS,
+  PHONE_GLASS_CELLS,
+  PHONE_HOME_CELLS,
+  PHONE_ISLAND_CELLS,
+  PHONE_PX,
+  PHONE_STATUS_CELLS,
+  PHONE_TEX,
+} from "./art/phoneArt";
 import { cells, PX } from "./art/px";
 import { MARK } from "./ui/copy";
 import { Color } from "./ui/theme";
 import { fitTypeToWidth, makeType } from "./ui/typekit";
 
-export { PEOPLE_PX, PERSON_H, PERSON_HAT_H, PERSON_SIT_H, PERSON_SIT_W, PERSON_W };
+export { PEOPLE_PX, PERSON_H, PERSON_HAT_H, PERSON_SIT_H, PERSON_SIT_W, PERSON_W, PORTRAIT_H, PORTRAIT_W };
+
+/** KINDLING on the driver's cap — 10% over the old 13.2 so it reads at arm's length. */
+const DRIVER_MARK_PX = 14.52;
 
 type G = Phaser.GameObjects.Graphics;
 
@@ -25,7 +50,11 @@ function bake(scene: Phaser.Scene, key: string, w: number, h: number, draw: (g: 
   g.destroy();
 }
 
-export function generateTextures(scene: Phaser.Scene): void {
+/**
+ * @param crewSeed casts the driver and the key lead. Fixed for the whole page
+ *   session — the seated driver has to be the same person as the standing one.
+ */
+export function generateTextures(scene: Phaser.Scene, crewSeed: number = Date.now()): void {
   roadH(scene);
   roadV(scene);
   roadCross(scene);
@@ -52,14 +81,20 @@ export function generateTextures(scene: Phaser.Scene): void {
   bag(scene);
   counterBags(scene);
   vehicle(scene);
-  person(scene, "tex-keylead", "keylead", Pal.skin, Pal.hairBrown, Pal.leaf, Pal.hairBrownLite);
-  person(scene, "tex-driver", "driver", Pal.skin, Pal.hairBlack, Pal.amber, Pal.hairBlackLite);
-  person(scene, "tex-customer", "customer", Pal.skin, Pal.hairAuburn, Pal.glass, Pal.hairAuburnLite);
-  personSit(scene);
+  // Crew wear Kindling colours, so only the face is cast; customers vary head to shirt.
+  const driverLook: Look = { ...crewFace(crewSeed, "driver"), ...OUTFITS.rust };
+  const keyLeadLook: Look = { ...crewFace(crewSeed, "keylead"), ...OUTFITS.leaf };
+  person(scene, "tex-keylead", "keylead", keyLeadLook);
+  person(scene, "tex-driver", "driver", driverLook);
+  CUSTOMER_LOOKS.forEach((look, i) => {
+    person(scene, customerTextureKey(i), "customer", look);
+    personPortrait(scene, customerPortraitKey(i), look);
+  });
+  personSit(scene, driverLook);
   // cx values are the cap panel centres: standing panel spans 40–152px, seated 56–184px.
   // cy rides just above panel centre so the mark clears the brim and glasses.
-  stampKindling(scene, "tex-driver", 96, 31, 13.2, 104);
-  stampKindling(scene, "tex-driver-sit", 120, 31, 13.2, 120);
+  stampKindling(scene, "tex-driver", 96, 31, DRIVER_MARK_PX, 104);
+  stampKindling(scene, "tex-driver-sit", 120, 31, DRIVER_MARK_PX, 120);
   stampKindling(scene, "tex-keylead", 96, 208, 23, 120);
   receipt(scene);
   jar(scene, "tex-flower", 0x4a8a52, 0x3a2a18, true);
@@ -69,7 +104,16 @@ export function generateTextures(scene: Phaser.Scene): void {
   crate(scene);
   phone(scene);
   cog(scene);
-  const people = new Set(["tex-keylead", "tex-driver", "tex-driver-sit", "tex-customer"]);
+  // People bake at 2× the world grid and are displayed under 1:1, so they want
+  // LINEAR. Every appearance variant has to be in here or the pool renders
+  // NEAREST and looks like it came from a different game.
+  const people = new Set([
+    "tex-keylead",
+    "tex-driver",
+    "tex-driver-sit",
+    ...customerTextureKeys(),
+    ...customerPortraitKeys(),
+  ]);
   for (const key of scene.textures.getTextureKeys()) {
     if (!key.startsWith("tex-")) continue;
     scene.textures.get(key).setFilter(
@@ -591,23 +635,23 @@ function drawEyes(g: G, lx: number, ly: number, iris: number): void {
   pcells(g, lx + 7, ly, 6, 1, Pal.ink);
 }
 
-function drawFace(g: G, ox: number, oy: number, iris: number, hair: number): void {
-  pcells(g, ox, oy, 14, 15, Pal.skin);
-  pcells(g, ox, oy + 6, 2, 5, Pal.skinDark);
-  pcells(g, ox + 12, oy + 6, 2, 5, Pal.skinDark);
-  pcells(g, ox + 3, oy + 14, 8, 1, Pal.skinDark);
-  pcells(g, ox + 1, oy + 2, 5, 1, hair);
-  pcells(g, ox + 8, oy + 2, 5, 1, hair);
-  drawEyes(g, ox + 1, oy + 4, iris);
-  pcells(g, ox + 6, oy + 10, 2, 1, Pal.skinDark);
-  pcells(g, ox + 6, oy + 12, 2, 1, Pal.skinDark);
+function drawFace(g: G, ox: number, oy: number, look: Look): void {
+  pcells(g, ox, oy, 14, 15, look.skin);
+  pcells(g, ox, oy + 6, 2, 5, look.skinDark);
+  pcells(g, ox + 12, oy + 6, 2, 5, look.skinDark);
+  pcells(g, ox + 3, oy + 14, 8, 1, look.skinDark);
+  pcells(g, ox + 1, oy + 2, 5, 1, look.hair);
+  pcells(g, ox + 8, oy + 2, 5, 1, look.hair);
+  drawEyes(g, ox + 1, oy + 4, look.iris);
+  pcells(g, ox + 6, oy + 10, 2, 1, look.skinDark);
+  pcells(g, ox + 6, oy + 12, 2, 1, look.skinDark);
 }
 
-function drawHands(g: G, leftX: number, rightX: number, y: number, skin: number): void {
+function drawHands(g: G, leftX: number, rightX: number, y: number, skin: number, skinDark: number): void {
   pcells(g, leftX, y, 3, 2, skin);
-  pcells(g, leftX + 1, y + 1, 1, 1, Pal.skinDark);
-  pcells(g, rightX, y, 3, 2, Pal.skinDark);
-  pcells(g, rightX + 1, y + 1, 1, 1, Pal.skin);
+  pcells(g, leftX + 1, y + 1, 1, 1, skinDark);
+  pcells(g, rightX, y, 3, 2, skinDark);
+  pcells(g, rightX + 1, y + 1, 1, 1, skin);
 }
 
 function drawShoes(g: G, lx: number, rx: number, y: number, w: number): void {
@@ -622,16 +666,16 @@ function drawPants(g: G, lx: number, rx: number, y: number, w: number, h: number
   pcells(g, rx, y, w, h, Pal.pantDark);
 }
 
-function drawCollar(g: G, kit: Kit, shirt: number, shirtDark: number, dy: number): void {
-  pcells(g, 10, 17 + dy, 4, 3, Pal.skinDark);
-  pcells(g, 11, 17 + dy, 2, 1, Pal.skin);
+function drawCollar(g: G, kit: Kit, look: Look, dy: number): void {
+  pcells(g, 10, 17 + dy, 4, 3, look.skinDark);
+  pcells(g, 11, 17 + dy, 2, 1, look.skin);
   if (kit === "keylead") {
     pcells(g, 7, 19 + dy, 10, 2, Pal.cream);
     pcells(g, 8, 19 + dy, 8, 1, Pal.creamSoft);
-    pcells(g, 11, 20 + dy, 2, 1, shirtDark);
+    pcells(g, 11, 20 + dy, 2, 1, look.shirtDark);
   } else {
-    pcells(g, 8, 19 + dy, 8, 2, shirtDark);
-    pcells(g, 9, 19 + dy, 6, 1, shirt);
+    pcells(g, 8, 19 + dy, 8, 2, look.shirtDark);
+    pcells(g, 9, 19 + dy, 6, 1, look.shirt);
   }
 }
 
@@ -647,29 +691,107 @@ function drawCap(g: G, hx: number, hy: number, front = 16): void {
   pcells(g, hx - 3, hy + 6, brim - 2, 1, Pal.leaf);
 }
 
-function drawHair(g: G, kit: Kit, hair: number, hairLite: number, hat: boolean): void {
+/**
+ * Hair, drawn before the face so the face crops the scalp back to the hairline.
+ * That leaves the crown band (rows 0–2) and the temples (columns 3–4 and 19–21)
+ * carrying the silhouette, which is what actually reads at 24 logical pixels —
+ * colour alone does not distinguish two people across a shop floor.
+ */
+function drawHair(g: G, style: HairStyle, hair: number, hairLite: number, hat: boolean, dy = 0): void {
+  const y = (row: number): number => row + dy;
   if (hat) {
-    pcells(g, 4, 6, 3, 8, hair);
-    pcells(g, 17, 6, 4, 9, hair);
-    pcells(g, 3, 8, 2, 4, hair);
-    pcells(g, 20, 9, 2, 5, hairLite);
+    // Under a cap only the sides show; length is the one cue left.
+    const long = style === "long" || style === "coils";
+    pcells(g, 4, y(6), 3, long ? 12 : 8, hair);
+    pcells(g, 17, y(6), 4, long ? 13 : 9, hair);
+    pcells(g, 3, y(8), 2, 4, hair);
+    pcells(g, 20, y(9), 2, long ? 9 : 5, hairLite);
+    if (style === "bun") {
+      pcells(g, 18, y(12), 4, 4, hair);
+      pcells(g, 19, y(13), 2, 2, hairLite);
+    }
     return;
   }
-  pcells(g, 4, 0, 16, 6, hair);
-  pcells(g, 3, 2, 4, 11, hair);
-  pcells(g, 17, 1, 5, 13, hair);
-  pcells(g, 6, 0, 10, 3, hairLite);
-  if (kit === "customer") {
-    pcells(g, 5, 0, 7, 3, hairLite);
-    pcells(g, 18, 2, 4, 13, hair);
-    pcells(g, 20, 8, 2, 8, hairLite);
-    pcells(g, 3, 12, 3, 5, hair);
-  } else {
-    pcells(g, 9, 0, 3, 2, hair);
-    pcells(g, 19, 6, 3, 9, hair);
-    pcells(g, 20, 8, 2, 6, Pal.shadow);
-    pcells(g, 3, 12, 3, 5, hair);
+  if (style === "crop") {
+    pcells(g, 5, y(1), 14, 5, hair);
+    pcells(g, 6, y(1), 12, 2, hairLite);
+    pcells(g, 3, y(3), 3, 7, hair);
+    pcells(g, 19, y(3), 3, 8, hair);
+    pcells(g, 20, y(5), 2, 4, hairLite);
+    return;
   }
+  if (style === "swept") {
+    pcells(g, 4, y(0), 16, 6, hair);
+    pcells(g, 5, y(0), 9, 3, hairLite);
+    pcells(g, 14, y(0), 2, 4, hair);
+    pcells(g, 3, y(2), 3, 10, hair);
+    pcells(g, 18, y(1), 4, 12, hair);
+    pcells(g, 20, y(4), 2, 7, hairLite);
+    return;
+  }
+  if (style === "bun") {
+    // Knot above the crown, everything else tucked in tight.
+    pcells(g, 9, y(0), 6, 3, hair);
+    pcells(g, 10, y(0), 4, 1, hairLite);
+    pcells(g, 5, y(2), 14, 4, hair);
+    pcells(g, 7, y(2), 10, 1, hairLite);
+    pcells(g, 4, y(3), 2, 5, hair);
+    pcells(g, 19, y(3), 2, 6, hair);
+    pcells(g, 19, y(8), 3, 4, hair);
+    pcells(g, 20, y(9), 2, 2, hairLite);
+    return;
+  }
+  if (style === "coils") {
+    // Volume plus dabbed texture — a rounded outline, not a helmet.
+    pcells(g, 4, y(0), 16, 6, hair);
+    pcells(g, 3, y(1), 18, 5, hair);
+    pcells(g, 2, y(3), 4, 8, hair);
+    pcells(g, 18, y(2), 4, 10, hair);
+    for (let i = 0; i < 7; i++) pcells(g, 4 + i * 2, y(i % 2 === 0 ? 0 : 1), 1, 1, hairLite);
+    pcells(g, 3, y(4), 1, 2, hairLite);
+    pcells(g, 20, y(5), 1, 3, hairLite);
+    pcells(g, 19, y(11), 3, 3, hair);
+    return;
+  }
+  // long
+  pcells(g, 4, y(0), 16, 6, hair);
+  pcells(g, 3, y(2), 4, 11, hair);
+  pcells(g, 17, y(1), 5, 13, hair);
+  pcells(g, 6, y(0), 10, 3, hairLite);
+  pcells(g, 5, y(0), 7, 3, hairLite);
+  pcells(g, 18, y(2), 4, 13, hair);
+  pcells(g, 20, y(8), 2, 8, hairLite);
+  pcells(g, 3, y(12), 3, 5, hair);
+}
+
+/** Hairline over the forehead, drawn after the face so it lands on top of it. */
+function drawFringe(g: G, style: HairStyle, hair: number, hairLite: number, dy: number): void {
+  if (style === "crop") {
+    pcells(g, 6, 3 + dy, 12, 1, hair);
+    pcells(g, 7, 3 + dy, 5, 1, hairLite);
+    return;
+  }
+  if (style === "swept") {
+    pcells(g, 6, 3 + dy, 12, 2, hair);
+    pcells(g, 7, 4 + dy, 5, 1, hairLite);
+    pcells(g, 13, 3 + dy, 5, 2, hair);
+    return;
+  }
+  if (style === "bun") {
+    pcells(g, 6, 3 + dy, 12, 1, hair);
+    pcells(g, 6, 3 + dy, 5, 1, hairLite);
+    return;
+  }
+  if (style === "coils") {
+    pcells(g, 6, 3 + dy, 12, 2, hair);
+    pcells(g, 8, 4 + dy, 1, 1, hairLite);
+    pcells(g, 12, 4 + dy, 1, 1, hairLite);
+    pcells(g, 15, 4 + dy, 1, 1, hairLite);
+    return;
+  }
+  pcells(g, 6, 3 + dy, 12, 2, hair);
+  pcells(g, 7, 4 + dy, 4, 2, hairLite);
+  pcells(g, 12, 4 + dy, 3, 1, hair);
 }
 
 interface StampStyle {
@@ -729,49 +851,70 @@ function stampKindling(scene: Phaser.Scene, key: string, cx: number, cy: number,
   });
 }
 
-function person(scene: Phaser.Scene, key: string, kit: Kit, skin: number, hair: number, iris: number, hairLite: number): void {
+function person(scene: Phaser.Scene, key: string, kit: Kit, look: Look): void {
   const hat = kit === "driver";
   const dy = hat ? 4 : 0;
   const wide = kit === "keylead";
   bake(scene, key, PERSON_W, hat ? PERSON_HAT_H : PERSON_H, (g) => {
-    const shirt = kit === "keylead" ? Pal.leaf : kit === "driver" ? Pal.rust : Pal.denim;
-    const shirtDark = kit === "keylead" ? Pal.leafDark : kit === "driver" ? Pal.rustDark : Pal.denimDark;
-
     if (wide) {
       pcells(g, 4, 42 + dy, 16, 2, Pal.shadow);
       drawPants(g, 7, 13, 33 + dy, 4, 9);
       drawShoes(g, 6, 13, 41 + dy, 5);
-      pcells(g, 4, 19 + dy, 16, 14, shirt);
-      pcells(g, 18, 21 + dy, 2, 12, shirtDark);
-      pcells(g, 1, 20 + dy, 3, 10, shirt);
-      pcells(g, 20, 20 + dy, 3, 10, shirtDark);
-      drawHands(g, 1, 20, 29 + dy, skin);
+      pcells(g, 4, 19 + dy, 16, 14, look.shirt);
+      pcells(g, 18, 21 + dy, 2, 12, look.shirtDark);
+      pcells(g, 1, 20 + dy, 3, 10, look.shirt);
+      pcells(g, 20, 20 + dy, 3, 10, look.shirtDark);
+      drawHands(g, 1, 20, 29 + dy, look.skin, look.skinDark);
     } else {
       pcells(g, 6, 42 + dy, 12, 2, Pal.shadow);
       drawPants(g, 8, 13, 33 + dy, 3, 9);
       drawShoes(g, 7, 13, 41 + dy, 4);
-      pcells(g, 6, 19 + dy, 12, 14, shirt);
-      pcells(g, 16, 21 + dy, 2, 12, shirtDark);
-      pcells(g, 3, 20 + dy, 3, 10, shirt);
-      pcells(g, 18, 20 + dy, 3, 10, shirtDark);
-      drawHands(g, 3, 18, 29 + dy, skin);
+      pcells(g, 6, 19 + dy, 12, 14, look.shirt);
+      pcells(g, 16, 21 + dy, 2, 12, look.shirtDark);
+      pcells(g, 3, 20 + dy, 3, 10, look.shirt);
+      pcells(g, 18, 20 + dy, 3, 10, look.shirtDark);
+      drawHands(g, 3, 18, 29 + dy, look.skin, look.skinDark);
     }
 
-    drawCollar(g, kit, shirt, shirtDark, dy);
-    drawHair(g, kit, hair, hairLite, hat);
+    drawCollar(g, kit, look, dy);
+    drawHair(g, look.hairStyle, look.hair, look.hairLite, hat);
     if (hat) drawCap(g, 5, 0);
-    drawFace(g, 5, 3 + dy, iris, hair);
-    if (!hat) {
-      pcells(g, 6, 3 + dy, 12, 2, hair);
-      pcells(g, 7, 4 + dy, 4, 2, hairLite);
-      pcells(g, 12, 4 + dy, 3, 1, hair);
-    } else {
-      pcells(g, 6, 3 + dy, 12, 1, Pal.leaf);
-    }
+    drawFace(g, 5, 3 + dy, look);
+    if (!hat) drawFringe(g, look.hairStyle, look.hair, look.hairLite, dy);
+    else pcells(g, 6, 3 + dy, 12, 1, Pal.leaf);
   });
 }
 
-function personSit(scene: Phaser.Scene): void {
+/**
+ * Head-and-shoulders for the ID card. Deliberately the *same* head as the
+ * standing sprite, drawn with the same helpers at the same cell size, so the
+ * photo and the person at the door cannot drift apart as the art changes.
+ */
+/** Rows of headroom in the portrait, so a bun or coils never touch the frame. */
+const PORTRAIT_DY = 3;
+
+function personPortrait(scene: Phaser.Scene, key: string, look: Look): void {
+  const backdrop = 0xbecad3;
+  const backdropLow = 0x94a6b4;
+  const rows = PORTRAIT_H / PEOPLE_PX;
+  bake(scene, key, PORTRAIT_W, PORTRAIT_H, (g) => {
+    // Studio sweep: light behind the head, falling off behind the shoulders, so
+    // the head is not floating on a flat card.
+    pcells(g, 0, 0, 24, rows, backdrop);
+    pcells(g, 0, rows - 9, 24, 9, backdropLow);
+    pcells(g, 0, rows - 11, 5, 11, backdropLow);
+    pcells(g, 19, rows - 12, 5, 12, backdropLow);
+    pcells(g, 4, 19 + PORTRAIT_DY, 16, rows - 19 - PORTRAIT_DY, look.shirt);
+    pcells(g, 16, 20 + PORTRAIT_DY, 4, rows - 20 - PORTRAIT_DY, look.shirtDark);
+    pcells(g, 3, 21 + PORTRAIT_DY, 2, rows - 21 - PORTRAIT_DY, look.shirtDark);
+    drawCollar(g, "customer", look, PORTRAIT_DY);
+    drawHair(g, look.hairStyle, look.hair, look.hairLite, false, PORTRAIT_DY);
+    drawFace(g, 5, 3 + PORTRAIT_DY, look);
+    drawFringe(g, look.hairStyle, look.hair, look.hairLite, PORTRAIT_DY);
+  });
+}
+
+function personSit(scene: Phaser.Scene, look: Look): void {
   bake(scene, "tex-driver-sit", PERSON_SIT_W, PERSON_SIT_H, (g) => {
     pcells(g, 8, 34, 12, 2, Pal.shadow);
     drawPants(g, 11, 16, 27, 5, 6);
@@ -779,26 +922,26 @@ function personSit(scene: Phaser.Scene): void {
     pcells(g, 17, 32, 4, 2, Pal.pantDark);
     drawShoes(g, 10, 17, 33, 4);
 
-    pcells(g, 10, 19, 12, 9, Pal.rust);
-    pcells(g, 20, 20, 2, 8, Pal.rustDark);
-    pcells(g, 11, 19, 8, 2, Pal.rustDark);
-    pcells(g, 12, 19, 6, 1, Pal.rust);
+    pcells(g, 10, 19, 12, 9, look.shirt);
+    pcells(g, 20, 20, 2, 8, look.shirtDark);
+    pcells(g, 11, 19, 8, 2, look.shirtDark);
+    pcells(g, 12, 19, 6, 1, look.shirt);
 
-    pcells(g, 7, 21, 3, 8, Pal.rust);
-    pcells(g, 7, 28, 3, 2, Pal.skin);
-    pcells(g, 8, 29, 1, 1, Pal.skinDark);
-    pcells(g, 21, 21, 3, 8, Pal.rustDark);
-    pcells(g, 21, 28, 3, 2, Pal.skin);
-    pcells(g, 22, 29, 1, 1, Pal.skinDark);
+    pcells(g, 7, 21, 3, 8, look.shirt);
+    pcells(g, 7, 28, 3, 2, look.skin);
+    pcells(g, 8, 29, 1, 1, look.skinDark);
+    pcells(g, 21, 21, 3, 8, look.shirtDark);
+    pcells(g, 21, 28, 3, 2, look.skin);
+    pcells(g, 22, 29, 1, 1, look.skinDark);
 
-    pcells(g, 13, 17, 4, 3, Pal.skinDark);
-    pcells(g, 14, 17, 2, 1, Pal.skin);
+    pcells(g, 13, 17, 4, 3, look.skinDark);
+    pcells(g, 14, 17, 2, 1, look.skin);
 
-    pcells(g, 6, 6, 3, 8, Pal.hairBlack);
-    pcells(g, 21, 6, 4, 9, Pal.hairBlack);
-    pcells(g, 22, 9, 2, 5, Pal.hairBlackLite);
+    pcells(g, 6, 6, 3, 8, look.hair);
+    pcells(g, 21, 6, 4, 9, look.hair);
+    pcells(g, 22, 9, 2, 5, look.hairLite);
     drawCap(g, 7, 0, 18);
-    drawFace(g, 7, 5, Pal.amber, Pal.hairBlack);
+    drawFace(g, 7, 5, look);
     pcells(g, 8, 5, 12, 1, Pal.leaf);
   });
 }
@@ -911,37 +1054,72 @@ function cog(scene: Phaser.Scene): void {
   });
 }
 
+/** One 8px phone cell. Finer than the 4px world grid — see `art/phoneArt.ts`. */
+function phcells(g: G, lx: number, ly: number, lw: number, lh: number, color: number): void {
+  g.fillStyle(color, 1);
+  g.fillRect(lx * PHONE_PX, ly * PHONE_PX, lw * PHONE_PX, lh * PHONE_PX);
+}
+
 function phone(scene: Phaser.Scene): void {
-  // Black square iPhone chassis — empty screen for live Kindling Delivery UI.
-  bake(scene, "tex-phone", 80, 96, (g) => {
-    const body = 0x0a0a0c;
-    const rim = 0x2a2a30;
-    const screen = 0x101418;
-    // Soft shadow
-    cells(g, 2, 3, 18, 21, Pal.shadow);
-    // Chassis (rounded square)
-    cells(g, 2, 2, 18, 22, body);
-    cells(g, 3, 1, 16, 1, body);
-    cells(g, 3, 24, 16, 1, body);
-    cells(g, 1, 3, 1, 20, body);
-    cells(g, 20, 3, 1, 20, body);
-    // Metal rim highlight
-    cells(g, 3, 2, 16, 1, rim);
-    cells(g, 2, 3, 1, 1, rim);
-    cells(g, 19, 3, 1, 1, rim);
-    // Side buttons
-    cells(g, 0, 7, 1, 2, rim);
-    cells(g, 0, 10, 1, 3, rim);
-    cells(g, 0, 14, 1, 3, rim);
-    cells(g, 21, 11, 1, 4, rim);
-    // Screen
-    cells(g, 3, 4, 16, 18, screen);
-    // Dynamic island
-    cells(g, 7, 5, 8, 2, body);
-    cells(g, 8, 5, 1, 2, 0x1a2830);
-    cells(g, 13, 5, 1, 2, 0x243848);
-    // Home indicator
-    cells(g, 8, 20, 6, 1, 0x3a3a42);
+  const chassis = PHONE_CHASSIS_CELLS;
+  const glass = PHONE_GLASS_CELLS;
+  const status = PHONE_STATUS_CELLS;
+  const island = PHONE_ISLAND_CELLS;
+  const home = PHONE_HOME_CELLS;
+  const rimLite = 0x565b66;
+  const rim = 0x33373f;
+  const rimDark = 0x191b21;
+  const bezel = 0x07070b;
+  const screen = 0x0d1218;
+  const pip = 0xa6b0b8;
+  const pipDim = 0x59636b;
+
+  // Canvas is derived from the cell grid, so the art fits it exactly and the
+  // chassis lands dead centre — the old bake clipped three edges and skewed
+  // every ring, hit box and inset hung off it.
+  bake(scene, "tex-phone", PHONE_TEX.w, PHONE_TEX.h, (g) => {
+    const right = chassis.x + chassis.w;
+    const bottom = chassis.y + chassis.h;
+    // Polished band, with the corners stepped in twice for the rounded shell.
+    phcells(g, chassis.x + 2, chassis.y, chassis.w - 4, 1, rimLite);
+    phcells(g, chassis.x + 1, chassis.y + 1, chassis.w - 2, 1, rimLite);
+    phcells(g, chassis.x, chassis.y + 2, chassis.w, chassis.h - 4, rim);
+    phcells(g, chassis.x + 1, bottom - 2, chassis.w - 2, 1, rimDark);
+    phcells(g, chassis.x + 2, bottom - 1, chassis.w - 4, 1, rimDark);
+    phcells(g, chassis.x, chassis.y + 2, 1, chassis.h - 4, rimLite);
+    phcells(g, right - 1, chassis.y + 2, 1, chassis.h - 4, rimDark);
+
+    // Matte bezel inside the band.
+    phcells(g, chassis.x + 2, chassis.y + 1, chassis.w - 4, 1, bezel);
+    phcells(g, chassis.x + 1, chassis.y + 2, chassis.w - 2, chassis.h - 4, bezel);
+    phcells(g, chassis.x + 2, bottom - 2, chassis.w - 4, 1, bezel);
+
+    // Side buttons live in the margin columns the old bake was clipping off.
+    phcells(g, chassis.x - 1, 8, 1, 2, rim);
+    phcells(g, chassis.x - 1, 12, 1, 3, rimLite);
+    phcells(g, chassis.x - 1, 16, 1, 3, rimLite);
+    phcells(g, right, 11, 1, 5, rimLite);
+
+    phcells(g, glass.x, glass.y, glass.w, glass.h, screen);
+
+    // Status bar: signal pips left, battery right, island between them.
+    phcells(g, status.x, status.y + 1, 1, 1, pipDim);
+    phcells(g, status.x + 1, status.y + 1, 1, 1, pip);
+    phcells(g, status.x + 2, status.y, 1, 2, pip);
+    phcells(g, status.x + 3, status.y, 1, 2, pip);
+    const battery = status.x + status.w - 4;
+    phcells(g, battery, status.y, 3, 2, pipDim);
+    phcells(g, battery, status.y, 2, 2, pip);
+    phcells(g, battery + 3, status.y, 1, 2, pipDim);
+
+    // Dynamic island, narrowed on its top row so it reads as a pill.
+    phcells(g, island.x + 1, island.y, island.w - 2, 1, bezel);
+    phcells(g, island.x, island.y + 1, island.w, 1, bezel);
+    phcells(g, island.x + 1, island.y + 1, 4, 1, 0x171b21);
+    phcells(g, island.x + 5, island.y, 2, 2, 0x1d2f3f);
+    phcells(g, island.x + 5, island.y, 1, 1, 0x3a627e);
+
+    phcells(g, home.x + 5, home.y, home.w - 10, 1, 0x4c515a);
   });
 }
 

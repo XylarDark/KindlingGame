@@ -27,9 +27,15 @@ describe("people bake contract", () => {
     expect(src).toContain("makeType");
     expect(src).toContain("fitTypeToWidth");
     expect(src).not.toMatch(/label\.setScale/);
-    expect(src).toContain('stampKindling(scene, "tex-driver", 96, 31, 13.2, 104)');
-    expect(src).toContain('stampKindling(scene, "tex-driver-sit", 120, 31, 13.2, 120)');
+    expect(src).toContain('stampKindling(scene, "tex-driver", 96, 31, DRIVER_MARK_PX, 104)');
+    expect(src).toContain('stampKindling(scene, "tex-driver-sit", 120, 31, DRIVER_MARK_PX, 120)');
     expect(src).toContain('stampKindling(scene, "tex-keylead", 96, 208, 23, 120)');
+  });
+
+  it("runs the driver cap mark 10% over its old size", () => {
+    const src = readFileSync(join(root, "src/pixelArt.ts"), "utf8");
+    expect(src).toContain("const DRIVER_MARK_PX = 14.52;");
+    expect(14.52).toBeCloseTo(13.2 * 1.1, 5);
   });
 
   it("does not flip the front-facing key-lead", () => {

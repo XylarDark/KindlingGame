@@ -12,6 +12,11 @@ export interface DropoffView {
   orderId: string | null;
   houseId: string | null;
   customerName: string | null;
+  /**
+   * Index into the customer appearance pool. The doorstep sprite and the ID-card
+   * photo both read this one field, so they cannot resolve to different people.
+   */
+  customerLook: number | null;
   skuName: string | null;
   atCurb: boolean;
   driverOnFoot: boolean;
@@ -40,6 +45,7 @@ export function emptyDropoff(): DropoffView {
     orderId: null,
     houseId: null,
     customerName: null,
+    customerLook: null,
     skuName: null,
     atCurb: false,
     driverOnFoot: false,
