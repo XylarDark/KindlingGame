@@ -8,7 +8,7 @@ This file holds the operational protocol — the things that will waste your aft
 
 **Do not use the `cursor-ide-browser` tools when more than one agent may be running.** That browser is a single shared tab. Three agents reaching for it at once hung all three for 46 minutes with no error and no output — the failure is silent, so you will not be told it happened.
 
-Capture through your own isolated Chrome instead:
+The shared tab fails even with a single caller: `browser_navigate` has returned `Timed out waiting for glass browser view` twice in one hour. Capture through your own isolated Chrome instead:
 
 ```
 npx tsx scripts/agent-shot.ts --lane 3 --name shop.png
@@ -20,6 +20,25 @@ A lane number picks a dedicated debug port (`9400 + lane`) and its own Chrome pr
 Useful flags: `--url`, `--query`, `--size WxH`, `--wait ms`, `--no-click`, `--out`, `--name`. The game boots paused, so the script clicks the canvas centre to start play unless you pass `--no-click`.
 
 Why the shared browser cannot simply be fixed is recorded in [docs/operational/automation-gaps.md](docs/operational/automation-gaps.md); re-check it if the Cursor browser tools change.
+
+### A run cannot hang, leak a browser, or collide with yours
+
+You do not need to manage any of this, but knowing it exists will save you from working around it:
+
+- **Every run is bounded.** A watchdog ends the run within a wall-clock budget derived from the work you asked for, and every CDP call, debug-port poll and process query has its own timeout. On expiry the run prints the step it died on, tears down its Chrome and exits non-zero. Raise it with `--budget <ms>` if a plan legitimately needs longer.
+- **Every exit path tears down.** Return, throw, unhandled rejection and `SIGINT`/`SIGTERM`/`SIGHUP`/`SIGBREAK` all kill the whole Chrome process tree and delete the lane's profile directory. A `taskkill /F` on the run itself is the one case teardown cannot survive — use `--cleanup` afterwards.
+- **Lanes are locked.** A lane held by a live run fails fast and names the holder and a free lane to use instead. A lock whose holder is dead is reclaimed, and the reclaim is logged.
+- **The profile is disposable.** It is deleted at the end of each run, so every capture starts from clean `localStorage`. Pass `--keep-profile` to keep a warm shader cache between runs on the same lane.
+
+If a run is interrupted, or a lane starts refusing for no clear reason, reap it:
+
+```
+npx tsx scripts/agent-shot.ts --cleanup --lane 3         # this lane
+npx tsx scripts/agent-shot.ts --cleanup --all --dry-run  # survey every lane, change nothing
+npm run shot:cleanup -- --lane 3
+```
+
+Cleanup is safe to run at any time. It only ever touches processes whose `--user-data-dir` is exactly a `kindling-shot-laneN` directory, so it cannot reach your own browser. Prefer `--dry-run` for `--all` while other agents may be mid-run, because a run started before lane locking existed holds no lock to protect it.
 
 ### Working the game and reading its state back
 
@@ -37,7 +56,13 @@ Prefer `eval` over pixels for anything you assert: a backgrounded tab returns st
 
 ## The dev server is shared — don't start a second one
 
-One vite serves everything on **port 5174**: `npx vite --host --port 5174 --strictPort`. Check `http://127.0.0.1:5174/` before assuming it's down. Prefer `127.0.0.1` over `localhost`, matching the other capture scripts. Note `npm run dev -- --port 5174` does **not** work: the script is `vite --host`, so npm folds the port into `--host` and Chrome tries to resolve a hostname of "5174".
+One vite serves everything on **port 5174**. `npm run dev` now does the right thing: the port is pinned in `vite.config.ts` (`server.port`, `server.strictPort`) and the script passes the flags explicitly, so there is no longer a wrong way to start it. `npx vite --host --port 5174 --strictPort` remains equivalent.
+
+Check `http://127.0.0.1:5174/` before assuming it's down. Prefer `127.0.0.1` over `localhost`, matching the capture scripts. `strictPort` means a second server refuses to start rather than sliding to 5175 where nothing is looking for it.
+
+Do **not** pass the port through npm — `npm run dev -- --port 5174` folds it into the `--host` value, and the browser then tries to resolve a hostname of "5174". You no longer need to.
+
+To put the game in front of a human, use `npm run open` rather than `Start-Process`. It checks the server is actually serving, focuses an existing window that already has the game instead of stacking another tab, and refuses with instructions when the server is down.
 
 ## Failures here are usually silent — verify positively
 

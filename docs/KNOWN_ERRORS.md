@@ -54,6 +54,38 @@
 - **Fix:** capture through a per-agent Chrome instance — `npx tsx scripts/agent-shot.ts --lane N`, where the lane picks a dedicated debug port (`9400 + lane`) and its own Chrome profile.
 - **Prevention:** full protocol in [AGENTS.md](../AGENTS.md); the underlying limitation is logged in [operational/automation-gaps.md](operational/automation-gaps.md).
 
+### A capture run could still hang forever, because nothing had a timeout
+
+- **Date:** 2026-09-07
+- **Symptom:** the class of failure behind the 46-minute deadlock above. A run produced no output and never returned, so there was nothing to debug and no exit code to react to.
+- **Cause:** every wait in `scripts/agent-shot.ts` was unbounded. `cdp.send` returned a promise that only ever settled on a reply, so if Chrome stopped answering — or died, closing the socket with calls in flight — the promise never settled at all. The debug-port poll used a bare `fetch`, which waits indefinitely on a socket that accepts and then says nothing. There was no overall wall-clock limit, and `chrome.kill()` in a `finally` block ran on none of the paths that matter: an unhandled rejection unwinds nothing, and a signal skips `finally` entirely.
+- **Fix:** a wall-clock watchdog derived from the requested work, a per-operation timeout on every CDP round-trip and HTTP request, rejection of in-flight calls when the websocket closes, and synchronous teardown wired to `exit`, `SIGINT`, `SIGTERM`, `SIGHUP`, `SIGBREAK`, `uncaughtException` and `unhandledRejection`. On expiry the run names the step it died on and exits non-zero. Decisions live in `scripts/lib/laneProtocol.ts` with unit tests; the wiring is asserted structurally by `scripts/laneSafety.test.ts`.
+- **Prevention:** teardown must stay **synchronous** — `process.on("exit")` will not await a promise, so an async cleanup silently does nothing on exactly the paths you added it for. Never write a bare `await cdp.send(...)`; the guard test fails the build if one reappears. A run that dies loudly is infinitely better than one that hangs silently.
+
+### Killing only the parent Chrome leaves the rest of the tree behind
+
+- **Date:** 2026-09-07
+- **Symptom:** "endless browsers" — orphaned Chrome processes accumulating with no owning run.
+- **Cause:** two things. `chrome.kill()` targets one process, but Chrome spawns renderer, GPU, utility and crashpad children. And the obvious identifier was wrong: **only the browser process and its renderers carry `--remote-debugging-port`**, while every process in the tree carries `--user-data-dir`. Reaping by port would therefore have stranded the GPU, utility and crashpad children. Verified by inspecting a real launch.
+- **Fix:** identify lane processes by **profile directory** (`--user-data-dir` ending in exactly `kindling-shot-laneN`), never by process name, and kill with `taskkill /PID <pid> /T /F` — measured taking an 8-process tree to zero.
+- **Prevention:** `taskkill /T` **exits non-zero when any child vanishes while it walks the tree**, which happens constantly with Chrome's renderers. It was observed reporting failure on a tree it had in fact destroyed. Its exit code is not evidence; `killTree` now measures the outcome with a liveness check instead of trusting it.
+
+### A blank capture that looked like a broken game was a cold shader cache
+
+- **Date:** 2026-09-07
+- **Symptom:** a capture that had worked returned a flat `#241c16` rectangle. The obvious reading was a boot crash in the scene under edit.
+- **Cause:** not a crash at all. `eval` showed the game fully alive — `shop` scene active with 54 children, WebGL renderer, render loop running. Deleting the lane profile at the end of every run (the fix for a 688 MB disk leak) made every launch start with a **cold shader cache**, and headless Chrome renders through SwiftShader, so first paint at 1920x1080 landed after the default 2500ms settle had already expired. The screenshot was of the page background.
+- **Fix:** gate the first capture on real rendered frames — poll `window.kindlingGame.loop.frame` until it passes a threshold, bounded by its own timeout and charged to the run budget. `--no-ready-wait` restores the old fixed sleep, `--min-frames` retunes it.
+- **Prevention:** a fixed sleep cannot express "has painted"; it encodes an assumption about machine speed that software rendering breaks. When a capture looks broken, **read state with `eval` before believing the pixels** — that is what separated "still painting" from "crashed on boot" here in one step.
+
+### A process query matched its own command line
+
+- **Date:** 2026-09-07
+- **Symptom:** every clean capture run printed `WARNING pid NNNNN mentions a lane profile but could not be attributed`.
+- **Cause:** the reaper enumerates processes with `Get-CimInstance Win32_Process -Filter "CommandLine LIKE '%kindling-shot-lane%'"`. The PowerShell process running that query has the pattern **in its own command line**, so it matched its own filter, and the "could not attribute this browser" branch fired on it.
+- **Fix:** treat a command line as an unattributable browser only when it carries a `--user-data-dir` flag *and* mentions the profile prefix. A process that merely names a profile path — the query itself, a shell, an editor — is ignored.
+- **Prevention:** this only surfaced because the unattributable case is reported loudly instead of skipped. Keep it that way: the alternative is a reaper that silently fails to find things.
+
 ---
 
 ## Related
