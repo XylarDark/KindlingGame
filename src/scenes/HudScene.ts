@@ -101,9 +101,25 @@ const SET_ROW_PX = "22px";
 const SET_VALUE_PX = "24px";
 const SET_BTN_LABEL_PX = "26px";
 const SET_BTN_CAP_PX = "16px";
-/** Cog caption, outside the panel -- left on the shared ramp. */
-const SET_BODY_PX = "17.6px";
 const SET_HINT_PX = "14.3px";
+
+/**
+ * The cog caption's own step, 25% over `HUD_CAPTION_PX`. It has to be its own number:
+ * `HUD_CAPTION_PX` is the SCORE caption's step too, so raising that would have resized
+ * the readout nobody asked about. It replaces a `SET_BODY_PX` that only this label used.
+ */
+const HUD_COG_CAPTION_PX = HUD_CAPTION_PX * 1.25;
+const HUD_COG_CAPTION_PAD = { x: 12, y: 6 };
+/**
+ * Grown from the step rather than typed, because `fitTypeToBox` only ever shrinks: the
+ * old 36px box could not hold 22.5px type and would have rendered it at ~19px while the
+ * constant claimed 22.5. One line of Inter measures ~1.21x its px; 1.4 leaves headroom
+ * for the descender and the chip padding. Measured live: 22.5px in a 44px box.
+ */
+const HUD_COG_CAPTION_BOX = {
+  w: 240,
+  h: Math.ceil(HUD_COG_CAPTION_PX * 1.4 + HUD_COG_CAPTION_PAD.y * 2),
+};
 
 /**
  * Delivery phone. Every dimension below is derived from `PHONE_SCALE` and the cell
@@ -1093,15 +1109,18 @@ export class HudScene extends Phaser.Scene {
       else this.openSettings();
     };
     this.cog.on("pointerdown", toggleSettings);
+    // Centred on the cog: the cog's origin is (1, 1) at cogX, so its middle is half a cog
+    // to the left. layoutHud repositions it from the same expression — the two must agree,
+    // or the caption drifts off the control it labels on the first resize.
     this.cogCaption = addUiText(this, cogX - cogSize / 2, cogY - cogSize - 8, "Settings", {
-      size: SET_BODY_PX,
+      size: `${HUD_COG_CAPTION_PX}px`,
       color: Color.creamHex,
       backgroundColor: Color.bannerInk,
-      padding: { x: 12, y: 6 },
+      padding: HUD_COG_CAPTION_PAD,
       fontStyle: "600",
       align: "center",
-      maxWidth: 240,
-      maxHeight: 36,
+      maxWidth: HUD_COG_CAPTION_BOX.w,
+      maxHeight: HUD_COG_CAPTION_BOX.h,
     })
       .setOrigin(0.5, 1)
       .setDepth(42);
