@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   CITY,
+  MAP_COLS,
+  MAP_ROWS,
+  MAX_HOUSES,
   TILE,
+  buildCityMap,
+  cityBlocks,
   doorstepWorld,
   houseById,
   lotCenter,
@@ -33,11 +38,58 @@ describe("city map", () => {
 
   it("keeps every house reachable from Kindling", () => {
     expect(CITY.walkable[CITY.shopSpawn.r]?.[CITY.shopSpawn.c]).toBe(true);
+    // All fourteen, by id — a lot that generates but cannot be driven to is the exact
+    // silent failure spreading the lots across the map could introduce.
+    expect(CITY.houses).toHaveLength(MAX_HOUSES);
+    expect(CITY.houses.map((h) => h.id)).toEqual(
+      Array.from({ length: MAX_HOUSES }, (_, i) => `house-${i + 1}`),
+    );
     for (const house of CITY.houses) {
       const path = pathToHouse(CITY.shopSpawn, house.id);
       expect(path.length, house.id).toBeGreaterThan(1);
       expect(path[path.length - 1]).toEqual(house.stop);
+      // Every cell of the route has to be drivable, not just its endpoints.
+      for (const cell of path) {
+        expect(CITY.walkable[cell.r]?.[cell.c], `${house.id} via ${cell.c},${cell.r}`).toBe(true);
+      }
+      // The stall is only a stall if the van can turn into it off a street.
+      const touchesStreet = [
+        { c: house.stop.c - 1, r: house.stop.r },
+        { c: house.stop.c + 1, r: house.stop.r },
+        { c: house.stop.c, r: house.stop.r - 1 },
+        { c: house.stop.c, r: house.stop.r + 1 },
+      ].some((n) => CITY.kinds[n.r]?.[n.c] === "road");
+      expect(touchesStreet, `${house.id} stall is not on a street`).toBe(true);
     }
+  });
+
+  it("spreads the lots over every block, instead of filling the first row", () => {
+    const blocks = cityBlocks();
+    expect(blocks.length).toBeGreaterThanOrEqual(12);
+    const counts = blocks.map(
+      (b) =>
+        CITY.houses.filter(
+          (h) => h.house.r >= b.r0 && h.house.r <= b.r1 && h.house.c >= b.c0 && h.house.c <= b.c1,
+        ).length,
+    );
+    // The old row-major scan hit MAX_HOUSES inside block row one and left the rest of
+    // the city — two thirds of the phone minimap — blank. Every block now has a lot.
+    expect(counts.every((n) => n >= 1), `per-block counts: ${counts.join(",")}`).toBe(true);
+    expect(counts.reduce((a, b) => a + b, 0)).toBe(MAX_HOUSES);
+
+    // And they reach the far edges, not just one lot token-placed per block.
+    const rows = CITY.houses.map((h) => h.house.r);
+    const cols = CITY.houses.map((h) => h.house.c);
+    expect(Math.max(...rows) - Math.min(...rows)).toBeGreaterThan(MAP_ROWS / 2);
+    expect(Math.max(...cols) - Math.min(...cols)).toBeGreaterThan(MAP_COLS / 2);
+  });
+
+  it("builds the same city every time — the minimap bakes its static layer on that", () => {
+    const a = buildCityMap();
+    const b = buildCityMap();
+    expect(a.houses).toEqual(b.houses);
+    expect(a.shopSpawn).toEqual(b.shopSpawn);
+    expect(a.kinds).toEqual(b.kinds);
   });
 
   it("sizes the Kindling return hit to the shop building lot", () => {

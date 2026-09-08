@@ -6,10 +6,7 @@ import {
   minimapProjection,
   type WorldRect,
 } from "./cityMinimap";
-import { CITY, MAP_PX_H, MAP_PX_W, TILE, isEWStreet, isNSStreet } from "./cityT0";
-
-/** `MAX_HOUSES` in cityT0 is private; the map is specced to fourteen lots. */
-const MAX_HOUSES = 14;
+import { CITY, MAP_PX_H, MAP_PX_W, MAX_HOUSES, TILE, isEWStreet, isNSStreet } from "./cityT0";
 
 const area = (r: WorldRect): number => (r.right - r.left) * (r.bottom - r.top);
 
@@ -180,6 +177,32 @@ describe("cityMinimapGeometry", () => {
       1 +
       geo.shopStalls.length;
     expect(rects).toBeLessThan(120);
+  });
+
+  it("fills the whole panel with lots, not just the top strip", () => {
+    // Every lot used to sit in block row one, so the phone drew houses across the top
+    // and two thirds of empty blocks underneath. Check each third of the panel's height
+    // and each quarter of its width actually receives lots.
+    const bandHas = (lo: number, hi: number, axis: "y" | "x"): boolean =>
+      geo.houses.some(({ rect }) => {
+        const mid = axis === "y" ? (rect.top + rect.bottom) / 2 : (rect.left + rect.right) / 2;
+        return mid >= lo && mid < hi;
+      });
+
+    for (let third = 0; third < 3; third++) {
+      const lo = (MAP_PX_H * third) / 3;
+      expect(bandHas(lo, lo + MAP_PX_H / 3, "y"), `no lots in vertical third ${third}`).toBe(true);
+    }
+    for (let quarter = 0; quarter < 4; quarter++) {
+      const lo = (MAP_PX_W * quarter) / 4;
+      expect(bandHas(lo, lo + MAP_PX_W / 4, "x"), `no lots in horizontal quarter ${quarter}`).toBe(true);
+    }
+
+    // And no block is left as bare fill: most blocks carry a lot the phone can draw.
+    const blocksWithLots = geo.blocks.filter((block) =>
+      geo.houses.some(({ rect }) => overlaps(block, rect)),
+    );
+    expect(blocksWithLots.length).toBe(geo.blocks.length);
   });
 
   it("is deterministic, so the static layer can be baked once", () => {

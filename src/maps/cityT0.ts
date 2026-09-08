@@ -10,7 +10,8 @@ export const MAP_PX_H = MAP_ROWS * TILE;
 
 const BLOCK_H = 8;
 const BLOCK_W = 9;
-const MAX_HOUSES = 14;
+/** The map is specced to fourteen lots — the minimap and the delivery rota both size to it. */
+export const MAX_HOUSES = 14;
 
 export type TileKind = "wall" | "road" | "shop" | "house" | "parking";
 
@@ -157,6 +158,103 @@ function drivewayTowardRoad(
 
 const ACCESS_CYCLE: HouseAccess[] = ["garage", "walkway", "curb"];
 
+/** One city block's buildable interior — the rectangle the streets fence off. */
+interface Block {
+  r0: number;
+  r1: number;
+  c0: number;
+  c1: number;
+}
+
+/** Contiguous non-street spans between the border rings, i.e. the block interiors on one axis. */
+function blockSpans(isStreetIndex: (i: number) => boolean, count: number): { lo: number; hi: number }[] {
+  const spans: { lo: number; hi: number }[] = [];
+  let lo: number | null = null;
+  for (let i = 1; i < count - 1; i++) {
+    if (isStreetIndex(i)) {
+      if (lo !== null) spans.push({ lo, hi: i - 1 });
+      lo = null;
+    } else if (lo === null) {
+      lo = i;
+    }
+  }
+  if (lo !== null) spans.push({ lo, hi: count - 2 });
+  return spans;
+}
+
+/**
+ * Every block the streets carve out, in reading order. Derived from the street
+ * predicates rather than hard-coded, so retuning `BLOCK_H` / `BLOCK_W` cannot
+ * silently leave whole quarters of the city unbuilt.
+ */
+export function cityBlocks(): Block[] {
+  const blocks: Block[] = [];
+  for (const rows of blockSpans(isEWStreet, MAP_ROWS)) {
+    for (const cols of blockSpans(isNSStreet, MAP_COLS)) {
+      blocks.push({ r0: rows.lo, r1: rows.hi, c0: cols.lo, c1: cols.hi });
+    }
+  }
+  return blocks;
+}
+
+/** Stamp a lot at `origin` if it fits and can reach a street. Mutates the grid on success. */
+function tryPlaceHouse(
+  kinds: TileKind[][],
+  walkable: boolean[][],
+  houses: HouseStop[],
+  r: number,
+  c: number,
+): boolean {
+  const size = BUILD_SIZES[(c + r * 3) % BUILD_SIZES.length]!;
+  const origin = { c, r };
+  if (!lotFree(kinds, origin, size.w, size.h, "wall")) return false;
+  const access = ACCESS_CYCLE[houses.length % ACCESS_CYCLE.length]!;
+  // Need empty wall ring for driveway / curb stall.
+  const pad = drivewayTowardRoad(kinds, walkable, origin, size.w, size.h, access);
+  if (!pad) return false;
+  if (!pad.parking.every((p) => kinds[p.r]![p.c] === "wall")) return false;
+  // Thinning: the `c * 5` term is a multiple of 5 and drops out, so this bars every
+  // fifth row. Keeps lots off a shared row line rather than terracing them.
+  if ((c * 5 + r * 3) % 5 === 0) return false;
+
+  for (const cell of lotCells(origin, size.w, size.h)) kinds[cell.r]![cell.c] = "house";
+  paintParking(kinds, walkable, pad.parking);
+  houses.push({
+    id: `house-${houses.length + 1}`,
+    house: origin,
+    stop: pad.stop,
+    lotW: size.w,
+    lotH: size.h,
+    parking: pad.parking,
+    access,
+  });
+  return true;
+}
+
+/**
+ * Fill one lot inside `block`, scanning from the corner `corner` picks (low bit flips the
+ * row sweep, second bit the column sweep). Staggering the start corner block by block
+ * puts houses on different sides of the streets instead of stamping each block alike.
+ */
+function placeOneInBlock(
+  kinds: TileKind[][],
+  walkable: boolean[][],
+  houses: HouseStop[],
+  block: Block,
+  corner: number,
+): boolean {
+  const fromBottom = (corner & 1) !== 0;
+  const fromRight = (corner & 2) !== 0;
+  for (let i = block.r0; i <= block.r1; i++) {
+    const r = fromBottom ? block.r1 - (i - block.r0) : i;
+    for (let j = block.c0; j <= block.c1; j++) {
+      const c = fromRight ? block.c1 - (j - block.c0) : j;
+      if (tryPlaceHouse(kinds, walkable, houses, r, c)) return true;
+    }
+  }
+  return false;
+}
+
 function placeShop(kinds: TileKind[][], walkable: boolean[][]): { shopLot: ShopLot; shopSpawn: TileCell } {
   // Building sits one lot in from the N–S street so a full parking strip faces the curb.
   const origin = { c: 4, r: 3 };
@@ -210,31 +308,16 @@ export function buildCityMap(): CityMap {
   const { shopLot, shopSpawn } = placeShop(kinds, walkable);
 
   const houses: HouseStop[] = [];
-  for (let r = 2; r < MAP_ROWS - 3; r++) {
-    for (let c = 2; c < MAP_COLS - 3; c++) {
-      if (houses.length >= MAX_HOUSES) break;
-      const size = BUILD_SIZES[(c + r * 3) % BUILD_SIZES.length]!;
-      const origin = { c, r };
-      if (!lotFree(kinds, origin, size.w, size.h, "wall")) continue;
-      const access = ACCESS_CYCLE[houses.length % ACCESS_CYCLE.length]!;
-      // Need empty wall ring for driveway / curb stall.
-      const pad = drivewayTowardRoad(kinds, walkable, origin, size.w, size.h, access);
-      if (!pad) continue;
-      if (!pad.parking.every((p) => kinds[p.r]![p.c] === "wall")) continue;
-      if ((c * 5 + r * 3) % 5 === 0) continue;
-
-      for (const cell of lotCells(origin, size.w, size.h)) kinds[cell.r]![cell.c] = "house";
-      paintParking(kinds, walkable, pad.parking);
-      houses.push({
-        id: `house-${houses.length + 1}`,
-        house: origin,
-        stop: pad.stop,
-        lotW: size.w,
-        lotH: size.h,
-        parking: pad.parking,
-        access,
-      });
+  const blocks = cityBlocks();
+  // One lot per block per pass, round-robin. Scanning the map row-major instead reaches
+  // MAX_HOUSES while still inside the first block row, which is what used to leave two
+  // thirds of the city — and of the phone minimap — with nothing on it.
+  for (let pass = 0; houses.length < MAX_HOUSES; pass++) {
+    let placedThisPass = 0;
+    for (let i = 0; i < blocks.length && houses.length < MAX_HOUSES; i++) {
+      if (placeOneInBlock(kinds, walkable, houses, blocks[i]!, i + pass)) placedThisPass += 1;
     }
+    if (placedThisPass === 0) break;
   }
 
   return { kinds, walkable, shopSpawn, shopLot, houses };
