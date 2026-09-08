@@ -37,6 +37,12 @@ export function addHudButton(
     depth?: number;
     minWidth?: number;
     caption?: string;
+    /**
+     * Floor for the button box, defaulting to {@link HUD_BUTTON_MIN_H}. Going under that
+     * default drops the control below {@link MIN_CSS_TOUCH_PX} once a phone stretches the
+     * canvas, so only pass it for a panel that is deliberately sized down.
+     */
+    minHeight?: number;
     /** Overrides for panels that run their own type step (e.g. settings). */
     labelSize?: string;
     captionSize?: string;
@@ -80,7 +86,7 @@ export function addHudButton(
     const w = Math.max(opts.minWidth ?? 260, inner + 56);
     // Label + caption are one centered stack — never pinned to opposite edges.
     const stackH = text.height + (cap ? CAP_GAP + caption.height : 0);
-    const h = Math.max(HUD_BUTTON_MIN_H, stackH + 32);
+    const h = Math.max(opts.minHeight ?? HUD_BUTTON_MIN_H, stackH + 32);
     const left = -w * originX;
     const top = -h * originY;
     bg.clear();
@@ -92,8 +98,13 @@ export function addHudButton(
     text.setPosition(left + w / 2, stackTop + text.height / 2);
     caption.setPosition(left + w / 2, stackTop + text.height + CAP_GAP + caption.height / 2);
     container.setSize(w, h);
+    // Phaser normalises the local point by displayOrigin before testing the hit area
+    // (InputManager.pointWithinHitArea), and a Container's origin is its centre. A rect
+    // given in the same coordinates as the fill above therefore lands half a button up
+    // and to the left of the paint: most of the button dead, and a matching slab of
+    // empty panel live. Shift it back by the origin so hit area and paint coincide.
     container.setInteractive(
-      new Phaser.Geom.Rectangle(left, top, w, h),
+      new Phaser.Geom.Rectangle(left + container.displayOriginX, top + container.displayOriginY, w, h),
       Phaser.Geom.Rectangle.Contains,
     );
     container.input!.cursor = "pointer";
