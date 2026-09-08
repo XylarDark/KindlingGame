@@ -3,14 +3,7 @@ import { getMusicPrefs, setMusicEnabled, setMusicVolume, syncMusicToClock } from
 import { playCameraClick, playUiSfx } from "../audio/sfx";
 import { customerPortraitKey } from "../art/people";
 import { PORTRAIT_H, PORTRAIT_W } from "../art/peopleSize";
-import {
-  PHONE_APP_CELLS,
-  PHONE_CHASSIS_CELLS,
-  PHONE_PX,
-  PHONE_SCALE,
-  PHONE_TEX,
-  phoneDesignRect,
-} from "../art/phoneArt";
+import { PHONE_APP_CELLS, PHONE_CHASSIS_CELLS, PHONE_SCALE, PHONE_TEX, phoneDesignRect } from "../art/phoneArt";
 import { clampInput } from "../input/controls";
 import { enableItemHit, syncItemHit } from "../input/hit";
 import { houseById, lotWorldRect } from "../maps/cityT0";
@@ -108,18 +101,19 @@ const SET_HINT_PX = "14.3px";
 /**
  * Delivery phone. Every dimension below is derived from `PHONE_SCALE` and the cell
  * grid in `phoneArt`, because the previous hand-written set drifted out of step with
- * the texture and pushed the tutorial's flash ring off centre. Nothing here may be
- * typed in independently.
+ * the texture: the chassis, the glass and the app rect stopped agreeing with the
+ * pixels they were supposed to sit on. Nothing here may be typed in independently.
  */
 const PHONE_W = PHONE_TEX.w * PHONE_SCALE;
 const PHONE_H = PHONE_TEX.h * PHONE_SCALE;
-/** The visible body, inside the margin the side buttons live in. */
+/**
+ * The visible body, inside the margin the side buttons live in. Both the tap target
+ * and the phone's screen placement are measured off this rather than the sprite box,
+ * so the transparent button margin neither takes taps nor pads the gap to the cog.
+ */
 const PHONE_CHASSIS = phoneDesignRect(PHONE_CHASSIS_CELLS);
 /** Where the delivery app may paint: glass, minus the baked status bar and home strip. */
 const PHONE_APP = phoneDesignRect(PHONE_APP_CELLS);
-/** One cell of ring, which is exactly the button margin — symmetric by construction. */
-const PHONE_FLASH_PAD = PHONE_PX * PHONE_SCALE;
-const PHONE_FLASH_STROKE = Math.round(PHONE_PX * PHONE_SCALE * 0.36);
 const PHONE_COG_GAP = 16;
 /** App chrome: a title bar, the map, and a status bar the map is fitted around. */
 const PHONE_HEADER_H = 34;
@@ -201,7 +195,6 @@ export class HudScene extends Phaser.Scene {
   private phone!: Phaser.GameObjects.Container;
   private phoneBody!: Phaser.GameObjects.Image;
   private phoneHit!: Phaser.GameObjects.Rectangle;
-  private phoneFlash!: Phaser.GameObjects.Rectangle;
   private phoneChrome!: Phaser.GameObjects.Graphics;
   /** Static city, baked once. The city has no RNG, so it never needs redrawing. */
   private phoneMapBase!: Phaser.GameObjects.RenderTexture;
@@ -306,11 +299,6 @@ export class HudScene extends Phaser.Scene {
       .setDepth(20);
 
     this.phoneBody = this.add.image(0, 0, "tex-phone").setDisplaySize(PHONE_W, PHONE_H);
-    // Ring the chassis, not the sprite: the sprite carries a transparent margin for
-    // the side buttons, and ringing that is what made the flash look off centre.
-    this.phoneFlash = this.add
-      .rectangle(0, 0, PHONE_CHASSIS.w + PHONE_FLASH_PAD, PHONE_CHASSIS.h + PHONE_FLASH_PAD, Color.lime, 0)
-      .setStrokeStyle(PHONE_FLASH_STROKE, Color.lime, 1);
     this.phoneChrome = this.add.graphics();
     this.phoneMapBase = this.add.renderTexture(PHONE_MAP.x, PHONE_MAP.y, PHONE_MAP.w, PHONE_MAP.h).setOrigin(0, 0);
     this.bakePhoneMap();
@@ -348,7 +336,6 @@ export class HudScene extends Phaser.Scene {
     });
     this.phone = this.add
       .container(GAME_WIDTH - 160, GAME_HEIGHT - 220, [
-        this.phoneFlash,
         this.phoneBody,
         this.phoneChrome,
         this.phoneMapBase,
@@ -767,13 +754,12 @@ export class HudScene extends Phaser.Scene {
     if (showPhone) {
       this.phone.setAlpha(1);
       this.phoneBody.setAlpha(drop.phase === "calling" ? 0.92 : 1);
-      this.phoneFlash.setVisible(flashPhone && drop.phase !== "calling");
+      // The phone's tutorial cue is the status chip going lime, not a ring around the
+      // chassis: the ring was removed, the cue was not.
       if (flashPhone && drop.phase !== "calling") {
-        this.phoneFlash.setStrokeStyle(4 + Math.round(3 * pulse), Color.lime, 0.55 + 0.45 * pulse);
         this.phoneStatus.setColor(Color.inkHex);
         this.phoneStatus.setBackgroundColor(Color.limeHex);
       } else {
-        this.phoneFlash.setVisible(false);
         this.phoneStatus.setColor(drop.phase === "calling" ? Color.neonHex : Color.creamHex);
         this.phoneStatus.setBackgroundColor("#101418");
       }
@@ -781,7 +767,6 @@ export class HudScene extends Phaser.Scene {
       refitType(this.phoneStatus);
       this.paintPhoneMap(snap);
     } else {
-      this.phoneFlash.setVisible(false);
       this.phoneMap.clear();
     }
 
