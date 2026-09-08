@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { customerTextureKey } from "../art/people";
 import { driveGrade } from "../art/dayNightGrade";
 import { applyDayNight, attachDayNight, dayNightFrom, type DayNightPipeline } from "../art/dayNightPipeline";
 import {
@@ -27,6 +28,13 @@ import { Color, Type } from "../ui/theme";
 import { addMark, fitTypeToWidth, overlayStroke } from "../ui/typekit";
 
 const HOUSE_TEX = ["tex-house", "tex-house-alt", "tex-house-3", "tex-house-4", "tex-house-5", "tex-house-6"];
+
+/**
+ * The road's share of the "what to do next" family, 25% over the shared ramp.
+ * Local constants, because `Type` feeds every screen in the game.
+ */
+const PIN_LABEL_PX = "25px";
+const VAN_BANNER_PX = "20px";
 
 export class DriveScene extends Phaser.Scene {
   private vehicle!: Phaser.GameObjects.Image;
@@ -90,39 +98,44 @@ export class DriveScene extends Phaser.Scene {
       ease: "Sine.easeInOut",
     });
     this.pinLabel = addUiText(this, 0, 0, "", {
-      size: Type.heading,
+      size: PIN_LABEL_PX,
       color: Color.inkHex,
       backgroundColor: Color.amberHex,
-      padding: { x: 18, y: 12 },
+      padding: { x: 20, y: 14 },
       align: "center",
       fontStyle: "700",
       strokeThickness: 0,
       lineSpacing: 6,
       noWrap: true,
-      maxWidth: 380,
-      maxHeight: 120,
+      maxWidth: 460,
+      maxHeight: 150,
     })
       .setOrigin(0.5, 1)
       // Above the van/walker sprites — the stop label must never be clipped.
       .setDepth(13)
       .setVisible(false);
     this.vanBanner = addUiText(this, 0, 0, "", {
-      size: Type.body,
+      size: VAN_BANNER_PX,
       color: Color.creamHex,
       backgroundColor: Color.bannerInk,
-      padding: { x: 14, y: 8 },
+      padding: { x: 18, y: 10 },
       align: "center",
       fontStyle: "600",
-      maxWidth: 400,
-      maxHeight: 56,
-      ...overlayStroke(14),
+      maxWidth: 500,
+      maxHeight: 70,
+      ...overlayStroke(18),
     })
       .setOrigin(0.5, 1)
       .setDepth(12)
       .setVisible(false);
     this.vehicle = this.add.image(0, 0, "tex-vehicle").setDepth(6).setDisplaySize(168, 104);
     this.walker = this.add.image(0, 0, "tex-driver").setOrigin(0.5, 1).setScale(PEOPLE_SCALE).setDepth(7).setVisible(false);
-    this.customer = this.add.image(0, 0, "tex-customer").setOrigin(0.5, 1).setScale(PEOPLE_SCALE).setDepth(6).setVisible(false);
+    this.customer = this.add
+      .image(0, 0, customerTextureKey(0))
+      .setOrigin(0.5, 1)
+      .setScale(PEOPLE_SCALE)
+      .setDepth(6)
+      .setVisible(false);
     this.spawnTraffic();
   }
 
@@ -205,8 +218,12 @@ export class DriveScene extends Phaser.Scene {
           ? `${houseTitle(stopId)}\n${destOrder.customerName}${clock ? `\n${clock}` : ""}`
           : houseTitle(stopId);
         this.pinLabel.setVisible(true).setPosition(x, this.pinBase.y - this.pinBob - 12).setText(who);
-        this.pinLabel.setColor(destOrder && isSlaUrgent(destOrder.slaRemainingMs) ? Color.dangerHex : Color.inkHex);
-        this.pinLabel.setBackgroundColor(Color.amberHex);
+        // Ink in every state, LATE included: the urgency moves to the backing so the
+        // stop name never drops to danger-red-on-amber, which was the weakest read here.
+        this.pinLabel.setColor(Color.inkHex);
+        this.pinLabel.setBackgroundColor(
+          destOrder && isSlaUrgent(destOrder.slaRemainingMs) ? Color.dangerHex : Color.amberHex,
+        );
 
         const flashPin = next?.kind === "gpsPin";
         const pulse = 0.62 + 0.38 * (0.5 + 0.5 * Math.sin(snap.gameMs / 280));
@@ -234,12 +251,14 @@ export class DriveScene extends Phaser.Scene {
         .setVisible(true)
         .setText(snap.toast)
         .setPosition(snap.vehicle.x, snap.vehicle.y - 78);
-      fitTypeToWidth(this.vanBanner, 400);
+      fitTypeToWidth(this.vanBanner, 500);
     } else {
       this.vanBanner.setVisible(false);
     }
 
     if (snap.dropoff.customer) {
+      const face = customerTextureKey(snap.dropoff.customerLook ?? 0);
+      if (this.customer.texture.key !== face) this.customer.setTexture(face);
       this.customer.setVisible(true).setPosition(snap.dropoff.customer.x, snap.dropoff.customer.y + 10);
     } else {
       this.customer.setVisible(false);

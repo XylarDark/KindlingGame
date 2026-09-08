@@ -1,15 +1,17 @@
 import Phaser from "phaser";
+import { customerTextureKey } from "../art/people";
 import { doorGrade } from "../art/dayNightGrade";
 import { applyDayNight, attachDayNight, dayNightFrom, type DayNightPipeline } from "../art/dayNightPipeline";
 import { paintDoorstep, DOORSTEP_DOOR_X, DOORSTEP_FLOOR_Y, DOORSTEP_PORCH } from "../art/doorstep";
 import { itemHitSize } from "../input/hitRect";
 import { BAG_SCALE, PEOPLE_SCALE, PERSON_DISPLAY_H } from "../maps/shopT0";
 import { getSim } from "../session";
+import { GAME_WIDTH } from "../sim/constants";
 import { skyAt } from "../sim/dayNight";
 import type { SimSnapshot } from "../sim/gameSim";
 import { formatSlaClock, isSlaUrgent } from "../ui/copy";
 import { addUiText } from "../ui/text";
-import { Color, Type } from "../ui/theme";
+import { Color } from "../ui/theme";
 import { fitTypeToWidth } from "../ui/typekit";
 import { designSafeInset, readCssSafeArea, VIEWFIT_EVENT, viewFromScale } from "../ui/viewFit";
 
@@ -20,6 +22,18 @@ const CUSTOMER_X = DOORSTEP_DOOR_X + 200;
 const PERSON_HIT_PAD = 72;
 const BAG_HIT_PAD = 80;
 
+/**
+ * The "what to do next" copy runs 25% over the shared ramp. Held as local
+ * constants rather than a ramp change: `Type` feeds every screen in the game.
+ */
+const DOOR_PROMPT_PX = "20px";
+const DOOR_TITLE_PX = "33.75px";
+const DOOR_CAPTION_PX = "16.25px";
+/** Gap between a sprite's edge and the chip anchored off it. */
+const DOOR_CHIP_GAP = 20;
+/** Keep a wide chip on screen when the sprite it hangs off is near an edge. */
+const DOOR_CHIP_MARGIN = 24;
+
 export class DoorScene extends Phaser.Scene {
   private backdrop!: Phaser.GameObjects.Graphics;
   private driver!: Phaser.GameObjects.Image;
@@ -28,9 +42,9 @@ export class DoorScene extends Phaser.Scene {
   private prompt!: Phaser.GameObjects.Text;
   private houseLabel!: Phaser.GameObjects.Text;
   private bagCaption!: Phaser.GameObjects.Text;
-  private youLabel!: Phaser.GameObjects.Text;
-  private customerCaption!: Phaser.GameObjects.Text;
   private floorY = 0;
+  /** Cached so the per-frame chip placement does not re-read CSS safe areas. */
+  private insetTop = 0;
   private lastHouse = "";
   private lastSkyKey = "";
   private lastBagHanded: boolean | null = null;
@@ -47,7 +61,7 @@ export class DoorScene extends Phaser.Scene {
     paintDoorstep(this.backdrop, 0, skyAt(0));
 
     this.houseLabel = addUiText(this, DOORSTEP_DOOR_X, 56, "", {
-      size: Type.title,
+      size: DOOR_TITLE_PX,
       color: Color.creamHex,
       backgroundColor: Color.bannerInk,
       padding: { x: 20, y: 10 },
@@ -60,7 +74,11 @@ export class DoorScene extends Phaser.Scene {
 
     this.floorY = DOORSTEP_FLOOR_Y + 8;
     this.driver = this.add.image(DRIVER_X, this.floorY, "tex-driver").setOrigin(0.5, 1).setScale(PEOPLE_SCALE).setDepth(5);
-    this.customer = this.add.image(CUSTOMER_X, this.floorY, "tex-customer").setOrigin(0.5, 1).setScale(PEOPLE_SCALE).setDepth(5);
+    this.customer = this.add
+      .image(CUSTOMER_X, this.floorY, customerTextureKey(0))
+      .setOrigin(0.5, 1)
+      .setScale(PEOPLE_SCALE)
+      .setDepth(5);
     this.bag = this.add
       .image(bagDriverPos(this.floorY).x, bagDriverPos(this.floorY).y, "tex-bag")
       .setOrigin(0.5, 0.22)
@@ -77,52 +95,33 @@ export class DoorScene extends Phaser.Scene {
       getSim().queueInteract();
     });
 
-    this.youLabel = addUiText(this, DRIVER_X, this.floorY + 16, "You", {
-      size: Type.caption,
-      color: Color.creamHex,
-      backgroundColor: Color.bannerInk,
-      padding: { x: 8, y: 3 },
-      fontStyle: "700",
-      maxWidth: 120,
-      maxHeight: 28,
-    })
-      .setOrigin(0.5, 0)
-      .setDepth(7);
-    this.customerCaption = addUiText(this, CUSTOMER_X, this.floorY + 16, "Customer", {
-      size: Type.caption,
-      color: Color.creamHex,
-      backgroundColor: Color.bannerInk,
-      padding: { x: 8, y: 3 },
-      fontStyle: "700",
-      maxWidth: 160,
-      maxHeight: 28,
-    })
-      .setOrigin(0.5, 0)
-      .setDepth(7);
-    this.bagCaption = addUiText(this, this.bag.x, this.bag.y - 8, "", {
-      size: Type.caption,
+    // Sits under the bag, so the sentence and the thing it names read as one unit.
+    this.bagCaption = addUiText(this, this.bag.x, this.bag.y, "", {
+      size: DOOR_CAPTION_PX,
       color: Color.inkHex,
       backgroundColor: Color.limeHex,
-      padding: { x: 8, y: 3 },
+      padding: { x: 10, y: 4 },
       fontStyle: "700",
-      maxWidth: 200,
-      maxHeight: 36,
+      maxWidth: 260,
+      maxHeight: 44,
     })
-      .setOrigin(0.5, 1)
+      .setOrigin(0.5, 0)
       .setDepth(7)
       .setVisible(false);
 
-    this.prompt = addUiText(this, DOORSTEP_DOOR_X, GAME_PROMPT_Y, "", {
-      size: Type.body,
+    // Anchored over the customer's head rather than parked at a fixed y — the
+    // instruction names them, so it should be pointing at them.
+    this.prompt = addUiText(this, CUSTOMER_X, 0, "", {
+      size: DOOR_PROMPT_PX,
       color: Color.inkHex,
       backgroundColor: Color.creamHex,
-      padding: { x: 16, y: 10 },
+      padding: { x: 20, y: 12 },
       align: "center",
       fontStyle: "600",
       maxWidth: 720,
-      maxHeight: 72,
+      maxHeight: 90,
     })
-      .setOrigin(0.5)
+      .setOrigin(0.5, 1)
       .setDepth(8);
 
     this.layoutDoorHud();
@@ -134,8 +133,36 @@ export class DoorScene extends Phaser.Scene {
 
   private layoutDoorHud(): void {
     const inset = designSafeInset(viewFromScale(this.scale), readCssSafeArea(document.getElementById("game-root")));
+    this.insetTop = inset.top;
     this.houseLabel.setPosition(DOORSTEP_DOOR_X, 56 + inset.top);
-    this.prompt.setPosition(DOORSTEP_DOOR_X, GAME_PROMPT_Y + inset.top);
+    this.placeChips();
+  }
+
+  /** Re-anchor the sprite-hung chips. Cheap enough to run every frame — the bag moves. */
+  private placeChips(): void {
+    this.placePrompt(this.insetTop);
+    this.placeBagCaption();
+  }
+
+  /**
+   * Prompt bottom edge sits a gap above the customer's head, derived from the
+   * sprite's own `displayHeight` so it tracks any change to PEOPLE_SCALE.
+   */
+  private placePrompt(insetTop: number): void {
+    const headTop = this.customer.y - this.customer.displayHeight * this.customer.originY;
+    const half = this.prompt.displayWidth / 2 + DOOR_CHIP_MARGIN;
+    const x = Phaser.Math.Clamp(this.customer.x, half, GAME_WIDTH - half);
+    const floor = insetTop + this.prompt.displayHeight + DOOR_CHIP_GAP;
+    this.prompt.setPosition(x, Math.max(floor, headTop - DOOR_CHIP_GAP));
+  }
+
+  private placeBagCaption(): void {
+    const below = this.bag.y + this.bag.displayHeight * (1 - this.bag.originY);
+    const half = this.bagCaption.displayWidth / 2 + DOOR_CHIP_MARGIN;
+    this.bagCaption.setPosition(
+      Phaser.Math.Clamp(this.bag.x, half, GAME_WIDTH - half),
+      below + DOOR_CHIP_GAP * 0.5,
+    );
   }
 
   update(): void {
@@ -144,6 +171,9 @@ export class DoorScene extends Phaser.Scene {
 
   private sync(snap: SimSnapshot): void {
     const drop = snap.dropoff;
+    // Same field the ID-card photo reads, so the two cannot show different people.
+    const face = customerTextureKey(drop.customerLook ?? 0);
+    if (this.customer.texture.key !== face) this.customer.setTexture(face);
     const houseKey = drop.houseId ?? "house-1";
     const sky = skyAt(snap.gameMs);
     const skyKey = `${sky.zenith}:${sky.haze}:${sky.lampAlpha.toFixed(2)}:${sky.windowGlow.toFixed(2)}`;
@@ -230,21 +260,14 @@ export class DoorScene extends Phaser.Scene {
     );
     this.prompt.setAlpha(1);
 
-    this.customerCaption.setText(drop.customerName ?? "Customer");
-    this.customerCaption.setAlpha(1);
-    this.customerCaption.setBackgroundColor(Color.bannerInk);
-    this.customerCaption.setColor(Color.creamHex);
-
     this.bagCaption.setVisible(nextHand || nextPhoto);
     this.bagCaption.setText(nextHand ? "Tap bag to hand over" : "Tap bag for photo");
     this.bagCaption.setAlpha(1);
     this.bagCaption.setBackgroundColor(Color.limeHex);
     this.bagCaption.setColor(Color.inkHex);
-    this.bagCaption.setPosition(this.bag.x, this.bag.y - this.bag.displayHeight * this.bag.originY - 8);
+    this.placeChips();
   }
 }
-
-const GAME_PROMPT_Y = 148;
 
 function bagDriverPos(floorY: number): { x: number; y: number } {
   return { x: DRIVER_X + 52, y: floorY - PERSON_DISPLAY_H * 0.46 };

@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { customerTextureKey } from "../art/people";
 import { drawReceiptRail } from "../art/receiptRail";
 import { shopGrade } from "../art/dayNightGrade";
 import { applyDayNight, attachDayNight, dayNightFrom, type DayNightPipeline } from "../art/dayNightPipeline";
@@ -431,7 +432,13 @@ export class ShopScene extends Phaser.Scene {
     for (const customer of list) {
       let sprite = this.customers.get(customer.orderId);
       if (!sprite) {
-        sprite = this.add.image(customer.x, CUSTOMER_SPOT.y, "tex-customer").setOrigin(0.5, 1).setScale(PEOPLE_SCALE).setDepth(5);
+        // One appearance per order, derived from the customer's identity — the same
+        // person always walks in looking the same way.
+        sprite = this.add
+          .image(customer.x, CUSTOMER_SPOT.y, customerTextureKey(customer.look))
+          .setOrigin(0.5, 1)
+          .setScale(PEOPLE_SCALE)
+          .setDepth(5);
         enableItemHit(sprite);
         sprite.on("pointerdown", () => getSim().shopClick({ type: "customer", orderId: customer.orderId }));
         wireHover(sprite);
