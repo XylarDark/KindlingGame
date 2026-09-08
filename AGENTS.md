@@ -21,6 +21,22 @@ Useful flags: `--url`, `--query`, `--size WxH`, `--wait ms`, `--no-click`, `--ou
 
 Why the shared browser cannot simply be fixed is recorded in [docs/operational/automation-gaps.md](docs/operational/automation-gaps.md); re-check it if the Cursor browser tools change.
 
+### If a human asks for the Cursor browser: never pass `position` to a new tab
+
+`browser_navigate` derives its internal `preserveFocus` from the **absence** of `position`. Omit `position` and Cursor builds the view inside the workbench renderer, on a path with no deadline. Pass it, and Cursor asks a separate "glass" window to create the tab and then polls for a webview element for exactly 2000 ms before throwing `Timed out waiting for glass browser view`. The one logged failure died in 2126 ms, which is that deadline and not a slow network.
+
+Concurrency makes it worse for a second reason: tab lists are **filtered by owning agent**, so another agent's tab is invisible to you, reuse is skipped, and you fall through into tab *creation* — the only path that can time out.
+
+The way to show a human the game is therefore two calls: create quietly with `newTab` and no `position`, then reveal by passing the returned `viewId` **with** `position`. Reuse never enters the creation path, so revealing an existing view is safe.
+
+```
+npx tsx scripts/browser-probe.ts    # offline, reads Cursor's logs, cannot hang
+```
+
+Run that first. It reports whether the browser subsystem has failed recently and touches no MCP tool.
+
+**Retry at most once, and only with the call changed** — drop `position`. Repeating an identical call re-enters the same race. This applies only to the failure that *returns an error*: a hanging call cannot be cancelled from inside an agent, so retrying a hang is strictly worse than not. Closing a stale tab (`browser_tabs` close) or releasing a stuck lock repairs a *stale* browser, not a wedged one; for a true wedge the only lever is `Developer: Reload Window`.
+
 ### A run cannot hang, leak a browser, or collide with yours
 
 You do not need to manage any of this, but knowing it exists will save you from working around it:

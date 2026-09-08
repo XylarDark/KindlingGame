@@ -54,6 +54,14 @@
 - **Fix:** capture through a per-agent Chrome instance — `npx tsx scripts/agent-shot.ts --lane N`, where the lane picks a dedicated debug port (`9400 + lane`) and its own Chrome profile.
 - **Prevention:** full protocol in [AGENTS.md](../AGENTS.md); the underlying limitation is logged in [operational/automation-gaps.md](operational/automation-gaps.md).
 
+### The Cursor browser's 2-second fuse is lit by the `position` argument
+
+- **Date:** 2026-09-07
+- **Symptom:** `browser_navigate` returned `[cursor.browserView.newTab] Timed out waiting for glass browser view: a36aa3`, twice in one hour, with only a single caller — so contention was not the explanation.
+- **Cause:** the extension derives `preserveFocus` from the **absence** of `position`. Without it, Cursor creates the browser view inside the workbench renderer and cannot time out. With it, creation is delegated to the separate glass window and then polled for a webview element against a hard 2000 ms deadline (`AUk = 2e3` in `workbench.glass.main.js`). The logged failure took 2126 ms, matching the deadline rather than any network delay. A second factor explains the clustering around concurrency: `listTabs` filters by owning agent, so a tab held by another agent is invisible, reuse is skipped, and the call falls through to the one path that can expire.
+- **Fix:** omit `position` to create, then reveal by passing the returned `viewId` **with** `position` — reuse never enters the creation path. Verified: the same call that timed out twice succeeded immediately without `position`, and revealing by `viewId` afterwards also succeeded.
+- **Prevention:** `scripts/browser-probe.ts` reads Cursor's own automation logs offline and reports whether the subsystem has failed recently; it touches no MCP tool and cannot hang, so it is safe as a preflight. Retry at most once and only with the call changed — and never retry the *hanging* variant, which an agent cannot cancel from inside. Protocol in [AGENTS.md](../AGENTS.md); the un-diagnosable remainder is in [operational/automation-gaps.md](operational/automation-gaps.md).
+
 ### A capture run could still hang forever, because nothing had a timeout
 
 - **Date:** 2026-09-07
@@ -101,6 +109,14 @@
 - **Cause:** the reaper enumerates processes with `Get-CimInstance Win32_Process -Filter "CommandLine LIKE '%kindling-shot-lane%'"`. The PowerShell process running that query has the pattern **in its own command line**, so it matched its own filter, and the "could not attribute this browser" branch fired on it.
 - **Fix:** treat a command line as an unattributable browser only when it carries a `--user-data-dir` flag *and* mentions the profile prefix. A process that merely names a profile path — the query itself, a shell, an editor — is ignored.
 - **Prevention:** this only surfaced because the unattributable case is reported loudly instead of skipped. Keep it that way: the alternative is a reaper that silently fails to find things.
+
+### Sprites baked into a hand-built capture scene render solid black
+
+- **Date:** 2026-09-07
+- **Symptom:** a contact-sheet scene added by hand for reviewing character art drew its background and shapes correctly, but every person came out a solid black silhouette. Cost three captures before the cause was clear.
+- **Cause:** sprites inherit the game's day/night pipeline, which needs lighting state the ad-hoc scene never set up. Graphics shapes do not go through that pipeline, so they were unaffected — which is what makes it deceptive: the scene plainly works, only the subject is missing.
+- **Fix:** `setPipeline("MultiPipeline")` on sprites drawn into a scene built for inspection rather than play.
+- **Prevention:** true of any harness scene, not just contact sheets. If a capture shows a working background and a black subject, suspect the pipeline before suspecting the art — and note this is a harness limitation, not a game bug: the same textures render correctly in the real scenes.
 
 ---
 
