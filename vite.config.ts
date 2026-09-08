@@ -3,8 +3,14 @@ import { defineConfig } from "vite";
 export default defineConfig({
   base: "./",
   server: {
+    // Pinned so the plain `npm run dev` serves the port every capture script expects.
+    // `npm run dev -- --port 5174` cannot work: npm appends forwarded arguments, so the
+    // port folds into the `--host` value and the browser tries to resolve a hostname of
+    // "5174". strictPort then refuses to start a second server instead of quietly
+    // sliding to 5175, where nothing would be looking for it.
     host: true,
-    port: 5173,
+    port: 5174,
+    strictPort: true,
   },
   preview: {
     host: true,

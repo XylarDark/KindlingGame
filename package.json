@@ -4,10 +4,13 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --host",
+    "dev": "vite --host --port 5174 --strictPort",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host",
-    "test": "vitest run"
+    "test": "vitest run",
+    "open": "npx tsx scripts/open-game.ts",
+    "shot": "npx tsx scripts/agent-shot.ts",
+    "shot:cleanup": "npx tsx scripts/agent-shot.ts --cleanup"
   },
   "dependencies": {
     "@fontsource/inter": "^5.3.0",
