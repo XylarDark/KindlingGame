@@ -19,6 +19,12 @@ things that will waste your afternoon if you get them wrong. Everything else loa
 Do not add always-applied rules. Context loaded on every turn measurably degrades accuracy, so the
 budget for this file is roughly 200 lines and the always-apply rule count is zero.
 
+**A skill's `description` is always-loaded too.** Only the body is deferred; every description is
+read each turn to decide relevance. Eleven skills currently cost about 650 tokens per turn on top
+of this file's ~1,900, so the always-on budget is roughly 2,600 tokens in total. Adding a skill is
+a permanent charge against it. Before adding one, prefer extending an existing skill, and keep the
+`description` to a single sentence naming the trigger.
+
 ## Commands
 
 | Task | Command |
