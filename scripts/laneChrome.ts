@@ -382,26 +382,39 @@ export function listProfileDirs(): ProfileDirInfo[] {
 }
 
 /**
- * Removes a profile directory, retrying briefly.
+ * How long teardown may spend deleting a profile before deferring to `--cleanup`.
+ *
+ * Teardown runs after the watchdog has done its job, so nothing else bounds it. An
+ * unbounded delete is a hang by another name: one was measured at 37 seconds against a
+ * directory Chrome still held handles on.
+ */
+export const PROFILE_REMOVAL_BUDGET_MS = 5_000;
+
+/**
+ * Removes a profile directory, retrying within a fixed budget.
  *
  * Windows keeps a handle open for a moment after a kill, so the first attempt often
  * fails with EBUSY on a directory that is about to be removable. Retries are a
  * synchronous busy-wait because this runs from the exit handler, where nothing async
- * will execute.
+ * will execute. On expiry it gives up and says so; the reaper collects the remains.
  */
-export function removeProfileDir(path: string, attempts = 4): boolean {
-  for (let i = 0; i < attempts; i += 1) {
+export function removeProfileDir(path: string, budgetMs = PROFILE_REMOVAL_BUDGET_MS): boolean {
+  if (!existsSync(path)) return true;
+  const deadline = Date.now() + budgetMs;
+  do {
     try {
-      rmSync(path, { recursive: true, force: true, maxRetries: 2, retryDelay: 120 });
+      // maxRetries stays 0: rmSync's own retries block per directory entry, and on a
+      // profile of several thousand files that turned a teardown into 37 seconds.
+      rmSync(path, { recursive: true, force: true, maxRetries: 0 });
       if (!existsSync(path)) return true;
     } catch {
-      // Fall through to the next attempt.
+      // Fall through and retry until the budget runs out.
     }
-    const until = Date.now() + 150;
+    const until = Math.min(Date.now() + 200, deadline);
     while (Date.now() < until) {
       /* sync backoff: the exit handler cannot await */
     }
-  }
+  } while (Date.now() < deadline);
   return !existsSync(path);
 }
 
