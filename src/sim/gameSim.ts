@@ -280,7 +280,7 @@ export class GameSim {
   }
 
   /**
-   * Settings → RESET DAY TO 9:00 AM. Deliberately the same operation as `startNewDay`,
+   * Settings → RESET TO 9 AM. Deliberately the same operation as `startNewDay`,
    * not a second implementation of it.
    *
    * This used to rewind the clock and restart SLA timers while leaving the floor as it

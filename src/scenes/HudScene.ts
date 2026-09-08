@@ -1030,18 +1030,18 @@ export class HudScene extends Phaser.Scene {
     });
     this.endShiftBtn = endShift;
 
-    // The label is not bumped: "RESET DAY TO 9:00 AM" is already wider than the label
-    // box the narrower button gives it, so fitTypeToBox shrinks it to fit and a larger
-    // seed would render at exactly the same size. The caption does take the bump, but
-    // only because it got shorter — see resetDayToNine for why the copy changed.
-    const reset = addHudButton(this, SET_PAD, SET_RESET_Y, "RESET DAY TO 9:00 AM", () => this.resetDayToNine(), {
+    // This label only reaches END SHIFT's step because the copy was cut to reach it.
+    // "RESET DAY TO 9:00 AM" overran the narrower button's label box, so fitTypeToBox
+    // pinned it at 18px no matter how high the seed went — a shorter string was the only
+    // way to buy the size back. See resetDayToNine for why the caption changed.
+    const reset = addHudButton(this, SET_PAD, SET_RESET_Y, "RESET TO 9 AM", () => this.resetDayToNine(), {
       originX: 0,
       originY: 0,
       variant: "amber",
       minWidth: SET_BTN_W,
       minHeight: SET_BTN_H,
       caption: "Clears the floor · score to zero",
-      labelSize: SET_ROW_PX,
+      labelSize: SET_BTN_LABEL_PX,
       captionSize: SET_BTN_CAP_PX,
       depth: 41,
     });

@@ -30,7 +30,7 @@ describe("settings cog panel", () => {
     expect(src).toContain("Volume");
     expect(src).toContain("END_SHIFT_LABEL");
     expect(src).toContain("endShiftEarly");
-    expect(src).toContain("RESET DAY TO 9:00 AM");
+    expect(src).toContain("RESET TO 9 AM");
     expect(src).toContain("resetToMorning");
     expect(src).toContain("startNewDay");
     expect(src).toContain("setMusicEnabled");
@@ -56,6 +56,16 @@ describe("settings cog panel", () => {
     expect(src).toContain("const SETTINGS_H = SET_HINT_Y + SET_HINT_H + SET_PAD;");
     expect(src.match(/minWidth: SET_BTN_W/g)).toHaveLength(2);
     expect(src.match(/minHeight: SET_BTN_H/g)).toHaveLength(2);
+  });
+
+  it("seeds both button labels at the same step, which only short copy can hold", () => {
+    // fitTypeToBox only ever shrinks, so a seed above what the box can fit renders at
+    // the fitted size and the constant becomes a lie. "RESET DAY TO 9:00 AM" overran the
+    // label box and pinned itself to 18px next to END SHIFT's 26px; the copy was cut to
+    // "RESET TO 9 AM" to buy the size back. This pins the seeds — a longer label would
+    // still shrink silently, so the rendered px is checked in-browser, not here.
+    expect(src.match(/labelSize: SET_BTN_LABEL_PX/g)).toHaveLength(2);
+    expect(src.match(/captionSize: SET_BTN_CAP_PX/g)).toHaveLength(2);
   });
 
   it("keeps a hud button's hit area on the box it paints", () => {
