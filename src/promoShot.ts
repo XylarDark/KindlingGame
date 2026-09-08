@@ -16,6 +16,25 @@ export function shotQuery(): PromoShot | null {
   return null;
 }
 
+/**
+ * `?house=5` or `?house=house-5` aims the seeded delivery at one lot, so a capture can
+ * reach a named stop instead of only the default one. Lots front streets of both
+ * orientations, and a still of the van at a stop is only worth anything if you can choose
+ * which stop. An unknown or malformed id falls back to the default rather than throwing.
+ */
+export function houseQuery(): string {
+  try {
+    const raw = new URLSearchParams(globalThis.location?.search ?? "").get("house");
+    if (!raw) return DEFAULT_SHOT_HOUSE;
+    const id = /^\d+$/.test(raw) ? `house-${raw}` : raw;
+    return houseById(id) ? id : DEFAULT_SHOT_HOUSE;
+  } catch {
+    return DEFAULT_SHOT_HOUSE;
+  }
+}
+
+const DEFAULT_SHOT_HOUSE = "house-1";
+
 function waitFetch(sim: GameSim): void {
   for (let i = 0; i < 300; i++) {
     if (sim.snapshot().keyLead.phase === "idle" && sim.snapshot().handSkuId) return;
@@ -28,7 +47,8 @@ export function applyPromoShot(sim: GameSim): void {
   const shot = shotQuery();
   if (!shot) return;
 
-  const order = sim.spawnOrder("delivery", { destinationId: "house-1", ageOk: true });
+  const houseId = houseQuery();
+  const order = sim.spawnOrder("delivery", { destinationId: houseId, ageOk: true });
   sim.shopClick({ type: "tablet", orderId: order.id });
   sim.shopClick({ type: "strain", skuId: order.skuId });
   waitFetch(sim);
@@ -40,7 +60,7 @@ export function applyPromoShot(sim: GameSim): void {
     return;
   }
 
-  const stop = houseById("house-1");
+  const stop = houseById(houseId);
   if (!stop) return;
   const pos = tileToWorld(stop.stop);
   sim.setVehiclePosition(pos.x, pos.y);
