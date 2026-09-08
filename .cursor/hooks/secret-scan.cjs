@@ -427,7 +427,12 @@ async function main() {
     decision = deny(`Secret scanner failed: ${error.message}. Denying by default.`);
   }
 
-  const payload = JSON.stringify(decision);
+  // The trailing newline is required, not cosmetic. Cursor's reader is line-delimited, so a
+  // response without one can sit in its buffer as an incomplete line and be discarded when the
+  // process exits - reported as `returned no output`, which under `failClosed` blocks the
+  // operation. The audit log recorded complete 59-byte writes for invocations Cursor called
+  // empty; 59 is this payload with no newline. Cursor's own documented example emits one.
+  const payload = `${JSON.stringify(decision)}\n`;
 
   audit({
     // The event and target make a denial traceable to the operation it blocked. Without them, a
