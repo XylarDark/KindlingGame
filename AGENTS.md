@@ -20,10 +20,14 @@ Do not add always-applied rules. Context loaded on every turn measurably degrade
 budget for this file is roughly 200 lines and the always-apply rule count is zero.
 
 **A skill's `description` is always-loaded too.** Only the body is deferred; every description is
-read each turn to decide relevance. Eleven skills currently cost about 650 tokens per turn on top
-of this file's ~1,900, so the always-on budget is roughly 2,600 tokens in total. Adding a skill is
+read each turn to decide relevance. Fourteen skills currently cost about 920 tokens per turn on top
+of this file's ~2,400, so the always-on budget is roughly 3,300 tokens in total. Adding a skill is
 a permanent charge against it. Before adding one, prefer extending an existing skill, and keep the
 `description` to a single sentence naming the trigger.
+
+Ten of those fourteen are optional in the template, which now ships six core skills and the rest
+as opt-in extras. They are all active here on purpose; if that changes, move the dormant ones to
+`.agents/skills-extras/` rather than deleting them, and correct the count above.
 
 ## Commands
 

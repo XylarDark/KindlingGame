@@ -1,0 +1,37 @@
+# Keep generated and vendor trees out of agent indexing.
+
+# Node / JS build output
+node_modules/
+dist/
+build/
+out/
+.next/
+.nuxt/
+.turbo/
+.cache/
+*.min.js
+*.map
+
+# Python virtualenv and bytecode
+vendor/
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Coverage and test artifacts
+coverage/
+.nyc_output/
+
+# Tooling and VCS (not source)
+.devenv/
+.git/
+
+# Game / engine generated trees
+**/Library/
+**/Temp/
+**/Logs/
+**/Intermediate/
+**/Saved/
+**/Binaries/
+**/obj/
