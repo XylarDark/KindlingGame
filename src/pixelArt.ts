@@ -36,6 +36,7 @@ import {
 } from "./art/phoneArt";
 import { cells, PX } from "./art/px";
 import { MARK } from "./ui/copy";
+import { SIGN_FIELD } from "./ui/signPlaque";
 import { Color } from "./ui/theme";
 import { fitTypeToWidth, makeType } from "./ui/typekit";
 
@@ -572,8 +573,20 @@ function bag(scene: Phaser.Scene): void {
 const CBAG = { w: 28, h: 21, panelX: 4, panelY: 6, panelW: 20, panelH: 13 };
 const COUNTER_BAG_PX = { w: CBAG.w * PX, h: CBAG.h * PX };
 
-/** Kraft sack with a blank label panel — `stampText` prints the wording. */
-function counterBag(scene: Phaser.Scene, key: string, panel: number): void {
+/**
+ * The white face's foot shadow. `Pal.creamSoft` was tuned as a step down from
+ * `Pal.cream` and reads as a tan stain once the face above it is pure white, so
+ * the neutral needs its own tone — and a deeper one, because a few percent off
+ * white disappears where the same step off cream still registered.
+ */
+const BAG_FACE_SHADE = 0xdcdcd6;
+
+/**
+ * Kraft sack with a blank label panel — `stampText` prints the wording.
+ * `faceShade` travels with `panel` so each face is shaded in its own tone
+ * rather than in whatever suited the one it replaced.
+ */
+function counterBag(scene: Phaser.Scene, key: string, panel: number, faceShade: number): void {
   bake(scene, key, COUNTER_BAG_PX.w, COUNTER_BAG_PX.h, (g) => {
     cells(g, 1, 4, 26, 17, Pal.ink);
     cells(g, 2, 5, 24, 15, Pal.leaf);
@@ -581,7 +594,7 @@ function counterBag(scene: Phaser.Scene, key: string, panel: number): void {
     cells(g, 24, 5, 2, 15, Pal.leafDark);
     cells(g, 2, 19, 24, 1, Pal.leafDark);
     cells(g, CBAG.panelX, CBAG.panelY, CBAG.panelW, CBAG.panelH, panel);
-    cells(g, CBAG.panelX, CBAG.panelY + CBAG.panelH - 1, CBAG.panelW, 1, Pal.creamSoft);
+    cells(g, CBAG.panelX, CBAG.panelY + CBAG.panelH - 1, CBAG.panelW, 1, faceShade);
     // Handles over the sack mouth, drawn last so they read in front of it.
     cells(g, 7, 0, 5, 6, Pal.ink);
     cells(g, 8, 1, 3, 4, Pal.leaf);
@@ -594,6 +607,13 @@ function counterBag(scene: Phaser.Scene, key: string, panel: number): void {
  * The four labelled counter bags. Fixed wording bakes into the pixels: it stays
  * on the grid, costs no Text object, and tints with the sprite when the supply
  * bag flashes as the next tap. Only the live counts stay as Text.
+ *
+ * Three of the four share the white face. `bags`, `delivery` and `pickup` sit
+ * on the same counter at the same time, so whitening only the one that was
+ * asked about would read as a bug rather than as a choice. `pack` keeps its
+ * lime face: it is not a fourth bag but the alternate texture of the `bags`
+ * sprite, and the lime is the "next tap" signal, which a white face would
+ * erase — the resting state going white makes that prompt louder, not weaker.
  */
 function counterBags(scene: Phaser.Scene): void {
   const mid = COUNTER_BAG_PX.w / 2;
@@ -604,12 +624,12 @@ function counterBags(scene: Phaser.Scene): void {
   const wordCy = panelBottom - 9;
   const ink = { color: Color.inkHex, strokeThickness: 0 };
 
-  counterBag(scene, "tex-bag-cream", Pal.cream);
-  counterBag(scene, "tex-bag-lime", Pal.lime);
-  stampText(scene, "tex-bag-cream", "tex-bag-bags", "BAGS", mid, (panelTop + panelBottom) / 2, 30, panelW, ink);
+  counterBag(scene, "tex-bag-white", SIGN_FIELD, BAG_FACE_SHADE);
+  counterBag(scene, "tex-bag-lime", Pal.lime, Pal.creamSoft);
+  stampText(scene, "tex-bag-white", "tex-bag-bags", "BAGS", mid, (panelTop + panelBottom) / 2, 30, panelW, ink);
   stampText(scene, "tex-bag-lime", "tex-bag-pack", "TAP TO\nPACK", mid, (panelTop + panelBottom) / 2, 19, panelW, ink);
-  stampText(scene, "tex-bag-cream", "tex-bag-delivery", "DELIVERY", mid, wordCy, 15, panelW, ink);
-  stampText(scene, "tex-bag-cream", "tex-bag-pickup", "PICKUP", mid, wordCy, 15, panelW, ink);
+  stampText(scene, "tex-bag-white", "tex-bag-delivery", "DELIVERY", mid, wordCy, 15, panelW, ink);
+  stampText(scene, "tex-bag-white", "tex-bag-pickup", "PICKUP", mid, wordCy, 15, panelW, ink);
 }
 
 function vehicle(scene: Phaser.Scene): void {
