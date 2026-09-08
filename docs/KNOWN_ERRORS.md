@@ -67,9 +67,10 @@ broken implementation and a correct one agree. A round number is the usual accom
 
 Distinct from both sections above, and the reason this one is separate: there was no check
 here to fool. These bugs lived in the gap between what the source **said** — a constant
-naming a font size, a header comment naming a derivation, a colour token named `flash` —
-and what the code did. Nothing measured any of those claims, so each read as true until
-someone finally looked at the thing it described: the rendered pixels.
+naming a font size, a header comment naming a derivation, a colour token named `flash`, a
+function named for a correction it quietly declined to make — and what the code did.
+Nothing measured any of those claims, so each read as true until someone finally measured
+the thing it described.
 
 ### A size constant read 20px, the caption rendered 18, and a comment vouched for geometry it did not control
 
@@ -87,6 +88,17 @@ someone finally looked at the thing it described: the rendered pixels.
 - **The expensive part, and why this entry is filed here:** the obvious next move — *animating* that existing tint rather than holding it constant — produced two stills that were **indistinguishable**. A change that looks done, reads back correctly, and does nothing. The source said `flash`, the token was literally named `flash`, and nothing anywhere enforced that anything flashed.
 - **Fix:** move **luminance**, the one channel a green sprite has left. Alpha pinned at 1, the same token swung between 45% and full brightness so the peak still lands exactly on `Color.flash` and the shared colour identity is untouched, plus a 12% scale swell, because motion reads as "tap me" better than colour at this sprite size. Measured luma over the bag body then moved **35 → 78** per cycle, a 2.2x swing, repeatable. Commit `a1051d6`, in `src/scenes/DoorScene.ts`.
 - **Prevention:** a multiplicative tint **cannot brighten a sprite that already shares its hue** — check the hue relationship before reaching for one. Note the same alpha-plus-`Color.flash` pattern is still in use on the customer sprite a few lines away, and is correct there: a person is not green, so the multiply has room to work. The hue check is the lesson, not the pattern. And verify a visual effect by **sampling rendered pixels**, never by reading back the property you just set — here every property was exactly what the code asked for.
+
+### A lane snap that silently declined, and a driveable pad read as a routable one
+
+- **Date:** 2026-09-08
+- **Symptom:** the delivery van reached some stalls from the far side of the road, cutting across oncoming traffic, and arrived so skewed it had to swing up to **132°** to square up. **Seven of fourteen lots** were affected — `house-2` and `house-10` at 132°, `house-6` at 87°, `house-13` at 84°, and `house-5`, `house-7` and `house-9` at 76°. `tsc` and the whole suite were green throughout, because nothing anywhere asserted anything about the arrival angle.
+- **Cause, the snap that declined:** `driveLaneCell(cell, next)` picks a lane from the direction *out of* `cell`. Where that step runs perpendicular to the street — which is precisely the cell where the van turns off it — no street pair matches, and the function hands the cell **back unchanged**, keeping whichever of the two lanes A\* happened to pick. The one cell whose lane decides the arrival is the one cell the snap left alone, and the caller cannot tell a corrected cell from a declined one.
+- **Cause, walkability read as permission:** parking pads are driveable, so a two-cell driveway was a legal through-route. A\* used it to enter stalls from the back, without the route ever touching the frontage the van parks against.
+- **Fix:** `routeToStall` forces the tail of the route — from the first junction upstream of the frontage, along the kerb lane, to the stall — and closes that run, the pad, and the cell just past the frontage while the lead-in is searched. The closure is the load-bearing part: without it A\* joins the forced run halfway by crossing the oncoming lane, which is the original fault rather than a fix for it. The cell past the frontage covers the case where the frontage is itself a junction and the run is therefore a single cell. Every lot now squares up **within 40°**, against an asserted ceiling of 55°. Commit `1c41707`, in `src/sim/driveRoute.ts`.
+- **Prevention — a transform that no-ops on unmatched input fails open:** returning the input unchanged looks like a safe default and is exactly the bug, because success and refusal become the same value. This is the same shape as the source-scanning helper in [Failures that verified nothing](#failures-that-verified-nothing) above, which returned the whole rest of the file when its marker did not match — a reader who has internalised one has most of the other. If a function cannot do its job on an input, make it say so rather than hand the input back.
+- **Prevention — walkability is not permission:** a tile the van *can* drive on is not a tile a route *may* use. The grid answers "is this passable"; the router read that as "is this allowed", and the two had to be separated by closing the pads explicitly. Worth looking for wherever a permissive data structure is doubling as an authorisation check — the structure will keep answering the question it was built for, not the one being asked.
+- **Prevention — assert the outcome over every case, not a sample:** the worst-skewing lots sat on the same side of their street, so a spot check that missed that side would have passed on a broken city. Driving all fourteen lots costs **3.1s**, which is essentially the whole of the suite's rise from 7.7s to ~10.6s — a trade the sim worker flagged rather than hid. Pair it with the cheap structural test that checks the *shape* of each route instead of driving it: that catches the same class in **53ms** from a different angle, so the fast one localises a fault and the slow one proves the thing the player actually sees.
 
 ---
 
