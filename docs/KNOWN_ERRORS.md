@@ -214,6 +214,22 @@ the thing it described.
 - **Settled fact, recorded so nobody re-derives it:** **`gameMs` advances 1:1 with real time** — measured at **1.0103** and **0.9952** in separate runs. `GameSim.tick` feeds Phaser's frame delta into the clock unscaled, and `MS_PER_GAME_MINUTE` is an interpretation constant that does not multiply it. So an oscillator written against `gameMs` runs at real-time speed: the door flash measured **1125ms** and **1144ms** per period off the rendered object against a predicted 1131ms. That makes it a legible throb rather than a strobe, and driving it from game time rather than wall time is what freezes it correctly when the sim pauses instead of animating a frozen scene.
 - **Prevention:** a single still can never demonstrate an animation, and two stills only do it if each one is independently anchored to the cycle. Pair them with a numeric read-back over time — the luma sampling in the tint entry above is what actually proved that pulse; the stills only illustrated it.
 
+### Spacing customers apart made a delivery test lose a customer
+
+- **Date:** 2026-09-08
+- **Symptom:** giving each shopper their own standing slot, a pure layout change, broke an unrelated simulation test: `holds a normal delivery run cleanly and only sheds once parked for good` began reporting `shopCover.lost` of 1.
+- **Cause:** the first slot ladder fanned out from `CUSTOMER_SPOT` in both directions, so a customer in an off-centre slot had *further to walk* than before. That delay pushed a pickup past its no-show deadline. Layout and timing are coupled here because the walk is simulated, not instant, and nothing about the change looked temporal.
+- **Fix:** queue the slots backward from `CUSTOMER_SPOT` towards the door instead of fanning out, so slot 0 keeps the original walk and no slot is ever nearer the door than the one before it. Bubbles alternate rows to stay legible at the tighter pitch.
+- **Prevention:** when moving where a simulated actor stands, check the tests that assert *when* they arrive. A geometry constant that feeds a walk is a clock, and "no slot walks further than the old single spot" is the invariant worth stating in code.
+
+### A source-scanning test flagged the camera's own backdrop as a text chip
+
+- **Date:** 2026-09-08
+- **Symptom:** the test guarding the new ink-on-white plaque scheme failed on `DriveScene.ts` after every text box had already been converted.
+- **Cause:** the scan banned `setBackgroundColor(`, but Phaser cameras carry the same method, and the road legitimately paints its sky through `cameras.main.setBackgroundColor` every frame. The scan was reading a real call that had nothing to do with text.
+- **Fix:** scan line-wise and exclude lines mentioning `cameras.main`, then assert on the offending lines themselves so a failure names what it found rather than only that something matched.
+- **Prevention:** a banned-substring test is only as good as the namespace it assumes. Before trusting one, inject a violation and confirm it fails *for the right reason*, which is what showed this guard was firing on the sky and not on a chip.
+
 ---
 
 ## Related

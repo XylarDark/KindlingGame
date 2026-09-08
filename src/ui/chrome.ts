@@ -163,23 +163,3 @@ export function wireHover(obj: Phaser.GameObjects.GameObject & { setTint?: (c: n
   obj.on("pointerout", () => obj.clearTint?.());
 }
 
-export function addBanner(
-  scene: Phaser.Scene,
-  x: number,
-  y: number,
-  width: number,
-  opts: { depth?: number } = {},
-): Phaser.GameObjects.Text {
-  return addUiText(scene, x, y, "", {
-    size: Type.body,
-    color: Color.creamHex,
-    backgroundColor: Color.bannerInk,
-    padding: { x: 18, y: 10 },
-    align: "center",
-    fontStyle: "600",
-    maxWidth: width,
-    maxHeight: 64,
-  })
-    .setOrigin(0.5, 0)
-    .setDepth(opts.depth ?? 20);
-}

@@ -12,6 +12,8 @@ import {
   TRAFFIC_LOOP_MAX,
   TRAFFIC_MIN_SEP,
   TRAFFIC_VAN_DETECT,
+  VAN_CRAWL_GAP,
+  VAN_MATCH_GAP,
   buildTrafficLoops,
   cityTrafficLoops,
   driveSpeedForTraffic,
@@ -134,10 +136,13 @@ const loops = buildTrafficLoops(TRAFFIC_LOOP_MAX);
   const cruise = VEHICLE_SPEED;
   const lead = { id: "l", x: 200, y: 0, key: "tex-car", depth: 5, angle: 0, speed: 120 };
   const player = { x: 0, y: 0, heading: 0 };
+  // Each distance is taken off the band edge it is meant to sit just outside or inside, so a
+  // trim to VAN_FOLLOW_GAP_SCALE moves these with it. Fixed 150/120 were tuned to the bands
+  // as they stood before the gaps widened, and quietly landed one band lower afterwards.
   const clear = driveSpeedForTraffic(player, [], cruise);
-  const soft = driveSpeedForTraffic(player, [{ ...lead, x: 150 }], cruise);
-  const hard = driveSpeedForTraffic(player, [{ ...lead, x: 120 }], cruise);
-  const stopped = driveSpeedForTraffic(player, [{ ...lead, x: 80, speed: 0 }], cruise);
+  const soft = driveSpeedForTraffic(player, [{ ...lead, x: VAN_MATCH_GAP + 8 }], cruise);
+  const hard = driveSpeedForTraffic(player, [{ ...lead, x: VAN_MATCH_GAP - 8 }], cruise);
+  const stopped = driveSpeedForTraffic(player, [{ ...lead, x: VAN_CRAWL_GAP - 8, speed: 0 }], cruise);
   const ok =
     clear === cruise &&
     soft === Math.min(cruise, 140) &&

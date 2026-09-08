@@ -1,3 +1,4 @@
+import { PERSON_W } from "../art/peopleSize";
 import { GAME_WIDTH } from "../sim/constants";
 
 /** Shop cutaway at 1920×1080. Staff behind the counter; lobby in front. */
@@ -113,11 +114,44 @@ export const DOOR = {
 };
 /** Feet on the lobby boards; head stays just below the counter front. */
 export const CUSTOMER_SPOT = { x: COUNTER_MID, y: COUNTER_FRONT + PERSON_DISPLAY_H + 2 };
-/** Speech sits in the lobby, left of the walk-in — not on their head or the plaque. */
-export const CUSTOMER_BUBBLE_DX = -220;
 /** Bubbles must clear the lobby sandwich board on the far left. */
 export const CUSTOMER_BUBBLE_MIN_X = 300;
 export const CUSTOMER_BUBBLE_Y = COUNTER_FRONT + 96;
+
+/**
+ * Standing room per customer. People bake 192 wide and draw at {@link PEOPLE_SCALE},
+ * so this is the shoulder-to-shoulder figure plus a hand's width of daylight — the
+ * pitch below cannot go under it without sprites touching.
+ */
+export const PERSON_DISPLAY_W = Math.round(PERSON_W * PEOPLE_SCALE);
+export const CUSTOMER_SLOT_PITCH = PERSON_DISPLAY_W + 16;
+
+/**
+ * Where the `index`-th customer on the floor stands: the first arrival takes the counter
+ * spot and the rest queue back toward the street door they came in through.
+ *
+ * The line runs doorward rather than fanning out either side of the counter, because
+ * every slot then sits on the way in. A customer's walk is at most the one to the
+ * counter spot and usually shorter, so nobody now waits longer to be served than they
+ * did when the whole floor stood on one spot — which matters: the NPC key lead's cover
+ * loop only starts on a customer once they have stopped walking, and the shift's timing
+ * is tuned against that.
+ */
+export function customerSlotX(index: number): number {
+  return CUSTOMER_SPOT.x - index * CUSTOMER_SLOT_PITCH;
+}
+
+/**
+ * Speech alternates between two rows down the queue, so a chip only ever shares a row
+ * with the customer two places along and cannot run into its neighbour's however wide
+ * the copy gets. The gap clears the bubble box's own 92px cap, so it holds for the
+ * tallest chip the lobby can produce and not just the one-liners.
+ */
+export const CUSTOMER_BUBBLE_ROW_GAP = 100;
+
+export function customerBubbleY(index: number): number {
+  return CUSTOMER_BUBBLE_Y + (index % 2) * CUSTOMER_BUBBLE_ROW_GAP;
+}
 
 export const TV_COUNT = 3;
 export const TV_COLS = 3;

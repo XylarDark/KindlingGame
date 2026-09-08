@@ -64,7 +64,7 @@ import {
   type HouseStop,
 } from "../maps/cityT0";
 import { cityTrafficLoops, driveSpeedForTraffic, trafficCars } from "../maps/traffic";
-import { BACK_DOOR, CUSTOMER_SPOT, DOOR, KEYLEAD } from "../maps/shopT0";
+import { BACK_DOOR, customerSlotX, DOOR, KEYLEAD } from "../maps/shopT0";
 
 export type PlayerRole = "keyLead" | "driver";
 
@@ -91,6 +91,8 @@ export interface CustomerView {
   x: number;
   bubble: string;
   kind: "inStore" | "pickup";
+  /** Which standing slot they hold — see `customerSlotX`. The scene places speech off it. */
+  slot: number;
   /** Index into the customer appearance pool — stable for the life of the order. */
   look: number;
 }
@@ -182,6 +184,8 @@ interface CustomerState {
   x: number;
   targetX: number;
   kind: "inStore" | "pickup";
+  /** Standing position on the floor, held for the customer's whole visit. */
+  slot: number;
 }
 
 interface SpawnEvent {
@@ -424,6 +428,7 @@ export class GameSim {
         orderId: c.orderId,
         x: c.x,
         kind: c.kind,
+        slot: c.slot,
         bubble: this.customerBubble(c),
         look: this.customerLookFor(c.orderId),
       })),
@@ -519,13 +524,8 @@ export class GameSim {
     };
     this.orders.push(order);
     if (type === "inStore") {
-      this.customers.push({
-        orderId: order.id,
-        x: DOOR.x,
-        targetX: CUSTOMER_SPOT.x,
-        kind: "inStore",
-      });
-      // Floor counterPrompt carries walk-in guidance — keep toast free for errors/score.
+      this.customers.push(this.newCustomer(order.id, "inStore"));
+      // The walk-in's own speech bubble carries this — keep the toast for errors/score.
       // Mid-run the toast is the driver's own banner, and the counter is the key lead's
       // problem, so a walk-in arriving behind them must not wipe it.
       if (this.playerRole === "keyLead") this.toast = "";
@@ -1225,6 +1225,20 @@ export class GameSim {
     this.vehicleHeading = normalizeAngle(this.vehicleHeading + Math.sign(delta) * step);
   }
 
+  /**
+   * A customer through the door, walking to standing room of their own. Every customer
+   * used to be sent to the single counter spot, so a walk-in and any pickup waiting on
+   * a handoff stood inside each other — one silhouette with two heads. The slot is the
+   * lowest one free, held until they leave, so nobody shuffles sideways because someone
+   * else was served.
+   */
+  private newCustomer(orderId: string, kind: "inStore" | "pickup"): CustomerState {
+    const taken = new Set(this.customers.map((c) => c.slot));
+    let slot = 0;
+    while (taken.has(slot)) slot += 1;
+    return { orderId, x: DOOR.x, targetX: customerSlotX(slot), kind, slot };
+  }
+
   private moveCustomers(dtMs: number): void {
     const dt = dtMs / 1000;
     const step = CUSTOMER_SPEED * dt;
@@ -1357,12 +1371,7 @@ export class GameSim {
           if (elapsed >= PICKUP_ARRIVE_MS) {
             order.status = "readyForHandoff";
             if (!this.customers.some((c) => c.orderId === order.id)) {
-              this.customers.push({
-                orderId: order.id,
-                x: DOOR.x,
-                targetX: CUSTOMER_SPOT.x,
-                kind: "pickup",
-              });
+              this.customers.push(this.newCustomer(order.id, "pickup"));
             }
             this.toast = `${order.customerName} is here for pickup.`;
           }

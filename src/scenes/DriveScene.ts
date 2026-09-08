@@ -23,6 +23,7 @@ import { lerpAngle } from "../sim/driveRoute";
 import type { SimSnapshot } from "../sim/gameSim";
 import { tutorialHints } from "../sim/tutorialHints";
 import { formatSlaClock, isSlaUrgent } from "../ui/copy";
+import { addSignText, setSignAccent } from "../ui/signText";
 import { addUiText } from "../ui/text";
 import { Color, Type } from "../ui/theme";
 import { addMark, fitTypeToWidth, overlayStroke } from "../ui/typekit";
@@ -97,14 +98,11 @@ export class DriveScene extends Phaser.Scene {
       duration: 720,
       ease: "Sine.easeInOut",
     });
-    this.pinLabel = addUiText(this, 0, 0, "", {
+    this.pinLabel = addSignText(this, 0, 0, "", {
       size: PIN_LABEL_PX,
-      color: Color.inkHex,
-      backgroundColor: Color.amberHex,
       padding: { x: 20, y: 14 },
       align: "center",
       fontStyle: "700",
-      strokeThickness: 0,
       lineSpacing: 6,
       noWrap: true,
       maxWidth: 460,
@@ -114,16 +112,13 @@ export class DriveScene extends Phaser.Scene {
       // Above the van/walker sprites — the stop label must never be clipped.
       .setDepth(13)
       .setVisible(false);
-    this.vanBanner = addUiText(this, 0, 0, "", {
+    this.vanBanner = addSignText(this, 0, 0, "", {
       size: VAN_BANNER_PX,
-      color: Color.creamHex,
-      backgroundColor: Color.bannerInk,
       padding: { x: 18, y: 10 },
       align: "center",
       fontStyle: "600",
       maxWidth: 500,
       maxHeight: 70,
-      ...overlayStroke(18),
     })
       .setOrigin(0.5, 1)
       .setDepth(12)
@@ -218,12 +213,10 @@ export class DriveScene extends Phaser.Scene {
           ? `${houseTitle(stopId)}\n${destOrder.customerName}${clock ? `\n${clock}` : ""}`
           : houseTitle(stopId);
         this.pinLabel.setVisible(true).setPosition(x, this.pinBase.y - this.pinBob - 12).setText(who);
-        // Ink in every state, LATE included: the urgency moves to the backing so the
-        // stop name never drops to danger-red-on-amber, which was the weakest read here.
-        this.pinLabel.setColor(Color.inkHex);
-        this.pinLabel.setBackgroundColor(
-          destOrder && isSlaUrgent(destOrder.slaRemainingMs) ? Color.dangerHex : Color.amberHex,
-        );
+        // Ink on white in every state, LATE included: the urgency is carried by the
+        // frame, so the stop name never drops to danger-red on a coloured chip.
+        const urgent = !!destOrder && isSlaUrgent(destOrder.slaRemainingMs);
+        setSignAccent(this.pinLabel, urgent ? Color.danger : undefined);
 
         const flashPin = next?.kind === "gpsPin";
         const pulse = 0.62 + 0.38 * (0.5 + 0.5 * Math.sin(snap.gameMs / 280));
@@ -231,7 +224,7 @@ export class DriveScene extends Phaser.Scene {
         this.pin.setAlpha(flashPin ? pulse : 1);
         this.pinPulse.setFillStyle(flashPin ? Color.lime : Color.amber, flashPin ? 0.25 + 0.35 * pulse : 0.35);
         if (flashPin) {
-          this.pinLabel.setBackgroundColor(Color.limeHex);
+          setSignAccent(this.pinLabel, Color.lime);
           this.pinLabel.setAlpha(0.85 + 0.15 * pulse);
         } else {
           this.pinLabel.setAlpha(1);
@@ -274,18 +267,13 @@ export class DriveScene extends Phaser.Scene {
     this.shopCaption.setAlpha(1);
     if (snap.run?.nextStopId) {
       this.shopCaption.setText("Kindling");
-      this.shopCaption.setBackgroundColor(Color.bannerInk);
-      this.shopCaption.setColor(Color.creamHex);
+      setSignAccent(this.shopCaption);
     } else {
       this.shopCaption.setText(nearShop ? "Tap Kindling to return" : snap.autoDriving ? "Van heading to Kindling" : "Drive to Kindling");
-      if (flashShop && nearShop) {
-        const bright = Math.round(180 + 60 * (0.5 + 0.5 * Math.sin(snap.gameMs / 200)));
-        this.shopCaption.setBackgroundColor(`rgb(${bright},${Math.min(255, bright + 40)},${Math.round(bright * 0.55)})`);
-        this.shopCaption.setColor(Color.inkHex);
-      } else {
-        this.shopCaption.setBackgroundColor(nearShop ? Color.limeHex : Color.bannerInk);
-        this.shopCaption.setColor(nearShop ? Color.inkHex : Color.creamHex);
-      }
+      // In reach, so the frame goes lime; the flash that says "this is the tap" is now a
+      // pulse on the plaque rather than a third background colour.
+      setSignAccent(this.shopCaption, nearShop ? Color.lime : undefined);
+      this.shopCaption.setAlpha(flashShop && nearShop ? 0.8 + 0.2 * (0.5 + 0.5 * Math.sin(snap.gameMs / 200)) : 1);
     }
   }
 
@@ -414,10 +402,8 @@ export class DriveScene extends Phaser.Scene {
       .setDepth(2);
     fitTypeToWidth(mark, CITY.shopLot.w * TILE - 32);
 
-    this.shopCaption = addUiText(this, shop.x, shop.y + CITY.shopLot.h * TILE * 0.42, "Tap Kindling to return", {
+    this.shopCaption = addSignText(this, shop.x, shop.y + CITY.shopLot.h * TILE * 0.42, "Tap Kindling to return", {
       size: Type.body,
-      color: Color.inkHex,
-      backgroundColor: Color.limeHex,
       padding: { x: 12, y: 6 },
       fontStyle: "700",
       maxWidth: CITY.shopLot.w * TILE - 24,

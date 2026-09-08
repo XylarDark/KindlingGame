@@ -23,9 +23,10 @@ import type { ShiftResults } from "../sim/shiftResults";
 import { tutorialHints } from "../sim/tutorialHints";
 import { addHudButton, addPanel, HUD_BUTTON_MIN_H } from "../ui/chrome";
 import { END_SHIFT_CAPTION, END_SHIFT_LABEL, RESULTS_NEW_DAY, RESULTS_TITLE } from "../ui/copy";
+import { addSignText, setSignAccent } from "../ui/signText";
 import { addUiText } from "../ui/text";
 import { Color, Type } from "../ui/theme";
-import { refitType } from "../ui/typekit";
+import { parseFontPx, refitType, retypeSize } from "../ui/typekit";
 import { designSafeInset, HUD_TOUCH_MIN_DESIGN, readCssSafeArea, VIEWFIT_EVENT, viewFromScale } from "../ui/viewFit";
 
 /** Readouts sit either side of the counter sign, 10% over the display ramp. */
@@ -108,9 +109,10 @@ const SET_BTN_CAP_PX = "16px";
 const SET_HINT_PX = "14.3px";
 
 /**
- * The cog caption's own step, 25% over `HUD_CAPTION_PX`. It has to be its own number:
- * `HUD_CAPTION_PX` is the SCORE caption's step too, so raising that would have resized
- * the readout nobody asked about. It replaces a `SET_BODY_PX` that only this label used.
+ * The cog caption's own step, 25% over `HUD_CAPTION_PX`. It replaces a `SET_BODY_PX`
+ * that only this label used. `HUD_CAPTION_PX` is now the seed for nothing else — the
+ * SCORE caption runs at the score's step — so the two numbers are independent, and this
+ * one is the one to move for the cog.
  */
 const HUD_COG_CAPTION_PX = HUD_CAPTION_PX * 1.25;
 const HUD_COG_CAPTION_PAD = { x: 12, y: 6 };
@@ -226,6 +228,8 @@ const ID_FIELD_W = ID_CARD_W / 2 - ID_PAD - ID_FIELD_X;
 export class HudScene extends Phaser.Scene {
   private scoreText!: Phaser.GameObjects.Text;
   private scoreCaption!: Phaser.GameObjects.Text;
+  /** Last step the caption was set to, so a re-place that changes nothing costs nothing. */
+  private captionPx = HUD_SCORE_PX;
   private clockText!: Phaser.GameObjects.Text;
   private padRing!: Phaser.GameObjects.Graphics;
   private padKnob!: Phaser.GameObjects.Arc;
@@ -311,15 +315,19 @@ export class HudScene extends Phaser.Scene {
     })
       .setOrigin(1, 0.5)
       .setDepth(20);
+    // Seeded at the value's step, and kept there by matchCaptionToValue: the caption
+    // reads as part of the number rather than a footnote under it. The box is the
+    // value's height and wide enough for tracked caps at 44px (164px of glyphs), so
+    // shrink-to-fit leaves the seed alone at the size it was authored for.
     this.scoreCaption = addUiText(this, 0, 0, "SCORE", {
-      size: `${HUD_CAPTION_PX}px`,
+      size: `${HUD_SCORE_PX}px`,
       color: Color.creamHex,
       fontStyle: "700",
       align: "right",
       letterSpacing: 2,
-      maxWidth: 200,
-      maxHeight: 34,
-      ...readoutOutline(HUD_CAPTION_PX),
+      maxWidth: 220,
+      maxHeight: 68,
+      ...readoutOutline(HUD_SCORE_PX),
     })
       .setOrigin(1, 0.5)
       .setDepth(20);
@@ -352,13 +360,11 @@ export class HudScene extends Phaser.Scene {
       maxWidth: PHONE_APP.w - 16,
       maxHeight: PHONE_HEADER_H,
     }).setOrigin(0.5);
-    this.phoneStatus = addUiText(this, 0, PHONE_APP.y + PHONE_APP.h - PHONE_STATUS_H / 2, "Tap to call", {
+    this.phoneStatus = addSignText(this, 0, PHONE_APP.y + PHONE_APP.h - PHONE_STATUS_H / 2, "Tap to call", {
       size: PHONE_STATUS_PX,
-      color: Color.creamHex,
       fontStyle: "600",
       align: "center",
       lineSpacing: 2,
-      strokeThickness: 0,
       padding: { x: 10, y: 4 },
       noWrap: true,
       maxWidth: PHONE_APP.w - 12,
@@ -386,10 +392,8 @@ export class HudScene extends Phaser.Scene {
       .setVisible(false);
     this.paintPhoneChrome();
 
-    this.toastText = addUiText(this, GAME_WIDTH / 2, GAME_HEIGHT - 36, "", {
+    this.toastText = addSignText(this, GAME_WIDTH / 2, GAME_HEIGHT - 36, "", {
       size: HUD_TOAST_PX,
-      color: Color.creamHex,
-      backgroundColor: Color.bannerInk,
       padding: { x: 22, y: 13 },
       align: "center",
       fontStyle: "600",
@@ -400,10 +404,8 @@ export class HudScene extends Phaser.Scene {
       .setDepth(20);
 
     // Out on the road the shop is off-screen, so the counter reports in under the score.
-    this.coverText = addUiText(this, 0, 0, "", {
+    this.coverText = addSignText(this, 0, 0, "", {
       size: Type.caption,
-      color: Color.creamHex,
-      backgroundColor: Color.bannerInk,
       padding: { x: 12, y: 6 },
       fontStyle: "600",
       noWrap: true,
@@ -428,10 +430,8 @@ export class HudScene extends Phaser.Scene {
     this.padRing = this.add.graphics().setDepth(19);
     this.drawPad();
     this.padKnob = this.add.circle(this.padCenter.x, this.padCenter.y, 40, Color.cream, 0.92).setDepth(20);
-    this.padLabel = addUiText(this, this.padCenter.x, this.padCenter.y - 128, "Heading to stop…", {
+    this.padLabel = addSignText(this, this.padCenter.x, this.padCenter.y - 128, "Heading to stop…", {
       size: PAD_LABEL_PX,
-      color: Color.creamHex,
-      backgroundColor: Color.bannerInk,
       padding: { x: 13, y: 8 },
       fontStyle: "600",
       maxWidth: 300,
@@ -722,6 +722,9 @@ export class HudScene extends Phaser.Scene {
    * sign to flank, so they fall back to the screen corners.
    */
   private placeReadouts(): void {
+    // Size first, then measure: the caption's own width is part of the layout in corner
+    // mode, so it has to be at its final step before anything is positioned off it.
+    this.matchCaptionToValue();
     // The label tracks the value's measured width, so extra digits push it further
     // out instead of ever running under it. Re-run whenever the value text changes.
     const valueW = this.scoreText.width;
@@ -741,6 +744,23 @@ export class HudScene extends Phaser.Scene {
     this.scoreText.setOrigin(0, 0.5).setPosition(valueX, top);
     this.clockText.setOrigin(1, 0.5).setPosition(right, top);
     this.scorePopLayer.setPosition(valueX + valueW + 16, top);
+  }
+
+  /**
+   * SCORE is specified at the size of the number, which means the size the number
+   * actually renders at — not the step both were authored with. A long enough score
+   * shrinks inside its own box, and a caption left at the seed beside a shrunken value
+   * is the same mismatch this replaced, only the other way round. The outline is scaled
+   * with it for the same reason `readoutOutline` takes a px at all: a fixed thickness
+   * reads as a different weight at a different step.
+   */
+  private matchCaptionToValue(): void {
+    const px = parseFontPx(this.scoreText.style.fontSize);
+    if (px === this.captionPx) return;
+    this.captionPx = px;
+    const outline = readoutOutline(px);
+    this.scoreCaption.setStroke(outline.stroke, outline.strokeThickness);
+    retypeSize(this.scoreCaption, px);
   }
 
   private paintHud(snap: SimSnapshot): void {
@@ -792,15 +812,10 @@ export class HudScene extends Phaser.Scene {
     if (showPhone) {
       this.phone.setAlpha(1);
       this.phoneBody.setAlpha(drop.phase === "calling" ? 0.92 : 1);
-      // The phone's tutorial cue is the status chip going lime, not a ring around the
-      // chassis: the ring was removed, the cue was not.
-      if (flashPhone && drop.phase !== "calling") {
-        this.phoneStatus.setColor(Color.inkHex);
-        this.phoneStatus.setBackgroundColor(Color.limeHex);
-      } else {
-        this.phoneStatus.setColor(drop.phase === "calling" ? Color.neonHex : Color.creamHex);
-        this.phoneStatus.setBackgroundColor("#101418");
-      }
+      // The phone's tutorial cue is the status plaque's frame going lime, not a ring
+      // around the chassis: the ring was removed, the cue was not.
+      const cue = flashPhone && drop.phase !== "calling";
+      setSignAccent(this.phoneStatus, cue ? Color.lime : drop.phase === "calling" ? Color.leafBright : undefined);
       this.phoneStatus.setPadding(10, 6, 10, 6);
       refitType(this.phoneStatus);
       this.paintPhoneMap(snap);
@@ -1116,10 +1131,8 @@ export class HudScene extends Phaser.Scene {
     // Centred on the cog: the cog's origin is (1, 1) at cogX, so its middle is half a cog
     // to the left. layoutHud repositions it from the same expression — the two must agree,
     // or the caption drifts off the control it labels on the first resize.
-    this.cogCaption = addUiText(this, cogX - cogSize / 2, cogY - cogSize - 8, "Settings", {
+    this.cogCaption = addSignText(this, cogX - cogSize / 2, cogY - cogSize - 8, "Settings", {
       size: `${HUD_COG_CAPTION_PX}px`,
-      color: Color.creamHex,
-      backgroundColor: Color.bannerInk,
       padding: HUD_COG_CAPTION_PAD,
       fontStyle: "600",
       align: "center",
@@ -1350,12 +1363,12 @@ export class HudScene extends Phaser.Scene {
 
   private spawnScorePop(delta: number): void {
     const positive = delta >= 0;
-    const label = addUiText(this, 0, 0, positive ? `+${delta}` : String(delta), {
+    // Ink on white like every other box; the sign of the delta moves to the frame, which
+    // is the one place a colour still means something under this scheme.
+    const label = addSignText(this, 0, 0, positive ? `+${delta}` : String(delta), {
       size: Type.heading,
-      color: positive ? Color.neonHex : Color.dangerHex,
       fontStyle: "700",
-      strokeThickness: 0,
-      backgroundColor: Color.bannerInkSoft,
+      accent: positive ? Color.leafBright : Color.danger,
       padding: { x: 10, y: 4 },
       maxWidth: 160,
       maxHeight: 40,

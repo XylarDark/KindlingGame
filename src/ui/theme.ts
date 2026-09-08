@@ -35,13 +35,16 @@ export const Color = {
   floorLine: 0x4a3424,
   screen: 0x0c1612,
   screenHex: "#0c1612",
+  danger: 0xff8a6a,
   dangerHex: "#ff8a6a",
   muteHex: "#a89880",
   /** Soft lime tint on the next tap target. */
   flash: 0xb8ffb0,
-  /** Dark banner chips over the map / HUD. */
-  bannerInk: "#1c1612ee",
-  bannerInkSoft: "#1c1612cc",
+  /**
+   * No banner-chip tokens live here any more. Text boxes are the counter plaque —
+   * ink on a white field in a leaf frame — built with `addSignText`, so a chip colour
+   * is not a decision a call site gets to make. See `ui/signPlaque.ts`.
+   */
   /** Title / settings / results cream cards. */
   card: 0xfffaf3,
   cardHex: "#fffaf3",

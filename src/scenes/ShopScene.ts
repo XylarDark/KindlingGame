@@ -7,11 +7,9 @@ import { drawShopCounter, drawShopInterior, paintShopDayNight, paintWindowGlow }
 import {
   BAG_PANEL,
   BAG_STACK,
-  COUNTER_FRONT,
   CUSTOMER_SPOT,
-  CUSTOMER_BUBBLE_DX,
   CUSTOMER_BUBBLE_MIN_X,
-  CUSTOMER_BUBBLE_Y,
+  customerBubbleY,
   DRIVER,
   KEYLEAD,
   PICKUP_BAG,
@@ -41,6 +39,7 @@ import { nextShopHint } from "../sim/tutorialHints";
 import { driverReadyCopy } from "../ui/copy";
 import { readyTally, receiptSlips } from "../ui/receipts";
 import { wireHover } from "../ui/chrome";
+import { addSignText, setSignAccent } from "../ui/signText";
 import { addUiText } from "../ui/text";
 import { Color, Type } from "../ui/theme";
 import { HUD_SCORE_PX } from "./HudScene";
@@ -68,21 +67,19 @@ const TABLET_LABEL_INSET = 4;
  */
 const MSG_PX = "19.2px";
 const MSG_PAD = { x: 12, y: 7 };
-/** Lime counter prompt carries the longest two-line copy, so it keeps a fatter chip. */
-const PROMPT_PAD = { x: 14, y: 10 };
 
 /**
- * Keep a walk-in's speech bubble in the open lobby: prefer the left of the
- * customer, mirror to their right when the sandwich board is in the way, then
- * clamp so the chip never runs off screen.
+ * Speech sits on the customer it belongs to, which is only unambiguous now that each
+ * customer has standing room of their own: with everyone on one spot a chip had to be
+ * offset clear of the pile, and it named nobody. Two rows of them keep neighbours apart
+ * (see `customerBubbleY`), so all this has left to do is keep the chip on screen and
+ * off the lobby sandwich board.
  */
 function bubbleX(customerX: number, bubbleW: number): number {
   const half = bubbleW / 2;
   const min = CUSTOMER_BUBBLE_MIN_X + half;
   const max = GAME_WIDTH - 24 - half;
-  const left = customerX + CUSTOMER_BUBBLE_DX;
-  const x = left < min ? customerX - CUSTOMER_BUBBLE_DX : left;
-  return Phaser.Math.Clamp(x, Math.min(min, max), max);
+  return Phaser.Math.Clamp(customerX, Math.min(min, max), max);
 }
 
 export class ShopScene extends Phaser.Scene {
@@ -95,7 +92,6 @@ export class ShopScene extends Phaser.Scene {
   private queueBadge!: Phaser.GameObjects.Text;
   private keyLeadBubble!: Phaser.GameObjects.Text;
   private driverBubble!: Phaser.GameObjects.Text;
-  private counterPrompt!: Phaser.GameObjects.Text;
   private customers = new Map<string, Phaser.GameObjects.Image>();
   private bubbles = new Map<string, Phaser.GameObjects.Text>();
   private readyBag!: Phaser.GameObjects.Image;
@@ -167,13 +163,10 @@ export class ShopScene extends Phaser.Scene {
     });
     wireHover(this.tabletHit);
 
-    this.queueBadge = addUiText(this, tab.left + tab.w - 10, tab.top + 10, "", {
+    this.queueBadge = addSignText(this, tab.left + tab.w - 10, tab.top + 10, "", {
       size: Type.caption,
-      color: Color.inkHex,
-      backgroundColor: Color.creamHex,
       padding: { x: 6, y: 2 },
       fontStyle: "700",
-      strokeThickness: 0,
       maxWidth: 48,
       maxHeight: 28,
     })
@@ -181,10 +174,8 @@ export class ShopScene extends Phaser.Scene {
       .setDepth(13)
       .setVisible(false);
 
-    this.keyLeadBubble = addUiText(this, KEYLEAD.x - 168, KEYLEAD.y - PERSON_DISPLAY_H - 24, "", {
+    this.keyLeadBubble = addSignText(this, KEYLEAD.x - 168, KEYLEAD.y - PERSON_DISPLAY_H - 24, "", {
       size: MSG_PX,
-      color: Color.inkHex,
-      backgroundColor: Color.creamHex,
       padding: MSG_PAD,
       align: "center",
       fontStyle: "600",
@@ -200,10 +191,8 @@ export class ShopScene extends Phaser.Scene {
     this.driver.on("pointerdown", () => this.departNow());
     wireHover(this.driver);
 
-    this.driverBubble = addUiText(this, DRIVER.x - 24, DRIVER.y - PERSON_DISPLAY_H - 8, "", {
+    this.driverBubble = addSignText(this, DRIVER.x - 24, DRIVER.y - PERSON_DISPLAY_H - 8, "", {
       size: MSG_PX,
-      color: Color.inkHex,
-      backgroundColor: Color.creamHex,
       padding: MSG_PAD,
       align: "center",
       fontStyle: "600",
@@ -214,19 +203,6 @@ export class ShopScene extends Phaser.Scene {
       .setDepth(12)
       .setVisible(false);
 
-    this.counterPrompt = addUiText(this, CUSTOMER_SPOT.x + 268, COUNTER_FRONT + 104, "", {
-      size: MSG_PX,
-      color: Color.inkHex,
-      backgroundColor: Color.limeHex,
-      padding: PROMPT_PAD,
-      align: "center",
-      fontStyle: "700",
-      maxWidth: 380,
-      maxHeight: 96,
-    })
-      .setOrigin(0.5)
-      .setDepth(8)
-      .setVisible(false);
   }
 
   update(): void {
@@ -290,19 +266,6 @@ export class ShopScene extends Phaser.Scene {
       label.setColor(Color.creamHex);
       label.setAlpha(1);
     });
-
-    const walkIn = snap.orders.find((o) => o.type === "inStore");
-    if (walkIn) {
-      this.counterPrompt
-        .setVisible(true)
-        .setText(
-          snap.handSkuId === walkIn.skuId
-            ? `Tap ${walkIn.customerName}\nto hand over ${walkIn.skuName}`
-            : `${walkIn.customerName} at the counter\nwants ${walkIn.skuName}`,
-        );
-    } else {
-      this.counterPrompt.setVisible(false);
-    }
 
     this.syncTablet(snap, tabletPulse, next?.kind === "tablet");
     this.syncCustomers(snap.customers, pulse, next?.kind === "customer" ? next.orderId : null);
@@ -462,10 +425,8 @@ export class ShopScene extends Phaser.Scene {
         sprite.on("pointerdown", () => getSim().shopClick({ type: "customer", orderId: customer.orderId }));
         wireHover(sprite);
         this.customers.set(customer.orderId, sprite);
-        const bubble = addUiText(this, bubbleX(customer.x, 0), CUSTOMER_BUBBLE_Y, "", {
+        const bubble = addSignText(this, bubbleX(customer.x, 0), customerBubbleY(customer.slot), "", {
           size: MSG_PX,
-          color: Color.inkHex,
-          backgroundColor: Color.creamHex,
           padding: MSG_PAD,
           align: "center",
           fontStyle: "600",
@@ -483,15 +444,11 @@ export class ShopScene extends Phaser.Scene {
       const bubble = this.bubbles.get(customer.orderId);
       if (bubble) {
         bubble.setText(customer.bubble).setAlpha(1);
-        bubble.setPosition(bubbleX(customer.x, bubble.width), CUSTOMER_BUBBLE_Y);
+        bubble.setPosition(bubbleX(customer.x, bubble.width), customerBubbleY(customer.slot));
       }
-      if (bubble && focus) {
-        bubble.setBackgroundColor(Color.limeHex);
-        bubble.setColor(Color.inkHex);
-      } else if (bubble) {
-        bubble.setBackgroundColor(Color.creamHex);
-        bubble.setColor(Color.inkHex);
-      }
+      // The customer to serve next is named by their frame, not by a different chip:
+      // every box in the game is ink on white now, so state lives in the ring.
+      if (bubble) setSignAccent(bubble, focus ? Color.lime : undefined);
     }
   }
 

@@ -172,6 +172,29 @@ describe("ORDERS against the counter readouts", () => {
   });
 });
 
+describe("SCORE caption type size", () => {
+  it("is seeded at the value's step, not a caption step of its own", () => {
+    expect(captionBlock).toContain("size: `${HUD_SCORE_PX}px`");
+    // Measured in-browser at 1920x1080: "SCORE" renders 164x59 at 44px with its
+    // tracking. `fitTypeToBox` only ever shrinks, so a box under that would quietly
+    // hand back a smaller caption and the sizes would stop matching — which is the
+    // whole of what this caption is specified to do.
+    expect(captionBox.w).toBeGreaterThanOrEqual(164);
+    expect(captionBox.h).toBeGreaterThanOrEqual(59);
+  });
+
+  it("follows the value's rendered size rather than the seed they share", () => {
+    // A score long enough to shrink inside its own box would leave a seed-sized caption
+    // beside a smaller number. The match is made against what the value renders at, and
+    // it has to happen before anything is measured off the caption's width.
+    expect(hud).toContain("private matchCaptionToValue()");
+    expect(placeReadouts).toContain("this.matchCaptionToValue();");
+    expect(placeReadouts.indexOf("matchCaptionToValue")).toBeLessThan(
+      placeReadouts.indexOf("this.scoreText.width"),
+    );
+  });
+});
+
 describe("ORDERS type size", () => {
   it("is seeded from the score's own constant rather than a copy of the number", () => {
     expect(hud).toContain("export const HUD_SCORE_PX = 44;");

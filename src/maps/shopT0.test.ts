@@ -1,17 +1,24 @@
 import { describe, expect, it } from "vitest";
 import { PERSON_W } from "../art/peopleSize";
-import { GAME_WIDTH } from "../sim/constants";
+import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import {
   BAG_PANEL,
   BAG_STACK,
   BENCH_LEFT,
   COUNTER_BAG_H,
   COUNTER_BAG_W,
+  COUNTER_FRONT,
   COUNTER_RIGHT,
   COUNTER_TOP,
+  CUSTOMER_BUBBLE_MIN_X,
+  CUSTOMER_SPOT,
+  customerBubbleY,
+  customerSlotX,
+  DOOR,
   DRIVER,
   KEYLEAD,
   PEOPLE_SCALE,
+  PERSON_DISPLAY_W,
   PICKUP_BAG,
   READY_BAG,
   RECEIPT_SPOT,
@@ -70,6 +77,69 @@ describe("delivery window", () => {
  * Bags grow up from a bottom origin, so the sill above the counter is a hard
  * ceiling — these guard the clearances that let the bag grow wide, not tall.
  */
+/**
+ * Standing room on the shop floor. Every customer used to be sent to the one counter
+ * spot, so a walk-in and a pickup waiting on a handoff drew inside each other — two
+ * heads on one silhouette, with their speech chips stacked and unreadable.
+ */
+describe("customer standing slots", () => {
+  const span = (index: number) => ({
+    left: customerSlotX(index) - PERSON_DISPLAY_W / 2,
+    right: customerSlotX(index) + PERSON_DISPLAY_W / 2,
+  });
+
+  it("puts the first arrival on the counter spot", () => {
+    expect(customerSlotX(0)).toBe(CUSTOMER_SPOT.x);
+  });
+
+  it("never lets two customers share floor space", () => {
+    // Nine is past anything the shop can produce — one walk-in is allowed at a time and
+    // pickups leave in PICKUP_HANDOFF_WAIT_MS — so this is the rule, not the live case.
+    const xs = Array.from({ length: 9 }, (_, i) => customerSlotX(i));
+    expect(new Set(xs).size).toBe(xs.length);
+    for (let a = 0; a < xs.length; a++) {
+      for (let b = a + 1; b < xs.length; b++) {
+        expect(Math.abs(xs[a]! - xs[b]!), `slots ${a} and ${b}`).toBeGreaterThanOrEqual(PERSON_DISPLAY_W);
+      }
+    }
+  });
+
+  it("queues back toward the door, so no slot is a longer walk than the counter", () => {
+    // Load-bearing, not cosmetic: the NPC key lead's cover loop only starts on a
+    // customer once they stop walking, and a shift's timing is tuned against that. A
+    // ladder that fanned the queue outward made one slot a longer walk than the old
+    // single spot and the counter started shedding people on a normal delivery run.
+    for (let i = 1; i < 9; i++) {
+      expect(customerSlotX(i), `slot ${i} is doorward of slot ${i - 1}`).toBeLessThan(customerSlotX(i - 1));
+      expect(Math.abs(customerSlotX(i) - DOOR.x)).toBeLessThan(Math.abs(customerSlotX(0) - DOOR.x));
+    }
+  });
+
+  it("alternates speech rows down the line", () => {
+    for (let i = 1; i < 9; i++) {
+      expect(customerBubbleY(i), `rows either side of slot ${i}`).not.toBe(customerBubbleY(i - 1));
+    }
+  });
+
+  it("keeps the rows on screen and clear of the counter", () => {
+    for (let i = 0; i < 9; i++) {
+      const y = customerBubbleY(i);
+      expect(y).toBeGreaterThan(COUNTER_FRONT);
+      // The chip is centred on this y and its box caps at 92 tall.
+      expect(y + 92 / 2).toBeLessThan(GAME_HEIGHT);
+    }
+  });
+
+  it("holds four customers inside the clear lobby", () => {
+    // Four is past the live maximum. The left bound is the sandwich board the bubbles
+    // already had to clear; the right is the counter spot itself, so it cannot move.
+    for (let i = 0; i < 4; i++) {
+      expect(span(i).left, `slot ${i} clears the sandwich board`).toBeGreaterThan(CUSTOMER_BUBBLE_MIN_X - PERSON_DISPLAY_W);
+      expect(span(i).right, `slot ${i} stays on screen`).toBeLessThan(GAME_WIDTH - 24);
+    }
+  });
+});
+
 describe("counter bags", () => {
   const bagTop = COUNTER_TOP - COUNTER_BAG_H;
   const span = (x: number) => ({ left: x - COUNTER_BAG_W / 2, right: x + COUNTER_BAG_W / 2 });

@@ -53,15 +53,16 @@ export const TRAFFIC_LANE_WIDTH = 72;
 export const TRAFFIC_BASE_SPEED = 115;
 export const TRAFFIC_SPEED_STEP = 22;
 
-/** Traffic pace trim layered on the base pace — 1.15 = 15% faster ambient cars. */
-export const TRAFFIC_SPEED_SCALE = 1.15;
+/** Traffic pace trim layered on the base pace — 1.2075 = 21% faster ambient cars (1.15 × 1.05). */
+export const TRAFFIC_SPEED_SCALE = 1.2075;
 
 /**
- * Extra room the van leaves behind the car it queues behind — 1.1 = 10% further back.
- * Layered on the {@link TRAFFIC_MIN_SEP} bands below; both stay inside
- * {@link TRAFFIC_LOOK_AHEAD} so the van still sees the lead car it is reacting to.
+ * Extra room the van leaves behind the car it queues behind — 1.21 = 21% further back
+ * (1.1 × 1.1). Layered on the {@link TRAFFIC_MIN_SEP} bands below; both stay inside
+ * {@link TRAFFIC_LOOK_AHEAD} so the van still sees the lead car it is reacting to. At 1.21
+ * the widest band, {@link VAN_MATCH_GAP}, sits at 159.7 against a 180 look-ahead.
  */
-export const VAN_FOLLOW_GAP_SCALE = 1.1;
+export const VAN_FOLLOW_GAP_SCALE = 1.21;
 
 /** Nose-to-tail: inside this gap the van eases to a crawl. */
 export const VAN_CRAWL_GAP = TRAFFIC_MIN_SEP * 0.92 * VAN_FOLLOW_GAP_SCALE;
@@ -75,6 +76,41 @@ export const VAN_MATCH_GAP = TRAFFIC_MIN_SEP * 1.2 * VAN_FOLLOW_GAP_SCALE;
  * Cars *behind* the van still use the plain {@link TRAFFIC_MIN_SEP}.
  */
 export const VAN_FOLLOW_MIN_SEP = TRAFFIC_MIN_SEP * VAN_FOLLOW_GAP_SCALE;
+
+/**
+ * How near perpendicular two headings must be to count as crossing paths rather than one
+ * following the other. The city is an orthogonal grid, so |cos Δ| is ~1 for a lead car in
+ * the same lane, ~1 for an oncoming car (negated) and ~0 for a crossing one; a threshold of
+ * 0.5 admits everything within 30° of a right angle and excludes both parallel cases.
+ */
+export const TRAFFIC_CROSS_DOT = 0.5;
+
+/** How far ahead a vehicle looks for a junction another vehicle is crossing. */
+export const TRAFFIC_CROSS_LOOK = 160;
+
+/** Once a crossing vehicle is this far past the junction it no longer holds anyone up. */
+export const TRAFFIC_CROSS_CLEAR = 40;
+
+/**
+ * Where a giving-way vehicle waits: far enough short of the junction that the vehicle
+ * crossing it still clears {@link TRAFFIC_MIN_SEP} at the moment it is on the junction.
+ */
+export const TRAFFIC_CROSS_STOP_GAP = TRAFFIC_MIN_SEP;
+
+/**
+ * Ceiling on how far back a wait may pin an ambient car. A car's position is derived from
+ * `gameMs`, so a hold is applied fresh each call as a retreat from where the car would
+ * otherwise be, and it snaps forward by that much when the junction clears. Capping the
+ * retreat keeps that catch-up no larger than the one the existing van hold already makes.
+ * Past the cap the car noses on and {@link TRAFFIC_MIN_SEP} is the backstop, as before.
+ */
+export const TRAFFIC_CROSS_MAX_HOLD = TRAFFIC_MIN_SEP;
+
+/** Van cruise fraction while it eases up to a junction it has to give way at. */
+export const VAN_YIELD_CREEP = 0.3;
+
+/** Inside this distance to the junction the van has stopped creeping and is holding. */
+export const VAN_YIELD_STOP_GAP = TRAFFIC_CROSS_STOP_GAP;
 
 /** Spawn density vs a full loop fill — 0.75 = 25% fewer cars on the road. */
 export const TRAFFIC_DENSITY = 0.75;
@@ -220,6 +256,34 @@ export function trafficCars(
     states.push(...picked);
   }
 
+  // Junction yield: where two paths cross, whoever is further from the crossing gives way
+  // and waits short of it instead of driving through the other's flank. Cars sharing a loop
+  // share one path, so they follow rather than cross — that is the separation pass below.
+  const poses = states.map((car) => {
+    const p = pointAlongLoop(car.loop.points, car.t);
+    return { x: p.x, y: p.y, heading: headingAlongLoop(car.loop.points, car.t) };
+  });
+  const junctionHold = states.map(() => 0);
+  for (let a = 0; a < states.length; a++) {
+    for (let b = 0; b < states.length; b++) {
+      if (a === b) continue;
+      const car = states[a]!;
+      const other = states[b]!;
+      if (car.loop === other.loop) continue;
+      const conflict = crossingConflict(poses[a]!, poses[b]!);
+      if (!conflict || !givesWay(conflict.self, conflict.other, car.id > other.id)) continue;
+      junctionHold[a] = Math.max(junctionHold[a]!, holdBackFor(conflict.self));
+    }
+  }
+  // Decided against the same snapshot for every car, so the outcome does not depend on the
+  // order the pairs happen to be visited in.
+  states.forEach((car, i) => {
+    const hold = junctionHold[i]!;
+    if (hold <= 0) return;
+    car.t = ((car.t - hold / Math.max(TILE, car.loop.length)) % 1 + 1) % 1;
+    car.speed = 0;
+  });
+
   // Car↔car separation.
   for (let pass = 0; pass < 12; pass++) {
     let moved = false;
@@ -254,10 +318,22 @@ export function trafficCars(
       const forward = cos * dx + sin * dy;
       const lateral = -sin * dx + cos * dy;
 
+      let hold = 0;
       if (gap < TRAFFIC_VAN_DETECT && Math.abs(lateral) < TRAFFIC_LANE_WIDTH * 1.35 && forward > 24) {
         // Van is ahead in this lane — hold back. A van approaching from behind must not stop us
         // (that caused mutual crawl when auto-drive matched speed 0).
-        const hold = Math.max(4, (TRAFFIC_MIN_SEP * 1.35 - Math.min(gap, TRAFFIC_MIN_SEP * 1.35)) + 8);
+        hold = Math.max(4, (TRAFFIC_MIN_SEP * 1.35 - Math.min(gap, TRAFFIC_MIN_SEP * 1.35)) + 8);
+      }
+
+      // Give way where the van's path crosses this lane, on the same nearest-goes rule cars
+      // use between themselves. Setting speed to 0 here is also what releases the van:
+      // driveSpeedForTraffic will not wait on a car that has already stopped for it.
+      const conflict = crossingConflict({ x: p.x, y: p.y, heading }, obstacle);
+      if (conflict && vanHasRightOfWay(conflict.other, conflict.self)) {
+        hold = Math.max(hold, holdBackFor(conflict.self));
+      }
+
+      if (hold > 0) {
         const step = hold / Math.max(TILE, car.loop.length);
         car.t = ((car.t - step) % 1 + 1) % 1;
         car.speed = 0;
@@ -303,7 +379,10 @@ export function leadTrafficSpeed(
   return lead ? lead.car.speed : null;
 }
 
-/** Cruise speed for the van: match a lead car, and ease off if nose-to-tail. */
+/**
+ * Cruise speed for the van: match a lead car, ease off if nose-to-tail, and give way to a
+ * car crossing the junction ahead rather than turning into its flank.
+ */
 export function driveSpeedForTraffic(
   player: TrafficObstacle,
   cars: readonly TrafficCarView[],
@@ -311,13 +390,108 @@ export function driveSpeedForTraffic(
   lookAhead = TRAFFIC_LOOK_AHEAD,
 ): number {
   const lead = findLeadCar(player, cars, lookAhead);
-  if (!lead) return cruise;
-  let speed: number;
-  if (lead.dist < VAN_CRAWL_GAP) speed = Math.min(cruise * 0.15, lead.car.speed * 0.4);
-  else if (lead.dist < VAN_MATCH_GAP) speed = Math.min(cruise, lead.car.speed);
-  else speed = Math.min(cruise, lead.car.speed + 20);
-  // Never softlock behind a fully stopped lead (yield-to-van zero).
-  return Math.max(speed, cruise * 0.2);
+  let speed = cruise;
+  if (lead) {
+    if (lead.dist < VAN_CRAWL_GAP) speed = Math.min(cruise * 0.15, lead.car.speed * 0.4);
+    else if (lead.dist < VAN_MATCH_GAP) speed = Math.min(cruise, lead.car.speed);
+    else speed = Math.min(cruise, lead.car.speed + 20);
+    // Never softlock behind a fully stopped lead (yield-to-van zero).
+    speed = Math.max(speed, cruise * 0.2);
+  }
+
+  // Ease up to the junction, hold at the stop line, then fall in behind. Unlike the lead-car
+  // bands this may reach a true zero, because a crawl into a car crossing your nose is still
+  // a collision — but only ever while a *moving* car owns the junction, which is what bounds
+  // the wait. See findCrossingCar for why the two sides can never both be waiting.
+  const crossing = findCrossingCar(player, cars, lookAhead);
+  if (crossing) {
+    speed = crossing.dist <= VAN_YIELD_STOP_GAP ? 0 : Math.min(speed, cruise * VAN_YIELD_CREEP);
+  }
+  return speed;
+}
+
+/** Signed distances from each vehicle to the point where their paths cross. */
+type CrossConflict = { self: number; other: number };
+
+/**
+ * Where two vehicles' paths cross, measured along each one's own heading, or null when they
+ * do not conflict. Positive means the crossing is still ahead of that vehicle.
+ *
+ * The city is an orthogonal grid, so a crossing pair is perpendicular and the intersection
+ * of their two rays reduces to one projection each. A conflict needs the crossing to be
+ * ahead of `self` and within reach, and `other` to be at the junction — not still a street
+ * away from it, and not already through it.
+ */
+function crossingConflict(self: TrafficObstacle, other: TrafficObstacle): CrossConflict | null {
+  const ux = Math.cos(self.heading);
+  const uy = Math.sin(self.heading);
+  const vx = Math.cos(other.heading);
+  const vy = Math.sin(other.heading);
+  if (Math.abs(ux * vx + uy * vy) >= TRAFFIC_CROSS_DOT) return null;
+  const dx = other.x - self.x;
+  const dy = other.y - self.y;
+  const selfToJunction = dx * ux + dy * uy;
+  const otherToJunction = -(dx * vx + dy * vy);
+  if (selfToJunction <= 0 || selfToJunction > TRAFFIC_CROSS_LOOK) return null;
+  if (otherToJunction <= -TRAFFIC_CROSS_CLEAR || otherToJunction > TRAFFIC_CROSS_LOOK) return null;
+  return { self: selfToJunction, other: otherToJunction };
+}
+
+/**
+ * Right of way: whoever is still furthest from the junction gives way. It is one strict
+ * comparison on one number, so of any pair exactly one side yields and the other keeps
+ * moving — a mutual wait is not a state this can produce. `tieBreak` settles an exact draw.
+ */
+function givesWay(selfToJunction: number, otherToJunction: number, tieBreak: boolean): boolean {
+  if (selfToJunction > otherToJunction) return true;
+  if (selfToJunction < otherToJunction) return false;
+  return tieBreak;
+}
+
+/**
+ * The same rule for a van/car pair, as one predicate both sides read: the car holds when this
+ * says the van goes, and the van holds when it says otherwise. Kept in one place because two
+ * separate comparisons could agree on every distance except an exact draw and leave an
+ * equidistant pair either both driving on or both waiting. Draws fall to the van — the player
+ * is never the side frozen by a coin flip.
+ */
+export function vanHasRightOfWay(vanToJunction: number, carToJunction: number): boolean {
+  return vanToJunction <= carToJunction;
+}
+
+/** How far short of a junction to wait, capped so the catch-up on release stays small. */
+function holdBackFor(selfToJunction: number): number {
+  const short = TRAFFIC_CROSS_STOP_GAP - selfToJunction;
+  if (short <= 0) return 0;
+  return Math.min(short, TRAFFIC_CROSS_MAX_HOLD);
+}
+
+/**
+ * The nearest junction ahead of the van that a moving car is crossing and owns.
+ *
+ * Stopped cars are skipped deliberately. A car that has stopped is not about to cross, and
+ * more to the point it may have stopped *for the van* — `trafficCars` zeroes the speed of
+ * every car it holds. Taking right of way over a stopped car is therefore the guarantee
+ * that the van and a car can never each be waiting on the other: whichever of them yields
+ * first stops, and stopping is exactly what frees the other to go.
+ */
+function findCrossingCar(
+  player: TrafficObstacle,
+  cars: readonly TrafficCarView[],
+  lookAhead: number,
+): { car: TrafficCarView; dist: number } | null {
+  let best: TrafficCarView | null = null;
+  let bestDist = Infinity;
+  for (const car of cars) {
+    if (car.speed <= 0) continue;
+    const conflict = crossingConflict(player, { x: car.x, y: car.y, heading: car.angle });
+    if (!conflict || conflict.self > lookAhead) continue;
+    if (vanHasRightOfWay(conflict.self, conflict.other)) continue;
+    if (conflict.self >= bestDist) continue;
+    best = car;
+    bestDist = conflict.self;
+  }
+  return best ? { car: best, dist: bestDist } : null;
 }
 
 function findLeadCar(

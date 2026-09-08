@@ -100,7 +100,7 @@ describe("doorstep prompt", () => {
   it("grows the prompt's box with its font, because fitTypeToBox only shrinks", () => {
     // The trap: raise the seed and leave the box, and the text renders at the old size
     // while the constant claims otherwise — a change that looks done and does nothing.
-    const box = between(src, "this.prompt = addUiText(", ".setOrigin(0.5, 1)", "prompt box");
+    const box = between(src, "this.prompt = addSignText(", ".setOrigin(0.5, 1)", "prompt box");
     const height = /maxHeight: (\d+)/.exec(box);
     if (!height) throw new Error("prompt maxHeight not found");
     expect(Number(height[1])).toBeGreaterThanOrEqual(90 * 1.25);

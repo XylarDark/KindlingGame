@@ -133,6 +133,18 @@ export function fitTypeToWidth(text: Phaser.GameObjects.Text, maxWidth: number, 
   return fitTypeToBox(text, maxWidth, undefined, minPx);
 }
 
+/**
+ * Move a boxed label's type step at runtime. `setFontSize` alone does not survive here:
+ * shrink-to-fit always restarts from the size the label was authored with, so the next
+ * refit — a viewport change is enough — would put the old step back. The seed lives in
+ * the stored box, and this is the only way to move it.
+ */
+export function retypeSize(text: Phaser.GameObjects.Text, px: number): Phaser.GameObjects.Text {
+  const box = (text.getData(TYPEKIT_BOX) as TypeBox | undefined) ?? {};
+  text.setData(TYPEKIT_BOX, { ...box, basePx: px } satisfies TypeBox);
+  return fitTypeToBox(text, box.maxWidth, box.maxHeight, box.minPx ?? MIN_FIT_PX);
+}
+
 /** Re-run shrink-to-fit after padding / color chrome changes. */
 export function refitType(text: Phaser.GameObjects.Text): Phaser.GameObjects.Text {
   refitStoredBox(text);
@@ -160,7 +172,6 @@ function bindPolish(text: Phaser.GameObjects.Text, scene: Phaser.Scene, explicit
 export interface TypeStyle {
   size?: string | number;
   color?: string;
-  backgroundColor?: string;
   align?: string;
   padding?: { x?: number; y?: number };
   fontStyle?: string;
@@ -190,7 +201,9 @@ function canvasStyle(options: TypeStyle): Phaser.Types.GameObjects.Text.TextStyl
     fontFamily: UI_FONT,
     fontSize,
     color: options.color ?? "#f4e8c1",
-    backgroundColor: options.backgroundColor,
+    // No `backgroundColor`: a text's own background is a flat rect that cannot carry a
+    // border, and every text box in this game is a sign plaque instead. Boxed copy goes
+    // through `addSignText`, which is why this option is not offered.
     align: options.align,
     padding: options.padding,
     fontStyle: options.fontStyle ?? "600",

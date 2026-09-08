@@ -6,6 +6,7 @@ import { beginPlay, shouldShowHowTo } from "../session";
 import { addHudButton, addPanel, HUD_BUTTON_MIN_H } from "../ui/chrome";
 import { HOWTO_HINT, HOWTO_STEPS, PAUSE_HINT, WELCOME_HINT, WELCOME_TITLE } from "../ui/copy";
 import { SIGN_FRAME_W, signPlaqueRings } from "../ui/signPlaque";
+import { addSignText } from "../ui/signText";
 import { addUiText } from "../ui/text";
 import { Color, Type } from "../ui/theme";
 import { fitTypeToWidth } from "../ui/typekit";
@@ -276,14 +277,11 @@ export class TitleScene extends Phaser.Scene {
       ease: "Sine.inOut",
     });
 
-    addUiText(this, GAME_WIDTH / 2, play.y + btnH + hintGap, HOWTO_HINT, {
+    addSignText(this, GAME_WIDTH / 2, play.y + btnH + hintGap, HOWTO_HINT, {
       size: Type.caption,
-      color: Color.inkHex,
-      backgroundColor: Color.creamHex,
       padding: { x: 16, y: 7 },
       fontStyle: "700",
       lineSpacing: 0,
-      strokeThickness: 0,
       maxWidth: 640,
       maxHeight: 32,
     })

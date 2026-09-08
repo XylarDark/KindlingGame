@@ -16,6 +16,7 @@ import {
 import { GameSim } from "./gameSim";
 import { tutorialHints } from "./tutorialHints";
 import { CITY, houseById, isEWStreet, isNSStreet, lotCenter, tileToWorld } from "../maps/cityT0";
+import { PERSON_DISPLAY_W } from "../maps/shopT0";
 import { angleDelta, driveLaneCell } from "./driveRoute";
 import { PARK_TURN_RATE } from "./constants";
 import {
@@ -141,6 +142,40 @@ describe("GameSim order loops", () => {
     sim.tick(PICKUP_HANDOFF_WAIT_MS + 16);
     expect(sim.orderById(order.id)?.status).toBe("failed");
     expect(sim.score).toBe(SCORE_FAIL);
+  });
+
+  /**
+   * The reported case: a walk-in and a pickup waiting on their handoff both stood on the
+   * one counter spot, drawing as a single silhouette with two heads. Both customer paths
+   * — `spawnOrder("inStore")` and the pickup that arrives on the shelf — have to take
+   * standing room of their own, and hold it while their neighbours come and go.
+   */
+  it("stands every customer on the floor in room of their own", () => {
+    const sim = GameSim.create({ seed: 3, autoSpawn: false });
+    const pickup = fillTicket(sim, "pickup");
+    sim.tick(PICKUP_ARRIVE_MS);
+    const walkIn = sim.spawnOrder("inStore");
+    // Both settled. Everyone comes in by the one door, so two customers still crossing
+    // the floor legitimately pass each other — it is where they *stand* that is at issue.
+    waitForCustomerAtCounter(sim, walkIn.id);
+    waitForCustomerAtCounter(sim, pickup.id);
+
+    const floor = sim.snapshot().customers;
+    expect(floor.map((c) => c.orderId).sort()).toEqual([pickup.id, walkIn.id].sort());
+    expect(new Set(floor.map((c) => c.slot)).size).toBe(2);
+    const [a, b] = floor.map((c) => c.x);
+    expect(Math.abs(a! - b!), "shoulder to shoulder at least").toBeGreaterThanOrEqual(PERSON_DISPLAY_W);
+
+    // Whoever is left keeps the spot they walked to: being served ahead of you must not
+    // drag you sideways across the lobby.
+    // Tapping the pickup by name, not `handoff` — that serves the walk-in first.
+    const kept = sim.snapshot().customers.find((c) => c.orderId === walkIn.id)!;
+    sim.shopClick({ type: "customer", orderId: pickup.id });
+    expect(sim.orderById(pickup.id)?.status).toBe("completed");
+    const after = sim.snapshot().customers;
+    expect(after).toHaveLength(1);
+    expect(after[0]!.slot).toBe(kept.slot);
+    expect(after[0]!.x).toBe(kept.x);
   });
 
   it("completes in-store serve and penalizes walkout", () => {

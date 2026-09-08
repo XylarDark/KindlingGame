@@ -10,7 +10,7 @@ import { GAME_WIDTH } from "../sim/constants";
 import { skyAt } from "../sim/dayNight";
 import type { SimSnapshot } from "../sim/gameSim";
 import { formatSlaClock, isSlaUrgent } from "../ui/copy";
-import { addUiText } from "../ui/text";
+import { addSignText, setSignAccent } from "../ui/signText";
 import { Color } from "../ui/theme";
 import { fitTypeToWidth } from "../ui/typekit";
 import { designSafeInset, readCssSafeArea, VIEWFIT_EVENT, viewFromScale } from "../ui/viewFit";
@@ -87,10 +87,8 @@ export class DoorScene extends Phaser.Scene {
     this.backdrop = this.add.graphics().setDepth(0);
     paintDoorstep(this.backdrop, 0, skyAt(0));
 
-    this.houseLabel = addUiText(this, DOORSTEP_DOOR_X, 56, "", {
+    this.houseLabel = addSignText(this, DOORSTEP_DOOR_X, 56, "", {
       size: DOOR_TITLE_PX,
-      color: Color.creamHex,
-      backgroundColor: Color.bannerInk,
       padding: { x: 20, y: 10 },
       fontStyle: "700",
       maxWidth: 900,
@@ -124,10 +122,8 @@ export class DoorScene extends Phaser.Scene {
 
     // Anchored over the customer's head rather than parked at a fixed y — the
     // instruction names them, so it should be pointing at them.
-    this.prompt = addUiText(this, CUSTOMER_X, 0, "", {
+    this.prompt = addSignText(this, CUSTOMER_X, 0, "", {
       size: DOOR_PROMPT_PX,
-      color: Color.inkHex,
-      backgroundColor: Color.creamHex,
       padding: { x: 20, y: 12 },
       align: "center",
       fontStyle: "600",
@@ -202,7 +198,9 @@ export class DoorScene extends Phaser.Scene {
       ? `${drop.customerName ?? "Customer"}  ·  ${houseLabel(drop.houseId)}${sla ? `  ·  ${sla}` : ""}${runNote(snap)}`
       : "";
     this.houseLabel.setText(title);
-    this.houseLabel.setColor(destOrder && isSlaUrgent(destOrder.slaRemainingMs) ? Color.dangerHex : Color.creamHex);
+    // The clock in this title is the urgent part, and it stays ink on white like every
+    // other box; the frame is what reddens when the SLA is running out.
+    setSignAccent(this.houseLabel, destOrder && isSlaUrgent(destOrder.slaRemainingMs) ? Color.danger : undefined);
     fitTypeToWidth(this.houseLabel, 900);
 
     const flash = doorFlashPhase(snap.gameMs);
