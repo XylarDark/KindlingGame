@@ -2,6 +2,8 @@
 
 Phaser 3 + TypeScript. Windows/PowerShell: `&&` is not a valid statement separator — use `;`.
 
+This file holds the operational protocol — the things that will waste your afternoon if you get them wrong. Supporting detail lives in three places: [`.cursor/rules/`](.cursor/rules/README.md) for engineering standards (`08-project-context.mdc` carries the stack, commands and layout), [`docs/KNOWN_ERRORS.md`](docs/KNOWN_ERRORS.md) for the full forensics on past failures, and [`docs/operational/automation-gaps.md`](docs/operational/automation-gaps.md) for limits that cannot be automated away.
+
 ## Screenshots: take your own lane, never the shared browser
 
 **Do not use the `cursor-ide-browser` tools when more than one agent may be running.** That browser is a single shared tab. Three agents reaching for it at once hung all three for 46 minutes with no error and no output — the failure is silent, so you will not be told it happened.
@@ -17,6 +19,8 @@ A lane number picks a dedicated debug port (`9400 + lane`) and its own Chrome pr
 
 Useful flags: `--url`, `--query`, `--size WxH`, `--wait ms`, `--no-click`, `--out`, `--name`. The game boots paused, so the script clicks the canvas centre to start play unless you pass `--no-click`.
 
+Why the shared browser cannot simply be fixed is recorded in [docs/operational/automation-gaps.md](docs/operational/automation-gaps.md); re-check it if the Cursor browser tools change.
+
 ## The dev server is shared — don't start a second one
 
 One vite serves everything on **port 5174**: `npx vite --host --port 5174 --strictPort`. Check `http://127.0.0.1:5174/` before assuming it's down. Prefer `127.0.0.1` over `localhost`, matching the other capture scripts. Note `npm run dev -- --port 5174` does **not** work: the script is `vite --host`, so npm folds the port into `--host` and Chrome tries to resolve a hostname of "5174".
@@ -30,6 +34,8 @@ This codebase has produced three separate bugs that all passed their own checks 
 - **A non-null assertion** (`settingsDim.input!.enabled`) hid the fact that `input` is null until `setInteractive()` is called. `tsc` passed; the HUD crashed on boot. Prefer the real API (`setInteractive` / `disableInteractive`) over asserting a nullable away.
 
 So: a green check is not evidence unless you know what it measured.
+
+Each of these is written up in full — symptom, cause, fix, prevention, commit — in [docs/KNOWN_ERRORS.md](docs/KNOWN_ERRORS.md). Read it before you touch an audit, a source-scanning test, or Phaser input wiring, and append an entry whenever you debug a non-obvious failure.
 
 ## Definition of done
 
