@@ -135,14 +135,22 @@ async function main(): Promise<void> {
     ],
     { stdio: "ignore" },
   );
-  await sleep(1000);
   try {
-    const list = (await fetch(`http://127.0.0.1:${PORT}/json/list`).then((r) => r.json())) as {
-      webSocketDebuggerUrl: string;
-      type: string;
-    }[];
-    const page = list.find((t) => t.type === "page");
-    if (!page) throw new Error(`no Chrome page target on lane ${LANE} (port ${PORT})`);
+    // Chrome's debug port is not up at any fixed delay -- with several lanes launching at
+    // once a single fetch after one second refuses the connection often enough to matter.
+    type Target = { webSocketDebuggerUrl: string; type: string };
+    let page: Target | undefined;
+    let lastErr = "";
+    for (let i = 0; i < 40 && !page; i += 1) {
+      await sleep(250);
+      try {
+        const list = (await fetch(`http://127.0.0.1:${PORT}/json/list`).then((r) => r.json())) as Target[];
+        page = list.find((t) => t.type === "page");
+      } catch (e) {
+        lastErr = e instanceof Error ? e.message : String(e);
+      }
+    }
+    if (!page) throw new Error(`no Chrome page target on lane ${LANE} (port ${PORT}) after 10s: ${lastErr}`);
     const cdp = new Cdp();
     await cdp.connect(page.webSocketDebuggerUrl);
     await cdp.send("Page.enable");
