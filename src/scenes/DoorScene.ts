@@ -34,6 +34,28 @@ const DOOR_CHIP_GAP = 20;
 /** Keep a wide chip on screen when the sprite it hangs off is near an edge. */
 const DOOR_CHIP_MARGIN = 24;
 
+/**
+ * Flash cadence for the next tap target, as `Math.sin(gameMs / DOOR_FLASH_RATE)` — a
+ * 2*PI*180 ~= 1131ms cycle. `gameMs` advances 1:1 with real milliseconds (`GameSim.tick`
+ * feeds Phaser's frame delta straight into `GameClock`), so this is a legible ~1.1s
+ * throb and not a strobe. Game time rather than wall time is deliberate: the flash then
+ * freezes with the sim when the game pauses instead of animating a frozen scene.
+ */
+const DOOR_FLASH_RATE = 180;
+/** Swell at the peak of the flash. Motion reads as "tap me" far better than colour alone. */
+const DOOR_FLASH_SWELL = 0.12;
+/**
+ * Trough brightness as a fraction of `Color.flash`, so the flash swings in *luminance*.
+ *
+ * Hue alone cannot carry this target. `Color.flash` is a near-white lime, and a Phaser
+ * tint multiplies, so laying it over the bag — which is already green — only nudges the
+ * saturation: sampling the framebuffer over the bag at both extremes of a white-to-flash
+ * blend moved the average by about five values per channel, which is invisible. Dimming
+ * to a fraction of the same colour keeps the lime identity at the peak while giving the
+ * eye the one thing it reliably notices at this sprite size.
+ */
+const DOOR_FLASH_DIM = 0.45;
+
 export class DoorScene extends Phaser.Scene {
   private backdrop!: Phaser.GameObjects.Graphics;
   private driver!: Phaser.GameObjects.Image;
@@ -202,7 +224,8 @@ export class DoorScene extends Phaser.Scene {
     this.houseLabel.setColor(destOrder && isSlaUrgent(destOrder.slaRemainingMs) ? Color.dangerHex : Color.creamHex);
     fitTypeToWidth(this.houseLabel, 900);
 
-    const pulse = 0.7 + 0.3 * (0.5 + 0.5 * Math.sin(snap.gameMs / 180));
+    const flash = doorFlashPhase(snap.gameMs);
+    const pulse = 0.7 + 0.3 * flash;
     const nextPhoto = drop.actionLabel === "PHOTO";
     const nextId = drop.actionLabel === "CHECK ID";
     const nextHand = drop.actionLabel === "HAND BAG";
@@ -227,11 +250,16 @@ export class DoorScene extends Phaser.Scene {
     this.bag.setVisible(true);
     this.bag.setDepth(nextHand || nextPhoto ? 12 : 6);
     if (nextHand || nextPhoto) {
-      this.bag.setAlpha(pulse);
-      this.bag.setTint(Color.flash);
+      // Alpha stays at 1. Dipping it to 0.7 made the bag semi-transparent against a busy
+      // door, which reads as unfinished art rather than as a call to action; the colour
+      // and the size carry the effect instead.
+      this.bag.setAlpha(1);
+      this.bag.setTint(doorFlashTint(flash));
+      this.bag.setScale(DOOR_BAG_SCALE * (1 + DOOR_FLASH_SWELL * flash));
     } else {
       this.bag.setAlpha(1);
       this.bag.clearTint();
+      this.bag.setScale(DOOR_BAG_SCALE);
     }
 
     if (nextAsk) {
@@ -267,6 +295,26 @@ export class DoorScene extends Phaser.Scene {
     this.bagCaption.setColor(Color.inkHex);
     this.placeChips();
   }
+}
+
+/**
+ * 0 at the trough of the flash, 1 at its peak.
+ * See {@link DOOR_FLASH_RATE} for why this is driven from game time.
+ */
+function doorFlashPhase(gameMs: number): number {
+  return 0.5 + 0.5 * Math.sin(gameMs / DOOR_FLASH_RATE);
+}
+
+/**
+ * Swing `Color.flash` between {@link DOOR_FLASH_DIM} and full brightness. The colour has
+ * to *move*: the previous effect held `Color.flash` constant while the target was live,
+ * so the bag read as a green bag rather than as a flashing one. Full strength lands
+ * exactly on the shared token at the peak, so the "next tap target" colour is unchanged.
+ */
+function doorFlashTint(phase: number): number {
+  const level = DOOR_FLASH_DIM + (1 - DOOR_FLASH_DIM) * phase;
+  const channel = (shift: number): number => Math.round(((Color.flash >> shift) & 0xff) * level) << shift;
+  return (channel(16) | channel(8) | channel(0)) >>> 0;
 }
 
 function bagDriverPos(floorY: number): { x: number; y: number } {
