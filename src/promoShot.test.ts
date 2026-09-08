@@ -36,17 +36,26 @@ describe("applyPromoShot", () => {
   });
 
   it("stops the van mid-approach when ?drivems lands inside the run", () => {
-    // house-2 joins its approach run at 6450ms and parks at 7550ms, so a still seeded
-    // inside that window must catch the van still driving, not already in the stall.
-    vi.stubGlobal("location", { search: "?shot=drive&house=2&drivems=6900" });
-    const moving = GameSim.create({ seed: 5, autoSpawn: false });
-    applyPromoShot(moving);
-    expect(moving.snapshot().autoDriving).toBe(true);
+    // Swept rather than pinned to one instant. How long house-2's run takes moves with the
+    // route and the pace of the traffic the van waits for — it has already moved from
+    // 7550ms to 6450ms across two changes — and a hard-coded window turns that into a
+    // failure about nothing. What the query has to do is unchanged: land inside the run and
+    // the van is still driving, land past it and the van is in the stall.
+    const driving = [2_000, 3_000, 4_000, 5_000, 6_000, 7_000, 8_000, 9_000].map((ms) => {
+      vi.stubGlobal("location", { search: `?shot=drive&house=2&drivems=${ms}` });
+      const sim = GameSim.create({ seed: 5, autoSpawn: false });
+      applyPromoShot(sim);
+      return { ms, moving: sim.snapshot().autoDriving };
+    });
 
-    vi.stubGlobal("location", { search: "?shot=drive&house=2&drivems=9000" });
-    const parked = GameSim.create({ seed: 5, autoSpawn: false });
-    applyPromoShot(parked);
-    expect(parked.snapshot().autoDriving).toBe(false);
+    expect(driving.filter((d) => d.moving).length, "no seed caught the van driving").toBeGreaterThan(0);
+    expect(driving.filter((d) => !d.moving).length, "no seed reached the stall").toBeGreaterThan(0);
+    // And it parks once and stays parked: driving then parked, never back again.
+    const parkedFrom = driving.findIndex((d) => !d.moving);
+    expect(
+      driving.slice(parkedFrom).every((d) => !d.moving),
+      `van resumed driving after parking: ${driving.map((d) => `${d.ms}:${d.moving ? "drive" : "park"}`).join(" ")}`,
+    ).toBe(true);
   });
 
   it("keeps the promo still's own seven seconds when ?drivems is absent or unusable", () => {

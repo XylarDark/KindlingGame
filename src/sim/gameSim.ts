@@ -37,10 +37,11 @@ import { destLabel, isOpen, needsFetch, tabletQueue, type Order, type OrderType 
 import {
   advanceRoute,
   angleDelta,
+  approachToStall,
   kerbParkHeading,
   lerpAngle,
   normalizeAngle,
-  routeToStall,
+  stallRestHeading,
   routeWorldPoints,
   snapPathToDriveLanes,
   type StallApproach,
@@ -1092,10 +1093,9 @@ export class GameSim {
     const target = tileToWorld(stall.stop);
     const from = worldToTile(this.vehicle.x, this.vehicle.y);
     const start = CITY.walkable[from.r]?.[from.c] ? from : CITY.shopSpawn;
-    // A stall is approached on the kerb it fronts. Only if no lawful approach exists does
-    // this fall back to the shortest path, which is the old cut-across-the-oncoming-lane
-    // behaviour — kept as a last resort so an unreachable stall still gets a route.
-    const cells = routeToStall(CITY.walkable, start, stall) ?? findPath(CITY.walkable, start, stall.stop);
+    // Along the kerb the stall fronts, or across the road where that saves a block — the van
+    // waits for a gap in the lane it cuts through rather than clipping through it.
+    const cells = approachToStall(CITY.walkable, start, stall);
     this.driveRoute = routeWorldPoints(snapPathToDriveLanes(cells));
     // Final point is the parking stall center — no lane offset.
     if (this.driveRoute.length > 0) {
@@ -1162,10 +1162,16 @@ export class GameSim {
       y: this.vehicle.y,
       heading: this.vehicleHeading,
     });
+    // The waypoint the van is steering for, not the way it is pointing: a turn across the
+    // road has to be seen before it is begun, and mid-turn the nose is still in the old lane.
+    const aim = this.driveRoute[this.driveWaypoint];
+    const intent = aim ? Math.atan2(aim.y - this.vehicle.y, aim.x - this.vehicle.x) : undefined;
     const speed = driveSpeedForTraffic(
       { x: this.vehicle.x, y: this.vehicle.y, heading: this.vehicleHeading },
       traffic,
       VEHICLE_SPEED,
+      undefined,
+      intent,
     );
     const step = advanceRoute(this.vehicle.x, this.vehicle.y, this.driveWaypoint, this.driveRoute, speed, dt);
     this.vehicle.x = clamp(step.x, TILE, MAP_PX_W - TILE);
@@ -1191,7 +1197,12 @@ export class GameSim {
     const stopId = this.nextStopId();
     if (stopId) {
       const house = houseById(stopId);
-      if (house) this.parkHeading = kerbParkHeading(house.stop, house.street);
+      if (house) {
+        this.parkHeading = stallRestHeading(
+          this.vehicleHeading,
+          kerbParkHeading(house.stop, house.street),
+        );
+      }
       const order = this.runOrderIds
         .map((id) => this.orderById(id))
         .find((o) => o?.destinationId === stopId && o.status === "onRun");
@@ -1201,7 +1212,7 @@ export class GameSim {
       return;
     }
     if (dist(this.vehicle.x, this.vehicle.y, target.x, target.y) <= HANDOFF_RADIUS) {
-      this.parkHeading = SHOP_PARK_HEADING;
+      this.parkHeading = stallRestHeading(this.vehicleHeading, SHOP_PARK_HEADING);
       this.toast = "Parked at Kindling. Tap the shop to return.";
     }
   }

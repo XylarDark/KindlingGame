@@ -18,6 +18,7 @@ import {
   VAN_FOLLOW_MIN_SEP,
   VAN_MATCH_GAP,
   VAN_YIELD_CREEP,
+  VAN_CROSS_ACCEPT_GAP,
   VAN_YIELD_STOP_GAP,
   vanHasRightOfWay,
   buildTrafficLoops,
@@ -33,7 +34,7 @@ function loopOf(id: string): string {
 }
 
 describe("city traffic", () => {
-  it("keeps every traffic loop strictly in-lane — no diagonal corner cuts", () => {
+  it("keeps every traffic loop strictly in-lane â€” no diagonal corner cuts", () => {
     const loops = buildTrafficLoops(TRAFFIC_LOOP_MAX);
     expect(loops.length).toBeGreaterThan(0);
     for (const loop of loops) {
@@ -88,7 +89,7 @@ describe("city traffic", () => {
         }
       }
     }
-    // The sweep is worthless unless it actually put crossing traffic in front of itself —
+    // The sweep is worthless unless it actually put crossing traffic in front of itself â€”
     // a silent zero here would let the separation rule pass by never being exercised.
     expect(carSamples, "no cars sampled").toBeGreaterThan(1_000);
     expect(crossLoopPairs, "no cars from different loops ever met").toBeGreaterThan(0);
@@ -112,7 +113,7 @@ describe("city traffic", () => {
     }
   });
 
-  it("keeps one-way lane directions — no oncoming traffic in the same corridor", () => {
+  it("keeps one-way lane directions â€” no oncoming traffic in the same corridor", () => {
     const loops = buildTrafficLoops(TRAFFIC_LOOP_MAX);
     expect(loops.length).toBeGreaterThan(0);
     for (const t of [0, 3_000, 9_000, 18_000]) {
@@ -241,7 +242,7 @@ describe("city traffic", () => {
     expect(VAN_MATCH_GAP).toBeCloseTo(TRAFFIC_MIN_SEP * 1.2 * VAN_FOLLOW_GAP_SCALE, 6);
     // A lead car must still be detectable at the widest band, or the van would never react.
     expect(VAN_MATCH_GAP).toBeLessThan(TRAFFIC_LOOK_AHEAD);
-    // Crawl band clears the hard car↔car separation so the van settles behind, not inside it.
+    // Crawl band clears the hard carâ†”car separation so the van settles behind, not inside it.
     expect(VAN_CRAWL_GAP).toBeGreaterThanOrEqual(TRAFFIC_MIN_SEP);
 
     const cruise = 380;
@@ -290,7 +291,7 @@ describe("city traffic", () => {
     const atLine = driveSpeedForTraffic(player, [{ ...crosser, x: VAN_YIELD_STOP_GAP - 10 }], cruise);
     expect(atLine).toBe(0);
 
-    // Past the junction it is no longer in the way — fall in behind and go.
+    // Past the junction it is no longer in the way â€” fall in behind and go.
     expect(driveSpeedForTraffic(player, [{ ...crosser, y: 90 }], cruise)).toBe(cruise);
     // And a junction beyond the crossing look-ahead is not yet the van's problem.
     expect(driveSpeedForTraffic(player, [{ ...crosser, x: TRAFFIC_CROSS_LOOK + 20 }], cruise)).toBe(cruise);
@@ -306,13 +307,41 @@ describe("city traffic", () => {
     // The van is nearer the junction (100) than the car is (140), so the van goes first.
     expect(driveSpeedForTraffic(player, [{ ...crosser, y: -140 }], cruise)).toBe(cruise);
 
-    // A stopped car is not crossing anything, and it may well have stopped *for the van* —
+    // A stopped car is not crossing anything, and it may well have stopped *for the van* â€”
     // trafficCars zeroes the speed of every car it holds. Taking right of way over a stopped
     // vehicle is what makes it impossible for the two of them to sit waiting on each other.
     expect(driveSpeedForTraffic(player, [{ ...crosser, speed: 0 }], cruise)).toBe(cruise);
 
     // An oncoming car is head-on, not crossing, and must not be mistaken for one.
     expect(driveSpeedForTraffic(player, [{ ...crosser, angle: Math.PI }], cruise)).toBe(cruise);
+  });
+
+  it("waits for a gap before cutting across a lane to park", () => {
+    const cruise = 380;
+    const van = { x: 0, y: 0, heading: 0 };
+    const north = -Math.PI / 2;
+    // Westbound car in the lane the van has to cross to reach a stall on the far kerb.
+    const oncoming = { id: "on", x: 60, y: -100, key: "tex-car", depth: 5, angle: Math.PI, speed: 140 };
+
+    // Going on the nose alone, this car is invisible: it is oncoming rather than crossing,
+    // and it sits outside the lane the lead-car check looks down. That is the hole this
+    // fills â€” the van used to read the road as clear and turn into its flank.
+    expect(leadTrafficSpeed(van, [oncoming]), "not a lead car").toBeNull();
+    expect(driveSpeedForTraffic(van, [oncoming], cruise), "nose only: clear road").toBe(cruise);
+
+    // Steering across it, the lane is occupied â€” hold.
+    expect(driveSpeedForTraffic(van, [oncoming], cruise, undefined, north), "turning across it").toBe(0);
+
+    // A car that has left enough room does not hold the van up: this is gap acceptance,
+    // not right of way. The van is nearer the crossing point in every one of these cases.
+    const clear = { ...oncoming, x: VAN_CROSS_ACCEPT_GAP + 40 };
+    expect(driveSpeedForTraffic(van, [clear], cruise, undefined, north), "gap is there").toBe(cruise);
+
+    // Nor does a stopped one â€” it may well be stopped for the van, as at a junction.
+    expect(driveSpeedForTraffic(van, [{ ...oncoming, speed: 0 }], cruise, undefined, north)).toBe(cruise);
+
+    // And a steering correction inside the lane is not a crossing.
+    expect(driveSpeedForTraffic(van, [oncoming], cruise, undefined, 0.2), "not a turn").toBe(cruise);
   });
 
   it("settles an equidistant junction on one side only", () => {
@@ -363,45 +392,51 @@ describe("city traffic", () => {
       );
       expect(blocker, `t=${t} held with nothing crossing`).toBeTruthy();
     }
-    // It engages on the real map — not just against hand-placed cars.
+    // It engages on the real map â€” not just against hand-placed cars.
     expect(held, "never gave way anywhere on a two-minute sweep").toBeGreaterThan(0);
     // And it lets go. A wait is bounded by the crossing car clearing the junction, and the
     // cars are a pure function of the clock, so no wait can outlive one vehicle passing.
     expect(longestHold * 100, "van held at a junction far too long").toBeLessThan(3_000);
-    expect(held, "held for most of the sweep — that is a stall, not a yield").toBeLessThan(samples * 0.5);
+    expect(held, "held for most of the sweep â€” that is a stall, not a yield").toBeLessThan(samples * 0.5);
   });
 
   it("holds ambient cars short of a junction another car is crossing", () => {
     const loops = buildTrafficLoops(TRAFFIC_LOOP_MAX);
-    // loop-2 runs north up x=2460 into the eastbound corridor at y=300; at this moment it
-    // has to wait for the traffic already coming along it.
-    const cars = trafficCars(50_200, loops);
-    expect(cars.length).toBeGreaterThan(0);
-    const waiting = cars.find((c) => c.id === "loop-2-0")!;
-    expect(waiting, "loop-2-0 missing — the loop set moved").toBeTruthy();
-    expect(waiting.speed, "loop-2-0 should be giving way here").toBe(0);
-
-    // It is waiting for something real: a moving car on another loop, crossing its path.
-    const crossing = cars.filter(
-      (c) =>
-        c.id !== waiting.id &&
-        loopOf(c.id) !== loopOf(waiting.id) &&
-        c.speed > 0 &&
-        Math.abs(
-          Math.cos(c.angle) * Math.cos(waiting.angle) + Math.sin(c.angle) * Math.sin(waiting.angle),
-        ) < TRAFFIC_CROSS_DOT &&
-        Math.hypot(c.x - waiting.x, c.y - waiting.y) < TRAFFIC_CROSS_LOOK * 2,
-    );
-    expect(crossing.length, "nothing to give way to").toBeGreaterThan(0);
-    // Waiting means waiting short of it, not nosing in and being shoved back out.
-    for (const other of crossing) {
-      expect(Math.hypot(other.x - waiting.x, other.y - waiting.y)).toBeGreaterThanOrEqual(
-        TRAFFIC_MIN_SEP - 1,
-      );
+    // Swept rather than pinned to one timestamp. Which car is mid-junction at a given
+    // instant moves with every pace trim, so a hard-coded moment turns a tuning change
+    // into a failure about nothing â€” this asserts the rule instead: with no van on the
+    // map, a stopped car is a car giving way, and it must have something to give way to.
+    let held = 0;
+    for (let t = 0; t <= 60_000; t += 100) {
+      const cars = trafficCars(t, loops);
+      expect(cars.length, `t=${t}`).toBeGreaterThan(0);
+      for (const waiting of cars) {
+        if (waiting.speed !== 0) continue;
+        const crossing = cars.filter(
+          (c) =>
+            c.id !== waiting.id &&
+            loopOf(c.id) !== loopOf(waiting.id) &&
+            c.speed > 0 &&
+            Math.abs(
+              Math.cos(c.angle) * Math.cos(waiting.angle) + Math.sin(c.angle) * Math.sin(waiting.angle),
+            ) < TRAFFIC_CROSS_DOT &&
+            Math.hypot(c.x - waiting.x, c.y - waiting.y) < TRAFFIC_CROSS_LOOK * 2,
+        );
+        expect(crossing.length, `t=${t} ${waiting.id} stopped with nothing crossing`).toBeGreaterThan(0);
+        held += 1;
+        // Waiting means waiting short of it, not nosing in and being shoved back out.
+        for (const other of crossing) {
+          expect(
+            Math.hypot(other.x - waiting.x, other.y - waiting.y),
+            `t=${t} ${waiting.id} vs ${other.id}`,
+          ).toBeGreaterThanOrEqual(TRAFFIC_MIN_SEP - 1);
+        }
+      }
     }
+    expect(held, "no ambient car gave way anywhere in a minute of traffic").toBeGreaterThan(0);
   });
 
-  it("bounds every junction wait — traffic gives way without gridlocking", () => {
+  it("bounds every junction wait â€” traffic gives way without gridlocking", () => {
     const loops = buildTrafficLoops(TRAFFIC_LOOP_MAX);
     const run = new Map<string, number>();
     const longest = new Map<string, number>();
@@ -426,10 +461,10 @@ describe("city traffic", () => {
       }
       if (stopped === cars.length) frozenFrames += 1;
     }
-    // Cars do give way — if this is zero the rule is inert and everything below is vacuous.
+    // Cars do give way â€” if this is zero the rule is inert and everything below is vacuous.
     expect(everHeld, "no car ever gave way in three minutes").toBeGreaterThan(0);
     // Nobody is ever waiting on somebody who is waiting on them.
-    expect(frozenFrames, "every car stopped at once — that is a deadlock").toBe(0);
+    expect(frozenFrames, "every car stopped at once â€” that is a deadlock").toBe(0);
     for (const [id, frames] of longest) {
       expect(frames * 100, `${id} stuck at a junction`).toBeLessThan(3_000);
     }
@@ -441,7 +476,7 @@ describe("city traffic", () => {
     const van = { x: 2340, y: 200, heading: Math.PI / 2 };
     for (const t of [0, 600, 14_200, 50_200, 98_765]) {
       // Both callers ask independently for the same timestamp and must be handed the same
-      // cars, whichever order they ask in — the yield rules must not have left state behind.
+      // cars, whichever order they ask in â€” the yield rules must not have left state behind.
       const plain = trafficCars(t, loops);
       const withVan = trafficCars(t, loops, van);
       expect(trafficCars(t, loops), `t=${t} plain`).toEqual(plain);
@@ -452,7 +487,10 @@ describe("city traffic", () => {
   });
 
   it("compounds the pace and follow-gap trims without outrunning the look-ahead", () => {
-    expect(TRAFFIC_SPEED_SCALE).toBeCloseTo(1.15 * 1.05, 6);
+    // Each trim was asked for against the pace at the time, so they compound rather than
+    // replace: 15%, then 5%, then 20%. Pinning the product is what stops a later "+x%"
+    // being applied to the base by mistake.
+    expect(TRAFFIC_SPEED_SCALE).toBeCloseTo(1.15 * 1.05 * 1.2, 6);
     expect(VAN_FOLLOW_GAP_SCALE).toBeCloseTo(1.1 * 1.1, 6);
     // The invariant the follow-gap comment claims: the widest band the van reacts at has to
     // stay inside the distance it can see, or it would queue behind a car it cannot detect.

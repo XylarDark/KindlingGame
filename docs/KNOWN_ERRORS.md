@@ -230,6 +230,30 @@ the thing it described.
 - **Fix:** scan line-wise and exclude lines mentioning `cameras.main`, then assert on the offending lines themselves so a failure names what it found rather than only that something matched.
 - **Prevention:** a banned-substring test is only as good as the namespace it assumes. Before trusting one, inject a violation and confirm it fails *for the right reason*, which is what showed this guard was firing on the sky and not on a chip.
 
+### A test for a new traffic rule passed with the rule switched off
+
+- **Date:** 2026-09-08
+- **Symptom:** an end-to-end test asserted the van "crossed without ever waiting" was false — that it did wait — and passed. Disabling the new crossing rule entirely, by dropping the steering intent at the call site, left it passing unchanged.
+- **Cause:** the van waits for several reasons. The wait being measured came from the junction give-way rule that already existed, on the way to the stall, not from the crossing rule under test. Any "did it hesitate" assertion is satisfied by whichever brake happens to be nearest.
+- **Fix:** split the claim by what can actually observe it. The rule itself is asserted directly on `driveSpeedForTraffic` with a car placed in the lane being crossed; the end-to-end test drops the hesitation claim and pins what only it can see — the van still arrives, and never comes within a car length of one. The wiring that connects them, the intent argument, is pinned by a source scan, because removing it changes no test's outcome.
+- **Prevention:** after writing a test for a new rule, turn the rule off and watch it fail. A behavioural assertion that survives its own subject being deleted is measuring the rest of the system.
+
+### A van that had finished its delivery looked like a van stuck in traffic
+
+- **Date:** 2026-09-08
+- **Symptom:** a capture of the new crossing behaviour showed the van stationary in 28 of 32 samples, moving 160px in 6 seconds against a cruise of 380px/s, with the stop pin still reading 50m away. It read as a traffic deadlock in the new rules.
+- **Cause:** the van had arrived and parked. `?drivems` seeds the drive before the capture harness has finished waiting for the scene, which costs about three seconds of game time, so the still landed past the arrival rather than inside the run. The 50m was the distance to the *house door*, which is never zero at the kerb, and a parked van is stationary by definition.
+- **Fix:** read the state rather than inferring it from movement. Patching the scene's day/night hook, which is already handed the live snapshot every frame, gives `autoDriving`, the dropoff phase and `gameMs` directly — and it showed the van parked `atCurb` with the clock running at 1.04× real time.
+- **Prevention:** in this game, "not moving" has several innocent causes and the harness's own latency shifts every seeded moment later than asked. Confirm the sim's state before reading a still as a stall; a deterministic sweep in Node is the cheaper answer to "does it ever get stuck" anyway.
+
+### `Set-Content -Encoding UTF8` silently replaced every em dash in a source file
+
+- **Date:** 2026-09-08
+- **Symptom:** after a one-line import edit through `(Get-Content $p) -replace ... | Set-Content $p -Encoding UTF8`, an unrelated test failed on a copy assertion: `expected 'Buried â€” 9 jobs...' to match /Buried — \d+ jobs/`. `git diff` reported 147 changed lines in a file that had one line edited.
+- **Cause:** Windows PowerShell 5's `Get-Content` decodes a BOM-less UTF-8 file as ANSI, so every multi-byte character was already mangled before `Set-Content` wrote it back as UTF-8. The same pipeline also prepends a BOM, which is how two test files ended up starting with `EF BB BF`.
+- **Fix:** revert the file with `git checkout --` and redo the edit with the editing tools instead of a shell pipeline. Where the shell is unavoidable, `[System.IO.File]::ReadAllText`/`WriteAllText` with `UTF8Encoding($false)` round-trips without either fault.
+- **Prevention:** never pipe source through `Get-Content`/`Set-Content` on this machine — this codebase is full of em dashes in comments and copy, and the damage is invisible in a diff summary and in the edited line itself. `git diff --stat` after a scripted edit is the cheap check: a one-line edit that reports a hundred changed lines has re-encoded the file.
+
 ---
 
 ## Related

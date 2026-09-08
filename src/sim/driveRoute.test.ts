@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { CITY, isEWStreet, isNSStreet } from "../maps/cityT0";
+import { findPath } from "./pathfinding";
 import {
   advanceRoute,
   angleDelta,
   driveLaneCell,
+  approachToStall,
+  CROSS_SAVING_CELLS,
   kerbApproachRun,
   kerbParkHeading,
+  stallRestHeading,
   laneWorldPoint,
   routeToStall,
   lerpAngle,
@@ -275,5 +279,69 @@ describe("parked heading", () => {
     expect(angleDelta(3.0, -3.0)).toBeCloseTo(2 * Math.PI - 6.0);
     expect(angleDelta(-3.0, 3.0)).toBeCloseTo(6.0 - 2 * Math.PI);
     expect(angleDelta(0, Math.PI / 2)).toBeCloseTo(Math.PI / 2);
+  });
+});
+
+describe("crossing the road to a stall", () => {
+  const stalls = CITY.houses.map((h) => ({
+    id: h.id,
+    stall: { stop: h.stop, street: h.street, parking: h.parking },
+  }));
+
+  it("crosses only where it saves a block, and keeps the kerb approach otherwise", () => {
+    let crossed = 0;
+    let kept = 0;
+    for (const { id, stall } of stalls) {
+      const lawful = routeToStall(CITY.walkable, CITY.shopSpawn, stall);
+      const direct = findPath(CITY.walkable, CITY.shopSpawn, stall.stop);
+      const chosen = approachToStall(CITY.walkable, CITY.shopSpawn, stall);
+      expect(chosen.length, `${id} has no route at all`).toBeGreaterThan(0);
+      expect(chosen[chosen.length - 1], `${id} does not end on the stall`).toEqual(stall.stop);
+
+      const saving = (lawful?.length ?? 0) - direct.length;
+      if (lawful !== null && saving >= CROSS_SAVING_CELLS) {
+        expect(chosen.length, `${id} saves ${saving} cells and should cross`).toBe(direct.length);
+        crossed += 1;
+      } else if (lawful !== null) {
+        expect(chosen.length, `${id} saves only ${saving} cells and should keep the kerb`).toBe(lawful.length);
+        kept += 1;
+      }
+    }
+    // Both branches are live on this city: a rule where every lot went one way would make
+    // the threshold decorative, and neither count can be read off the other.
+    expect(crossed, "no lot crosses — the threshold is doing nothing").toBeGreaterThan(0);
+    expect(kept, "every lot crosses — the kerb approach is dead code").toBeGreaterThan(0);
+  });
+
+  it("falls back to the direct line for a stall with no lawful approach", () => {
+    // The old behaviour, still the last resort: a stall that cannot be reached along its
+    // own frontage gets a route anyway rather than none.
+    const walled = CITY.walkable.map((row) => [...row]);
+    const stall = stalls[0]!.stall;
+    for (const cell of kerbApproachRun(stall.stop, stall.street)) walled[cell.r]![cell.c] = false;
+    expect(routeToStall(walled, CITY.shopSpawn, stall), "still lawful — pick a tighter block").toBeNull();
+    const chosen = approachToStall(walled, CITY.shopSpawn, stall);
+    expect(chosen[chosen.length - 1]).toEqual(stall.stop);
+  });
+
+  it("rests nose-in when it crossed, and squares to the kerb when it came up the frontage", () => {
+    const EAST = 0;
+    const WEST = Math.PI;
+    const SOUTH = Math.PI / 2;
+
+    // Came up the frontage: the arrival is the tail of the turn into the pad, so square up.
+    expect(stallRestHeading(SOUTH - 0.6, SOUTH), "40 degrees off the kerb").toBeCloseTo(SOUTH);
+    expect(stallRestHeading(EAST, EAST), "already square").toBeCloseTo(EAST);
+
+    // Crossed the road: lining up would be a half-circle on the pad, so hold the nose.
+    expect(Math.abs(angleDelta(stallRestHeading(EAST, WEST), EAST)), "head-on to the kerb").toBeCloseTo(0);
+    expect(Math.abs(angleDelta(stallRestHeading(SOUTH, EAST), SOUTH)), "square across it").toBeCloseTo(0);
+
+    // A heading caught mid-turn still comes to rest on an axis, not skewed across the pad.
+    for (const arrival of [SOUTH + 0.3, WEST - 0.4, -1.2]) {
+      const rest = stallRestHeading(arrival, EAST);
+      const onAxis = Math.min(Math.abs(Math.sin(rest)), Math.abs(Math.cos(rest)));
+      expect(onAxis, `arrival ${arrival.toFixed(1)} left the van skewed`).toBeCloseTo(0);
+    }
   });
 });

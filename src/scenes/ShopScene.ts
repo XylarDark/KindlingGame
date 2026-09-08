@@ -9,7 +9,13 @@ import {
   BAG_STACK,
   CUSTOMER_SPOT,
   CUSTOMER_BUBBLE_MIN_X,
-  customerBubbleY,
+  CUSTOMER_SPEECH_BASE,
+  CUSTOMER_SPEECH_GAP,
+  CUSTOMER_SPEECH_H,
+  CUSTOMER_SPEECH_MAX_W,
+  customerSlotX,
+  customerSpeechShows,
+  customerSpeechWidth,
   DRIVER,
   KEYLEAD,
   PICKUP_BAG,
@@ -41,6 +47,7 @@ import { readyTally, receiptSlips } from "../ui/receipts";
 import { wireHover } from "../ui/chrome";
 import { addSignText, setSignAccent } from "../ui/signText";
 import { addUiText } from "../ui/text";
+import { fitTypeToBox } from "../ui/typekit";
 import { Color, Type } from "../ui/theme";
 import { HUD_SCORE_PX } from "./HudScene";
 
@@ -69,17 +76,36 @@ const MSG_PX = "19.2px";
 const MSG_PAD = { x: 12, y: 7 };
 
 /**
- * Speech sits on the customer it belongs to, which is only unambiguous now that each
- * customer has standing room of their own: with everyone on one spot a chip had to be
- * offset clear of the pile, and it named nobody. Two rows of them keep neighbours apart
- * (see `customerBubbleY`), so all this has left to do is keep the chip on screen and
- * off the lobby sandwich board.
+ * Speech sits centred on the customer it belongs to, which is what makes it theirs
+ * without needing a tail drawn to them. Height is handled by the speech band and width by
+ * `customerSpeechWidth`, so all this has left to do is keep the chip on screen and off
+ * the lobby sandwich board.
  */
 function bubbleX(customerX: number, bubbleW: number): number {
   const half = bubbleW / 2;
   const min = CUSTOMER_BUBBLE_MIN_X + half;
   const max = GAME_WIDTH - 24 - half;
   return Phaser.Math.Clamp(customerX, Math.min(min, max), max);
+}
+
+/**
+ * Hang a chip in the air above a model's head, measuring off what it rendered rather than
+ * off a guessed centre offset. A box grows downward from its middle as its copy wraps, so
+ * a fixed offset that clears a one-line callout puts a two-line one across the face — the
+ * key lead's hat is where that showed.
+ */
+function hangAboveHead(chip: Phaser.GameObjects.Text, model: Phaser.GameObjects.Image): void {
+  chip.setY(model.getBounds().y - CUSTOMER_SPEECH_GAP - chip.height / 2);
+}
+
+/** Distance to the nearest other customer on the floor, or Infinity when alone. */
+function nearestCustomerGap(customer: CustomerView, list: readonly CustomerView[]): number {
+  let nearest = Infinity;
+  for (const other of list) {
+    if (other.orderId === customer.orderId) continue;
+    nearest = Math.min(nearest, Math.abs(other.x - customer.x));
+  }
+  return nearest;
 }
 
 export class ShopScene extends Phaser.Scene {
@@ -234,7 +260,8 @@ export class ShopScene extends Phaser.Scene {
     this.keyLeadBubble
       .setVisible(!!callout && snap.keyLead.visible && snap.playerRole === "keyLead")
       .setText(callout ?? "")
-      .setPosition(snap.keyLead.x - 168, snap.keyLead.y - PERSON_DISPLAY_H - 24);
+      .setX(snap.keyLead.x - 168);
+    hangAboveHead(this.keyLeadBubble, this.keyLead);
 
     const next = nextShopHint(snap);
     const pulse = 0.62 + 0.38 * (0.5 + 0.5 * Math.sin(snap.gameMs / 420));
@@ -244,6 +271,7 @@ export class ShopScene extends Phaser.Scene {
     const driverLine = highlightGo ? (snap.driverLine ?? readyLine) : null;
     this.driverBubble.setVisible(!!driverLine && snap.playerRole === "keyLead").setText(driverLine ?? "");
     this.driverBubble.setAlpha(1);
+    hangAboveHead(this.driverBubble, this.driver);
     this.driver.setAlpha(highlightGo ? pulse : 1);
     this.driver.setTint(highlightGo ? Color.flash : 0xffffff);
     if (this.driver.input) this.driver.input.enabled = highlightGo;
@@ -425,13 +453,13 @@ export class ShopScene extends Phaser.Scene {
         sprite.on("pointerdown", () => getSim().shopClick({ type: "customer", orderId: customer.orderId }));
         wireHover(sprite);
         this.customers.set(customer.orderId, sprite);
-        const bubble = addSignText(this, bubbleX(customer.x, 0), customerBubbleY(customer.slot), "", {
+        const bubble = addSignText(this, bubbleX(customer.x, 0), CUSTOMER_SPEECH_BASE, "", {
           size: MSG_PX,
           padding: MSG_PAD,
           align: "center",
           fontStyle: "600",
-          maxWidth: 328,
-          maxHeight: 92,
+          maxWidth: CUSTOMER_SPEECH_MAX_W,
+          maxHeight: CUSTOMER_SPEECH_H,
         })
           .setOrigin(0.5)
           .setDepth(7);
@@ -443,8 +471,14 @@ export class ShopScene extends Phaser.Scene {
       sprite.setTint(focus ? Color.flash : 0xffffff);
       const bubble = this.bubbles.get(customer.orderId);
       if (bubble) {
+        // Width is set from the room this customer actually has, so the box has to be
+        // refitted before it is measured — the copy reflows into whatever it is given.
+        const gap = nearestCustomerGap(customer, list);
         bubble.setText(customer.bubble).setAlpha(1);
-        bubble.setPosition(bubbleX(customer.x, bubble.width), customerBubbleY(customer.slot));
+        fitTypeToBox(bubble, customerSpeechWidth(gap), CUSTOMER_SPEECH_H);
+        const settled = Math.abs(customer.x - customerSlotX(customer.slot)) < 1;
+        bubble.setVisible(customerSpeechShows(settled, gap));
+        bubble.setPosition(bubbleX(customer.x, bubble.width), CUSTOMER_SPEECH_BASE - bubble.height / 2);
       }
       // The customer to serve next is named by their frame, not by a different chip:
       // every box in the game is ink on white now, so state lives in the ring.

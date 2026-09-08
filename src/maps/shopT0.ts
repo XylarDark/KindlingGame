@@ -105,18 +105,43 @@ export const BENCH = {
   x: BENCH_LEFT + Math.floor(BENCH_W / 2),
   y: COUNTER_TOP + Math.floor((COUNTER_FRONT - COUNTER_TOP) / 2),
 };
+/**
+ * Air under the counter lip that belongs to customer speech, and nothing else.
+ *
+ * Chips used to hang at the middle of the customer they belonged to, which reads as a
+ * sticker across the model rather than as speech. There was nowhere else for them to go:
+ * the lobby is 250px deep, a standing person draws {@link PERSON_DISPLAY_H}, and the
+ * counter face above is already carrying the shop sign and the HUD readouts. So the queue
+ * stands a band lower and the air above their hair is reserved. Cropping the lobby at the
+ * chest is the perspective the cutaway already implies — these people are nearer the
+ * camera than the staff behind the counter, and their feet were off-frame before this.
+ *
+ * Sized off a two-line chip at the message step plus its padding, measured at 66px.
+ */
+export const CUSTOMER_SPEECH_H = 66;
+/** Daylight between the bottom of a chip and the hair beneath it. */
+export const CUSTOMER_SPEECH_GAP = 10;
+/**
+ * The line every chip hangs from: its **bottom** edge, not its middle. A box grows
+ * downward from its centre as copy wraps, so anchoring the centre is what let a two-line
+ * callout reach a face that a one-liner cleared.
+ */
+export const CUSTOMER_SPEECH_BASE = COUNTER_FRONT + 2 + CUSTOMER_SPEECH_H;
+/** Feet on the lobby boards; hair clears the speech band above it. */
+export const CUSTOMER_SPOT = {
+  x: COUNTER_MID,
+  y: CUSTOMER_SPEECH_BASE + CUSTOMER_SPEECH_GAP + PERSON_DISPLAY_H,
+};
+/** Bubbles must clear the lobby sandwich board on the far left. */
+export const CUSTOMER_BUBBLE_MIN_X = 300;
+
 export const DOOR_W = 200;
 export const DOOR_H = 372;
 /** Street door sat in the old bay; shifted left 5%, then nudged back toward the counter. */
 export const DOOR = {
   x: Math.floor(DOOR_W / 2 + (COUNTER_LEFT_PREV - DOOR_W) / 2) - SCREEN_5 + 36,
-  y: COUNTER_FRONT + PERSON_DISPLAY_H + 2,
+  y: CUSTOMER_SPOT.y,
 };
-/** Feet on the lobby boards; head stays just below the counter front. */
-export const CUSTOMER_SPOT = { x: COUNTER_MID, y: COUNTER_FRONT + PERSON_DISPLAY_H + 2 };
-/** Bubbles must clear the lobby sandwich board on the far left. */
-export const CUSTOMER_BUBBLE_MIN_X = 300;
-export const CUSTOMER_BUBBLE_Y = COUNTER_FRONT + 96;
 
 /**
  * Standing room per customer. People bake 192 wide and draw at {@link PEOPLE_SCALE},
@@ -141,16 +166,39 @@ export function customerSlotX(index: number): number {
   return CUSTOMER_SPOT.x - index * CUSTOMER_SLOT_PITCH;
 }
 
-/**
- * Speech alternates between two rows down the queue, so a chip only ever shares a row
- * with the customer two places along and cannot run into its neighbour's however wide
- * the copy gets. The gap clears the bubble box's own 92px cap, so it holds for the
- * tallest chip the lobby can produce and not just the one-liners.
- */
-export const CUSTOMER_BUBBLE_ROW_GAP = 100;
+/** Daylight left between one chip and the next. */
+export const CUSTOMER_SPEECH_PAD = 8;
+/** Widest a chip draws when the floor is quiet enough to give it the room. */
+export const CUSTOMER_SPEECH_MAX_W = 328;
+/** What a chip gets when the neighbouring slot is taken: the pitch, less the daylight. */
+export const CUSTOMER_SPEECH_MIN_W = CUSTOMER_SLOT_PITCH - CUSTOMER_SPEECH_PAD;
 
-export function customerBubbleY(index: number): number {
-  return CUSTOMER_BUBBLE_Y + (index % 2) * CUSTOMER_BUBBLE_ROW_GAP;
+/**
+ * How wide a chip may draw, given the distance to the nearest other customer on the floor.
+ *
+ * Every chip shares one row, so width is the only thing keeping two of them apart, and a
+ * chip centred on its owner cannot reach a neighbour's while it stays inside the gap
+ * between them. Reading the room off the live distance rather than off the slot pitch is
+ * what lets a lone customer have the whole box for their order and a full floor tighten
+ * up: the copy shrinks to fit rather than being clipped.
+ */
+export function customerSpeechWidth(nearestGap: number): number {
+  if (!Number.isFinite(nearestGap)) return CUSTOMER_SPEECH_MAX_W;
+  const room = nearestGap - CUSTOMER_SPEECH_PAD;
+  return Math.max(CUSTOMER_SPEECH_MIN_W, Math.min(CUSTOMER_SPEECH_MAX_W, room));
+}
+
+/**
+ * Whether a chip shows at all.
+ *
+ * Width alone keeps chips apart once everyone is standing on a slot, because the slots are
+ * a pitch apart and {@link CUSTOMER_SPEECH_MIN_W} fits inside that. It cannot hold for
+ * someone still crossing the floor, who passes within a body's width of every customer
+ * already served. Their speech waits until they have found their spot instead of sliding
+ * under a neighbour's — the arrival toast already says they are on their way in.
+ */
+export function customerSpeechShows(settled: boolean, nearestGap: number): boolean {
+  return settled || nearestGap >= CUSTOMER_SLOT_PITCH;
 }
 
 export const TV_COUNT = 3;

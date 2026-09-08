@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   CALL_CONNECT_MS,
@@ -17,7 +18,7 @@ import { GameSim } from "./gameSim";
 import { tutorialHints } from "./tutorialHints";
 import { CITY, houseById, isEWStreet, isNSStreet, lotCenter, tileToWorld } from "../maps/cityT0";
 import { PERSON_DISPLAY_W } from "../maps/shopT0";
-import { angleDelta, driveLaneCell } from "./driveRoute";
+import { angleDelta, driveLaneCell, kerbParkHeading } from "./driveRoute";
 import { PARK_TURN_RATE } from "./constants";
 import {
   TRAFFIC_LANE_WIDTH,
@@ -618,6 +619,12 @@ describe("GameSim order loops", () => {
    * would have passed on a broken city, which is why this drives every lot instead of a
    * sample; a ceiling on the turn then catches the whole class without knowing which lot
    * broke.
+   *
+   * What keeps the turn small is no longer only the lawful approach. Four lots — house-2,
+   * house-6, house-10 and house-13 — now cross the road when it saves a block, and a van
+   * that crossed rests nose-in instead of pivoting into line with the kerb (see
+   * `stallRestHeading`). Both routes are therefore under this ceiling, and it is still the
+   * same fault being watched for: a van that ends up sideways in the stall.
    */
   it("arrives square enough to park at every lot in the city", () => {
     const ARRIVAL_TURN_MAX_DEG = 55;
@@ -645,17 +652,15 @@ describe("GameSim order loops", () => {
   });
 
   it("eases the last turn into the stall over several ticks", () => {
-    const house = CITY.houses.find((h) => h.street.c === h.stop.c)!;
+    // Driven in rather than dropped on the pad. The turn only exists for a van that came up
+    // the frontage and swung into the stall, and how far off the rest heading it arrives is
+    // exactly what decides whether it squares up at all — a teleported van arrives on
+    // whatever heading it left the shop with, which is not the case under test.
     const sim = GameSim.create({ seed: 5, autoSpawn: false });
-    fillTicket(sim, "delivery", { destinationId: house.id });
+    fillTicket(sim, "delivery", { destinationId: "house-3" });
     sim.hitTheRoad();
-    const before = sim.snapshot().vehicle.heading;
-
-    // Drop the van straight onto the pad so the only thing left to do is square up.
-    const pad = tileToWorld(house.stop);
-    sim.setVehiclePosition(pad.x, pad.y);
-    sim.tick(16);
-    expect(sim.snapshot().autoDriving).toBe(false);
+    for (let i = 0; i < 2_000 && sim.snapshot().autoDriving; i++) sim.tick(50);
+    expect(sim.snapshot().autoDriving, "never arrived").toBe(false);
     const onArrival = sim.snapshot().vehicle.heading;
 
     let settledAfter = 0;
@@ -666,11 +671,13 @@ describe("GameSim order loops", () => {
       if (Math.abs(angleDelta(heading, next)) > 1e-9) settledAfter = i + 1;
       heading = next;
     }
-    // A real turn happened, it took time, and it came to rest exactly on the kerb heading.
-    expect(Math.abs(angleDelta(before, heading)), "nothing to turn — pick another lot").toBeGreaterThan(1);
-    expect(Math.abs(angleDelta(onArrival, heading)), "snapped on the arrival tick").toBeGreaterThan(0.5);
-    expect(settledAfter, "did not settle").toBeGreaterThan(1);
-    expect(Math.abs(Math.sin(heading))).toBeCloseTo(0);
+
+    // A real turn happened, it took time, and it came to rest on the kerb lane's heading.
+    const house = houseById("house-3")!;
+    const kerb = kerbParkHeading(house.stop, house.street);
+    expect(Math.abs(angleDelta(onArrival, heading)), "nothing to turn — pick another lot").toBeGreaterThan(0.3);
+    expect(settledAfter, "snapped instead of easing").toBeGreaterThan(1);
+    expect(angleDelta(heading, kerb), "came to rest off the kerb").toBeCloseTo(0);
   });
 
   it("queues behind traffic at the follow gap and still reaches the stop", () => {
@@ -708,6 +715,71 @@ describe("GameSim order loops", () => {
       expect(tightest, `phase ${phaseMs} nose-to-tail`).toBeGreaterThanOrEqual(TRAFFIC_MIN_SEP - 1);
       expect(tightest, `phase ${phaseMs} never closed up`).toBeLessThan(VAN_MATCH_GAP + 24);
     }
+  });
+
+  /**
+   * The delivery end of the crossing rule. house-10 and house-13 both cross the road to
+   * their stall (see `approachToStall`), so their last move takes the van through a lane it
+   * does not travel — the one place a delivery meets traffic side-on. Phase 12250 was
+   * measured to make the van wait at a junction on the way; phase 0 runs clear. Waiting is
+   * asserted where it belongs, on the rule itself in traffic.test.ts, because a wait here
+   * lasts a tick or two and a creep still counts as movement. What this pins is the pair of
+   * things the route change could break: the van still arrives, and it does not pass
+   * through a car on its way across.
+   */
+  it("crosses the road to a stall without driving through the traffic on it", () => {
+    let metTrafficSideOn = 0;
+    for (const [houseId, phaseMs] of [
+      ["house-13", 0],
+      ["house-10", 12_250],
+    ] as const) {
+      const sim = GameSim.create({ seed: 5, autoSpawn: false });
+      fillTicket(sim, "delivery", { destinationId: houseId });
+      sim.hitTheRoad();
+      sim.clock.gameMs = phaseMs;
+
+      let tightest = Infinity;
+      let crossed = false;
+      for (let i = 0; i < 1_200 && sim.snapshot().autoDriving; i++) {
+        sim.tick(50);
+        const v = sim.snapshot().vehicle;
+        for (const car of trafficCars(sim.clock.gameMs, cityTrafficLoops(), v)) {
+          tightest = Math.min(tightest, Math.hypot(car.x - v.x, car.y - v.y));
+          // Side-on to a car in a lane: the geometry the kerb approach used to rule out.
+          const cos = Math.cos(v.heading);
+          const sin = Math.sin(v.heading);
+          const along = Math.abs(cos * Math.cos(car.angle) + sin * Math.sin(car.angle));
+          if (along < 0.35 && Math.hypot(car.x - v.x, car.y - v.y) < TRAFFIC_LOOK_AHEAD) crossed = true;
+        }
+      }
+
+      const label = `${houseId} phase ${phaseMs}`;
+      expect(sim.snapshot().autoDriving, `${label} never parked`).toBe(false);
+      expect(tightest, `${label} drove through a car`).toBeGreaterThanOrEqual(TRAFFIC_MIN_SEP - 1);
+      if (crossed) metTrafficSideOn += 1;
+    }
+    // One of the two has to actually meet traffic side-on, or the separation figure above is
+    // measured against an empty road and would pass however badly the van crossed.
+    expect(metTrafficSideOn, "neither run met a car side-on — the case went untested").toBeGreaterThan(0);
+  });
+
+  it("steers the traffic rules with the waypoint it is turning toward", () => {
+    // Wiring, not geometry: the lane a turn crosses is only visible from the heading the van
+    // is steering at, and mid-turn its nose is still in the lane it is leaving. Drop the
+    // argument and every rule still passes while the van turns across traffic blind, so the
+    // call itself is what has to be pinned. The rule it feeds is covered in traffic.test.ts.
+    const src = readFileSync(new URL("./gameSim.ts", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+    // Markers checked before slicing: a scan that quietly matches nothing passes for the
+    // wrong reason, and this repo has been caught by exactly that.
+    const from = src.indexOf("private tickAutoDrive(");
+    const to = src.indexOf("private parkAt(");
+    expect(from, "tickAutoDrive not found").toBeGreaterThan(-1);
+    expect(to, "parkAt not found").toBeGreaterThan(from);
+    const auto = src.slice(from, to);
+    expect(auto, "no waypoint read").toMatch(/this\.driveRoute\[this\.driveWaypoint\]/);
+    expect(auto, "no intent derived from it").toMatch(/Math\.atan2\(aim\.y - this\.vehicle\.y/);
+    const call = auto.slice(auto.indexOf("driveSpeedForTraffic("));
+    expect(call.slice(0, call.indexOf(");")), "intent not passed through").toMatch(/intent,/);
   });
 
   it("lets the driver leave with packed deliveries while more tickets wait", () => {

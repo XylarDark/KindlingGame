@@ -333,6 +333,37 @@ export function kerbParkHeading(stop: TileCell, street: TileCell): number {
   return Math.atan2(dc, -dr);
 }
 
+/**
+ * How far off the kerb lane an arrival can be and still be worth squaring up to it.
+ *
+ * A van coming up the frontage turns into the pad across that lane, so it always arrives
+ * some way off the rest heading — measured across all fourteen lots, never worse than 48°.
+ * Anything wider means the van came off the far lane instead, and pivoting it into line
+ * would be a spin on the spot rather than the last of a turn.
+ */
+export const STALL_SQUARE_UP_MAX = (55 * Math.PI) / 180;
+
+/**
+ * The heading the van comes to rest at in a stall.
+ *
+ * Lining up with the kerb lane is right when the van arrived along that kerb — it is how a
+ * vehicle sits at a frontage, and it is what every lot did while the kerb approach was the
+ * only route in. It is wrong when the van crossed the road to get there: squaring up would
+ * mean pivoting most of a half-circle on the spot, which reads as a glitch rather than as
+ * parking. A van that pulled across the road rests nose-in, the way it came, snapped to the
+ * axis so a heading caught mid-turn does not leave it skewed across the pad.
+ *
+ * Note what this does *not* do, and what {@link kerbParkHeading} rules out above: it never
+ * picks *which* way along the kerb to face from the approach, because both directions are a
+ * quarter turn from the last leg in and choosing between them that way is a coin toss. The
+ * kerb heading is still the lane's own, and this only decides whether to take it at all.
+ */
+export function stallRestHeading(arrival: number, kerb: number): number {
+  if (Math.abs(angleDelta(arrival, kerb)) <= STALL_SQUARE_UP_MAX) return kerb;
+  const quarter = Math.PI / 2;
+  return normalizeAngle(Math.round(normalizeAngle(arrival) / quarter) * quarter);
+}
+
 /** North-American right-hand lane tile for a grid step (2-tile streets). */
 export function driveLaneCell(cell: TileCell, next: TileCell): TileCell {
   const dc = Math.sign(next.c - cell.c);
@@ -442,6 +473,37 @@ export function routeToStall(
   if (lead.length === 0) return null;
   const cells = [...lead, ...run.slice(1), stall.stop];
   return cells.filter((cell, i) => i === 0 || !sameCell(cell, cells[i - 1]!));
+}
+
+/**
+ * Cells the direct line has to save before the van crosses the road to a stall instead of
+ * driving round to come up the kerb it fronts. Roughly a block: below that the lawful
+ * approach is worth keeping, because arriving along the frontage parks tidily and needs no
+ * gap in the oncoming lane at all.
+ */
+export const CROSS_SAVING_CELLS = 6;
+
+/**
+ * How the van will actually reach a stall: along the kerb it fronts, unless crossing the
+ * road saves enough to be worth it.
+ *
+ * The kerb approach used to be the only answer, with the direct line kept as a fallback for
+ * stalls that had no lawful approach at all. That made every far-side delivery drive most of
+ * a block to come back on itself. Crossing is a real option now that the van waits for a gap
+ * in the lane it cuts through (see `driveSpeedForTraffic`), so the choice is a cost one, and
+ * `snapPathToDriveLanes` still holds the crossing route to legal lanes right up to the last
+ * cell — the crossing happens at the stall, not for the length of the run.
+ */
+export function approachToStall(
+  walkable: boolean[][],
+  start: TileCell,
+  stall: StallApproach,
+): TileCell[] {
+  const lawful = routeToStall(walkable, start, stall);
+  const direct = findPath(walkable, start, stall.stop);
+  if (lawful === null || lawful.length === 0) return direct;
+  if (direct.length === 0) return lawful;
+  return direct.length + CROSS_SAVING_CELLS <= lawful.length ? direct : lawful;
 }
 
 /** Snap a path onto legal one-way curb lanes (keeps the final cell as-is for parking). */

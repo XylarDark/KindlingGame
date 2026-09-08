@@ -53,8 +53,11 @@ export const TRAFFIC_LANE_WIDTH = 72;
 export const TRAFFIC_BASE_SPEED = 115;
 export const TRAFFIC_SPEED_STEP = 22;
 
-/** Traffic pace trim layered on the base pace — 1.2075 = 21% faster ambient cars (1.15 × 1.05). */
-export const TRAFFIC_SPEED_SCALE = 1.2075;
+/**
+ * Traffic pace trim layered on the base pace — 1.449 = 45% faster ambient cars, compounded
+ * from the trims as they were asked for: 1.15, then 5% (1.2075), then 20%.
+ */
+export const TRAFFIC_SPEED_SCALE = 1.449;
 
 /**
  * Extra room the van leaves behind the car it queues behind — 1.21 = 21% further back
@@ -108,6 +111,23 @@ export const TRAFFIC_CROSS_MAX_HOLD = TRAFFIC_MIN_SEP;
 
 /** Van cruise fraction while it eases up to a junction it has to give way at. */
 export const VAN_YIELD_CREEP = 0.3;
+
+/**
+ * How far the van's steering has to diverge from where its nose points before the turn
+ * counts as cutting across a lane rather than following one.
+ */
+export const VAN_CROSS_INTENT_MIN = Math.PI / 4;
+
+/**
+ * Room an approaching car must leave before the van will cut across its lane to park.
+ *
+ * This is gap acceptance, deliberately not the nearest-goes rule the junctions use. Turning
+ * across a lane puts the van *nearer* the point it is crossing than the car coming down
+ * that lane, so right of way would wave it straight into the flank it is trying to avoid.
+ * What matters is whether the lane is clear enough to traverse: one car length, against a
+ * crossing that takes the van a fraction of a second at cruise.
+ */
+export const VAN_CROSS_ACCEPT_GAP = TRAFFIC_MIN_SEP;
 
 /** Inside this distance to the junction the van has stopped creeping and is holding. */
 export const VAN_YIELD_STOP_GAP = TRAFFIC_CROSS_STOP_GAP;
@@ -380,14 +400,19 @@ export function leadTrafficSpeed(
 }
 
 /**
- * Cruise speed for the van: match a lead car, ease off if nose-to-tail, and give way to a
- * car crossing the junction ahead rather than turning into its flank.
+ * Cruise speed for the van: match a lead car, ease off if nose-to-tail, give way to a car
+ * crossing the junction ahead, and wait for a gap before cutting across a lane.
+ *
+ * `intent` is the heading the van is steering toward, which is not the one it is pointing
+ * along while it turns. Pass it and the van sees the lane it is about to enter; leave it out
+ * and the van reacts only to what is in front of its nose.
  */
 export function driveSpeedForTraffic(
   player: TrafficObstacle,
   cars: readonly TrafficCarView[],
   cruise: number,
   lookAhead = TRAFFIC_LOOK_AHEAD,
+  intent?: number,
 ): number {
   const lead = findLeadCar(player, cars, lookAhead);
   let speed = cruise;
@@ -407,7 +432,48 @@ export function driveSpeedForTraffic(
   if (crossing) {
     speed = crossing.dist <= VAN_YIELD_STOP_GAP ? 0 : Math.min(speed, cruise * VAN_YIELD_CREEP);
   }
+
+  // Cutting across a lane to reach a stall is a crossing the van's nose cannot see: while it
+  // is still pointing along its own lane, the lane it is about to cross carries *oncoming*
+  // traffic, and oncoming is deliberately not a crossing conflict. Looking down the heading
+  // it is steering toward is what puts that lane in view before the van is in it.
+  if (intent !== undefined && Math.abs(headingGap(intent, player.heading)) > VAN_CROSS_INTENT_MIN) {
+    const lane = findLaneToCross(player, intent, cars, lookAhead);
+    if (lane) speed = lane.dist <= VAN_YIELD_STOP_GAP ? 0 : Math.min(speed, cruise * VAN_YIELD_CREEP);
+  }
   return speed;
+}
+
+/** Signed smallest angle from `b` to `a`, in (-π, π]. */
+function headingGap(a: number, b: number): number {
+  return Math.atan2(Math.sin(a - b), Math.cos(a - b));
+}
+
+/**
+ * The nearest car whose lane the van's next turn would cut through, and which has not left
+ * enough room to take the gap. Stopped cars are skipped for the same reason as at junctions:
+ * a car that has stopped may well have stopped for the van, and waiting on it would be the
+ * one way the two of them could sit there forever.
+ */
+function findLaneToCross(
+  player: TrafficObstacle,
+  intent: number,
+  cars: readonly TrafficCarView[],
+  lookAhead: number,
+): { car: TrafficCarView; dist: number } | null {
+  const steering = { x: player.x, y: player.y, heading: intent };
+  let best: TrafficCarView | null = null;
+  let bestDist = Infinity;
+  for (const car of cars) {
+    if (car.speed <= 0) continue;
+    const conflict = crossingConflict(steering, { x: car.x, y: car.y, heading: car.angle });
+    if (!conflict || conflict.self > lookAhead) continue;
+    if (conflict.other > VAN_CROSS_ACCEPT_GAP) continue;
+    if (conflict.self >= bestDist) continue;
+    best = car;
+    bestDist = conflict.self;
+  }
+  return best ? { car: best, dist: bestDist } : null;
 }
 
 /** Signed distances from each vehicle to the point where their paths cross. */
