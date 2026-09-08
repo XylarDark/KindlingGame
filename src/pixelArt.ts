@@ -11,6 +11,7 @@ import {
   PORTRAIT_W,
 } from "./art/peopleSize";
 import {
+  ACCENTS,
   crewFace,
   CUSTOMER_LOOKS,
   customerPortraitKey,
@@ -18,6 +19,9 @@ import {
   customerTextureKey,
   customerTextureKeys,
   OUTFITS,
+  type Build,
+  type Footwear,
+  type Garment,
   type HairStyle,
   type Look,
 } from "./art/people";
@@ -81,9 +85,27 @@ export function generateTextures(scene: Phaser.Scene, crewSeed: number = Date.no
   bag(scene);
   counterBags(scene);
   vehicle(scene);
-  // Crew wear Kindling colours, so only the face is cast; customers vary head to shirt.
-  const driverLook: Look = { ...crewFace(crewSeed, "driver"), ...OUTFITS.rust };
-  const keyLeadLook: Look = { ...crewFace(crewSeed, "keylead"), ...OUTFITS.leaf };
+  // Crew wear Kindling colours, so the uniform is fixed and only the person is cast:
+  // build, complexion, hair, facial hair, small metal. The key lead works a counter, so
+  // their uniform is an apron over a cream under-shirt — the KINDLING mark stamps onto
+  // the bib. The driver is a tee under the cap, which the seated pose also draws.
+  const crewDress = { legs: "trousers", pattern: "solid", footwear: "boot", presents: "andro" } as const;
+  const driverLook: Look = {
+    ...crewFace(crewSeed, "driver"),
+    ...OUTFITS.rust,
+    ...crewDress,
+    garment: "tee",
+    inner: ACCENTS.cream,
+    accent: ACCENTS.charcoal,
+  };
+  const keyLeadLook: Look = {
+    ...crewFace(crewSeed, "keylead"),
+    ...OUTFITS.leaf,
+    ...crewDress,
+    garment: "apron",
+    inner: ACCENTS.cream,
+    accent: ACCENTS.brass,
+  };
   person(scene, "tex-keylead", "keylead", keyLeadLook);
   person(scene, "tex-driver", "driver", driverLook);
   CUSTOMER_LOOKS.forEach((look, i) => {
@@ -654,7 +676,16 @@ function drawHands(g: G, leftX: number, rightX: number, y: number, skin: number,
   pcells(g, rightX + 1, y + 1, 1, 1, skin);
 }
 
-function drawShoes(g: G, lx: number, rx: number, y: number, w: number): void {
+function drawShoes(g: G, lx: number, rx: number, y: number, w: number, footwear: Footwear = "boot"): void {
+  if (footwear === "flat") {
+    // Lower and narrower than a boot: one row of sole, a slim upper, no cuff.
+    pcells(g, lx, y + 1, w, 1, Pal.shoe);
+    pcells(g, rx, y + 1, w, 1, Pal.shoe);
+    pcells(g, lx + 1, y, w - 1, 1, Pal.shoe);
+    pcells(g, rx, y, w - 1, 1, Pal.shoe);
+    pcells(g, lx + 1, y, w - 2, 1, Pal.hairBlackLite);
+    return;
+  }
   pcells(g, lx, y, w, 2, Pal.shoe);
   pcells(g, rx, y, w, 2, Pal.shoe);
   pcells(g, lx, y, w - 1, 1, Pal.hairBlackLite);
@@ -666,29 +697,369 @@ function drawPants(g: G, lx: number, rx: number, y: number, w: number, h: number
   pcells(g, rx, y, w, h, Pal.pantDark);
 }
 
-function drawCollar(g: G, kit: Kit, look: Look, dy: number): void {
-  pcells(g, 10, 17 + dy, 4, 3, look.skinDark);
-  pcells(g, 11, 17 + dy, 2, 1, look.skin);
-  if (kit === "keylead") {
-    pcells(g, 7, 19 + dy, 10, 2, Pal.cream);
-    pcells(g, 8, 19 + dy, 8, 1, Pal.creamSoft);
-    pcells(g, 11, 20 + dy, 2, 1, look.shirtDark);
-  } else {
-    pcells(g, 8, 19 + dy, 8, 2, look.shirtDark);
-    pcells(g, 9, 19 + dy, 6, 1, look.shirt);
+/**
+ * Where this person's body sits on the 24-cell grid. Build changes the shoulder and
+ * waist line, which is the largest shape on the sprite and so the cue that survives
+ * being 24 logical pixels tall. `wide` is the key lead, who is drawn a little broader
+ * because they stand behind a counter facing the player.
+ */
+interface Frame {
+  torsoX: number;
+  torsoW: number;
+  waistX: number;
+  waistW: number;
+  armL: number;
+  armR: number;
+  armW: number;
+  legL: number;
+  legR: number;
+  legW: number;
+  shoeL: number;
+  shoeR: number;
+  shoeW: number;
+}
+
+function frameFor(build: Build, wide: boolean): Frame {
+  const grow = wide ? 2 : 0;
+  const shape =
+    build === "slim"
+      ? { x: 7, w: 10, wx: 8, ww: 8 }
+      : build === "broad"
+        ? { x: 5, w: 14, wx: 5, ww: 14 }
+        : { x: 6, w: 12, wx: 7, ww: 10 };
+  const heavy = build === "broad";
+  return {
+    torsoX: shape.x - grow,
+    torsoW: shape.w + grow * 2,
+    waistX: shape.wx - grow,
+    waistW: shape.ww + grow * 2,
+    armL: shape.x - grow - 3,
+    armR: shape.x + shape.w + grow,
+    armW: 3,
+    legL: heavy ? 7 : 8,
+    legR: 13,
+    legW: heavy ? 4 : 3,
+    shoeL: heavy ? 6 : 7,
+    shoeR: 13,
+    shoeW: heavy ? 5 : 4,
+  };
+}
+
+/** Shoulder line, waist, and hem — every garment starts from this. */
+const SHOULDER_Y = 19;
+const WAIST_Y = 25;
+const HIP_Y = 33;
+
+function drawTorso(g: G, f: Frame, dy: number, top: number, bottom: number, body: number, shade: number): void {
+  const split = Math.min(Math.max(top, WAIST_Y), bottom);
+  if (split > top) pcells(g, f.torsoX, top + dy, f.torsoW, split - top, body);
+  if (bottom > split) pcells(g, f.waistX, split + dy, f.waistW, bottom - split, body);
+  // One shaded column down the far side, so the torso is lit rather than flat.
+  if (split > top) pcells(g, f.torsoX + f.torsoW - 2, top + dy, 2, split - top, shade);
+  if (bottom > split) pcells(g, f.waistX + f.waistW - 2, split + dy, 2, bottom - split, shade);
+}
+
+/** Multiply a colour towards black, for shading an accent against its own hue. */
+function shade(color: number, amount: number): number {
+  const r = Math.round(((color >> 16) & 0xff) * amount);
+  const gr = Math.round(((color >> 8) & 0xff) * amount);
+  const b = Math.round((color & 0xff) * amount);
+  return (r << 16) | (gr << 8) | b;
+}
+
+/**
+ * Garments whose torso is one flat run of fabric, so a pattern lands on cloth rather
+ * than across an apron bib or a jacket's open front — which reads as noise, not weave.
+ */
+const PATTERNED_GARMENTS: ReadonlySet<Garment> = new Set<Garment>(["tee", "hoodie", "dress", "tank"]);
+
+/** Horizontal bands, the one fabric pattern that survives this cell size. */
+function drawStripes(g: G, f: Frame, dy: number, top: number, bottom: number, ink: number): void {
+  for (let row = top + 2; row < bottom; row += 3) {
+    const narrow = row >= WAIST_Y;
+    pcells(g, narrow ? f.waistX : f.torsoX, row + dy, narrow ? f.waistW : f.torsoW, 1, ink);
   }
 }
 
-function drawCap(g: G, hx: number, hy: number, front = 16): void {
+/**
+ * Arms. `sleeve` null means bare skin from the shoulder — a tank or a dress — which is
+ * a genuine outline change, not a recolour, because the arm narrows where the cloth stops.
+ */
+function drawArms(g: G, f: Frame, look: Look, dy: number, sleeve: number | null, sleeveEnd: number): void {
+  const top = SHOULDER_Y + 1;
+  const handY = 29;
+  if (sleeve !== null && sleeveEnd > top) {
+    // The far sleeve is shaded, or the arms merge into the torso and the figure loses
+    // its outline the moment it is drawn at shop-floor scale.
+    pcells(g, f.armL, top + dy, f.armW, sleeveEnd - top, sleeve);
+    pcells(g, f.armR, top + dy, f.armW, sleeveEnd - top, shade(sleeve, 0.72));
+    pcells(g, f.armL, top + dy, 1, sleeveEnd - top, shade(sleeve, 0.86));
+  }
+  const bareTop = sleeve === null ? top : sleeveEnd;
+  if (handY > bareTop) {
+    pcells(g, f.armL + 1, bareTop + dy, f.armW - 1, handY - bareTop, look.skin);
+    pcells(g, f.armR, bareTop + dy, f.armW - 1, handY - bareTop, look.skinDark);
+  }
+  drawHands(g, f.armL, f.armR, handY + dy, look.skin, look.skinDark);
+}
+
+/**
+ * Neck, then the neckline the garment cuts. Shared by the standing sprite and the ID
+ * portrait so a jacket's lapels or a tank's straps are the same in the photo as at the door.
+ */
+function drawNeckline(g: G, kit: Kit, look: Look, f: Frame, dy: number): void {
+  pcells(g, 10, 17 + dy, 4, 3, look.skinDark);
+  pcells(g, 11, 17 + dy, 2, 1, look.skin);
+  const y = SHOULDER_Y + dy;
+  switch (look.garment) {
+    case "hoodie":
+      // Hood bunched behind the neck: a band wider than the shoulders, plus drawstrings.
+      pcells(g, f.torsoX + 1, y - 1, f.torsoW - 2, 2, look.shirtDark);
+      pcells(g, 8, y, 8, 2, look.shirtDark);
+      pcells(g, 10, y + 1, 1, 3, look.accent);
+      pcells(g, 13, y + 1, 1, 3, look.accent);
+      break;
+    case "jacket":
+    case "coat":
+      // Open front: the under-layer shows in a V between two lapels.
+      pcells(g, 8, y, 8, 2, look.inner);
+      pcells(g, 8, y, 3, 3, look.shirtDark);
+      pcells(g, 13, y, 3, 3, look.shirtDark);
+      pcells(g, 11, y + 1, 2, 2, look.inner);
+      break;
+    case "tank":
+      // Bare shoulders, two narrow straps. The widest gap of skin in the wardrobe.
+      pcells(g, 7, y, 10, 3, look.skin);
+      pcells(g, 8, y, 2, 3, look.shirt);
+      pcells(g, 14, y, 2, 3, look.shirt);
+      pcells(g, 10, y + 2, 4, 1, look.skinDark);
+      break;
+    case "dress":
+    case "vest":
+      pcells(g, 8, y, 8, 2, look.inner);
+      pcells(g, 9, y, 6, 1, look.shirtDark);
+      pcells(g, 10, y + 1, 4, 2, look.skinDark);
+      break;
+    case "apron":
+      pcells(g, 8, y, 8, 2, look.inner);
+      // Bib straps rising over each shoulder.
+      pcells(g, 8, y, 2, 3, look.shirt);
+      pcells(g, 14, y, 2, 3, look.shirt);
+      break;
+    default:
+      if (kit === "keylead") {
+        pcells(g, 7, y, 10, 2, Pal.cream);
+        pcells(g, 8, y, 8, 1, Pal.creamSoft);
+        pcells(g, 11, y + 1, 2, 1, look.shirtDark);
+      } else {
+        pcells(g, 8, y, 8, 2, look.shirtDark);
+        pcells(g, 9, y, 6, 1, look.shirt);
+      }
+  }
+  if (look.accessory === "neckScarf") {
+    pcells(g, 9, y - 1, 6, 2, look.accent);
+    pcells(g, 10, y - 1, 4, 1, Pal.cream);
+    pcells(g, 13, y + 1, 2, 3, look.accent);
+  }
+}
+
+/**
+ * The torso and everything below it. Each case changes the *outline*, not just the
+ * colour: a coat runs past the hip, a dress and a skirt replace trousers with a flared
+ * hem and a bare leg, a vest cuts the sleeves back to an under-layer.
+ */
+function drawGarment(g: G, kit: Kit, look: Look, f: Frame, dy: number): void {
+  const shirt = look.shirt;
+  const dark = look.shirtDark;
+  let hem = HIP_Y;
+  let sleeve: number | null = shirt;
+  let sleeveEnd = 30;
+
+  switch (look.garment) {
+    case "hoodie":
+      drawTorso(g, f, dy, SHOULDER_Y, HIP_Y + 1, shirt, dark);
+      // Kangaroo pocket, and a ribbed hem that squares off the bottom.
+      pcells(g, f.waistX + 2, 28 + dy, f.waistW - 4, 4, dark);
+      pcells(g, f.waistX, HIP_Y - 1 + dy, f.waistW, 2, dark);
+      break;
+    case "jacket":
+      drawTorso(g, f, dy, SHOULDER_Y, HIP_Y + 1, look.inner, look.inner);
+      // Two panels hanging open over the under-layer.
+      pcells(g, f.torsoX, SHOULDER_Y + dy, 4, WAIST_Y - SHOULDER_Y, shirt);
+      pcells(g, f.waistX, WAIST_Y + dy, 4, HIP_Y + 1 - WAIST_Y, shirt);
+      pcells(g, f.torsoX + f.torsoW - 4, SHOULDER_Y + dy, 4, WAIST_Y - SHOULDER_Y, dark);
+      pcells(g, f.waistX + f.waistW - 4, WAIST_Y + dy, 4, HIP_Y + 1 - WAIST_Y, dark);
+      sleeveEnd = 28;
+      break;
+    case "coat":
+      hem = 38;
+      drawTorso(g, f, dy, SHOULDER_Y, hem, shirt, dark);
+      // Centre seam and a wide skirt to the coat, so it reads long rather than tall.
+      pcells(g, 11, SHOULDER_Y + 2 + dy, 2, hem - SHOULDER_Y - 2, look.inner);
+      pcells(g, f.waistX - 1, HIP_Y - 2 + dy, f.waistW + 2, hem - HIP_Y + 2, shirt);
+      pcells(g, f.waistX + f.waistW - 3, HIP_Y - 2 + dy, 4, hem - HIP_Y + 2, dark);
+      sleeveEnd = 29;
+      break;
+    case "vest":
+      drawTorso(g, f, dy, SHOULDER_Y, HIP_Y, shirt, dark);
+      // Armholes: the under-layer's sleeves run the full arm.
+      pcells(g, f.torsoX, SHOULDER_Y + dy, 2, 3, look.inner);
+      pcells(g, f.torsoX + f.torsoW - 2, SHOULDER_Y + dy, 2, 3, look.inner);
+      sleeve = look.inner;
+      break;
+    case "tank":
+      drawTorso(g, f, dy, SHOULDER_Y + 2, HIP_Y, shirt, dark);
+      sleeve = null;
+      break;
+    case "dress":
+      hem = 38;
+      drawTorso(g, f, dy, SHOULDER_Y, 29, shirt, dark);
+      // Flare: two steps outward, then a hem band. Wider than any trouser silhouette.
+      pcells(g, f.waistX - 1, 29 + dy, f.waistW + 2, 4, shirt);
+      pcells(g, f.waistX - 2, HIP_Y + dy, f.waistW + 4, hem - HIP_Y, shirt);
+      pcells(g, f.waistX + f.waistW - 2, 29 + dy, 4, hem - 29, dark);
+      pcells(g, f.waistX - 2, hem - 1 + dy, f.waistW + 4, 1, dark);
+      sleeve = null;
+      break;
+    case "skirt": {
+      hem = 38;
+      drawTorso(g, f, dy, SHOULDER_Y, 30, shirt, dark);
+      const skirtShade = shade(look.accent, 0.68);
+      pcells(g, f.waistX - 1, 30 + dy, f.waistW + 2, 3, look.accent);
+      pcells(g, f.waistX - 2, HIP_Y + dy, f.waistW + 4, hem - HIP_Y, look.accent);
+      // Shade in the skirt's own hue — borrowing the top's dark reads as two garments.
+      pcells(g, f.waistX + f.waistW - 1, 30 + dy, 3, hem - 30, skirtShade);
+      pcells(g, f.waistX - 2, hem - 1 + dy, f.waistW + 4, 1, skirtShade);
+      sleeveEnd = 24;
+      break;
+    }
+    case "apron":
+      drawTorso(g, f, dy, SHOULDER_Y, HIP_Y, look.inner, look.inner);
+      // Bib and skirt of the apron over an under-shirt, with a waist tie.
+      pcells(g, 9, SHOULDER_Y + 2 + dy, 6, 5, shirt);
+      pcells(g, f.waistX + 1, 24 + dy, f.waistW - 2, HIP_Y + 2 - 24, shirt);
+      pcells(g, f.waistX + 1, 24 + dy, f.waistW - 2, 1, dark);
+      pcells(g, f.waistX + f.waistW - 3, 24 + dy, 2, HIP_Y + 2 - 24, dark);
+      sleeve = look.inner;
+      sleeveEnd = 26;
+      break;
+    default:
+      drawTorso(g, f, dy, SHOULDER_Y, HIP_Y, shirt, dark);
+      sleeveEnd = kit === "customer" ? 26 : 30;
+  }
+
+  if (look.pattern === "stripe" && PATTERNED_GARMENTS.has(look.garment)) {
+    drawStripes(g, f, dy, SHOULDER_Y + 1, Math.min(hem, HIP_Y), dark);
+  }
+
+  if (look.legs === "bare") {
+    pcells(g, f.legL + 1, hem + dy, f.legW - 1, 41 - hem, look.skin);
+    pcells(g, f.legR, hem + dy, f.legW - 1, 41 - hem, look.skinDark);
+  } else if (look.legs === "shorts") {
+    drawPants(g, f.legL, f.legR, HIP_Y + dy, f.legW, 3);
+    pcells(g, f.legL + 1, HIP_Y + 3 + dy, f.legW - 1, 5, look.skin);
+    pcells(g, f.legR, HIP_Y + 3 + dy, f.legW - 1, 5, look.skinDark);
+  } else {
+    drawPants(g, f.legL, f.legR, HIP_Y + dy, f.legW, 9);
+  }
+
+  drawShoes(g, f.shoeL, f.shoeR, 41 + dy, f.shoeW, look.footwear);
+  drawArms(g, f, look, dy, sleeve, sleeveEnd);
+
+  if (look.accessory === "satchel") {
+    // Strap over one shoulder, stepped down across the chest to a small bag at the hip.
+    const strap = shade(look.accent, 0.8);
+    for (let i = 0; i < 5; i++) pcells(g, f.torsoX + 2 + i, SHOULDER_Y + 1 + i * 2 + dy, 2, 2, strap);
+    pcells(g, f.waistX + f.waistW - 3, 30 + dy, 4, 4, look.accent);
+    pcells(g, f.waistX + f.waistW - 3, 30 + dy, 4, 1, strap);
+  }
+}
+
+function drawCap(
+  g: G,
+  hx: number,
+  hy: number,
+  front = 16,
+  body: number = Pal.leaf,
+  trim: number = Pal.leafDark,
+  panel: number = HAT_PANEL,
+): void {
   const crown = front + 4;
   const brim = front + 6;
-  pcells(g, hx - 2, hy, crown - 2, 7, Pal.leaf);
-  pcells(g, hx - 3, hy + 1, crown, 6, Pal.leaf);
-  pcells(g, hx - 1, hy, crown - 4, 2, Pal.leafDark);
-  pcells(g, hx, hy + 2, front - 2, 4, Pal.leafDark);
-  pcells(g, hx, hy + 3, front - 2, 3, HAT_PANEL);
-  pcells(g, hx - 4, hy + 6, brim, 2, Pal.leafDark);
-  pcells(g, hx - 3, hy + 6, brim - 2, 1, Pal.leaf);
+  pcells(g, hx - 2, hy, crown - 2, 7, body);
+  pcells(g, hx - 3, hy + 1, crown, 6, body);
+  pcells(g, hx - 1, hy, crown - 4, 2, trim);
+  pcells(g, hx, hy + 2, front - 2, 4, trim);
+  pcells(g, hx, hy + 3, front - 2, 3, panel);
+  pcells(g, hx - 4, hy + 6, brim, 2, trim);
+  pcells(g, hx - 3, hy + 6, brim - 2, 1, body);
+}
+
+/**
+ * Hats, drawn after the hair and the face so they sit on top of both. Each one changes
+ * the head's outline, which is the second-largest shape a person has.
+ */
+function drawHeadwear(g: G, look: Look, dy: number): void {
+  const y = (row: number): number => row + dy;
+  switch (look.headwear) {
+    case "beanie":
+      pcells(g, 4, y(1), 16, 4, look.accent);
+      pcells(g, 3, y(2), 18, 3, look.accent);
+      pcells(g, 5, y(1), 8, 1, Pal.cream);
+      // Turned-up brim, sitting right on the hairline.
+      pcells(g, 3, y(4), 18, 2, look.accent);
+      pcells(g, 4, y(4), 16, 1, Pal.cream);
+      break;
+    case "cap":
+      drawCap(g, 5, y(0), 16, look.accent, look.shirtDark, look.accent);
+      pcells(g, 6, y(3), 12, 1, look.accent);
+      break;
+    case "headscarf":
+      // Wraps the crown and both temples, with the knot gathered at the left shoulder.
+      pcells(g, 4, y(0), 16, 5, look.accent);
+      pcells(g, 3, y(1), 18, 6, look.accent);
+      pcells(g, 3, y(6), 3, 8, look.accent);
+      pcells(g, 19, y(6), 3, 9, look.accent);
+      pcells(g, 5, y(1), 9, 2, Pal.cream);
+      pcells(g, 2, y(12), 4, 4, look.accent);
+      pcells(g, 6, y(4), 12, 1, look.accent);
+      break;
+    default:
+      break;
+  }
+}
+
+/**
+ * Beard, moustache or stubble. Deliberately spread across the cast rather than reserved
+ * for one presentation — it is one weak cue among several, not the signal itself.
+ */
+function drawFacialHair(g: G, look: Look, ox: number, oy: number): void {
+  switch (look.facialHair) {
+    case "stubble":
+      for (let i = 0; i < 6; i++) pcells(g, ox + 2 + i * 2, oy + 12 + (i % 2), 1, 1, look.skinDark);
+      pcells(g, ox + 3, oy + 14, 8, 1, look.hair);
+      break;
+    case "moustache":
+      pcells(g, ox + 4, oy + 11, 6, 1, look.hair);
+      pcells(g, ox + 5, oy + 12, 4, 1, look.hairLite);
+      break;
+    case "beard":
+      pcells(g, ox + 1, oy + 10, 2, 5, look.hair);
+      pcells(g, ox + 11, oy + 10, 2, 5, look.hair);
+      pcells(g, ox + 2, oy + 13, 10, 3, look.hair);
+      pcells(g, ox + 4, oy + 11, 6, 1, look.hair);
+      pcells(g, ox + 4, oy + 14, 6, 1, look.hairLite);
+      break;
+    default:
+      break;
+  }
+}
+
+/** Small metal at the jaw. One cell each, but it survives the downscale. */
+function drawEarrings(g: G, look: Look, ox: number, oy: number): void {
+  if (look.accessory !== "earrings") return;
+  pcells(g, ox - 1, oy + 8, 1, 2, look.accent);
+  pcells(g, ox + 14, oy + 8, 1, 2, look.accent);
 }
 
 /**
@@ -854,34 +1225,19 @@ function stampKindling(scene: Phaser.Scene, key: string, cx: number, cy: number,
 function person(scene: Phaser.Scene, key: string, kit: Kit, look: Look): void {
   const hat = kit === "driver";
   const dy = hat ? 4 : 0;
-  const wide = kit === "keylead";
+  const f = frameFor(look.build, kit === "keylead");
   bake(scene, key, PERSON_W, hat ? PERSON_HAT_H : PERSON_H, (g) => {
-    if (wide) {
-      pcells(g, 4, 42 + dy, 16, 2, Pal.shadow);
-      drawPants(g, 7, 13, 33 + dy, 4, 9);
-      drawShoes(g, 6, 13, 41 + dy, 5);
-      pcells(g, 4, 19 + dy, 16, 14, look.shirt);
-      pcells(g, 18, 21 + dy, 2, 12, look.shirtDark);
-      pcells(g, 1, 20 + dy, 3, 10, look.shirt);
-      pcells(g, 20, 20 + dy, 3, 10, look.shirtDark);
-      drawHands(g, 1, 20, 29 + dy, look.skin, look.skinDark);
-    } else {
-      pcells(g, 6, 42 + dy, 12, 2, Pal.shadow);
-      drawPants(g, 8, 13, 33 + dy, 3, 9);
-      drawShoes(g, 7, 13, 41 + dy, 4);
-      pcells(g, 6, 19 + dy, 12, 14, look.shirt);
-      pcells(g, 16, 21 + dy, 2, 12, look.shirtDark);
-      pcells(g, 3, 20 + dy, 3, 10, look.shirt);
-      pcells(g, 18, 20 + dy, 3, 10, look.shirtDark);
-      drawHands(g, 3, 18, 29 + dy, look.skin, look.skinDark);
-    }
-
-    drawCollar(g, kit, look, dy);
+    pcells(g, f.shoeL, 42 + dy, f.shoeR + f.shoeW - f.shoeL, 2, Pal.shadow);
+    drawGarment(g, kit, look, f, dy);
+    drawNeckline(g, kit, look, f, dy);
     drawHair(g, look.hairStyle, look.hair, look.hairLite, hat);
     if (hat) drawCap(g, 5, 0);
     drawFace(g, 5, 3 + dy, look);
     if (!hat) drawFringe(g, look.hairStyle, look.hair, look.hairLite, dy);
     else pcells(g, 6, 3 + dy, 12, 1, Pal.leaf);
+    drawFacialHair(g, look, 5, 3 + dy);
+    drawEarrings(g, look, 5, 3 + dy);
+    if (!hat) drawHeadwear(g, look, dy);
   });
 }
 
@@ -897,6 +1253,7 @@ function personPortrait(scene: Phaser.Scene, key: string, look: Look): void {
   const backdrop = 0xbecad3;
   const backdropLow = 0x94a6b4;
   const rows = PORTRAIT_H / PEOPLE_PX;
+  const f = frameFor(look.build, false);
   bake(scene, key, PORTRAIT_W, PORTRAIT_H, (g) => {
     // Studio sweep: light behind the head, falling off behind the shoulders, so
     // the head is not floating on a flat card.
@@ -904,17 +1261,52 @@ function personPortrait(scene: Phaser.Scene, key: string, look: Look): void {
     pcells(g, 0, rows - 9, 24, 9, backdropLow);
     pcells(g, 0, rows - 11, 5, 11, backdropLow);
     pcells(g, 19, rows - 12, 5, 12, backdropLow);
-    pcells(g, 4, 19 + PORTRAIT_DY, 16, rows - 19 - PORTRAIT_DY, look.shirt);
-    pcells(g, 16, 20 + PORTRAIT_DY, 4, rows - 20 - PORTRAIT_DY, look.shirtDark);
-    pcells(g, 3, 21 + PORTRAIT_DY, 2, rows - 21 - PORTRAIT_DY, look.shirtDark);
-    drawCollar(g, "customer", look, PORTRAIT_DY);
+    // Shoulders come from the same frame and the same neckline as the standing
+    // sprite, so build and garment cut are visible in the photo too — and cannot
+    // drift from the person who is actually at the door.
+    drawPortraitShoulders(g, look, f, PORTRAIT_DY, rows);
+    drawNeckline(g, "customer", look, f, PORTRAIT_DY);
     drawHair(g, look.hairStyle, look.hair, look.hairLite, false, PORTRAIT_DY);
     drawFace(g, 5, 3 + PORTRAIT_DY, look);
     drawFringe(g, look.hairStyle, look.hair, look.hairLite, PORTRAIT_DY);
+    drawFacialHair(g, look, 5, 3 + PORTRAIT_DY);
+    drawEarrings(g, look, 5, 3 + PORTRAIT_DY);
+    drawHeadwear(g, look, PORTRAIT_DY);
   });
 }
 
+/** The few rows of garment a head-and-shoulders crop actually shows. */
+function drawPortraitShoulders(g: G, look: Look, f: Frame, dy: number, rows: number): void {
+  const top = SHOULDER_Y + dy;
+  const h = rows - top;
+  if (h <= 0) return;
+  const bodyColor = look.garment === "jacket" || look.garment === "coat" || look.garment === "apron" || look.garment === "vest" ? look.inner : look.shirt;
+  pcells(g, f.torsoX, top, f.torsoW, h, bodyColor);
+  pcells(g, f.torsoX + f.torsoW - 3, top, 3, h, look.shirtDark);
+  if (look.garment === "jacket" || look.garment === "coat") {
+    pcells(g, f.torsoX, top, 4, h, look.shirt);
+    pcells(g, f.torsoX + f.torsoW - 4, top, 4, h, look.shirtDark);
+  }
+  if (look.garment === "vest" || look.garment === "apron") {
+    pcells(g, f.torsoX, top, 2, h, look.inner);
+    pcells(g, f.torsoX + 2, top, f.torsoW - 4, h, look.shirt);
+  }
+  if (look.garment === "tank") {
+    pcells(g, f.torsoX + 1, top, f.torsoW - 2, h, look.skin);
+    pcells(g, f.torsoX + 2, top, 2, h, look.shirt);
+    pcells(g, f.torsoX + f.torsoW - 4, top, 2, h, look.shirt);
+  }
+  if (look.pattern === "stripe" && PATTERNED_GARMENTS.has(look.garment)) {
+    drawStripes(g, f, dy, SHOULDER_Y + 1, rows - dy, look.shirtDark);
+  }
+}
+
 function personSit(scene: Phaser.Scene, look: Look): void {
+  // Same build as the standing driver: the two sprites are the same person, seen from
+  // the curb and from inside the van, so the shoulder line has to agree.
+  const spread = look.build === "slim" ? -1 : look.build === "broad" ? 1 : 0;
+  const tx = 10 - spread;
+  const tw = 12 + spread * 2;
   bake(scene, "tex-driver-sit", PERSON_SIT_W, PERSON_SIT_H, (g) => {
     pcells(g, 8, 34, 12, 2, Pal.shadow);
     drawPants(g, 11, 16, 27, 5, 6);
@@ -922,17 +1314,17 @@ function personSit(scene: Phaser.Scene, look: Look): void {
     pcells(g, 17, 32, 4, 2, Pal.pantDark);
     drawShoes(g, 10, 17, 33, 4);
 
-    pcells(g, 10, 19, 12, 9, look.shirt);
-    pcells(g, 20, 20, 2, 8, look.shirtDark);
-    pcells(g, 11, 19, 8, 2, look.shirtDark);
-    pcells(g, 12, 19, 6, 1, look.shirt);
+    pcells(g, tx, 19, tw, 9, look.shirt);
+    pcells(g, tx + tw - 2, 20, 2, 8, look.shirtDark);
+    pcells(g, tx + 1, 19, 8, 2, look.shirtDark);
+    pcells(g, tx + 2, 19, 6, 1, look.shirt);
 
-    pcells(g, 7, 21, 3, 8, look.shirt);
-    pcells(g, 7, 28, 3, 2, look.skin);
-    pcells(g, 8, 29, 1, 1, look.skinDark);
-    pcells(g, 21, 21, 3, 8, look.shirtDark);
-    pcells(g, 21, 28, 3, 2, look.skin);
-    pcells(g, 22, 29, 1, 1, look.skinDark);
+    pcells(g, tx - 3, 21, 3, 8, look.shirt);
+    pcells(g, tx - 3, 28, 3, 2, look.skin);
+    pcells(g, tx - 2, 29, 1, 1, look.skinDark);
+    pcells(g, tx + tw - 1, 21, 3, 8, look.shirtDark);
+    pcells(g, tx + tw - 1, 28, 3, 2, look.skin);
+    pcells(g, tx + tw, 29, 1, 1, look.skinDark);
 
     pcells(g, 13, 17, 4, 3, look.skinDark);
     pcells(g, 14, 17, 2, 1, look.skin);
@@ -943,6 +1335,8 @@ function personSit(scene: Phaser.Scene, look: Look): void {
     drawCap(g, 7, 0, 18);
     drawFace(g, 7, 5, look);
     pcells(g, 8, 5, 12, 1, Pal.leaf);
+    drawFacialHair(g, look, 7, 5);
+    drawEarrings(g, look, 7, 5);
   });
 }
 
