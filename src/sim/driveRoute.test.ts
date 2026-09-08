@@ -4,8 +4,10 @@ import {
   advanceRoute,
   angleDelta,
   driveLaneCell,
+  kerbApproachRun,
   kerbParkHeading,
   laneWorldPoint,
+  routeToStall,
   lerpAngle,
   orthogonalLanePath,
   routeIsOrthogonal,
@@ -201,6 +203,71 @@ describe("parked heading", () => {
         r: house.street.r + Math.round(Math.sin(heading)),
       };
       expect(driveLaneCell(house.street, ahead), house.id).toEqual(house.street);
+    }
+  });
+
+  /**
+   * The stall's frontage is the kerb the van parks against. Reaching it from the far lane
+   * means crossing oncoming traffic, which is what the route builder exists to prevent —
+   * so this checks the shape of the route rather than how it looked when driven.
+   */
+  it("reaches every stall along the kerb it fronts, never across the oncoming lane", () => {
+    const stalls = [
+      ...CITY.houses.map((h) => ({ label: h.id, stop: h.stop, street: h.street, parking: h.parking })),
+      {
+        label: "shop",
+        stop: CITY.shopSpawn,
+        street: CITY.shopLot.street,
+        parking: CITY.shopLot.parking,
+      },
+    ];
+    const orientations = new Set(stalls.map((s) => (s.street.c === s.stop.c ? "EW" : "NS")));
+    expect(orientations, "one street orientation went unchecked").toEqual(new Set(["EW", "NS"]));
+
+    // Collected rather than thrown one at a time: the lots that broke all sat on the same
+    // side of their street, and a report naming every one of them says that immediately.
+    const faults: string[] = [];
+    for (const stall of stalls) {
+      const axis = stall.street.c === stall.stop.c ? "EW" : "NS";
+      const note = (why: string): number => faults.push(`${stall.label}(${axis}) ${why}`);
+      // Route in from a junction on the far side of the city, so the approach is never
+      // trivially correct just because the start happened to sit in the right lane.
+      const cells = routeToStall(CITY.walkable, { c: 37, r: 25 }, stall);
+      if (cells === null) {
+        note("has no lawful approach");
+        continue;
+      }
+      const last = cells[cells.length - 1]!;
+      const frontage = cells[cells.length - 2]!;
+      const before = cells[cells.length - 3]!;
+      if (last.c !== stall.stop.c || last.r !== stall.stop.r) note("does not end on the stall");
+      if (frontage?.c !== stall.street.c || frontage.r !== stall.street.r) note("arrives off its own frontage");
+
+      // The step onto the frontage must run the way that lane runs.
+      const heading = kerbParkHeading(stall.stop, stall.street);
+      const dir = { c: Math.round(Math.cos(heading)), r: Math.round(Math.sin(heading)) };
+      if (before && (before.c + dir.c !== stall.street.c || before.r + dir.r !== stall.street.r)) {
+        note("enters its frontage against the lane");
+      }
+
+      // And a driveway is a destination, not a shortcut. The van may start parked on one
+      // and must finish on one; every cell between them is road.
+      if (cells.slice(1, -1).some((cell) => CITY.kinds[cell.r]![cell.c] === "parking")) {
+        note("cuts through a parking pad");
+      }
+    }
+    expect(faults).toEqual([]);
+  });
+
+  it("runs the approach from the first junction upstream of the frontage", () => {
+    for (const house of CITY.houses) {
+      const run = kerbApproachRun(house.stop, house.street);
+      expect(run.length, house.id).toBeGreaterThan(0);
+      expect(run[run.length - 1], house.id).toEqual(house.street);
+      for (const cell of run) expect(CITY.kinds[cell.r]![cell.c], `${house.id} ${cell.c},${cell.r}`).toBe("road");
+      // A lane is joined where another street meets it, so the run starts on a junction.
+      const head = run[0]!;
+      expect(isEWStreet(head.r) && isNSStreet(head.c), `${house.id} run does not start at a junction`).toBe(true);
     }
   });
 

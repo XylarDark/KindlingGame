@@ -40,8 +40,10 @@ import {
   kerbParkHeading,
   lerpAngle,
   normalizeAngle,
+  routeToStall,
   routeWorldPoints,
   snapPathToDriveLanes,
+  type StallApproach,
   type WorldPoint,
 } from "./driveRoute";
 import { findPath } from "./pathfinding";
@@ -1062,29 +1064,38 @@ export class GameSim {
   }
 
   private driveTargetWorld(): { x: number; y: number } | null {
+    const stall = this.driveTargetStall();
+    return stall ? tileToWorld(stall.stop) : null;
+  }
+
+  /** The stall the van is driving to, with the kerb it fronts so it can arrive lawfully. */
+  private driveTargetStall(): StallApproach | null {
     const stopId = this.nextStopId();
     if (stopId) {
       const house = houseById(stopId);
-      return house ? tileToWorld(house.stop) : null;
+      return house ? { stop: house.stop, street: house.street, parking: house.parking } : null;
     }
-    if (this.playerRole === "driver") return tileToWorld(CITY.shopSpawn);
-    return null;
+    if (this.playerRole !== "driver") return null;
+    return { stop: CITY.shopSpawn, street: CITY.shopLot.street, parking: CITY.shopLot.parking };
   }
 
   private refreshDriveRoute(): void {
-    const target = this.driveTargetWorld();
+    const stall = this.driveTargetStall();
     // Pulling away cancels any turn still being made in the stall we are leaving.
     this.parkHeading = null;
-    if (!target) {
+    if (!stall) {
       this.driveRoute = [];
       this.driveWaypoint = 0;
       this.driveArrived = false;
       return;
     }
+    const target = tileToWorld(stall.stop);
     const from = worldToTile(this.vehicle.x, this.vehicle.y);
     const start = CITY.walkable[from.r]?.[from.c] ? from : CITY.shopSpawn;
-    const goal = worldToTile(target.x, target.y);
-    const cells = findPath(CITY.walkable, start, goal);
+    // A stall is approached on the kerb it fronts. Only if no lawful approach exists does
+    // this fall back to the shortest path, which is the old cut-across-the-oncoming-lane
+    // behaviour — kept as a last resort so an unreachable stall still gets a route.
+    const cells = routeToStall(CITY.walkable, start, stall) ?? findPath(CITY.walkable, start, stall.stop);
     this.driveRoute = routeWorldPoints(snapPathToDriveLanes(cells));
     // Final point is the parking stall center — no lane offset.
     if (this.driveRoute.length > 0) {

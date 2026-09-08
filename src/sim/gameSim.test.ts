@@ -564,6 +564,41 @@ describe("GameSim order loops", () => {
     expect(Math.abs(angleDelta(heading, atHouse)), `${house.id} still faces the house`).toBeGreaterThan(0.6);
   });
 
+  /**
+   * The acceptance test for lawful approaches, and the one that would have caught the
+   * original fault. When the route reaches a stall from the far lane, the van arrives
+   * across the kerb and has to swing most of a half-circle to square up: house-2 and
+   * house-10 turned 132 degrees, house-6 87, house-13 84, and the four east-west lots 76.
+   * A ceiling on that turn catches the whole class without knowing which lot broke.
+   *
+   * Every lot, not a sample: the four worst all sat on the same side of their street, so
+   * any spot check that missed that side would have passed on a broken city.
+   */
+  it("arrives square enough to park at every lot in the city", () => {
+    const ARRIVAL_TURN_MAX_DEG = 55;
+    const measured: string[] = [];
+    const over: string[] = [];
+    for (const house of CITY.houses) {
+      const axis = house.street.c === house.stop.c ? "EW" : "NS";
+      const sim = GameSim.create({ seed: 5, autoSpawn: false });
+      fillTicket(sim, "delivery", { destinationId: house.id });
+      sim.hitTheRoad();
+      let approach = sim.snapshot().vehicle.heading;
+      for (let i = 0; i < 2_000 && sim.snapshot().autoDriving; i++) {
+        approach = sim.snapshot().vehicle.heading;
+        sim.tick(50);
+      }
+      expect(sim.snapshot().autoDriving, `${house.id} never arrived`).toBe(false);
+      // The squaring-up turn is rate limited; 30 ticks covers a half-circle of it.
+      for (let i = 0; i < 30; i++) sim.tick(50);
+      const turn = Math.abs((angleDelta(approach, sim.snapshot().vehicle.heading) * 180) / Math.PI);
+      measured.push(`${house.id}(${axis}) ${turn.toFixed(0)}`);
+      if (turn >= ARRIVAL_TURN_MAX_DEG) over.push(`${house.id}(${axis}) ${turn.toFixed(0)}`);
+    }
+    expect(measured).toHaveLength(CITY.houses.length);
+    expect(over, `arrived across the kerb; all lots: ${measured.join(", ")}`).toEqual([]);
+  });
+
   it("eases the last turn into the stall over several ticks", () => {
     const house = CITY.houses.find((h) => h.street.c === h.stop.c)!;
     const sim = GameSim.create({ seed: 5, autoSpawn: false });

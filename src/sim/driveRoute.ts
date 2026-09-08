@@ -1,5 +1,5 @@
-import { isEWStreet, isNSStreet, tileToWorld } from "../maps/cityT0";
-import type { TileCell } from "./pathfinding";
+import { CITY, isEWStreet, isNSStreet, tileToWorld } from "../maps/cityT0";
+import { findPath, type TileCell } from "./pathfinding";
 
 /** Nudge path points into the right-hand lane on two-tile streets. */
 export const LANE_OFFSET_PX = 28;
@@ -348,6 +348,100 @@ export function driveLaneCell(cell: TileCell, next: TileCell): TileCell {
     return { c: dr > 0 ? pair.west : pair.east, r: cell.r };
   }
   return cell;
+}
+
+/** A stall the van can be routed to: where it parks, the kerb it fronts, and its pad. */
+export interface StallApproach {
+  /** The pad cell the van comes to rest on. */
+  stop: TileCell;
+  /** The road tile that pad opens onto — see `HouseStop.street`. */
+  street: TileCell;
+  /** Every driveable cell of the pad, so a route cannot treat the driveway as a shortcut. */
+  parking: readonly TileCell[];
+}
+
+/** A junction is a tile both street predicates claim — the 2x2 overlap where lanes meet. */
+function isJunctionCell(cell: TileCell): boolean {
+  return isEWStreet(cell.r) && isNSStreet(cell.c);
+}
+
+function isRoadCell(cell: TileCell): boolean {
+  return CITY.kinds[cell.r]?.[cell.c] === "road";
+}
+
+function sameCell(a: TileCell, b: TileCell): boolean {
+  return a.c === b.c && a.r === b.r;
+}
+
+/** No block interior is anywhere near this long; the cap only stops a runaway walk. */
+const APPROACH_RUN_MAX = 16;
+
+/**
+ * The stretch of kerb lane a van has to drive to reach `stall` legally: from the first
+ * junction upstream of the frontage, forward to the frontage itself, in travel order.
+ *
+ * A one-way lane can only be joined where another street meets it, so that junction is
+ * the last point on the route a pathfinder is free to choose. Everything after it is
+ * forced. A run of one means the frontage is itself a junction and can be turned into
+ * directly.
+ */
+export function kerbApproachRun(stall: TileCell, street: TileCell): TileCell[] {
+  const heading = kerbParkHeading(stall, street);
+  const step = { c: Math.round(Math.cos(heading)), r: Math.round(Math.sin(heading)) };
+  const run: TileCell[] = [street];
+  let cell = street;
+  while (!isJunctionCell(cell) && run.length < APPROACH_RUN_MAX) {
+    const back = { c: cell.c - step.c, r: cell.r - step.r };
+    if (!isRoadCell(back)) break;
+    run.unshift(back);
+    cell = back;
+  }
+  return run;
+}
+
+/** A copy of the grid with `blocked` closed off, less anything the van is already standing on. */
+function gridWithout(walkable: boolean[][], blocked: readonly TileCell[], keep: TileCell): boolean[][] {
+  const grid = walkable.map((row) => [...row]);
+  for (const cell of blocked) {
+    if (sameCell(cell, keep)) continue;
+    if (grid[cell.r]?.[cell.c] !== undefined) grid[cell.r]![cell.c] = false;
+  }
+  return grid;
+}
+
+/**
+ * Route to a parking stall that arrives on the kerb the stall fronts, travelling the way
+ * that lane runs — so the van never crosses the oncoming lane to reach a driveway.
+ *
+ * Reaching the approach run's head is ordinary pathfinding; the run itself is not
+ * negotiable, so it is closed off while that search happens. Without that, A* simply
+ * joins the run halfway by cutting across the oncoming lane, which is the failure being
+ * fixed rather than a fix for it. The pad is closed for the same reason: it is driveable,
+ * so a two-cell driveway was otherwise a legal shortcut into the stall from the wrong end.
+ *
+ * Returns `null` when no legal approach exists, rather than quietly producing an illegal
+ * one — the caller decides what to do about a stall that cannot be reached lawfully.
+ */
+export function routeToStall(
+  walkable: boolean[][],
+  start: TileCell,
+  stall: StallApproach,
+): TileCell[] | null {
+  if (sameCell(start, stall.stop)) return [start];
+  const run = kerbApproachRun(stall.stop, stall.street);
+  const head = run[0]!;
+  const heading = kerbParkHeading(stall.stop, stall.street);
+  const ahead = {
+    c: stall.street.c + Math.round(Math.cos(heading)),
+    r: stall.street.r + Math.round(Math.sin(heading)),
+  };
+  // Closing the cell just past the frontage stops a head-on arrival when the frontage is
+  // itself the junction and the run is therefore a single cell.
+  const blocked = [...run.slice(1), ...stall.parking, ahead];
+  const lead = findPath(gridWithout(walkable, blocked, start), start, head);
+  if (lead.length === 0) return null;
+  const cells = [...lead, ...run.slice(1), stall.stop];
+  return cells.filter((cell, i) => i === 0 || !sameCell(cell, cells[i - 1]!));
 }
 
 /** Snap a path onto legal one-way curb lanes (keeps the final cell as-is for parking). */
