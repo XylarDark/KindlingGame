@@ -28,12 +28,22 @@ import {
   SCORE_DELIVERY_ON_TIME,
   SCORE_FAIL,
   SHIFT_MS,
+  PARK_TURN_RATE,
   VEHICLE_SPEED,
 } from "./constants";
 import { customerLookIndex } from "../art/people";
 import { ageForSeed, emptyDropoff, idCardFor, type DropoffPhase, type DropoffView } from "./dropoff";
 import { destLabel, isOpen, needsFetch, tabletQueue, type Order, type OrderType } from "./orders";
-import { advanceRoute, lerpAngle, routeWorldPoints, snapPathToDriveLanes, type WorldPoint } from "./driveRoute";
+import {
+  advanceRoute,
+  angleDelta,
+  kerbParkHeading,
+  lerpAngle,
+  normalizeAngle,
+  routeWorldPoints,
+  snapPathToDriveLanes,
+  type WorldPoint,
+} from "./driveRoute";
 import { findPath } from "./pathfinding";
 import { generateCustomerName } from "./names";
 import { isDeliveryLate, scoreForComplete, scoreForFail } from "./scoring";
@@ -44,7 +54,6 @@ import {
   doorstepWorld,
   houseById,
   houseTitle,
-  lotCenter,
   MAP_PX_H,
   MAP_PX_W,
   TILE,
@@ -192,6 +201,13 @@ interface DropoffState {
   bagHanded: boolean;
 }
 
+/**
+ * How the van sits in its stall at Kindling. The shift starts with it already parked, so
+ * this is the same kerb rule every other stop uses rather than a hand-picked angle — the
+ * van it returns to at the end of a run is the van it left in.
+ */
+const SHOP_PARK_HEADING = kerbParkHeading(CITY.shopSpawn, CITY.shopLot.street);
+
 export class GameSim {
   readonly catalog: Sku[];
   readonly clock = new GameClock();
@@ -236,7 +252,9 @@ export class GameSim {
   private driveRoute: WorldPoint[] = [];
   private driveWaypoint = 0;
   private driveArrived = false;
-  private vehicleHeading = Math.PI;
+  private vehicleHeading = SHOP_PARK_HEADING;
+  /** Heading the van is squaring up to in its stall, or null when it is not parking. */
+  private parkHeading: number | null = null;
   private keyLeadX = KEYLEAD.x;
   private keyLeadPhase: KeyLeadPhase = "idle";
   private keyLeadFacing = 1;
@@ -302,6 +320,7 @@ export class GameSim {
     this.input = { dx: 0, dy: 0 };
     this.driveArrived = true;
     this.driveRoute = [];
+    this.parkHeading = null;
     this.toast = "Shift over. See your results.";
   }
 
@@ -330,7 +349,8 @@ export class GameSim {
     this.clearDropoff();
     this.playerRole = "keyLead";
     this.vehicle = tileToWorld(CITY.shopSpawn);
-    this.vehicleHeading = Math.PI;
+    this.vehicleHeading = SHOP_PARK_HEADING;
+    this.parkHeading = null;
     this.driveRoute = [];
     this.driveWaypoint = 0;
     this.driveArrived = false;
@@ -585,6 +605,7 @@ export class GameSim {
       return;
     }
     if (this.playerRole === "driver" && this.dropoff?.phase !== "atDoor") this.tickDrive(dtMs / 1000);
+    this.tickParkHeading(dtMs / 1000);
     this.syncCurb();
     this.moveCustomers(dtMs);
     this.tickKeyLead(dtMs);
@@ -1052,6 +1073,8 @@ export class GameSim {
 
   private refreshDriveRoute(): void {
     const target = this.driveTargetWorld();
+    // Pulling away cancels any turn still being made in the stall we are leaving.
+    this.parkHeading = null;
     if (!target) {
       this.driveRoute = [];
       this.driveWaypoint = 0;
@@ -1157,10 +1180,7 @@ export class GameSim {
     const stopId = this.nextStopId();
     if (stopId) {
       const house = houseById(stopId);
-      if (house) {
-        const home = lotCenter(house.house, house.lotW, house.lotH);
-        this.vehicleHeading = Math.atan2(home.y - this.vehicle.y, home.x - this.vehicle.x);
-      }
+      if (house) this.parkHeading = kerbParkHeading(house.stop, house.street);
       const order = this.runOrderIds
         .map((id) => this.orderById(id))
         .find((o) => o?.destinationId === stopId && o.status === "onRun");
@@ -1170,10 +1190,28 @@ export class GameSim {
       return;
     }
     if (dist(this.vehicle.x, this.vehicle.y, target.x, target.y) <= HANDOFF_RADIUS) {
-      const shop = lotCenter(CITY.shopLot.origin, CITY.shopLot.w, CITY.shopLot.h);
-      this.vehicleHeading = Math.atan2(shop.y - this.vehicle.y, shop.x - this.vehicle.x);
+      this.parkHeading = SHOP_PARK_HEADING;
       this.toast = "Parked at Kindling. Tap the shop to return.";
     }
+  }
+
+  /**
+   * The last quarter turn into the stall. Runs after the drive tick has bowed out on
+   * `driveArrived`, so it is the only thing still moving the van — and it stops moving it
+   * the moment the parked heading is reached, which is what lets a test assert an exact
+   * angle rather than an asymptote.
+   */
+  private tickParkHeading(dt: number): void {
+    const target = this.parkHeading;
+    if (target === null) return;
+    const delta = angleDelta(this.vehicleHeading, target);
+    const step = PARK_TURN_RATE * dt;
+    if (Math.abs(delta) <= step) {
+      this.vehicleHeading = normalizeAngle(target);
+      this.parkHeading = null;
+      return;
+    }
+    this.vehicleHeading = normalizeAngle(this.vehicleHeading + Math.sign(delta) * step);
   }
 
   private moveCustomers(dtMs: number): void {

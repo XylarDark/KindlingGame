@@ -23,6 +23,12 @@ export interface HouseStop {
   house: TileCell;
   /** Delivery / return parking stall (driveable pad, not the street). */
   stop: TileCell;
+  /**
+   * The road tile `stop` opens onto — the kerb lane the stall belongs to. Recorded at
+   * build time because a corner stall can touch two streets, and only the placement
+   * knows which one it was cut for. {@link kerbParkHeading} turns it into a heading.
+   */
+  street: TileCell;
   lotW: number;
   lotH: number;
   /** Driveway / parking pad beside the house. */
@@ -36,6 +42,8 @@ export interface ShopLot {
   w: number;
   h: number;
   parking: TileCell[];
+  /** The road tile the van's own stall ({@link CityMap.shopSpawn}) opens onto. */
+  street: TileCell;
 }
 
 export interface CityMap {
@@ -120,9 +128,9 @@ function drivewayTowardRoad(
   bw: number,
   bh: number,
   access: HouseAccess,
-): { parking: TileCell[]; stop: TileCell } | null {
+): { parking: TileCell[]; stop: TileCell; street: TileCell } | null {
   const buildCells = lotCells(build, bw, bh);
-  const candidates: { parking: TileCell[]; stop: TileCell; score: number }[] = [];
+  const candidates: { parking: TileCell[]; stop: TileCell; street: TileCell; score: number }[] = [];
 
   for (const cell of buildCells) {
     for (const n of neighbors4(cell)) {
@@ -148,7 +156,9 @@ function drivewayTowardRoad(
       let score = parking.length * 10 + ((road.c + road.r) % 3);
       if (access === "garage" && parking.length >= 2) score += 8;
       if (access === "curb" && parking.length === 1) score += 6;
-      candidates.push({ parking, stop: parking[0]!, score });
+      // `road` is the street this pad was cut against — carry it so the parked heading
+      // never has to re-guess it from adjacency.
+      candidates.push({ parking, stop: parking[0]!, street: road, score });
     }
   }
 
@@ -223,6 +233,7 @@ function tryPlaceHouse(
     id: `house-${houses.length + 1}`,
     house: origin,
     stop: pad.stop,
+    street: pad.street,
     lotW: size.w,
     lotH: size.h,
     parking: pad.parking,
@@ -277,14 +288,22 @@ function placeShop(kinds: TileKind[][], walkable: boolean[][]): { shopLot: ShopL
   paintParking(kinds, walkable, parking);
 
   // Park at Kindling in the west strip (opens onto the street), not in the road.
-  const shopSpawn =
-    parking.find((p) => neighbors4(p).some((n) => kinds[n.r]?.[n.c] === "road")) ?? parking[0] ?? { c: 3, r: 4 };
+  // The strip runs north–south, so of the two streets a corner stall can touch, the one
+  // it fronts is the N–S street beside it — take that road tile, not merely the first.
+  const streetOf = (p: TileCell): TileCell | undefined => {
+    const roads = neighbors4(p).filter((n) => kinds[n.r]?.[n.c] === "road");
+    return roads.find((n) => n.r === p.r && isNSStreet(n.c)) ?? roads[0];
+  };
+  const spawnCell = parking.find((p) => streetOf(p));
+  const shopSpawn = spawnCell ?? parking[0] ?? { c: 3, r: 4 };
   if (!parking.some((p) => p.c === shopSpawn.c && p.r === shopSpawn.r)) {
     parking.unshift(shopSpawn);
     paintParking(kinds, walkable, [shopSpawn]);
   }
+  const street = streetOf(shopSpawn);
+  if (!street) throw new Error("Kindling's van stall does not touch a street");
 
-  return { shopLot: { origin, w, h, parking }, shopSpawn };
+  return { shopLot: { origin, w, h, parking, street }, shopSpawn };
 }
 
 export function buildCityMap(): CityMap {

@@ -262,14 +262,23 @@ export function pointAheadOnRoute(
   return route[route.length - 1] ?? { x, y };
 }
 
-/** Shortest-path lerp for headings in (-π, π]. */
-export function lerpAngle(from: number, to: number, t: number): number {
-  const fromN = Math.atan2(Math.sin(from), Math.cos(from));
-  const toN = Math.atan2(Math.sin(to), Math.cos(to));
-  let delta = toN - fromN;
+/** Normalise a heading into (-π, π]. */
+export function normalizeAngle(angle: number): number {
+  return Math.atan2(Math.sin(angle), Math.cos(angle));
+}
+
+/** Signed shortest turn from one heading to another, in (-π, π]. */
+export function angleDelta(from: number, to: number): number {
+  let delta = normalizeAngle(to) - normalizeAngle(from);
   while (delta > Math.PI) delta -= Math.PI * 2;
   while (delta < -Math.PI) delta += Math.PI * 2;
-  return fromN + delta * Math.max(0, Math.min(1, t));
+  return delta;
+}
+
+/** Shortest-path lerp for headings in (-π, π]. */
+export function lerpAngle(from: number, to: number, t: number): number {
+  const fromN = normalizeAngle(from);
+  return fromN + angleDelta(fromN, to) * Math.max(0, Math.min(1, t));
 }
 
 export function routeLength(route: readonly WorldPoint[]): number {
@@ -294,6 +303,34 @@ export function routeIsOrthogonal(route: readonly WorldPoint[], epsilon = 1.5): 
     if (!axisAligned) return false;
   }
   return true;
+}
+
+/**
+ * How a car actually sits in a stall: squared up with the street it fronts, pointing the
+ * way traffic legally moves in the kerb lane beside it.
+ *
+ * Both halves fall out of one vector — stall → the road tile it opens onto:
+ *
+ * - **Axis.** The stall is a lot tile, so a road tile sharing its row can only belong to a
+ *   north–south street, and one sharing its column can only belong to an east–west street
+ *   (a tile on an E–W street row is road for its whole length, so a lot tile could not sit
+ *   there). The offset therefore names the axis outright, on either street orientation.
+ * - **Direction.** Of the two headings along that axis, the legal one is the one that puts
+ *   the kerb — the stall side — on the car's right, which is {@link driveLaneCell}'s rule
+ *   seen from the pavement. Rotating stall→road a quarter turn clockwise in screen space
+ *   (y down) is exactly that heading: a stall north of an E–W street faces west, matching
+ *   the northern (westbound) lane it backs onto; one west of a N–S street faces south.
+ *
+ * Deliberately independent of how the van approached. The last leg into a stall is
+ * perpendicular to the street, so an approach-based choice would be picking between two
+ * headings that are both 90° away — a coin toss that flips half the city the wrong way.
+ */
+export function kerbParkHeading(stop: TileCell, street: TileCell): number {
+  const dc = street.c - stop.c;
+  const dr = street.r - stop.r;
+  if (dc === 0 && dr === 0) throw new Error("A stall cannot be its own street tile");
+  // (dc, dr) rotated +90° with y pointing down is (-dr, dc).
+  return Math.atan2(dc, -dr);
 }
 
 /** North-American right-hand lane tile for a grid step (2-tile streets). */

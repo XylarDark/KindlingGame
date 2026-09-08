@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { CITY, isEWStreet, isNSStreet } from "../maps/cityT0";
 import {
   advanceRoute,
+  angleDelta,
   driveLaneCell,
+  kerbParkHeading,
   laneWorldPoint,
   lerpAngle,
   orthogonalLanePath,
@@ -137,5 +140,73 @@ describe("driveRoute", () => {
     // One ~90° corner (+ settle): well under a half-circle of absolute turn.
     expect((spin * 180) / Math.PI).toBeLessThan(150);
     expect((maxStep * 180) / Math.PI).toBeLessThanOrEqual(95);
+  });
+});
+
+describe("parked heading", () => {
+  const EAST = 0;
+  const SOUTH = Math.PI / 2;
+  const WEST = Math.PI;
+  const NORTH = -Math.PI / 2;
+
+  it("faces the way the kerb lane beside the stall travels", () => {
+    const stop = { c: 9, r: 6 };
+    // Road to the south: the stall is on an E–W street's north kerb, which is westbound.
+    expect(kerbParkHeading(stop, { c: 9, r: 7 })).toBeCloseTo(WEST);
+    expect(kerbParkHeading(stop, { c: 9, r: 5 })).toBeCloseTo(EAST);
+    // Road to the east: the stall is on a N–S street's west kerb, which is southbound.
+    expect(kerbParkHeading(stop, { c: 10, r: 6 })).toBeCloseTo(SOUTH);
+    expect(kerbParkHeading(stop, { c: 8, r: 6 })).toBeCloseTo(NORTH);
+  });
+
+  it("refuses a stall that claims to be its own street tile", () => {
+    expect(() => kerbParkHeading({ c: 4, r: 4 }, { c: 4, r: 4 })).toThrow(/own street tile/);
+  });
+
+  /**
+   * Lots are dealt round-robin across every city block, so they front streets of both
+   * orientations. A sweep that happened to see only one would pass with half the city
+   * parked wrong — hence the assertion that both groups are populated before any of the
+   * per-lot checks run.
+   */
+  it("squares every lot in the city up with its own street, on both orientations", () => {
+    const alongEW = CITY.houses.filter((h) => h.street.c === h.stop.c);
+    const alongNS = CITY.houses.filter((h) => h.street.r === h.stop.r);
+    expect(alongEW.length, "no lot fronts an E–W street").toBeGreaterThan(0);
+    expect(alongNS.length, "no lot fronts a N–S street").toBeGreaterThan(0);
+    expect(alongEW.length + alongNS.length).toBe(CITY.houses.length);
+
+    for (const house of alongEW) {
+      expect(isEWStreet(house.street.r), house.id).toBe(true);
+      // Due east or west — no component across the street, which is the skew being fixed.
+      expect(Math.abs(Math.sin(kerbParkHeading(house.stop, house.street))), house.id).toBeCloseTo(0);
+    }
+    for (const house of alongNS) {
+      expect(isNSStreet(house.street.c), house.id).toBe(true);
+      expect(Math.abs(Math.cos(kerbParkHeading(house.stop, house.street))), house.id).toBeCloseTo(0);
+    }
+
+    for (const house of CITY.houses) {
+      const heading = kerbParkHeading(house.stop, house.street);
+      // Kerb on the driver's right, carriageway on their left: right-hand traffic stated
+      // from the pavement rather than from the lane table.
+      const toRoad = { x: house.street.c - house.stop.c, y: house.street.r - house.stop.r };
+      const right = { x: -Math.sin(heading), y: Math.cos(heading) };
+      expect(right.x * toRoad.x + right.y * toRoad.y, house.id).toBeLessThan(0);
+
+      // And the same claim checked against the game's own lane table: a car driving off
+      // in the parked direction is already in the legal lane for it.
+      const ahead = {
+        c: house.street.c + Math.round(Math.cos(heading)),
+        r: house.street.r + Math.round(Math.sin(heading)),
+      };
+      expect(driveLaneCell(house.street, ahead), house.id).toEqual(house.street);
+    }
+  });
+
+  it("measures the shortest turn across the ±π seam", () => {
+    expect(angleDelta(3.0, -3.0)).toBeCloseTo(2 * Math.PI - 6.0);
+    expect(angleDelta(-3.0, 3.0)).toBeCloseTo(6.0 - 2 * Math.PI);
+    expect(angleDelta(0, Math.PI / 2)).toBeCloseTo(Math.PI / 2);
   });
 });

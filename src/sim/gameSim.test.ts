@@ -15,7 +15,9 @@ import {
 } from "./constants";
 import { GameSim } from "./gameSim";
 import { tutorialHints } from "./tutorialHints";
-import { CITY, houseById, tileToWorld } from "../maps/cityT0";
+import { CITY, houseById, isEWStreet, isNSStreet, lotCenter, tileToWorld } from "../maps/cityT0";
+import { angleDelta, driveLaneCell } from "./driveRoute";
+import { PARK_TURN_RATE } from "./constants";
 import {
   TRAFFIC_LANE_WIDTH,
   TRAFFIC_LOOK_AHEAD,
@@ -512,6 +514,83 @@ describe("GameSim order loops", () => {
     const pad = tileToWorld(stop.stop);
     const v = sim.snapshot().vehicle;
     expect(Math.hypot(v.x - pad.x, v.y - pad.y)).toBeLessThan(2);
+  });
+
+  /**
+   * The van used to come to rest still aimed at the house, so it sat skewed across the
+   * pad instead of squared up in it. Lots are dealt round-robin across every block, so a
+   * lot fronting a north–south street parks on a different axis than one on an east–west
+   * street — driving only the nearest house would leave half the city untested.
+   */
+  it.each([
+    ["an east-west street", CITY.houses.find((h) => h.street.c === h.stop.c)!],
+    ["a north-south street", CITY.houses.find((h) => h.street.r === h.stop.r)!],
+  ])("parks square with the kerb at a lot on %s", (_label, house) => {
+    expect(house, "the city has no lot on this street orientation").toBeDefined();
+    const sim = GameSim.create({ seed: 5, autoSpawn: false });
+    fillTicket(sim, "delivery", { destinationId: house.id });
+    sim.hitTheRoad();
+    for (let i = 0; i < 2_000 && sim.snapshot().autoDriving; i++) sim.tick(50);
+    expect(sim.snapshot().autoDriving, `${house.id} never arrived`).toBe(false);
+
+    // The last turn is rate limited, so settle it — and check on the way that it was a
+    // turn and not a snap.
+    let heading = sim.snapshot().vehicle.heading;
+    let biggestStep = 0;
+    for (let i = 0; i < 80; i++) {
+      sim.tick(50);
+      const next = sim.snapshot().vehicle.heading;
+      biggestStep = Math.max(biggestStep, Math.abs(angleDelta(heading, next)));
+      heading = next;
+    }
+    expect(biggestStep, `${house.id} jumped mid-park`).toBeLessThanOrEqual(PARK_TURN_RATE * 0.05 + 1e-6);
+
+    // Along the street it fronts, with no component across it.
+    const acrossStreet = house.street.c === house.stop.c ? Math.sin(heading) : Math.cos(heading);
+    expect(house.street.c === house.stop.c ? isEWStreet(house.street.r) : isNSStreet(house.street.c)).toBe(true);
+    expect(Math.abs(acrossStreet), `${house.id} sits skewed`).toBeCloseTo(0);
+
+    // Pointing the way its own kerb lane runs, checked against the game's lane table.
+    const ahead = {
+      c: house.street.c + Math.round(Math.cos(heading)),
+      r: house.street.r + Math.round(Math.sin(heading)),
+    };
+    expect(driveLaneCell(house.street, ahead), `${house.id} faces oncoming traffic`).toEqual(house.street);
+
+    // And explicitly not the old behaviour: aimed at the house it just delivered to.
+    const v = sim.snapshot().vehicle;
+    const home = lotCenter(house.house, house.lotW, house.lotH);
+    const atHouse = Math.atan2(home.y - v.y, home.x - v.x);
+    expect(Math.abs(angleDelta(heading, atHouse)), `${house.id} still faces the house`).toBeGreaterThan(0.6);
+  });
+
+  it("eases the last turn into the stall over several ticks", () => {
+    const house = CITY.houses.find((h) => h.street.c === h.stop.c)!;
+    const sim = GameSim.create({ seed: 5, autoSpawn: false });
+    fillTicket(sim, "delivery", { destinationId: house.id });
+    sim.hitTheRoad();
+    const before = sim.snapshot().vehicle.heading;
+
+    // Drop the van straight onto the pad so the only thing left to do is square up.
+    const pad = tileToWorld(house.stop);
+    sim.setVehiclePosition(pad.x, pad.y);
+    sim.tick(16);
+    expect(sim.snapshot().autoDriving).toBe(false);
+    const onArrival = sim.snapshot().vehicle.heading;
+
+    let settledAfter = 0;
+    let heading = onArrival;
+    for (let i = 0; i < 200; i++) {
+      sim.tick(16);
+      const next = sim.snapshot().vehicle.heading;
+      if (Math.abs(angleDelta(heading, next)) > 1e-9) settledAfter = i + 1;
+      heading = next;
+    }
+    // A real turn happened, it took time, and it came to rest exactly on the kerb heading.
+    expect(Math.abs(angleDelta(before, heading)), "nothing to turn — pick another lot").toBeGreaterThan(1);
+    expect(Math.abs(angleDelta(onArrival, heading)), "snapped on the arrival tick").toBeGreaterThan(0.5);
+    expect(settledAfter, "did not settle").toBeGreaterThan(1);
+    expect(Math.abs(Math.sin(heading))).toBeCloseTo(0);
   });
 
   it("queues behind traffic at the follow gap and still reaches the stop", () => {

@@ -36,6 +36,19 @@ describe("city map", () => {
     }
   });
 
+  it("records the street each stall opens onto, for the shop's corner stall too", () => {
+    const stalls: { label: string; stop: typeof CITY.shopSpawn; street: typeof CITY.shopSpawn }[] = [
+      ...CITY.houses.map((h) => ({ label: h.id, stop: h.stop, street: h.street })),
+      { label: "shop", stop: CITY.shopSpawn, street: CITY.shopLot.street },
+    ];
+    expect(stalls).toHaveLength(CITY.houses.length + 1);
+    for (const { label, stop, street } of stalls) {
+      expect(CITY.kinds[street.r]![street.c], label).toBe("road");
+      // Orthogonally adjacent — a stall opens onto the kerb it touches, never a diagonal.
+      expect(Math.abs(street.c - stop.c) + Math.abs(street.r - stop.r), label).toBe(1);
+    }
+  });
+
   it("keeps every house reachable from Kindling", () => {
     expect(CITY.walkable[CITY.shopSpawn.r]?.[CITY.shopSpawn.c]).toBe(true);
     // All fourteen, by id — a lot that generates but cannot be driven to is the exact

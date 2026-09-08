@@ -17,6 +17,13 @@ export const VEHICLE_SPEED = 380;
 export const HANDOFF_RADIUS = 160;
 /** Snap into a parking stall once this close to the pad center. */
 export const PARK_ARRIVE_RADIUS = 70;
+/**
+ * How fast the van squares up in its stall, in rad/s. The driver is still at the wheel
+ * and the camera is still on them, so the last quarter turn is a turn, not a snap. A
+ * linear rate rather than an exponential ease so it lands exactly on the parked heading
+ * in bounded time — 90° in a quarter of a second — instead of only ever approaching it.
+ */
+export const PARK_TURN_RATE = 6.4;
 export const DOOR_HAND_RADIUS = 80;
 export const CALL_CONNECT_MS = 1_800;
 export const DROPOFF_WALK_SPEED = 160;
