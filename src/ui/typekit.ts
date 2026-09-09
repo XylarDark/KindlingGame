@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { MARK } from "./copy";
 import { TYPE_MIN_FIT_PX, Type, designPxForMinCss } from "./theme";
+import { clampFitSize, typeFitRange, type SizeMeasure } from "./typeFit";
 import {
   capsTracking,
   currentDpr,
@@ -26,8 +27,13 @@ type TypeBox = {
   minPx?: number;
   /** Recompute design floor from on-screen CSS px on each fit (viewfit-safe). */
   minCssFloor?: number;
+  /** Recompute design ceiling from on-screen CSS px on each fit. */
+  maxCssCeiling?: number;
   basePx?: number;
   noWrap?: boolean;
+  /** Plaque / chip may grow with the glyphs instead of clipping at the floor. */
+  growBox?: boolean;
+  overflow?: boolean;
 };
 
 function enableCanvasSmoothing(text: Phaser.GameObjects.Text): void {
@@ -75,7 +81,8 @@ function padExtents(text: Phaser.GameObjects.Text): { x: number; y: number } {
 }
 
 /**
- * Shrink font size until the glyph box fits — never bitmap-scale (that pixelates).
+ * Clamp font size into [floor, ceiling] so type can grow toward a CSS cap when the
+ * box has slack, and shrink when copy is long. Never bitmap-scale (that pixelates).
  * Wrap width is padded conservatively so letter-spacing cannot spill past the box.
  */
 export function fitTypeToBox(
@@ -87,18 +94,24 @@ export function fitTypeToBox(
   text.setScale(1);
   const box: TypeBox = text.getData(TYPEKIT_BOX) ?? {};
   const basePx = box.basePx ?? parseFontPx(text.style.fontSize);
+  const scale = getStageContainScale();
   const cssFloor =
-    box.minCssFloor !== undefined
-      ? designPxForMinCss(box.minCssFloor, getStageContainScale())
-      : 0;
-  const floor = Math.max(MIN_FIT_PX, minPx, cssFloor);
-  let px = basePx;
+    box.minCssFloor !== undefined ? designPxForMinCss(box.minCssFloor, scale) : 0;
+  const cssCeiling =
+    box.maxCssCeiling !== undefined ? designPxForMinCss(box.maxCssCeiling, scale) : 0;
+  const { floor, ceiling } = typeFitRange({
+    basePx,
+    minPx: Math.max(MIN_FIT_PX, minPx),
+    cssFloor,
+    cssCeiling,
+  });
 
   const widthLimit = maxWidth ?? box.maxWidth;
   const heightLimit = maxHeight ?? box.maxHeight;
   const noWrap = box.noWrap ?? false;
+  const growBox = box.growBox ?? false;
 
-  const applySize = (size: number): void => {
+  const applySize = (size: number): SizeMeasure => {
     text.setFontSize(size);
     applyTracking(text, text.text, text.getData("typekitTracking"));
     const pad = padExtents(text);
@@ -110,18 +123,30 @@ export function fitTypeToBox(
       const wrapW = Math.max(8, widthLimit - pad.x - gutter);
       text.setStyle({ wordWrap: { width: wrapW } });
     }
+    text.setFixedSize(0, 0);
     text.updateText();
+    return { width: text.width, height: text.height };
   };
 
-  applySize(px);
+  const fitted = clampFitSize(applySize, floor, ceiling, { width: widthLimit, height: heightLimit });
+  applySize(fitted.size);
+  if (fitted.clip && !growBox) {
+    const clipW = widthLimit && widthLimit > 0 ? widthLimit : text.width;
+    const clipH = heightLimit && heightLimit > 0 ? heightLimit : text.height;
+    text.setFixedSize(clipW, clipH);
+  }
 
-  let guard = 0;
-  while (px > floor && guard++ < 200) {
-    const tooWide = widthLimit !== undefined && widthLimit > 0 && text.width > widthLimit + 0.5;
-    const tooTall = heightLimit !== undefined && heightLimit > 0 && text.height > heightLimit + 0.5;
-    if (!tooWide && !tooTall) break;
-    px -= 1;
-    applySize(px);
+  if (import.meta.env.DEV && fitted.overflow && !box.overflow) {
+    console.debug("typekit: floor does not fit box", {
+      sample: String(text.text).slice(0, 48),
+      floor,
+      ceiling,
+      size: fitted.size,
+      clip: fitted.clip,
+      widthLimit,
+      heightLimit,
+      measured: { w: text.width, h: text.height },
+    });
   }
 
   text.setData(TYPEKIT_BOX, {
@@ -129,8 +154,11 @@ export function fitTypeToBox(
     maxHeight: heightLimit,
     minPx: floor,
     minCssFloor: box.minCssFloor,
+    maxCssCeiling: box.maxCssCeiling,
     basePx,
     noWrap,
+    growBox,
+    overflow: fitted.overflow,
   } satisfies TypeBox);
   return polishText(text, text.scene);
 }
@@ -142,7 +170,7 @@ export function fitTypeToWidth(text: Phaser.GameObjects.Text, maxWidth: number, 
 
 /**
  * Move a boxed label's type step at runtime. `setFontSize` alone does not survive here:
- * shrink-to-fit always restarts from the size the label was authored with, so the next
+ * clamp-fit always restarts from the size the label was authored with, so the next
  * refit — a viewport change is enough — would put the old step back. The seed lives in
  * the stored box, and this is the only way to move it.
  */
@@ -152,7 +180,7 @@ export function retypeSize(text: Phaser.GameObjects.Text, px: number): Phaser.Ga
   return fitTypeToBox(text, box.maxWidth, box.maxHeight, box.minPx ?? MIN_FIT_PX);
 }
 
-/** Re-run shrink-to-fit after padding / color chrome changes. */
+/** Re-run clamp-fit after padding / color chrome changes. */
 export function refitType(text: Phaser.GameObjects.Text): Phaser.GameObjects.Text {
   refitStoredBox(text);
   return text;
@@ -187,19 +215,23 @@ export interface TypeStyle {
   strokeThickness?: number;
   lineSpacing?: number;
   letterSpacing?: number;
-  /** Shrink until glyphs fit this width (also sets word wrap). */
+  /** Clamp-fit glyphs into this width (also sets word wrap). */
   maxWidth?: number;
-  /** Shrink until glyphs fit this height. */
+  /** Clamp-fit glyphs into this height. */
   maxHeight?: number;
-  /** Floor for shrink-to-fit (default {@link TYPE_MIN_FIT_PX}). */
+  /** Floor for clamp-fit (default {@link TYPE_MIN_FIT_PX}). */
   minPx?: number;
   /**
    * On-screen CSS px floor. Converted to design px via current contain scale on each
    * fit so viewfit refresh cannot silently drop below the readability contract.
    */
   minCssFloor?: number;
+  /** On-screen CSS px grow cap. Type sizes up toward this when the box has slack. */
+  maxCssCeiling?: number;
   /** Keep authored line breaks — shrink to fit width instead of wrapping. */
   noWrap?: boolean;
+  /** Let the measured box grow instead of clipping when the floor cannot fit. */
+  growBox?: boolean;
 }
 
 function canvasStyle(options: TypeStyle): Phaser.Types.GameObjects.Text.TextStyle {
@@ -238,8 +270,10 @@ function finishType(
     maxHeight: options.maxHeight,
     minPx: options.minPx ?? MIN_FIT_PX,
     minCssFloor: options.minCssFloor,
+    maxCssCeiling: options.maxCssCeiling,
     basePx,
     noWrap: options.noWrap ?? false,
+    growBox: options.growBox ?? false,
   } satisfies TypeBox);
   applyTracking(text, content, options.letterSpacing);
   if (options.letterSpacing !== undefined) text.setData("typekitTracking", options.letterSpacing);

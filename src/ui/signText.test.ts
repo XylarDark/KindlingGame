@@ -47,7 +47,7 @@ describe("text boxes are all the counter plaque", () => {
   });
 
   it("measures the field off the text that rendered, not the box it asked for", () => {
-    // `fitTypeToBox` only ever shrinks, so a plaque sized from the authored constants
+    // `fitTypeToBox` clamp-fits, so a plaque sized from the authored constants
     // would stand proud of a shrunken caption. This is the same trap that has caught
     // the layout audit and the SCORE caption before it.
     expect(helper).toMatch(/text\.width \* text\.originX/);

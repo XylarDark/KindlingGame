@@ -34,4 +34,21 @@ describe("game scale config", () => {
     expect(html).toContain("viewport-fit=cover");
     expect(html).toContain("100dvh");
   });
+
+  it("paints OS chrome and letterbox as sky, keeping leaf on the side rails", () => {
+    const html = readFileSync(join(root, "index.html"), "utf8").replace(/\r\n/g, "\n");
+    const manifest = readFileSync(join(root, "public/manifest.webmanifest"), "utf8");
+    const config = readFileSync(join(root, "src/config.ts"), "utf8");
+    expect(html).toContain('name="theme-color" content="#1b2238"');
+    expect(html).toMatch(/\.kindling-rail \{[\s\S]*?background: #3d6a44/);
+    const bodyRule = /html,\s*body \{[^}]+\}/.exec(html);
+    if (!bodyRule) throw new Error("html, body rule missing");
+    expect(bodyRule[0]).toContain("background: #1b2238");
+    expect(bodyRule[0]).not.toContain("position: fixed");
+    expect(config).toContain('backgroundColor: "#1b2238"');
+    expect(manifest).toContain('"theme_color": "#1b2238"');
+    expect(manifest).toContain('"background_color": "#1b2238"');
+    expect(manifest).toContain('"display_override"');
+    expect(manifest).toContain("fullscreen");
+  });
 });

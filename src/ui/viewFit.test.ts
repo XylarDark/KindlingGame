@@ -109,7 +109,8 @@ describe("viewfit notify", () => {
 });
 
 describe("HUD touch after scale", () => {
-  it("keeps HUD buttons at least ~44 CSS px on every popular landscape size", () => {
+  it("keeps HUD buttons at least ~48 CSS px on every popular landscape size", () => {
+    expect(MIN_CSS_TOUCH_PX).toBe(48);
     expect(HUD_TOUCH_MIN_DESIGN).toBe(minDesignPx(MIN_CSS_TOUCH_PX, "y"));
     for (const view of POPULAR_MOBILE_LANDSCAPE) {
       expect(cssPxFromDesign(HUD_TOUCH_MIN_DESIGN, "y", view)).toBeGreaterThanOrEqual(MIN_CSS_TOUCH_PX - 0.5);

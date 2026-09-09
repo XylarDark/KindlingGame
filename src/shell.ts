@@ -1,4 +1,4 @@
-import type Phaser from "phaser";
+import { Color } from "./ui/theme";
 import { GAME_HEIGHT, GAME_WIDTH } from "./sim/constants";
 import {
   containStage,
@@ -103,7 +103,11 @@ export function installMobileShell(game: Phaser.Game): void {
       shell.style.width = `${width}px`;
       shell.style.height = `${height}px`;
       shell.style.transform = `translate(${ox}px, ${oy}px)`;
+      shell.style.background = Color.skyTopHex;
     }
+    document.documentElement.style.background = Color.skyTopHex;
+    const theme = document.querySelector('meta[name="theme-color"]');
+    if (theme) theme.setAttribute("content", Color.skyTopHex);
 
     const packed = containStage({ width, height });
     // Publish contain scale before viewfit so type floors / mobile ramp see it.

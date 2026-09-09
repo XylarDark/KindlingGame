@@ -53,18 +53,17 @@ describe("settings cog panel", () => {
     expect(fn).not.toContain("SETTINGS_W");
     expect(fn).not.toContain("SETTINGS_H");
     // A Container is 0x0 until sized, which would shrink the punch-out to nothing.
-    expect(src).toContain("this.settingsPanel.setSize(SETTINGS_W, SETTINGS_H);");
+    expect(src).toContain("this.settingsPanel.setSize(SETTINGS_W, box.h);");
   });
 
   it("derives the panel box from the button box so one scale moves the whole panel", () => {
     expect(src).toContain("const SETTINGS_W = SET_BTN_W + SET_PAD * 2;");
-    expect(src).toContain("const SETTINGS_H = SET_HINT_Y + SET_HINT_H + SET_PAD;");
-    expect(src.match(/minWidth: SET_BTN_W/g)).toHaveLength(2);
-    expect(src.match(/minHeight: SET_BTN_H/g)).toHaveLength(2);
+    expect(src).toContain("const btnH = Math.max(80, rowH);");
+    expect(src).not.toContain("Math.max(HUD_BUTTON_MIN_H, rowH)");
   });
 
   it("seeds both button labels at the same step, which only short copy can hold", () => {
-    // fitTypeToBox only ever shrinks, so a seed above what the box can fit renders at
+    // clamp-fit will drop a seed the box cannot hold, so the constant becomes a lie.
     // the fitted size and the constant becomes a lie. "RESET DAY TO 9:00 AM" overran the
     // label box and pinned itself to 18px next to END SHIFT's 26px; the copy was cut to
     // "RESET TO 9 AM" to buy the size back. This pins the seeds — a longer label would

@@ -101,7 +101,7 @@ describe("doorstep prompt", () => {
     expect(pxConstant("doorPromptPx")).toBeCloseTo(31.25, 5);
   });
 
-  it("grows the prompt's box with its font, because fitTypeToBox only shrinks", () => {
+  it("grows the prompt's box with its font, because clamp-fit will drop a tight box", () => {
     // The trap: raise the seed and leave the box, and the text renders at the old size
     // while the constant claims otherwise — a change that looks done and does nothing.
     const box = between(src, "this.prompt = addSignText(", ".setOrigin(0.5, 1)", "prompt box");

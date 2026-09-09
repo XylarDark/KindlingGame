@@ -80,6 +80,14 @@ the thing it described.
 - **Fix:** state the chrome in cells so it genuinely derives (`PHONE_CELL * 2.5`, `* 4`, `* 0.25`), which puts the band at 64.4px and lets the caption reach its authored 20px — read back off the live text object, not inferred from the constant. The band now carries a comment naming it the tightest box on the phone and quoting the two numbers that make it tight (64 of 64.4), so the next person who wants a taller map can see what they would be spending. Commit `be757d4`, in `src/scenes/HudScene.ts` and `src/art/phoneArt.ts`.
 - **Prevention:** **assert the effective rendered size, never the declared constant.** A test pinning `PHONE_STATUS_PX` would have passed identically in the broken state and the fixed one; only `style.fontSize` off the object in a browser distinguishes them. And read a comment asserting a derivation as an unverified claim rather than a guarantee — nothing fails when a hand-written number quietly replaces a derived one, so the drift is silent by construction and the person who finds it is never the person who caused it. The same shape is worth watching for wherever a constant names a size: see the `RESET TO 9 AM` label, which was pinned at 18px next to a sibling's 26px until the copy was cut.
 
+### Shrink-to-fit plus a CSS floor drew glyphs outside the box
+
+- **Date:** 2026-09-09
+- **Symptom:** raising `minCssFloor` for mobile readability made labels escape their plaques and HUD bands. `tsc` and the shrink-loop tests stayed green: the loop still exited, and the stored `basePx` was unchanged.
+- **Cause:** `fitTypeToBox` only ever walked *down* from the authored seed and stopped at the floor. When the floor was larger than the box, it applied that floor and returned — overflow was the success path. Nothing measured `text.width` against `typekitBox.maxWidth` after the loop.
+- **Fix:** clamp-fit in `src/ui/typeFit.ts` picks the largest size in `[floor, ceiling]` that fits, can grow toward a CSS cap, and if even the floor sticks out it drops below the floor (or clips) rather than drawing outside the box. The interval is a pure function with tests; Phaser only rasterizes the chosen size.
+- **Prevention:** a one-way clamp plus a floor is two contracts that fight. Test the matrix (grows, shrinks, sub-floor, clip) on the pure fitter, not on a Phaser Text. An overflow audit that skips items with no `typekitBox` is the other half of this — see the layout-audit entry above.
+
 ### A tint named `flash` multiplied a green sprite by green, and changed nothing
 
 - **Date:** 2026-09-08

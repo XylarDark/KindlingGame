@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { Type, TYPE_MIN_FIT_PX, MSG_SCALE, MOBILE_TEXT_SCALE, MOBILE_STAGE_SCALE_MAX, MSG_MIN_CSS_PX, HUD_CHROME_MIN_CSS_PX, MOBILE_MSG_PAD_EXTRA, designPxForMinCss, shouldApplyMobileTextRamp, effectiveMsgScale, effectiveChromeScale, scaleMsgBox, scaleMsgPad, scaleMsgPx, scaleChromePx, msgMinFitPx, chromeMinFitPx } from "./theme";
+import { Type, TYPE_MIN_FIT_PX, MSG_SCALE, MOBILE_TEXT_SCALE, MOBILE_STAGE_SCALE_MAX, MSG_MIN_CSS_PX, MSG_MAX_CSS_PX, HUD_CHROME_MIN_CSS_PX, HUD_CHROME_MAX_CSS_PX, TV_MENU_MIN_CSS_PX, TV_MENU_MAX_CSS_PX, MSG_TYPE_FIT, HUD_TYPE_FIT, MENU_TYPE_FIT, MOBILE_MSG_PAD_EXTRA, designPxForMinCss, shouldApplyMobileTextRamp, effectiveMsgScale, effectiveChromeScale, scaleMsgBox, scaleMsgPad, scaleMsgPx, scaleChromePx, msgMinFitPx, chromeMinFitPx } from "./theme";
 import { parseFontPx } from "./typeMetrics";
 import { setStageContainScale } from "./viewFit";
 
@@ -49,6 +49,15 @@ describe("designPxForMinCss floors", () => {
     expect(msgMinFitPx(scale)).toBe(designPxForMinCss(MSG_MIN_CSS_PX, scale));
     expect(chromeMinFitPx(scale)).toBe(designPxForMinCss(HUD_CHROME_MIN_CSS_PX, scale));
     expect(msgMinFitPx(1)).toBeGreaterThanOrEqual(TYPE_MIN_FIT_PX);
+  });
+
+  it("publishes per-tier CSS ceilings above the floors", () => {
+    expect(MSG_MAX_CSS_PX).toBeGreaterThan(MSG_MIN_CSS_PX);
+    expect(HUD_CHROME_MAX_CSS_PX).toBeGreaterThan(HUD_CHROME_MIN_CSS_PX);
+    expect(TV_MENU_MAX_CSS_PX).toBeGreaterThan(TV_MENU_MIN_CSS_PX);
+    expect(MSG_TYPE_FIT.maxCssCeiling).toBe(MSG_MAX_CSS_PX);
+    expect(HUD_TYPE_FIT.minCssFloor).toBe(HUD_CHROME_MIN_CSS_PX);
+    expect(MENU_TYPE_FIT.minCssFloor).toBe(TV_MENU_MIN_CSS_PX);
   });
 });
 

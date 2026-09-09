@@ -23,14 +23,16 @@ import { getSim, startSession } from "../session";
 import type { SimSnapshot } from "../sim/gameSim";
 import type { ShiftResults } from "../sim/shiftResults";
 import { tutorialHints } from "../sim/tutorialHints";
-import { addHudButton, addPanel, HUD_BUTTON_MIN_H } from "../ui/chrome";
+import { addHudButton, addPanel } from "../ui/chrome";
 import { END_SHIFT_CAPTION, END_SHIFT_LABEL, RESULTS_NEW_DAY, RESULTS_TITLE } from "../ui/copy";
 import { addSignText, setSignAccent } from "../ui/signText";
 import { addUiText } from "../ui/text";
 import {
   Color,
-  HUD_CHROME_MIN_CSS_PX,
-  MSG_MIN_CSS_PX,
+  HUD_TYPE_FIT,
+  MENU_TYPE_FIT,
+  MSG_TYPE_FIT,
+  designPxForMinCss,
   scaleChromePx,
   scaleMsgBox,
   scaleMsgPad,
@@ -38,7 +40,7 @@ import {
   Type,
 } from "../ui/theme";
 import { parseFontPx, refitType, retypeSize } from "../ui/typekit";
-import { designSafeInset, HUD_TOUCH_MIN_DESIGN, readCssSafeArea, VIEWFIT_EVENT, viewFromScale } from "../ui/viewFit";
+import { designSafeInset, getStageContainScale, HUD_TOUCH_MIN_DESIGN, MIN_CSS_TOUCH_PX, readCssSafeArea, VIEWFIT_EVENT, viewFromScale } from "../ui/viewFit";
 
 /** Readouts sit either side of the counter sign, 10% over the display ramp. */
 const HUD_READOUT_PX = 40;
@@ -77,40 +79,72 @@ function rowMidY(label: Phaser.GameObjects.Text): number {
 function rowBand(
   label: Phaser.GameObjects.Text,
   value: Phaser.GameObjects.Text,
+  minHeight = 56,
 ): { mid: number; height: number } {
   const top = Math.min(label.y, value.y - value.height / 2);
   const bottom = Math.max(label.y + label.height, value.y + value.height / 2);
-  return { mid: (top + bottom) / 2, height: bottom - top };
+  const height = Math.max(bottom - top, minHeight);
+  return { mid: (top + bottom) / 2, height };
 }
 
 /**
- * Settings panel. The buttons were 392x132 -- 132 being the touch floor, half again
- * what the label stack needs -- so they now run at three quarters of that, and the
- * panel is derived from the button box rather than the reverse. Nothing below is a
- * free number: change SET_BTN_SCALE and the whole panel follows.
+ * Settings panel. Width still uses the 0.75 scale; row/button height follows the
+ * current contain scale so a phone hits 48 CSS px without a 900px desktop panel.
  */
 const SET_PAD = 24;
 const SET_BTN_SCALE = 0.75;
 const SET_BTN_W = Math.round((440 - SET_PAD * 2) * SET_BTN_SCALE);
-const SET_BTN_H = Math.round(HUD_BUTTON_MIN_H * SET_BTN_SCALE);
 const SET_BTN_GAP = 16;
-/** Buttons run full-bleed inside the padding, so the panel is as wide as they are. */
 const SETTINGS_W = SET_BTN_W + SET_PAD * 2;
-const SET_ROW_TOP = 64;
-const SET_VOL_ROW_TOP = 124;
 const VOL_KNOB_R = 12;
-const VOL_TRACK = { x: SET_PAD, y: 176, w: Math.round(312 * SET_BTN_SCALE), h: 16 };
-/** Below the volume knob so the Start-fullscreen row clears the slider hit box. */
-const SET_FS_ROW_TOP = VOL_TRACK.y + VOL_KNOB_R + 28;
-/** Install coach re-open — sits under Start fullscreen, above End Shift. */
-const SET_INSTALL_ROW_TOP = SET_FS_ROW_TOP + 52;
-const SET_STACK_TOP = SET_INSTALL_ROW_TOP + 52;
-const SET_END_SHIFT_Y = SET_STACK_TOP;
-const SET_RESET_Y = SET_END_SHIFT_Y + SET_BTN_H + SET_BTN_GAP;
-const SET_HINT_Y = SET_RESET_Y + SET_BTN_H + SET_BTN_GAP;
-/** One line, and the type step is capped to it, so the closing pad stays at SET_PAD. */
+const VOL_TRACK_X = SET_PAD;
+const VOL_TRACK_W = Math.round(312 * SET_BTN_SCALE);
+const VOL_TRACK_H = 16;
 const SET_HINT_H = 24;
-const SETTINGS_H = SET_HINT_Y + SET_HINT_H + SET_PAD;
+const SET_ROW_GAP = 8;
+
+type SettingsGeom = {
+  rowH: number;
+  btnH: number;
+  rowTop: number;
+  volRowTop: number;
+  volTrackY: number;
+  fsRowTop: number;
+  installRowTop: number;
+  endShiftY: number;
+  resetY: number;
+  hintY: number;
+  h: number;
+};
+
+function settingsGeom(stageScale = getStageContainScale()): SettingsGeom {
+  // Current contain scale, not HUD_BUTTON_MIN_H: that worst-case floor is ~139 design px
+  // and stacking it for every row overflowed the 1080 canvas on a phone.
+  const rowH = Math.max(56, designPxForMinCss(MIN_CSS_TOUCH_PX, Math.max(stageScale, 0.25)));
+  // addHudButton grows to stackH+32 (~80) when the min is smaller, so geom must match.
+  const btnH = Math.max(80, rowH);
+  const rowTop = 48;
+  const volRowTop = rowTop + rowH + SET_ROW_GAP;
+  const volTrackY = volRowTop + 22;
+  const fsRowTop = volTrackY + VOL_KNOB_R + SET_ROW_GAP;
+  const installRowTop = fsRowTop + rowH + SET_ROW_GAP;
+  const endShiftY = installRowTop + rowH + SET_ROW_GAP;
+  const resetY = endShiftY + btnH + SET_BTN_GAP;
+  const hintY = resetY + btnH + SET_BTN_GAP;
+  return {
+    rowH,
+    btnH,
+    rowTop,
+    volRowTop,
+    volTrackY,
+    fsRowTop,
+    installRowTop,
+    endShiftY,
+    resetY,
+    hintY,
+    h: hintY + SET_HINT_H + SET_PAD,
+  };
+}
 
 /**
  * Panel type steps. Rows and the end-shift button take a bump because their boxes have
@@ -132,10 +166,10 @@ const SET_HINT_PX = "14.3px";
 const HUD_COG_CAPTION_PX = HUD_CAPTION_PX * 1.25;
 const HUD_COG_CAPTION_PAD = { x: 12, y: 6 };
 /**
- * Grown from the step rather than typed, because `fitTypeToBox` only ever shrinks: the
- * old 36px box could not hold 22.5px type and would have rendered it at ~19px while the
- * constant claimed 22.5. One line of Inter measures ~1.21x its px; 1.4 leaves headroom
- * for the descender and the chip padding. Measured live: 22.5px in a 44px box.
+ * Grown from the step rather than typed, because clamp-fit will shrink a seed the
+ * box cannot hold: the old 36px box could not hold 22.5px type and would have
+ * rendered it at ~19px while the constant claimed 22.5. One line of Inter measures
+ * ~1.21x its px; 1.4 leaves headroom for the descender and the chip padding.
  */
 const HUD_COG_CAPTION_BOX = {
   w: 240,
@@ -287,6 +321,7 @@ export class HudScene extends Phaser.Scene {
   private cogCaption!: Phaser.GameObjects.Text;
   private settingsDim!: Phaser.GameObjects.Rectangle;
   private settingsPanel!: Phaser.GameObjects.Container;
+  private settingsBox!: SettingsGeom;
   private musicValue!: Phaser.GameObjects.Text;
   private fullscreenValue!: Phaser.GameObjects.Text;
   private volumeTrack!: Phaser.GameObjects.Rectangle;
@@ -325,7 +360,7 @@ export class HudScene extends Phaser.Scene {
       color: Color.creamHex,
       fontStyle: "700",
       align: "right",
-      minCssFloor: HUD_CHROME_MIN_CSS_PX,
+      ...HUD_TYPE_FIT,
       maxWidth: 360,
       maxHeight: 68,
       ...readoutOutline(HUD_SCORE_PX),
@@ -335,14 +370,14 @@ export class HudScene extends Phaser.Scene {
     // Seeded at the value's step, and kept there by matchCaptionToValue: the caption
     // reads as part of the number rather than a footnote under it. The box is the
     // value's height and wide enough for tracked caps at 44px (164px of glyphs), so
-    // shrink-to-fit leaves the seed alone at the size it was authored for.
+    // clamp-fit leaves the seed alone at the size it was authored for.
     this.scoreCaption = addUiText(this, 0, 0, "SCORE", {
       size: scaleChromePx(HUD_SCORE_PX),
       color: Color.creamHex,
       fontStyle: "700",
       align: "right",
       letterSpacing: 2,
-      minCssFloor: HUD_CHROME_MIN_CSS_PX,
+      ...HUD_TYPE_FIT,
       maxWidth: 220,
       maxHeight: 68,
       ...readoutOutline(HUD_SCORE_PX),
@@ -355,7 +390,7 @@ export class HudScene extends Phaser.Scene {
       size: scaleChromePx(HUD_READOUT_PX),
       color: Color.creamHex,
       fontStyle: "700",
-      minCssFloor: HUD_CHROME_MIN_CSS_PX,
+      ...HUD_TYPE_FIT,
       maxWidth: 360,
       maxHeight: 62,
       ...readoutOutline(HUD_READOUT_PX),
@@ -376,6 +411,7 @@ export class HudScene extends Phaser.Scene {
       strokeThickness: 0,
       letterSpacing: 0,
       noWrap: true,
+      ...HUD_TYPE_FIT,
       maxWidth: PHONE_APP.w - 16,
       maxHeight: PHONE_HEADER_H,
     }).setOrigin(0.5);
@@ -386,6 +422,7 @@ export class HudScene extends Phaser.Scene {
       lineSpacing: 2,
       padding: { x: 10, y: 4 },
       noWrap: true,
+      ...HUD_TYPE_FIT,
       maxWidth: PHONE_APP.w - 12,
       maxHeight: PHONE_STATUS_H,
     }).setOrigin(0.5);
@@ -416,7 +453,7 @@ export class HudScene extends Phaser.Scene {
       padding: scaleMsgPad({ x: 22, y: 13 }),
       align: "center",
       fontStyle: "600",
-      minCssFloor: MSG_MIN_CSS_PX,
+      ...MSG_TYPE_FIT,
       maxWidth: scaleMsgBox(900),
       maxHeight: scaleMsgBox(80),
     })
@@ -429,7 +466,7 @@ export class HudScene extends Phaser.Scene {
       padding: scaleMsgPad({ x: 12, y: 6 }),
       fontStyle: "600",
       noWrap: true,
-      minCssFloor: MSG_MIN_CSS_PX,
+      ...MSG_TYPE_FIT,
       maxWidth: scaleMsgBox(560),
       maxHeight: scaleMsgBox(40),
     })
@@ -455,7 +492,7 @@ export class HudScene extends Phaser.Scene {
       size: padLabelPx(),
       padding: scaleMsgPad({ x: 13, y: 8 }),
       fontStyle: "600",
-      minCssFloor: MSG_MIN_CSS_PX,
+      ...MSG_TYPE_FIT,
       maxWidth: scaleMsgBox(300),
       maxHeight: scaleMsgBox(50),
     })
@@ -532,6 +569,7 @@ export class HudScene extends Phaser.Scene {
       letterSpacing: 2,
       strokeThickness: 0,
       noWrap: true,
+      ...HUD_TYPE_FIT,
       maxWidth: ID_CARD_W * 0.6,
       maxHeight: ID_HEADER_H - 12,
     }).setOrigin(0, 0.5);
@@ -542,6 +580,7 @@ export class HudScene extends Phaser.Scene {
       letterSpacing: 1,
       strokeThickness: 0,
       noWrap: true,
+      ...HUD_TYPE_FIT,
       maxWidth: ID_CARD_W * 0.4,
       maxHeight: ID_HEADER_H - 16,
     }).setOrigin(1, 0.5);
@@ -555,6 +594,7 @@ export class HudScene extends Phaser.Scene {
       color: Color.inkHex,
       fontStyle: "700",
       strokeThickness: 0,
+      ...HUD_TYPE_FIT,
       maxWidth: ID_FIELD_W,
       maxHeight: 46,
     }).setOrigin(0, 0.5);
@@ -563,6 +603,7 @@ export class HudScene extends Phaser.Scene {
       color: "#3a2418",
       fontStyle: "600",
       strokeThickness: 0,
+      ...HUD_TYPE_FIT,
       maxWidth: ID_FIELD_W,
       maxHeight: 34,
     }).setOrigin(0, 0.5);
@@ -572,6 +613,7 @@ export class HudScene extends Phaser.Scene {
       fontStyle: "600",
       letterSpacing: 1,
       strokeThickness: 0,
+      ...HUD_TYPE_FIT,
       maxWidth: ID_FIELD_W,
       maxHeight: 34,
     }).setOrigin(0, 0.5);
@@ -584,6 +626,7 @@ export class HudScene extends Phaser.Scene {
       align: "center",
       strokeThickness: 0,
       noWrap: true,
+      ...HUD_TYPE_FIT,
       maxWidth: ID_CARD_W - ID_PAD * 4,
       maxHeight: 40,
     }).setOrigin(0.5);
@@ -593,6 +636,7 @@ export class HudScene extends Phaser.Scene {
       color: "#3a2418",
       fontStyle: "600",
       strokeThickness: 0,
+      ...HUD_TYPE_FIT,
       maxWidth: ID_FIELD_W,
       maxHeight: 34,
     }).setOrigin(0, 0.5);
@@ -605,6 +649,7 @@ export class HudScene extends Phaser.Scene {
         letterSpacing: 2,
         strokeThickness: 0,
         noWrap: true,
+        ...HUD_TYPE_FIT,
         maxWidth: ID_FIELD_W,
         maxHeight: 22,
       }).setOrigin(0, 0.5),
@@ -616,6 +661,7 @@ export class HudScene extends Phaser.Scene {
       letterSpacing: 2,
       strokeThickness: 0,
       noWrap: true,
+      ...HUD_TYPE_FIT,
       maxWidth: ID_PHOTO_W,
       maxHeight: 20,
     }).setOrigin(0.5, 0);
@@ -727,7 +773,8 @@ export class HudScene extends Phaser.Scene {
     this.cog.setDisplaySize(cogSize, cogSize);
     syncItemHit(this.cog);
     this.cogCaption.setPosition(cogX - cogSize / 2, cogY - cogSize - 8);
-    this.settingsPanel.setPosition(cogX - SETTINGS_W, cogY - cogSize - 32 - SETTINGS_H);
+    const panelTop = Math.max(inset.top, cogY - cogSize - 32 - this.settingsBox.h);
+    this.settingsPanel.setPosition(cogX - SETTINGS_W, panelTop);
 
     // Keep the phone clear of the settings cog (bottom-right).
     const cogLeft = cogX - cogSize;
@@ -998,9 +1045,11 @@ export class HudScene extends Phaser.Scene {
       this.closeSettings();
     });
 
+    const box = settingsGeom();
+    this.settingsBox = box;
     const panelX = GAME_WIDTH - 24 - SETTINGS_W;
-    const panelY = GAME_HEIGHT - 24 - 168 - SETTINGS_H;
-    const bg = addPanel(this, 0, 0, SETTINGS_W, SETTINGS_H, {
+    const panelY = GAME_HEIGHT - 24 - 168 - box.h;
+    const bg = addPanel(this, 0, 0, SETTINGS_W, box.h, {
       radius: 4,
       fill: Color.card,
       stroke: Color.woodTrim,
@@ -1011,14 +1060,16 @@ export class HudScene extends Phaser.Scene {
       color: Color.inkHex,
       fontStyle: "700",
       strokeThickness: 0,
+      ...MENU_TYPE_FIT,
       maxWidth: SET_BTN_W,
       maxHeight: 38,
     });
-    const musicLabel = addUiText(this, SET_PAD, SET_ROW_TOP, "Music", {
+    const musicLabel = addUiText(this, SET_PAD, box.rowTop, "Music", {
       size: SET_ROW_PX,
       color: Color.inkHex,
       fontStyle: "600",
       strokeThickness: 0,
+      ...MENU_TYPE_FIT,
       maxWidth: 180,
       maxHeight: 30,
     });
@@ -1027,12 +1078,13 @@ export class HudScene extends Phaser.Scene {
       color: Color.inkHex,
       fontStyle: "700",
       strokeThickness: 0,
+      ...MENU_TYPE_FIT,
       maxWidth: 140,
       maxHeight: 32,
     }).setOrigin(1, 0.5);
     // Hit box is measured off the two texts that make up the row, so it cannot grow an
     // invisible margin when the type step changes. Width is the button column.
-    const musicBand = rowBand(musicLabel, this.musicValue);
+    const musicBand = rowBand(musicLabel, this.musicValue, box.rowH);
     const musicHit = this.add
       .rectangle(SETTINGS_W / 2, musicBand.mid, SET_BTN_W, musicBand.height, 0x000000, 0.001)
       .setInteractive({ useHandCursor: true });
@@ -1042,11 +1094,12 @@ export class HudScene extends Phaser.Scene {
       this.refreshMusicControls();
     });
 
-    const volumeLabel = addUiText(this, SET_PAD, SET_VOL_ROW_TOP, "Volume", {
+    const volumeLabel = addUiText(this, SET_PAD, box.volRowTop, "Volume", {
       size: SET_ROW_PX,
       color: Color.inkHex,
       fontStyle: "600",
       strokeThickness: 0,
+      ...MENU_TYPE_FIT,
       maxWidth: 180,
       maxHeight: 30,
     });
@@ -1055,23 +1108,24 @@ export class HudScene extends Phaser.Scene {
       color: Color.inkHex,
       fontStyle: "700",
       strokeThickness: 0,
+      ...MENU_TYPE_FIT,
       maxWidth: 100,
       maxHeight: 30,
     }).setOrigin(1, 0.5);
     this.volumeTrack = this.add
-      .rectangle(VOL_TRACK.x, VOL_TRACK.y, VOL_TRACK.w, VOL_TRACK.h, 0xd8c8b0)
+      .rectangle(VOL_TRACK_X, box.volTrackY, VOL_TRACK_W, VOL_TRACK_H, 0xd8c8b0)
       .setOrigin(0, 0.5);
-    this.volumeFill = this.add.rectangle(VOL_TRACK.x, VOL_TRACK.y, 8, VOL_TRACK.h, Color.leaf).setOrigin(0, 0.5);
-    this.volumeKnob = this.add.circle(VOL_TRACK.x, VOL_TRACK.y, VOL_KNOB_R, Color.woodTrim);
+    this.volumeFill = this.add.rectangle(VOL_TRACK_X, box.volTrackY, 8, VOL_TRACK_H, Color.leaf).setOrigin(0, 0.5);
+    this.volumeKnob = this.add.circle(VOL_TRACK_X, box.volTrackY, VOL_KNOB_R, Color.woodTrim);
     // The knob overhangs both ends of the track by its radius, so that -- not the track
     // -- is the slider's visible extent, and the hit box is built from it. The pointer
     // to value mapping reads the track instead, so widening this cannot skew the value.
     this.volumeHit = this.add
       .rectangle(
-        VOL_TRACK.x + VOL_TRACK.w / 2,
-        VOL_TRACK.y,
-        VOL_TRACK.w + VOL_KNOB_R * 2,
-        VOL_KNOB_R * 2,
+        VOL_TRACK_X + VOL_TRACK_W / 2,
+        box.volTrackY,
+        VOL_TRACK_W + VOL_KNOB_R * 2,
+        Math.max(VOL_KNOB_R * 2, box.rowH),
         0x000000,
         0.001,
       )
@@ -1091,11 +1145,12 @@ export class HudScene extends Phaser.Scene {
       this.draggingVol = false;
     });
 
-    const fullscreenLabel = addUiText(this, SET_PAD, SET_FS_ROW_TOP, "Start fullscreen", {
+    const fullscreenLabel = addUiText(this, SET_PAD, box.fsRowTop, "Start fullscreen", {
       size: SET_ROW_PX,
       color: Color.inkHex,
       fontStyle: "600",
       strokeThickness: 0,
+      ...MENU_TYPE_FIT,
       maxWidth: 220,
       maxHeight: 30,
     });
@@ -1104,10 +1159,11 @@ export class HudScene extends Phaser.Scene {
       color: Color.inkHex,
       fontStyle: "700",
       strokeThickness: 0,
+      ...MENU_TYPE_FIT,
       maxWidth: 140,
       maxHeight: 32,
     }).setOrigin(1, 0.5);
-    const fullscreenBand = rowBand(fullscreenLabel, this.fullscreenValue);
+    const fullscreenBand = rowBand(fullscreenLabel, this.fullscreenValue, box.rowH);
     const fullscreenHit = this.add
       .rectangle(SETTINGS_W / 2, fullscreenBand.mid, SET_BTN_W, fullscreenBand.height, 0x000000, 0.001)
       .setInteractive({ useHandCursor: true });
@@ -1118,11 +1174,12 @@ export class HudScene extends Phaser.Scene {
       this.refreshFullscreenControl();
     });
 
-    const installLabel = addUiText(this, SET_PAD, SET_INSTALL_ROW_TOP, "Install for full screen", {
+    const installLabel = addUiText(this, SET_PAD, box.installRowTop, "Install for full screen", {
       size: SET_ROW_PX,
       color: Color.inkHex,
       fontStyle: "600",
       strokeThickness: 0,
+      ...MENU_TYPE_FIT,
       maxWidth: 260,
       maxHeight: 30,
     });
@@ -1131,10 +1188,11 @@ export class HudScene extends Phaser.Scene {
       color: "#3d6a44",
       fontStyle: "700",
       strokeThickness: 0,
+      ...MENU_TYPE_FIT,
       maxWidth: 100,
       maxHeight: 32,
     }).setOrigin(1, 0.5);
-    const installBand = rowBand(installLabel, installValue);
+    const installBand = rowBand(installLabel, installValue, box.rowH);
     const installHit = this.add
       .rectangle(SETTINGS_W / 2, installBand.mid, SET_BTN_W, installBand.height, 0x000000, 0.001)
       .setInteractive({ useHandCursor: true });
@@ -1145,12 +1203,12 @@ export class HudScene extends Phaser.Scene {
 
     // "END SHIFT" is nine characters, so it clears the narrower label box with room to
     // spare and takes the bump.
-    const endShift = addHudButton(this, SET_PAD, SET_END_SHIFT_Y, END_SHIFT_LABEL, () => this.endShiftEarly(), {
+    const endShift = addHudButton(this, SET_PAD, box.endShiftY, END_SHIFT_LABEL, () => this.endShiftEarly(), {
       originX: 0,
       originY: 0,
       variant: "primary",
       minWidth: SET_BTN_W,
-      minHeight: SET_BTN_H,
+      minHeight: box.btnH,
       caption: END_SHIFT_CAPTION,
       labelSize: SET_BTN_LABEL_PX,
       captionSize: SET_BTN_CAP_PX,
@@ -1162,22 +1220,23 @@ export class HudScene extends Phaser.Scene {
     // "RESET DAY TO 9:00 AM" overran the narrower button's label box, so fitTypeToBox
     // pinned it at 18px no matter how high the seed went — a shorter string was the only
     // way to buy the size back. See resetDayToNine for why the caption changed.
-    const reset = addHudButton(this, SET_PAD, SET_RESET_Y, "RESET TO 9 AM", () => this.resetDayToNine(), {
+    const reset = addHudButton(this, SET_PAD, box.resetY, "RESET TO 9 AM", () => this.resetDayToNine(), {
       originX: 0,
       originY: 0,
       variant: "amber",
       minWidth: SET_BTN_W,
-      minHeight: SET_BTN_H,
+      minHeight: box.btnH,
       caption: "Clears the floor · score to zero",
       labelSize: SET_BTN_LABEL_PX,
       captionSize: SET_BTN_CAP_PX,
       depth: 41,
     });
-    const resetHint = addUiText(this, SET_PAD, SET_HINT_Y, "Clean slate — bags, tickets and runs go.", {
+    const resetHint = addUiText(this, SET_PAD, box.hintY, "Clean slate — bags, tickets and runs go.", {
       size: SET_HINT_PX,
       color: Color.muteHex,
       fontStyle: "600",
       strokeThickness: 0,
+      ...MENU_TYPE_FIT,
       maxWidth: SET_BTN_W,
       maxHeight: SET_HINT_H,
     });
@@ -1208,7 +1267,7 @@ export class HudScene extends Phaser.Scene {
     // The dim's punch-out is read off this size, so it has to be set and non-zero: a
     // Container defaults to 0x0, which would silently shrink the punch-out to nothing
     // and put us back to the dim closing the panel on the click that worked a control.
-    this.settingsPanel.setSize(SETTINGS_W, SETTINGS_H);
+    this.settingsPanel.setSize(SETTINGS_W, box.h);
     if (this.settingsPanel.width <= 0 || this.settingsPanel.height <= 0) {
       throw new Error("settings panel needs a non-zero size for the dim punch-out to track it");
     }
@@ -1232,7 +1291,7 @@ export class HudScene extends Phaser.Scene {
       padding: HUD_COG_CAPTION_PAD,
       fontStyle: "600",
       align: "center",
-      minCssFloor: HUD_CHROME_MIN_CSS_PX,
+      ...HUD_TYPE_FIT,
       maxWidth: HUD_COG_CAPTION_BOX.w,
       maxHeight: HUD_COG_CAPTION_BOX.h,
     })
@@ -1306,8 +1365,8 @@ export class HudScene extends Phaser.Scene {
     this.musicValue.setText(prefs.enabled ? "ON" : "OFF");
     this.musicValue.setColor(prefs.enabled ? "#3d6a44" : Color.muteHex);
     const t = prefs.volume;
-    this.volumeFill.width = Math.max(8, VOL_TRACK.w * t);
-    this.volumeKnob.setPosition(VOL_TRACK.x + VOL_TRACK.w * t, VOL_TRACK.y);
+    this.volumeFill.width = Math.max(8, VOL_TRACK_W * t);
+    this.volumeKnob.setPosition(VOL_TRACK_X + VOL_TRACK_W * t, this.settingsBox.volTrackY);
     this.volumePct.setText(`${Math.round(t * 100)}%`);
   }
 
@@ -1371,6 +1430,7 @@ export class HudScene extends Phaser.Scene {
       fontStyle: "700",
       align: "center",
       strokeThickness: 0,
+      ...MENU_TYPE_FIT,
       maxWidth: RESULTS_W - 64,
       maxHeight: 48,
     }).setOrigin(0.5, 0);
@@ -1380,6 +1440,7 @@ export class HudScene extends Phaser.Scene {
       fontStyle: "600",
       align: "center",
       strokeThickness: 0,
+      ...MENU_TYPE_FIT,
       maxWidth: RESULTS_W - 64,
       maxHeight: 28,
     }).setOrigin(0.5, 0);
@@ -1389,6 +1450,7 @@ export class HudScene extends Phaser.Scene {
       fontStyle: "700",
       align: "center",
       strokeThickness: 0,
+      ...MENU_TYPE_FIT,
       maxWidth: RESULTS_W - 64,
       maxHeight: 52,
     }).setOrigin(0.5, 0);
@@ -1398,6 +1460,7 @@ export class HudScene extends Phaser.Scene {
       fontStyle: "700",
       align: "center",
       strokeThickness: 0,
+      ...MENU_TYPE_FIT,
       maxWidth: RESULTS_W - 64,
       maxHeight: 28,
     }).setOrigin(0.5, 0);
@@ -1408,6 +1471,7 @@ export class HudScene extends Phaser.Scene {
       align: "center",
       strokeThickness: 0,
       lineSpacing: 8,
+      ...MENU_TYPE_FIT,
       maxWidth: RESULTS_W - 80,
       maxHeight: 168,
     }).setOrigin(0.5, 0);
@@ -1417,6 +1481,7 @@ export class HudScene extends Phaser.Scene {
       fontStyle: "700",
       align: "center",
       strokeThickness: 0,
+      ...MENU_TYPE_FIT,
       maxWidth: RESULTS_W - 96,
       maxHeight: 48,
     }).setOrigin(0.5, 0);

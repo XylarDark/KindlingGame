@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { Color, Type } from "./theme";
+import { Color, HUD_TYPE_FIT, Type } from "./theme";
 import { addUiText } from "./text";
 import { HUD_TOUCH_MIN_DESIGN } from "./viewFit";
 
@@ -21,7 +21,7 @@ export function addPanel(
   return g;
 }
 
-/** Tall enough that a phone canvas still hits ~44 CSS px after scale. */
+/** Tall enough that a phone canvas still hits {@link MIN_CSS_TOUCH_PX} after scale. */
 export const HUD_BUTTON_MIN_H = HUD_TOUCH_MIN_DESIGN;
 
 export function addHudButton(
@@ -67,6 +67,7 @@ export function addHudButton(
     fontStyle: "700",
     align: "center",
     strokeThickness: 0,
+    ...HUD_TYPE_FIT,
     maxWidth: Math.max(160, (opts.minWidth ?? 260) - 56),
     maxHeight: opts.labelMaxHeight ?? 36,
   }).setOrigin(0.5);
@@ -76,6 +77,7 @@ export function addHudButton(
     fontStyle: "600",
     align: "center",
     strokeThickness: 0,
+    ...HUD_TYPE_FIT,
     maxWidth: Math.max(160, (opts.minWidth ?? 260) - 48),
     maxHeight: opts.captionMaxHeight ?? 40,
   }).setOrigin(0.5);

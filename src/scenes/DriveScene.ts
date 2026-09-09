@@ -24,7 +24,7 @@ import type { SimSnapshot } from "../sim/gameSim";
 import { tutorialHints } from "../sim/tutorialHints";
 import { formatSlaClock, isSlaUrgent } from "../ui/copy";
 import { addSignText, setSignAccent } from "../ui/signText";
-import { Color, MSG_MIN_CSS_PX, Type, scaleMsgBox, scaleMsgPad, scaleMsgPx } from "../ui/theme";
+import { Color, MSG_TYPE_FIT, Type, scaleMsgBox, scaleMsgPad, scaleMsgPx } from "../ui/theme";
 import { addUiText } from "../ui/text";
 import { addMark, fitTypeToWidth, overlayStroke } from "../ui/typekit";
 
@@ -105,7 +105,7 @@ export class DriveScene extends Phaser.Scene {
       fontStyle: "700",
       lineSpacing: scaleMsgBox(6),
       noWrap: true,
-      minCssFloor: MSG_MIN_CSS_PX,
+      ...MSG_TYPE_FIT,
       maxWidth: scaleMsgBox(460),
       maxHeight: scaleMsgBox(150),
     })
@@ -118,7 +118,7 @@ export class DriveScene extends Phaser.Scene {
       padding: scaleMsgPad({ x: 18, y: 10 }),
       align: "center",
       fontStyle: "600",
-      minCssFloor: MSG_MIN_CSS_PX,
+      ...MSG_TYPE_FIT,
       maxWidth: scaleMsgBox(500),
       maxHeight: scaleMsgBox(70),
     })
@@ -408,7 +408,7 @@ export class DriveScene extends Phaser.Scene {
       size: scaleMsgPx(16),
       padding: scaleMsgPad({ x: 12, y: 6 }),
       fontStyle: "700",
-      minCssFloor: MSG_MIN_CSS_PX,
+      ...MSG_TYPE_FIT,
       maxWidth: CITY.shopLot.w * TILE - 24,
       maxHeight: scaleMsgBox(52),
     })

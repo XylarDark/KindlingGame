@@ -10,7 +10,7 @@ import { presentInstallCoach } from "../ui/installCoach";
 import { SIGN_FRAME_W, signPlaqueRings } from "../ui/signPlaque";
 import { addSignText } from "../ui/signText";
 import { addUiText } from "../ui/text";
-import { Color, MSG_MIN_CSS_PX, scaleMsgBox, scaleMsgPad, scaleMsgPx, Type } from "../ui/theme";
+import { Color, MENU_TYPE_FIT, MSG_TYPE_FIT, scaleMsgBox, scaleMsgPad, scaleMsgPx, Type } from "../ui/theme";
 import { fitTypeToWidth } from "../ui/typekit";
 import { designSafeInset, readCssSafeArea, VIEWFIT_EVENT, viewFromScale } from "../ui/viewFit";
 
@@ -84,6 +84,7 @@ export class TitleScene extends Phaser.Scene {
         align: "center",
         lineSpacing: 0,
         strokeThickness: 0,
+        ...MENU_TYPE_FIT,
         maxWidth: GAME_WIDTH - (PAUSE_MARGIN + SIGN_FRAME_W) * 2,
         maxHeight: 68,
       })
@@ -182,6 +183,7 @@ export class TitleScene extends Phaser.Scene {
         fontStyle: "700",
         align: "center",
         strokeThickness: 0,
+        ...MENU_TYPE_FIT,
         maxWidth: innerW,
         maxHeight: introN(56),
       })
@@ -195,6 +197,7 @@ export class TitleScene extends Phaser.Scene {
         fontStyle: "600",
         align: "center",
         strokeThickness: 0,
+        ...MENU_TYPE_FIT,
         maxWidth: innerW,
         maxHeight: introN(60),
       })
@@ -259,6 +262,7 @@ export class TitleScene extends Phaser.Scene {
         color: Color.creamHex,
         fontStyle: "700",
         strokeThickness: 0,
+        ...MENU_TYPE_FIT,
         maxWidth: introN(34),
         maxHeight: introN(34),
       })
@@ -270,6 +274,7 @@ export class TitleScene extends Phaser.Scene {
         color: Color.inkHex,
         fontStyle: "700",
         strokeThickness: 0,
+        ...MENU_TYPE_FIT,
         maxWidth: cardW - introN(40),
         maxHeight: introN(28),
       })
@@ -282,6 +287,7 @@ export class TitleScene extends Phaser.Scene {
         fontStyle: "600",
         align: "center",
         strokeThickness: 0,
+        ...MENU_TYPE_FIT,
         maxWidth: cardW - introN(52),
         maxHeight: bodyH,
       })
@@ -319,7 +325,7 @@ export class TitleScene extends Phaser.Scene {
       padding: scaleMsgPad({ x: introN(16), y: introN(7) }),
       fontStyle: "700",
       lineSpacing: 0,
-      minCssFloor: MSG_MIN_CSS_PX,
+      ...MSG_TYPE_FIT,
       maxWidth: scaleMsgBox(introN(640)),
       maxHeight: scaleMsgBox(introN(32)),
     })

@@ -11,9 +11,9 @@ import { skyAt } from "../sim/dayNight";
 import type { SimSnapshot } from "../sim/gameSim";
 import { formatSlaClock, isSlaUrgent } from "../ui/copy";
 import { addSignText, setSignAccent } from "../ui/signText";
-import { Color, MSG_MIN_CSS_PX, scaleMsgBox, scaleMsgPad, scaleMsgPx } from "../ui/theme";
+import { Color, MSG_TYPE_FIT, scaleMsgBox, scaleMsgPad, scaleMsgPx } from "../ui/theme";
 import { fitTypeToWidth } from "../ui/typekit";
-import { designSafeInset, readCssSafeArea, VIEWFIT_EVENT, viewFromScale } from "../ui/viewFit";
+import { designSafeInset, HUD_TOUCH_MIN_DESIGN, readCssSafeArea, VIEWFIT_EVENT, viewFromScale } from "../ui/viewFit";
 
 /** 25% larger than shop bags (BAG_SCALE 0.7). */
 const DOOR_BAG_SCALE = BAG_SCALE * 1.25;
@@ -25,7 +25,7 @@ const BAG_HIT_PAD = 88; // ~10% over prior 80 for mobile taps
 /**
  * Doorstep message chips: prior sizes (prompt 25px / title 33.75px) then the shared
  * {@link scaleMsgPx} bump. Lazy so create() sees the shell contain scale.
- * `maxHeight` must move with the seed — `fitTypeToBox` only ever shrinks.
+ * `maxHeight` must move with the seed — clamp-fit will otherwise drop below it.
  */
 const doorPromptPx = (): string => scaleMsgPx(25);
 const doorTitlePx = (): string => scaleMsgPx(33.75);
@@ -85,7 +85,7 @@ export class DoorScene extends Phaser.Scene {
       size: doorTitlePx(),
       padding: scaleMsgPad({ x: 20, y: 10 }),
       fontStyle: "700",
-      minCssFloor: MSG_MIN_CSS_PX,
+      ...MSG_TYPE_FIT,
       maxWidth: scaleMsgBox(900),
       maxHeight: scaleMsgBox(72),
     })
@@ -122,7 +122,7 @@ export class DoorScene extends Phaser.Scene {
       padding: scaleMsgPad({ x: 20, y: 12 }),
       align: "center",
       fontStyle: "600",
-      minCssFloor: MSG_MIN_CSS_PX,
+      ...MSG_TYPE_FIT,
       maxWidth: scaleMsgBox(720),
       // Prior box was 113 for the 25px seed; grow with MSG_SCALE so fitTypeToBox
       // cannot silently shrink the larger seed back down.
@@ -305,9 +305,10 @@ function runNote(snap: SimSnapshot): string {
 
 function enableWideHit(obj: Phaser.GameObjects.Image, pad: number): void {
   const { width, height } = itemHitSize(obj);
+  const need = Math.max(pad, Math.ceil(Math.max(0, HUD_TOUCH_MIN_DESIGN - Math.min(width, height)) / 2));
   obj.setInteractive({
     useHandCursor: true,
-    hitArea: new Phaser.Geom.Rectangle(-pad, -pad, width + pad * 2, height + pad * 2),
+    hitArea: new Phaser.Geom.Rectangle(-need, -need, width + need * 2, height + need * 2),
     hitAreaCallback: Phaser.Geom.Rectangle.Contains,
   });
 }
@@ -319,7 +320,8 @@ function armHit(obj: Phaser.GameObjects.Image, on: boolean, pad: number): void {
     else {
       obj.input.enabled = true;
       const { width, height } = itemHitSize(obj);
-      obj.input.hitArea = new Phaser.Geom.Rectangle(-pad, -pad, width + pad * 2, height + pad * 2);
+      const need = Math.max(pad, Math.ceil(Math.max(0, HUD_TOUCH_MIN_DESIGN - Math.min(width, height)) / 2));
+      obj.input.hitArea = new Phaser.Geom.Rectangle(-need, -need, width + need * 2, height + need * 2);
     }
   } else if (obj.input) {
     obj.input.enabled = false;

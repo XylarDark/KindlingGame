@@ -36,7 +36,7 @@ function accentOf(text: Phaser.GameObjects.Text): number {
 
 /**
  * The plaque's field: the text's measured box, placed against its own origin. Read off
- * the object rather than the constants it was built from — a shrink-to-fit text is
+ * the object rather than the constants it was built from — a clamp-fit text is
  * routinely smaller than the box it was authored with, and the frame has to sit on the
  * glyphs that actually rendered.
  */
@@ -118,6 +118,7 @@ export function addSignText(
     color: style.color ?? Color.inkHex,
     // Ink on white needs no outline, and a stroke would print inside the field.
     strokeThickness: style.strokeThickness ?? 0,
+    growBox: style.growBox ?? true,
   });
   if (accent !== undefined) text.setData(ACCENT, accent);
 

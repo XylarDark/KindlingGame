@@ -15,7 +15,7 @@
 | micro | 11 |
 | fit floor | 10 |
 
-`fitTypeToBox` shrinks fonts (never bitmap-scales) to `maxWidth`/`maxHeight`. Wrap width subtracts padding + a letter-spacing gutter. Multi-line labels skip caps tracking so wrap math stays honest. `refitType` after mid-frame padding/chrome changes.
+`fitTypeToBox` clamp-fits fonts into a floor–ceiling interval (never bitmap-scales) so type can grow toward a CSS cap when the box has slack. Wrap width subtracts padding + a letter-spacing gutter. Multi-line labels skip caps tracking so wrap math stays honest. `refitType` after mid-frame padding/chrome changes.
 
 `noWrap: true` keeps authored line breaks and shrinks to fit width instead of re-wrapping. Use it for labels whose line structure is meaningful (door hours, phone title/status, GPS pin), so `9 AM – 11 PM` can never split into `9 AM – 11` / `PM`.
 
@@ -62,7 +62,7 @@ Fixed from screenshots (`?howto=1`, `?shot=drive`, shop live). Shots are QA scra
 - Bag audit re-run (2026-09-07, zoom 1): 1 / 6 / 12 packed bags — 22, 28 and 30 visible texts, every one carrying a fit box, no overflow, nothing under 12px, no overlaps. Both counts hold the full 27px unshrunk (18×33 in the 72×34 box), and the 12-bag case has the same footprint as the 6-bag one
 - Packed bags: the per-order bag + chip row (up to 6 chips marching left over the key-lead) is gone. One delivery bag and one pickup bag now stand on the counter, each printing its live count on its own baked label panel (`BAG_PANEL`, title-size, `noWrap`), and a 6-row receipt rail carries the per-order detail on the counter face. Rail rows are caption-size, `noWrap`, one line each, oldest ticket at the top; a 7th packed bag collapses the tail into `+N more`. Measured live at six slips: rail box left edge 1236 against a clock ending at 1207, so the rail clears the HUD clock
 
-Canvas uses CSS `object-fit: fill` — non-uniform stretch can still make type look “squashed” on odd viewports; that is separate from design-space fit.
+Canvas uses CSS `object-fit: contain` — the shell sizes a 16:9 stage; leftover width is Kindling side rails.
 
 ## Libraries
 

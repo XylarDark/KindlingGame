@@ -24,8 +24,8 @@ export interface CanvasClientRect {
   height: number;
 }
 
-/** Apple HIG / Material minimum touch target in CSS pixels. */
-export const MIN_CSS_TOUCH_PX = 44;
+/** Material 48 (Apple HIG is 44). Phone landscape after contain still has to hit this. */
+export const MIN_CSS_TOUCH_PX = 48;
 
 /** Landscape CSS sizes for phones and tablets Kindling should fill. */
 export const POPULAR_MOBILE_LANDSCAPE: readonly ViewSize[] = [

@@ -23,6 +23,8 @@ export const Color = {
   panelHex: "#221c16",
   panelStroke: 0x6a5640,
   skyTop: 0x1b2238,
+  /** Shop/drive zenith — OS chrome and letterbox, not the leaf rails. */
+  skyTopHex: "#1b2238",
   skyMid: 0x3d3a5c,
   skyLow: 0x8a5a62,
   brick: 0x4a3028,
@@ -57,10 +59,10 @@ export const Color = {
 
 /**
  * Design-space type ramp for the 1920×1080 layout.
- * Sized to fit chrome; `fitTypeToBox` shrinks further when a container is tighter.
- * On-screen CSS floors after 16:9 contain live in {@link MSG_MIN_CSS_PX} /
+ * Sized to fit chrome; `fitTypeToBox` clamp-fits further inside [floor, ceiling].
+ * On-screen CSS floors/ceilings after 16:9 contain live in {@link MSG_MIN_CSS_PX} /
  * {@link HUD_CHROME_MIN_CSS_PX} and are enforced via {@link scaleMsgPx} /
- * {@link scaleChromePx} + `fitTypeToBox` `minCssFloor`.
+ * {@link scaleChromePx} + `fitTypeToBox` `minCssFloor` / `maxCssCeiling`.
  */
 export const Type = {
   display: "36px",
@@ -97,8 +99,28 @@ export const MOBILE_TEXT_VIEWPORT_MAX_CSS = 900;
 /** Message-chip body type: minimum on-screen CSS px after contain. */
 export const MSG_MIN_CSS_PX = 14;
 
+/** Message-chip grow cap in on-screen CSS px. */
+export const MSG_MAX_CSS_PX = 20;
+
 /** Primary HUD chrome labels: minimum on-screen CSS px after contain. */
 export const HUD_CHROME_MIN_CSS_PX = 12;
+
+/** HUD chrome grow cap in on-screen CSS px. */
+export const HUD_CHROME_MAX_CSS_PX = 16;
+
+/** TV boards, settings rows, results, title chrome. */
+export const TV_MENU_MIN_CSS_PX = 13;
+
+export const TV_MENU_MAX_CSS_PX = 18;
+
+/** Spread onto message chips / speech / door prompts. */
+export const MSG_TYPE_FIT = { minCssFloor: MSG_MIN_CSS_PX, maxCssCeiling: MSG_MAX_CSS_PX } as const;
+
+/** Spread onto SCORE / clock / cog / phone chrome. */
+export const HUD_TYPE_FIT = { minCssFloor: HUD_CHROME_MIN_CSS_PX, maxCssCeiling: HUD_CHROME_MAX_CSS_PX } as const;
+
+/** Spread onto TV strain names, settings, results, title cards. */
+export const MENU_TYPE_FIT = { minCssFloor: TV_MENU_MIN_CSS_PX, maxCssCeiling: TV_MENU_MAX_CSS_PX } as const;
 
 /** Extra padding scale on message chips while the mobile ramp is active. */
 export const MOBILE_MSG_PAD_EXTRA = 1.15;

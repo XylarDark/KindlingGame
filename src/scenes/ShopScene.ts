@@ -48,8 +48,9 @@ import { addUiText } from "../ui/text";
 import { fitTypeToBox } from "../ui/typekit";
 import {
   Color,
-  MSG_MIN_CSS_PX,
-  HUD_CHROME_MIN_CSS_PX,
+  HUD_TYPE_FIT,
+  MENU_TYPE_FIT,
+  MSG_TYPE_FIT,
   scaleChromePx,
   scaleMsgBox,
   scaleMsgPad,
@@ -59,16 +60,16 @@ import {
 import { HUD_SCORE_PX } from "./HudScene";
 
 /**
- * Strain names on the wall screens run 21% over the heading step.
- * TODO(mobile-text): tier TV board names onto the chrome/mobile ramp once box
- * budgets are verified — skipping blind scale in this first readability slice.
+ * Strain names on the wall screens run 21% over the heading step, then clamp-fit
+ * against {@link MENU_TYPE_FIT} so a phone contain cannot drop them under the
+ * menu CSS floor.
  */
 const TV_LABEL_PX = "24.2px";
 
 /**
  * ORDERS is specified as "the same size as the score", so it is seeded from the score's
  * own constant rather than a copy of the number. The tablet screen cannot actually hold
- * 44px of it — see `TABLET_LABEL_INSET` — and `fitTypeToBox` only ever shrinks, so the
+ * 44px of it — see `TABLET_LABEL_INSET` — and clamp-fit sizes down from the ceiling, so the
  * rendered size is the largest that fits and is measured in-browser, never assumed.
  */
 const TABLET_LABEL_PX = HUD_SCORE_PX;
@@ -169,7 +170,7 @@ export class ShopScene extends Phaser.Scene {
       letterSpacing: 0,
       noWrap: true,
       strokeThickness: 0,
-      minCssFloor: HUD_CHROME_MIN_CSS_PX,
+      ...HUD_TYPE_FIT,
       maxWidth: tab.screenW - TABLET_LABEL_INSET * 2,
       maxHeight: tab.screenH - TABLET_LABEL_INSET * 2,
     })
@@ -188,6 +189,7 @@ export class ShopScene extends Phaser.Scene {
       size: Type.caption,
       padding: { x: 6, y: 2 },
       fontStyle: "700",
+      ...MENU_TYPE_FIT,
       maxWidth: 48,
       maxHeight: 28,
     })
@@ -201,7 +203,7 @@ export class ShopScene extends Phaser.Scene {
       align: "center",
       fontStyle: "700",
       accent: Color.danger,
-      minCssFloor: MSG_MIN_CSS_PX,
+      ...MSG_TYPE_FIT,
       maxWidth: scaleMsgBox(200),
       maxHeight: scaleMsgBox(44),
     })
@@ -214,7 +216,7 @@ export class ShopScene extends Phaser.Scene {
       padding: msgPad(),
       align: "center",
       fontStyle: "600",
-      minCssFloor: MSG_MIN_CSS_PX,
+      ...MSG_TYPE_FIT,
       maxWidth: scaleMsgBox(340),
       maxHeight: scaleMsgBox(104),
     })
@@ -232,7 +234,7 @@ export class ShopScene extends Phaser.Scene {
       padding: msgPad(),
       align: "center",
       fontStyle: "600",
-      minCssFloor: MSG_MIN_CSS_PX,
+      ...MSG_TYPE_FIT,
       maxWidth: scaleMsgBox(336),
       maxHeight: scaleMsgBox(124),
     })
@@ -349,7 +351,7 @@ export class ShopScene extends Phaser.Scene {
       this.tabletScreen.fillStyle(0x1a3a22, 1);
       this.tabletScreen.fillRect(tab.screenLeft, tab.screenTop, tab.screenW, tab.screenH - tab.homeH);
     }
-    // The label is constant, and setText re-runs the whole shrink-to-fit loop — eleven
+    // The label is constant, and setText re-runs the whole clamp-fit loop — eleven
     // sizes now that it is seeded at the score's step — so it is set once at build time
     // rather than every frame. The old per-frame refit also re-narrowed the box to the
     // screen minus 16, which would have quietly undone TABLET_LABEL_INSET.
@@ -396,6 +398,7 @@ export class ShopScene extends Phaser.Scene {
           fontStyle: "600",
           strokeThickness: 0,
           noWrap: true,
+          ...MENU_TYPE_FIT,
           maxWidth: RECEIPT_RAIL.w - RECEIPT_RAIL.inset - 10,
           maxHeight: RECEIPT_RAIL.rowH - 2,
         })
@@ -414,6 +417,7 @@ export class ShopScene extends Phaser.Scene {
       fontStyle: "700",
       strokeThickness: 0,
       noWrap: true,
+      ...MENU_TYPE_FIT,
       maxWidth: BAG_PANEL.w - 8,
       maxHeight: BAG_PANEL.countH,
     })
@@ -498,7 +502,7 @@ export class ShopScene extends Phaser.Scene {
           padding: msgPad(),
           align: "center",
           fontStyle: "600",
-          minCssFloor: MSG_MIN_CSS_PX,
+          ...MSG_TYPE_FIT,
       maxWidth: CUSTOMER_SPEECH_MAX_W,
           maxHeight: CUSTOMER_SPEECH_H,
         })
@@ -511,7 +515,7 @@ export class ShopScene extends Phaser.Scene {
           align: "center",
           fontStyle: "600",
           accent: Color.danger,
-          minCssFloor: MSG_MIN_CSS_PX,
+          ...MSG_TYPE_FIT,
       maxWidth: CUSTOMER_SPEECH_MAX_W,
           maxHeight: feedbackH(),
         })
@@ -571,6 +575,7 @@ export class ShopScene extends Phaser.Scene {
         fontStyle: "700",
         lineSpacing: 0,
         strokeThickness: 0,
+        ...MENU_TYPE_FIT,
         maxWidth: maxW,
         maxHeight: maxH,
       })

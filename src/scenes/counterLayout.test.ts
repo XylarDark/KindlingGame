@@ -176,7 +176,7 @@ describe("SCORE caption type size", () => {
   it("is seeded at the value's step, not a caption step of its own", () => {
     expect(captionBlock).toContain("size: scaleChromePx(HUD_SCORE_PX)");
     // Measured in-browser at 1920x1080: "SCORE" renders 164x59 at 44px with its
-    // tracking. `fitTypeToBox` only ever shrinks, so a box under that would quietly
+    // tracking. Clamp-fit will drop a box under that, so the caption would quietly
     // hand back a smaller caption and the sizes would stop matching — which is the
     // whole of what this caption is specified to do.
     expect(captionBox.w).toBeGreaterThanOrEqual(164);
@@ -207,8 +207,8 @@ describe("ORDERS type size", () => {
     // Measured in-browser at 1920x1080: the seed is 44px and the label renders at 33px,
     // its 135px of glyphs against a 136px box. Width is the binding constraint, so every
     // pixel of box is type size — an 8px inset a side, which is what this replaced, cost
-    // 2px of rendered type. fitTypeToBox only ever shrinks, so the seed is a ceiling and
-    // the rendered size has to be read off the live object, never assumed from here.
+    // 2px of rendered type. Clamp-fit sizes down from the ceiling, so the seed is a
+    // cap and the rendered size has to be read off the live object, never assumed from here.
     expect(ORDERS_INSET).toBeLessThanOrEqual(4);
     expect(tab.screenW - ORDERS_INSET * 2).toBeGreaterThanOrEqual(136);
     // Caps tracking would have spent ~8% of that width on the gaps between six letters.
