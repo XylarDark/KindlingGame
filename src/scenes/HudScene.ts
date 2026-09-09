@@ -25,7 +25,7 @@ import { addHudButton, addPanel, HUD_BUTTON_MIN_H } from "../ui/chrome";
 import { END_SHIFT_CAPTION, END_SHIFT_LABEL, RESULTS_NEW_DAY, RESULTS_TITLE } from "../ui/copy";
 import { addSignText, setSignAccent } from "../ui/signText";
 import { addUiText } from "../ui/text";
-import { Color, Type } from "../ui/theme";
+import { Color, scaleMsgBox, scaleMsgPad, scaleMsgPx, Type } from "../ui/theme";
 import { parseFontPx, refitType, retypeSize } from "../ui/typekit";
 import { designSafeInset, HUD_TOUCH_MIN_DESIGN, readCssSafeArea, VIEWFIT_EVENT, viewFromScale } from "../ui/viewFit";
 
@@ -39,7 +39,7 @@ const HUD_READOUT_PX = 40;
 export const HUD_SCORE_PX = 44;
 const HUD_CAPTION_PX = 18;
 /** Order banner runs 25% over the ramp — read across the room, mid-task. */
-const HUD_TOAST_PX = "20px";
+const HUD_TOAST_PX = scaleMsgPx(20);
 const HUD_SIGN_GAP = 28;
 /** Corner fallback keeps clear of the ceiling band on the road and at doors. */
 const HUD_CORNER_TOP = 76;
@@ -161,7 +161,7 @@ const PHONE_STATUS_H = PHONE_CELL * 4;
 const PHONE_MAP_GAP = PHONE_CELL * 0.25;
 const PHONE_TITLE_PX = "20px";
 const PHONE_STATUS_PX = "20px";
-const PAD_LABEL_PX = "16.25px";
+const PAD_LABEL_PX = scaleMsgPx(16.25);
 
 /**
  * The map panel carries the city's own 1.43:1 aspect. The old 204x108 panel was
@@ -394,23 +394,23 @@ export class HudScene extends Phaser.Scene {
 
     this.toastText = addSignText(this, GAME_WIDTH / 2, GAME_HEIGHT - 36, "", {
       size: HUD_TOAST_PX,
-      padding: { x: 22, y: 13 },
+      padding: scaleMsgPad({ x: 22, y: 13 }),
       align: "center",
       fontStyle: "600",
-      maxWidth: 900,
-      maxHeight: 80,
+      maxWidth: scaleMsgBox(900),
+      maxHeight: scaleMsgBox(80),
     })
       .setOrigin(0.5, 1)
       .setDepth(20);
 
     // Out on the road the shop is off-screen, so the counter reports in under the score.
     this.coverText = addSignText(this, 0, 0, "", {
-      size: Type.caption,
-      padding: { x: 12, y: 6 },
+      size: scaleMsgPx(13),
+      padding: scaleMsgPad({ x: 12, y: 6 }),
       fontStyle: "600",
       noWrap: true,
-      maxWidth: 560,
-      maxHeight: 40,
+      maxWidth: scaleMsgBox(560),
+      maxHeight: scaleMsgBox(40),
     })
       .setOrigin(0, 0)
       .setDepth(20)
@@ -432,10 +432,10 @@ export class HudScene extends Phaser.Scene {
     this.padKnob = this.add.circle(this.padCenter.x, this.padCenter.y, 40, Color.cream, 0.92).setDepth(20);
     this.padLabel = addSignText(this, this.padCenter.x, this.padCenter.y - 128, "Heading to stop…", {
       size: PAD_LABEL_PX,
-      padding: { x: 13, y: 8 },
+      padding: scaleMsgPad({ x: 13, y: 8 }),
       fontStyle: "600",
-      maxWidth: 300,
-      maxHeight: 50,
+      maxWidth: scaleMsgBox(300),
+      maxHeight: scaleMsgBox(50),
     })
       .setOrigin(0.5, 1)
       .setDepth(20);

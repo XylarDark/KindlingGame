@@ -27,8 +27,6 @@ import {
   PICKUP_BAG,
   READY_BAG,
   RECEIPT_SPOT,
-  SILL_H,
-  SILL_Y,
   WINDOW,
   WINDOW_LEFT_INSET,
   tabletLayout,
@@ -162,15 +160,17 @@ describe("customer standing slots", () => {
 describe("counter bags", () => {
   const bagTop = COUNTER_TOP - COUNTER_BAG_H;
   const span = (x: number) => ({ left: x - COUNTER_BAG_W / 2, right: x + COUNTER_BAG_W / 2 });
-  /** The sill lip plus the drop shadow it casts down the wall. */
-  const sillBottom = SILL_Y + SILL_H + 6;
-
-  it("grows wide rather than tall, so the sill and tablet stay clear", () => {
-    expect(bagTop).toBeGreaterThan(sillBottom);
+  it("stands tall enough to overlap ORDERS a little", () => {
     const tab = tabletLayout();
-    expect(bagTop).toBeGreaterThan(tab.top + tab.h);
-    // Width is the only axis with room, so that is where the label space came from.
-    expect(COUNTER_BAG_W).toBeGreaterThan(COUNTER_BAG_H);
+    const tabBottom = tab.top + tab.h;
+    // Bags grow up from the counter into the ORDERS tablet — overlap, not clearance.
+    expect(bagTop).toBeLessThan(tabBottom);
+    expect(tabBottom - bagTop).toBeGreaterThanOrEqual(16);
+    expect(tabBottom - bagTop).toBeLessThanOrEqual(40);
+    // Still rooted on the counter face, not covering the whole tablet.
+    expect(bagTop).toBeGreaterThan(tab.top + tab.h * 0.45);
+    expect(COUNTER_BAG_H).toBe(136);
+    expect(COUNTER_BAG_W).toBe(112);
   });
 
   it("keeps the printed count band inside the bag face", () => {

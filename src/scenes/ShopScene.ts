@@ -46,7 +46,7 @@ import { wireHover } from "../ui/chrome";
 import { addSignText, setSignAccent } from "../ui/signText";
 import { addUiText } from "../ui/text";
 import { fitTypeToBox } from "../ui/typekit";
-import { Color, Type } from "../ui/theme";
+import { Color, scaleMsgBox, scaleMsgPad, scaleMsgPx, Type } from "../ui/theme";
 import { HUD_SCORE_PX } from "./HudScene";
 
 /** Strain names on the wall screens run 21% over the heading step. */
@@ -67,11 +67,14 @@ const TABLET_LABEL_PX = HUD_SCORE_PX;
 const TABLET_LABEL_INSET = 4;
 
 /**
- * Customer / driver action messages run 20% over the body step — they are the
- * copy that tells the player which tap comes next, read across the lobby.
+ * Customer / driver action messages: prior +20% over body, then the shared
+ * {@link scaleMsgPx} +25% bump so chips stay readable across the lobby.
  */
-const MSG_PX = "19.2px";
-const MSG_PAD = { x: 12, y: 7 };
+const MSG_PX = scaleMsgPx(19.2);
+const MSG_PAD = scaleMsgPad({ x: 12, y: 7 });
+const MSG_NOTICE_PX = scaleMsgPx(13);
+const MSG_NOTICE_PAD = scaleMsgPad({ x: 10, y: 5 });
+const FEEDBACK_H = scaleMsgBox(48);
 
 /**
  * Hang a chip in the air above a model's head, measuring off what it rendered rather than
@@ -180,25 +183,25 @@ export class ShopScene extends Phaser.Scene {
 
     // Light ORDERS notice — former toast spawn / ticket cues live here during shop play.
     this.ordersNotice = addSignText(this, TABLET.x, tab.top + tab.h + 18, "", {
-      size: Type.caption,
-      padding: { x: 10, y: 5 },
+      size: MSG_NOTICE_PX,
+      padding: MSG_NOTICE_PAD,
       align: "center",
       fontStyle: "600",
-      maxWidth: 260,
-      maxHeight: 52,
+      maxWidth: scaleMsgBox(260),
+      maxHeight: scaleMsgBox(52),
     })
       .setOrigin(0.5, 0)
       .setDepth(13)
       .setVisible(false);
 
     this.targetCallout = addSignText(this, 0, 0, "", {
-      size: Type.caption,
-      padding: { x: 10, y: 5 },
+      size: MSG_NOTICE_PX,
+      padding: MSG_NOTICE_PAD,
       align: "center",
       fontStyle: "700",
       accent: Color.danger,
-      maxWidth: 200,
-      maxHeight: 44,
+      maxWidth: scaleMsgBox(200),
+      maxHeight: scaleMsgBox(44),
     })
       .setOrigin(0.5, 1)
       .setDepth(14)
@@ -209,8 +212,8 @@ export class ShopScene extends Phaser.Scene {
       padding: MSG_PAD,
       align: "center",
       fontStyle: "600",
-      maxWidth: 340,
-      maxHeight: 104,
+      maxWidth: scaleMsgBox(340),
+      maxHeight: scaleMsgBox(104),
     })
       .setOrigin(0.5)
       .setDepth(12)
@@ -226,8 +229,8 @@ export class ShopScene extends Phaser.Scene {
       padding: MSG_PAD,
       align: "center",
       fontStyle: "600",
-      maxWidth: 336,
-      maxHeight: 124,
+      maxWidth: scaleMsgBox(336),
+      maxHeight: scaleMsgBox(124),
     })
       .setOrigin(1, 1)
       .setDepth(12)
@@ -505,13 +508,13 @@ export class ShopScene extends Phaser.Scene {
           .setDepth(7);
         this.bubbles.set(customer.orderId, bubble);
         const feedback = addSignText(this, customer.x, CUSTOMER_SPOT.y - PERSON_DISPLAY_H, "", {
-          size: Type.caption,
-          padding: { x: 10, y: 5 },
+          size: MSG_NOTICE_PX,
+          padding: MSG_NOTICE_PAD,
           align: "center",
           fontStyle: "600",
           accent: Color.danger,
           maxWidth: CUSTOMER_SPEECH_MAX_W,
-          maxHeight: 48,
+          maxHeight: FEEDBACK_H,
         })
           .setOrigin(0.5)
           .setDepth(7)
@@ -540,7 +543,7 @@ export class ShopScene extends Phaser.Scene {
         const note = customer.feedback;
         if (layout && note) {
           feedback.setText(note).setVisible(true);
-          fitTypeToBox(feedback, layout.w, 48);
+          fitTypeToBox(feedback, layout.w, FEEDBACK_H);
           feedback.setPosition(layout.x, layout.y + layout.h / 2 + CUSTOMER_SPEECH_GAP + feedback.height / 2);
         } else {
           feedback.setVisible(false);

@@ -28,8 +28,10 @@ function constant(name: string): number {
   return Number(hit[1]);
 }
 
-/** Read a `const NAME = "<n>px"` seed out of the source, or throw. */
+/** Read a message px seed — either `"Npx"` or `scaleMsgPx(N)` — out of the source. */
 function pxConstant(name: string): number {
+  const scaled = new RegExp(`const ${name} = scaleMsgPx\\(([\\d.]+)\\);`).exec(src);
+  if (scaled) return Number(scaled[1]) * 1.25;
   const hit = new RegExp(`const ${name} = "([\\d.]+)px";`).exec(src);
   if (!hit) throw new Error(`px constant not found: ${name}`);
   return Number(hit[1]);
@@ -93,17 +95,19 @@ describe("doorstep tap target flash", () => {
 });
 
 describe("doorstep prompt", () => {
-  it("seeds the prompt 25% over the previous 20px", () => {
-    expect(pxConstant("DOOR_PROMPT_PX")).toBeCloseTo(25, 5);
+  it("seeds the prompt with the shared +25% message bump over 25px", () => {
+    expect(pxConstant("DOOR_PROMPT_PX")).toBeCloseTo(31.25, 5);
   });
 
   it("grows the prompt's box with its font, because fitTypeToBox only shrinks", () => {
     // The trap: raise the seed and leave the box, and the text renders at the old size
     // while the constant claims otherwise — a change that looks done and does nothing.
     const box = between(src, "this.prompt = addSignText(", ".setOrigin(0.5, 1)", "prompt box");
-    const height = /maxHeight: (\d+)/.exec(box);
+    const height = /maxHeight: (?:scaleMsgBox\()?(\d+)/.exec(box);
     if (!height) throw new Error("prompt maxHeight not found");
-    expect(Number(height[1])).toBeGreaterThanOrEqual(90 * 1.25);
+    expect(Number(height[1]) * 1.25).toBeGreaterThanOrEqual(113 * 1.25);
+    // Authored base must already clear the prior 113px floor before MSG_SCALE.
+    expect(Number(height[1])).toBeGreaterThanOrEqual(113);
   });
 
   it("still floors the chip against the top safe inset", () => {

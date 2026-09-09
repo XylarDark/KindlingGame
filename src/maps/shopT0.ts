@@ -56,18 +56,20 @@ export const COUNTER_PLANT = { x: KEYLEAD.x - 220, y: COUNTER_TOP };
 /** Where slips print. The receipt rail hangs off the counter under this spot. */
 export const RECEIPT_SPOT = { x: COUNTER_RIGHT - 48, y: COUNTER_TOP };
 /**
- * Counter bags print their label on their own face, so they bake wider than the
- * road bag and draw 1:1 (see `counterBag` in pixelArt). The pass-through sill
- * caps the height, so all the room for type had to come from width.
+ * Counter bags print their label on their own face, so they bake and draw 1:1
+ * (see `counterBag` in pixelArt). Grown taller so the supply / ready bags
+ * visually overlap the ORDERS tablet a little; width stays put so the hit
+ * targets and label panels keep their horizontal room.
  */
 export const COUNTER_BAG_W = 112;
-export const COUNTER_BAG_H = 84;
+export const COUNTER_BAG_H = 136;
 /**
  * The printed panel on a counter bag's face, as offsets from the sprite's
  * bottom-centre origin. The live count owns the upper band; the baked
- * DELIVERY / PICKUP word owns the shorter band beneath it.
+ * DELIVERY / PICKUP word owns the shorter band beneath it. Panel sits near the
+ * bag mouth (top of the taller kraft face).
  */
-export const BAG_PANEL = { w: 80, countCy: -43, countH: 34 };
+export const BAG_PANEL = { w: 80, countCy: -95, countH: 34 };
 
 /** Packed deliveries pile at the counter's right end; pickups tuck in behind. */
 export const READY_BAG = { x: COUNTER_RIGHT - 248, y: COUNTER_TOP };
@@ -110,10 +112,11 @@ export const BENCH = {
   y: COUNTER_TOP + Math.floor((COUNTER_FRONT - COUNTER_TOP) / 2),
 };
 /**
- * Side speech chip size. Chips sit beside settled customers (not in an overhead band),
- * so the lobby no longer reserves a vertical strip under the counter for copy.
+ * Side speech chip size (~+25% message scale). Chips sit beside settled
+ * customers (not in an overhead band), so the lobby no longer reserves a vertical
+ * strip under the counter for copy.
  */
-export const CUSTOMER_SPEECH_H = 66;
+export const CUSTOMER_SPEECH_H = 83;
 /** Daylight between stacked speech / feedback chips, and above a model's head when hanging. */
 export const CUSTOMER_SPEECH_GAP = 10;
 /** Horizontal gap from the customer's body edge to the near edge of their chip. */
@@ -168,10 +171,10 @@ export function customerSlotX(index: number): number {
 
 /** Daylight left between one chip and the next. */
 export const CUSTOMER_SPEECH_PAD = 8;
-/** Widest a chip draws when the floor is quiet enough to give it the room. */
-export const CUSTOMER_SPEECH_MAX_W = 280;
-/** Narrowest side chip when neighbours leave little room. */
-export const CUSTOMER_SPEECH_MIN_W = 120;
+/** Widest a chip draws when the floor is quiet enough to give it the room (~+25%). */
+export const CUSTOMER_SPEECH_MAX_W = 350;
+/** Narrowest side chip when neighbours leave little room (~+25%). */
+export const CUSTOMER_SPEECH_MIN_W = 150;
 
 export type CustomerSpeechSide = "left" | "right";
 

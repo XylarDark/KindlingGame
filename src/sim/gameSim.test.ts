@@ -838,15 +838,15 @@ describe("GameSim order loops", () => {
     expect(types).toHaveLength(4);
   });
 
-  it("paces the tablet at three quarters of its original rate", () => {
+  it("paces the tablet at ~64% of its original rate (¾ then another −15%)", () => {
     // Was a flat "caps waves at 58 seconds". The cap moved when arrivals were slowed, so
     // the claim is now the thing that actually matters: the gap, and therefore the rate.
-    expect(TICKET_WAVE_MIN_MS).toBe(13_333);
-    expect(TICKET_WAVE_MAX_MS).toBe(77_333);
+    expect(TICKET_WAVE_MIN_MS).toBe(15_686);
+    expect(TICKET_WAVE_MAX_MS).toBe(90_980);
     const meanGap = (TICKET_WAVE_MIN_MS + TICKET_WAVE_MAX_MS) / 2;
-    expect(meanGap / ((10_000 + 58_000) / 2)).toBeCloseTo(1 / 0.75, 3);
+    expect(meanGap / ((10_000 + 58_000) / 2)).toBeCloseTo(1 / (0.75 * 0.85), 3);
     // Waves stayed 1–2 tickets; only the gap between them grew.
-    expect(TICKET_WAVE_GAP_SCALE).toBeCloseTo(4 / 3, 6);
+    expect(TICKET_WAVE_GAP_SCALE).toBeCloseTo((4 / 3) / 0.85, 6);
   });
 
   it("calls out strain and customer after the tablet is tapped", () => {
@@ -1248,7 +1248,7 @@ describe("recurring walk-in traffic", () => {
   it("keeps the door swinging all shift, not just at open", () => {
     const sim = GameSim.create({ seed: 3 });
     const log = watchDoor(sim);
-    // ~20 walk-ins at a 24-60s beat. The band is wide enough for any seed but far above
+    // ~17 walk-ins at the slowed 28–71s beat. The band is wide enough for any seed but far above
     // the single scripted walk-in that used to be the whole day's foot traffic.
     expect(log.ids.length).toBeGreaterThanOrEqual(12);
     expect(log.ids.length).toBeLessThanOrEqual(30);
@@ -1256,7 +1256,7 @@ describe("recurring walk-in traffic", () => {
     expect(log.spawnedAt[log.spawnedAt.length - 1]).toBeGreaterThan(SHIFT_MS * 0.8);
   });
 
-  it("holds the door beat to its 24-60s window", () => {
+  it("holds the door beat to its scaled walk-in window", () => {
     const sim = GameSim.create({ seed: 3 });
     const gaps = gapsBetween(watchDoor(sim).spawnedAt);
     expect(gaps.length).toBeGreaterThanOrEqual(11);
