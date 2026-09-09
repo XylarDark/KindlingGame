@@ -46,6 +46,9 @@ export function addHudButton(
     /** Overrides for panels that run their own type step (e.g. settings). */
     labelSize?: string;
     captionSize?: string;
+    /** Glyph box height for the label (default 36). Raise with larger labelSize. */
+    labelMaxHeight?: number;
+    captionMaxHeight?: number;
   } = {},
 ): Phaser.GameObjects.Container {
   const originX = opts.originX ?? 1;
@@ -65,7 +68,7 @@ export function addHudButton(
     align: "center",
     strokeThickness: 0,
     maxWidth: Math.max(160, (opts.minWidth ?? 260) - 56),
-    maxHeight: 36,
+    maxHeight: opts.labelMaxHeight ?? 36,
   }).setOrigin(0.5);
   const caption = addUiText(scene, 0, 0, opts.caption ?? "", {
     size: opts.captionSize ?? Type.caption,
@@ -74,7 +77,7 @@ export function addHudButton(
     align: "center",
     strokeThickness: 0,
     maxWidth: Math.max(160, (opts.minWidth ?? 260) - 48),
-    maxHeight: 40,
+    maxHeight: opts.captionMaxHeight ?? 40,
   }).setOrigin(0.5);
 
   const CAP_GAP = 6;
