@@ -249,10 +249,18 @@ the thing it described.
 ### `Set-Content -Encoding UTF8` silently replaced every em dash in a source file
 
 - **Date:** 2026-09-08
-- **Symptom:** after a one-line import edit through `(Get-Content $p) -replace ... | Set-Content $p -Encoding UTF8`, an unrelated test failed on a copy assertion: `expected 'Buried â€” 9 jobs...' to match /Buried — \d+ jobs/`. `git diff` reported 147 changed lines in a file that had one line edited.
+- **Symptom:** after a one-line import edit through `(Get-Content $p) -replace ... | Set-Content $p -Encoding UTF8`, an unrelated test failed on a copy assertion: an em dash in the expected string had become the three characters `U+00E2 U+20AC U+201D`. `git diff` reported 147 changed lines in a file that had one line edited.
 - **Cause:** Windows PowerShell 5's `Get-Content` decodes a BOM-less UTF-8 file as ANSI, so every multi-byte character was already mangled before `Set-Content` wrote it back as UTF-8. The same pipeline also prepends a BOM, which is how two test files ended up starting with `EF BB BF`.
 - **Fix:** revert the file with `git checkout --` and redo the edit with the editing tools instead of a shell pipeline. Where the shell is unavoidable, `[System.IO.File]::ReadAllText`/`WriteAllText` with `UTF8Encoding($false)` round-trips without either fault.
-- **Prevention:** never pipe source through `Get-Content`/`Set-Content` on this machine — this codebase is full of em dashes in comments and copy, and the damage is invisible in a diff summary and in the edited line itself. `git diff --stat` after a scripted edit is the cheap check: a one-line edit that reports a hundred changed lines has re-encoded the file.
+- **Prevention:** never pipe source through `Get-Content`/`Set-Content` on this machine — this codebase is full of em dashes in comments and copy, and the damage is invisible in a diff summary and in the edited line itself. `git diff --stat` after a scripted edit is the cheap check: a one-line edit that reports a hundred changed lines has re-encoded the file. `node .devenv/scripts/tools/fix-mojibake.js <file...>` names the damaged lines and repairs them; note that its own `--check` mode only scans `.devenv`, so game files have to be passed explicitly. Do not paste a mangled sequence into this file as evidence — it makes the scanner flag the write-up forever, which is why the symptom above names the code points instead.
+
+### A grep for mojibake came back clean on files that were full of it
+
+- **Date:** 2026-09-08
+- **Symptom:** immediately after the encoding damage above, `Select-String -Pattern "â€|Ã"` over `src` reported zero hits, and a recursive `Get-ChildItem | Select-String` grouping reported no files. Both were wrong: `traffic.test.ts` held sixteen mangled lines and `signText.test.ts` three, and they were committed. The template's `fix-mojibake.js` found them the same day.
+- **Cause:** the search pattern travels through the same shell that mangled the files. Typing mojibake characters into a PowerShell command line re-encodes them in transit, so the pattern that arrived at `Select-String` no longer contained the bytes being hunted, and it matched nothing. A passing scan was read as proof of a clean tree — the same fail-open shape as a source scan whose markers do not land.
+- **Fix:** detect this class by code point rather than by pasted glyph. Reading the file in Node and printing `codePointAt` for anything above 126 shows `U+00E2 U+20AC U+201D` plainly, and the repo has a purpose-built tool that does it properly.
+- **Prevention:** a corrupted-text search cannot be written in corrupted text. Assert the pattern works before trusting a clean result — grep for a string you know is present, or use a tool whose patterns live in a file rather than on the command line. Also note what a green suite does *not* cover: this damage sat in comments, one test title and one assertion message, so all 500 tests passed with it in place.
 
 ---
 

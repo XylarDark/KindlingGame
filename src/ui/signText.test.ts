@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 /**
  * `core.autocrlf` is true in this repo, so a checkout delivers CRLF and any
  * newline-anchored search silently misses. Normalise, and throw on a miss rather than
- * quietly scanning nothing â€” both failures have happened here before.
+ * quietly scanning nothing — both failures have happened here before.
  */
 function read(path: string): string {
   const src = readFileSync(new URL(path, import.meta.url), "utf8").replace(/\r\n/g, "\n");
@@ -66,8 +66,8 @@ describe("text boxes are all the counter plaque", () => {
 
   it("follows its text into a container", () => {
     // The score pop and the delivery phone both add their text to a container after it
-    // is built. A scene-level plaque would be drawn under the whole container â€” behind
-    // the phone chassis, in that case â€” and positioned in the wrong space.
+    // is built. A scene-level plaque would be drawn under the whole container — behind
+    // the phone chassis, in that case — and positioned in the wrong space.
     expect(helper).toMatch(/text\.parentContainer/);
     expect(helper).toMatch(/moveBelow/);
   });
