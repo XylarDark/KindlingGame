@@ -6,6 +6,8 @@ export const Color = {
   creamHex: "#f4e8c1",
   creamSoftHex: "#e8d8b0",
   leaf: 0x3d6a44,
+  /** Kindling sign leaf — shell / side-rail chrome. */
+  leafHex: "#3d6a44",
   leafBright: 0x5a9a62,
   lime: 0xc8c070,
   limeHex: "#c8c070",
