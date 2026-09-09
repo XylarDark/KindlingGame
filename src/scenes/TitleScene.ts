@@ -12,7 +12,7 @@ import { addSignText } from "../ui/signText";
 import { addUiText } from "../ui/text";
 import { Color, MENU_TYPE_FIT, MSG_TYPE_FIT, scaleMsgBox, scaleMsgPad, scaleMsgPx, Type } from "../ui/theme";
 import { fitTypeToWidth } from "../ui/typekit";
-import { designSafeInset, readCssSafeArea, VIEWFIT_EVENT, viewFromScale } from "../ui/viewFit";
+import { designHudInset, readCssSafeArea, VIEWFIT_EVENT } from "../ui/viewFit";
 
 /**
  * Welcome + how-to: dedicated ~50% readability bump in design space.
@@ -118,7 +118,7 @@ export class TitleScene extends Phaser.Scene {
   private layoutPauseHint(): void {
     const hint = this.pauseHint;
     if (!hint) return;
-    const inset = designSafeInset(viewFromScale(this.scale), readCssSafeArea(document.getElementById("game-root")));
+    const inset = designHudInset(readCssSafeArea(document.getElementById("game-root")));
     const left = PAUSE_MARGIN + inset.left;
     const right = GAME_WIDTH - PAUSE_MARGIN - inset.right;
     // The frame rides outside the glyph box, so the type budget loses it twice.

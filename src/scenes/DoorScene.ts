@@ -13,7 +13,7 @@ import { formatSlaClock, isSlaUrgent } from "../ui/copy";
 import { addSignText, setSignAccent } from "../ui/signText";
 import { Color, MSG_TYPE_FIT, scaleMsgBox, scaleMsgPad, scaleMsgPx } from "../ui/theme";
 import { fitTypeToWidth } from "../ui/typekit";
-import { designSafeInset, HUD_TOUCH_MIN_DESIGN, readCssSafeArea, VIEWFIT_EVENT, viewFromScale } from "../ui/viewFit";
+import { designHudInset, HUD_TOUCH_MIN_DESIGN, readCssSafeArea, VIEWFIT_EVENT } from "../ui/viewFit";
 
 /** 25% larger than shop bags (BAG_SCALE 0.7). */
 const DOOR_BAG_SCALE = BAG_SCALE * 1.25;
@@ -139,7 +139,7 @@ export class DoorScene extends Phaser.Scene {
   }
 
   private layoutDoorHud(): void {
-    const inset = designSafeInset(viewFromScale(this.scale), readCssSafeArea(document.getElementById("game-root")));
+    const inset = designHudInset(readCssSafeArea(document.getElementById("game-root")));
     this.insetTop = inset.top;
     this.houseLabel.setPosition(DOORSTEP_DOOR_X, 56 + inset.top);
     this.placePrompt();

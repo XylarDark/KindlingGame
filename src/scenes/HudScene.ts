@@ -27,12 +27,12 @@ import { addHudButton, addPanel } from "../ui/chrome";
 import { END_SHIFT_CAPTION, END_SHIFT_LABEL, RESULTS_NEW_DAY, RESULTS_TITLE } from "../ui/copy";
 import { addSignText, setSignAccent } from "../ui/signText";
 import { addUiText } from "../ui/text";
+import { settingsGeom, type SettingsGeom } from "../ui/settingsGeom";
 import {
   Color,
   HUD_TYPE_FIT,
   MENU_TYPE_FIT,
   MSG_TYPE_FIT,
-  designPxForMinCss,
   scaleChromePx,
   scaleMsgBox,
   scaleMsgPad,
@@ -40,7 +40,7 @@ import {
   Type,
 } from "../ui/theme";
 import { parseFontPx, refitType, retypeSize } from "../ui/typekit";
-import { designSafeInset, getStageContainScale, HUD_TOUCH_MIN_DESIGN, MIN_CSS_TOUCH_PX, readCssSafeArea, VIEWFIT_EVENT, viewFromScale } from "../ui/viewFit";
+import { designHudInset, HUD_TOUCH_MIN_DESIGN, readCssSafeArea, VIEWFIT_EVENT } from "../ui/viewFit";
 
 /** Readouts sit either side of the counter sign, 10% over the display ramp. */
 const HUD_READOUT_PX = 40;
@@ -94,57 +94,12 @@ function rowBand(
 const SET_PAD = 24;
 const SET_BTN_SCALE = 0.75;
 const SET_BTN_W = Math.round((440 - SET_PAD * 2) * SET_BTN_SCALE);
-const SET_BTN_GAP = 16;
 const SETTINGS_W = SET_BTN_W + SET_PAD * 2;
 const VOL_KNOB_R = 12;
 const VOL_TRACK_X = SET_PAD;
 const VOL_TRACK_W = Math.round(312 * SET_BTN_SCALE);
 const VOL_TRACK_H = 16;
 const SET_HINT_H = 24;
-const SET_ROW_GAP = 8;
-
-type SettingsGeom = {
-  rowH: number;
-  btnH: number;
-  rowTop: number;
-  volRowTop: number;
-  volTrackY: number;
-  fsRowTop: number;
-  installRowTop: number;
-  endShiftY: number;
-  resetY: number;
-  hintY: number;
-  h: number;
-};
-
-function settingsGeom(stageScale = getStageContainScale()): SettingsGeom {
-  // Current contain scale, not HUD_BUTTON_MIN_H: that worst-case floor is ~139 design px
-  // and stacking it for every row overflowed the 1080 canvas on a phone.
-  const rowH = Math.max(56, designPxForMinCss(MIN_CSS_TOUCH_PX, Math.max(stageScale, 0.25)));
-  // addHudButton grows to stackH+32 (~80) when the min is smaller, so geom must match.
-  const btnH = Math.max(80, rowH);
-  const rowTop = 48;
-  const volRowTop = rowTop + rowH + SET_ROW_GAP;
-  const volTrackY = volRowTop + 22;
-  const fsRowTop = volTrackY + VOL_KNOB_R + SET_ROW_GAP;
-  const installRowTop = fsRowTop + rowH + SET_ROW_GAP;
-  const endShiftY = installRowTop + rowH + SET_ROW_GAP;
-  const resetY = endShiftY + btnH + SET_BTN_GAP;
-  const hintY = resetY + btnH + SET_BTN_GAP;
-  return {
-    rowH,
-    btnH,
-    rowTop,
-    volRowTop,
-    volTrackY,
-    fsRowTop,
-    installRowTop,
-    endShiftY,
-    resetY,
-    hintY,
-    h: hintY + SET_HINT_H + SET_PAD,
-  };
-}
 
 /**
  * Panel type steps. Rows and the end-shift button take a bump because their boxes have
@@ -760,7 +715,7 @@ export class HudScene extends Phaser.Scene {
   }
 
   private layoutHud(): void {
-    const inset = designSafeInset(viewFromScale(this.scale), readCssSafeArea(document.getElementById("game-root")));
+    const inset = designHudInset(readCssSafeArea(document.getElementById("game-root")));
     const left = 28 + inset.left;
     const right = GAME_WIDTH - 28 - inset.right;
     const bottom = GAME_HEIGHT - 40 - inset.bottom;

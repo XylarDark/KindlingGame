@@ -80,6 +80,14 @@ the thing it described.
 - **Fix:** state the chrome in cells so it genuinely derives (`PHONE_CELL * 2.5`, `* 4`, `* 0.25`), which puts the band at 64.4px and lets the caption reach its authored 20px — read back off the live text object, not inferred from the constant. The band now carries a comment naming it the tightest box on the phone and quoting the two numbers that make it tight (64 of 64.4), so the next person who wants a taller map can see what they would be spending. Commit `be757d4`, in `src/scenes/HudScene.ts` and `src/art/phoneArt.ts`.
 - **Prevention:** **assert the effective rendered size, never the declared constant.** A test pinning `PHONE_STATUS_PX` would have passed identically in the broken state and the fixed one; only `style.fontSize` off the object in a browser distinguishes them. And read a comment asserting a derivation as an unverified claim rather than a guarantee — nothing fails when a hand-written number quietly replaces a derived one, so the drift is silent by construction and the person who finds it is never the person who caused it. The same shape is worth watching for wherever a constant names a size: see the `RESET TO 9 AM` label, which was pinned at 18px next to a sibling's 26px until the copy was cut.
 
+### Height-fill crop left HUD chrome off the visible screen
+
+- **Date:** 2026-09-09
+- **Symptom:** after switching contain to always fill viewport height (no top letterbox), iPad / tall landscape cropped the sides of the 16:9 stage. The settings cog and other HUD chrome sat in the clipped overhang and were unreachable.
+- **Cause:** `layoutHud` only applied CSS safe-area insets. It never added the design-space overhang from a negative `stage.left`, so chrome was still laid out as if the full 1920×1080 was visible.
+- **Fix:** `designLayoutInset` / `designHudInset` fold `stageCropCss` into the inset; the shell publishes the live stage frame via `setStageFrame`.
+- **Prevention:** any layout that pads from the design edge must use the crop-aware inset when height-fill can set `stage.left < 0`. Cover with a test that places the cog inside the visible design range on a 1024×768 contain.
+
 ### Shrink-to-fit plus a CSS floor drew glyphs outside the box
 
 - **Date:** 2026-09-09

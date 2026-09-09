@@ -7,6 +7,7 @@ import {
   RAIL_MIN_CSS_PX,
   readCssSafeArea,
   setStageContainScale,
+  setStageFrame,
   stageContainScale,
 } from "./ui/viewFit";
 
@@ -113,6 +114,7 @@ export function installMobileShell(game: Phaser.Game): void {
     const packed = containStage({ width, height });
     // Publish contain scale before viewfit so type floors / mobile ramp see it.
     setStageContainScale(stageContainScale(packed.stage));
+    setStageFrame(packed.stage);
     const sw = Math.round(packed.stage.width);
     const sh = Math.round(packed.stage.height);
     const sl = Math.round(packed.stage.left);

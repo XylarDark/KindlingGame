@@ -27,9 +27,9 @@ function activateWaiting(worker: ServiceWorker): void {
 }
 
 /**
- * Register the installability worker, check for a new deploy, and reload once if
- * this page was already controlled by an older worker. Times out so a hung Pages
- * fetch cannot block boot. Dev registers without waiting so HMR stays snappy.
+ * Register the installability worker. Activates a *already-waiting* update before
+ * the game starts (previous visit downloaded it). Does not await network update or
+ * activate mid-shift — that would blank-boot for seconds or reload under the player.
  */
 export async function bootKindlingPwa(): Promise<"ready" | "reloading" | "skipped"> {
   if (!("serviceWorker" in navigator)) {
@@ -58,46 +58,37 @@ export async function bootKindlingPwa(): Promise<"ready" | "reloading" | "skippe
 
   try {
     const reg = await navigator.serviceWorker.register(url, { updateViaCache: "none" });
-    debug("registered", { scope: reg.scope, hadController });
-    await Promise.race([reg.update(), sleep(PWA_UPDATE_WAIT_MS)]);
-    const installing = reg.installing;
-    if (installing && installing.state !== "installed" && installing.state !== "redundant") {
-      await Promise.race([
-        new Promise<void>((resolve) => {
-          installing.addEventListener("statechange", () => {
-            if (installing.state === "installed" || installing.state === "redundant") resolve();
-          });
-        }),
-        sleep(PWA_UPDATE_WAIT_MS),
-      ]);
-    }
+    debug("registered", { scope: reg.scope, hadController, waiting: Boolean(reg.waiting) });
+
     if (shouldActivateWaitingWorker(Boolean(reg.waiting), hadController) && reg.waiting) {
-      debug("activating waiting worker");
+      debug("activating waiting worker before game start");
       activateWaiting(reg.waiting);
       await sleep(800);
       if (reloading) return "reloading";
+      // controllerchange may still be in flight — do not start the old build.
+      return "reloading";
     }
+
+    // Download updates in the background for the *next* cold open. Never skipWaiting
+    // here or on resume — that would reload mid-shift.
+    void reg.update().then(
+      () => debug("background update finished", { waiting: Boolean(reg.waiting) }),
+      (err: unknown) => debug("background update failed", { err: String(err) }),
+    );
     bindResumeUpdateCheck(reg);
   } catch (err) {
-    debug("register/update failed", { err: String(err) });
+    debug("register failed", { err: String(err) });
   }
   return "ready";
 }
 
-/** When the installed app is foregrounded, look again — Android often keeps the process alive. */
+/** Foreground: fetch a newer worker script only. Activation waits for the next cold boot. */
 function bindResumeUpdateCheck(reg: ServiceWorkerRegistration): void {
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState !== "visible") return;
-    void (async () => {
-      try {
-        await Promise.race([reg.update(), sleep(PWA_UPDATE_WAIT_MS)]);
-        if (shouldActivateWaitingWorker(Boolean(reg.waiting), Boolean(navigator.serviceWorker.controller)) && reg.waiting) {
-          debug("resume found waiting worker");
-          activateWaiting(reg.waiting);
-        }
-      } catch (err) {
-        debug("resume update failed", { err: String(err) });
-      }
-    })();
+    void reg.update().then(
+      () => debug("resume update finished", { waiting: Boolean(reg.waiting) }),
+      (err: unknown) => debug("resume update failed", { err: String(err) }),
+    );
   });
 }

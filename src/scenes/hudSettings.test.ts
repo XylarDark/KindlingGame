@@ -58,8 +58,11 @@ describe("settings cog panel", () => {
 
   it("derives the panel box from the button box so one scale moves the whole panel", () => {
     expect(src).toContain("const SETTINGS_W = SET_BTN_W + SET_PAD * 2;");
-    expect(src).toContain("const btnH = Math.max(80, rowH);");
-    expect(src).not.toContain("Math.max(HUD_BUTTON_MIN_H, rowH)");
+    expect(src).toContain('from "../ui/settingsGeom"');
+    expect(src).toContain("settingsGeom()");
+    const geom = read("../ui/settingsGeom.ts");
+    expect(geom).toContain("const btnH = Math.max(80, rowH)");
+    expect(geom).not.toContain("Math.max(HUD_BUTTON_MIN_H, rowH)");
   });
 
   it("seeds both button labels at the same step, which only short copy can hold", () => {

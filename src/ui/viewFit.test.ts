@@ -11,8 +11,11 @@ import {
   stageContainScale,
   getStageContainScale,
   setStageContainScale,
+  setStageFrame,
   cssPxFromDesign,
   cssPxToDesign,
+  designHudInset,
+  designLayoutInset,
   designSafeInset,
   displayScale,
   fillsParent,
@@ -20,6 +23,7 @@ import {
   notifyViewfit,
   phaserDisplayScale,
   readCssSafeArea,
+  stageCropCss,
   VIEWFIT_EVENT,
 } from "./viewFit";
 
@@ -80,6 +84,48 @@ describe("displayScale NONE + CSS contain", () => {
     expect(inset.bottom).toBeCloseTo(cssPxToDesign(21, "y", view));
     expect(inset.left).toBeGreaterThan(80);
     expect(inset.bottom).toBeGreaterThan(40);
+  });
+
+  it("adds height-fill crop to HUD insets so chrome stays in the visible rect", () => {
+    const packed = containStage({ width: 1024, height: 768 });
+    expect(packed.stage.left).toBeLessThan(0);
+    const crop = stageCropCss(packed.stage);
+    expect(crop.left).toBeGreaterThan(100);
+    const inset = designLayoutInset(packed.stage, { left: 0, right: 0, top: 0, bottom: 0 });
+    const cropDesign = cssPxToDesign(crop.left, "x", packed.stage);
+    expect(inset.left).toBeCloseTo(cropDesign, 5);
+    expect(inset.right).toBeCloseTo(cropDesign, 5);
+    // Cog at GAME_WIDTH - 24 - inset.right must stay inside the visible crop.
+    const cogX = GAME_WIDTH - 24 - inset.right;
+    expect(cogX).toBeLessThanOrEqual(GAME_WIDTH - cropDesign);
+    expect(cogX).toBeGreaterThanOrEqual(cropDesign);
+  });
+
+  it("publishes stage frame for designHudInset", () => {
+    const packed = containStage({ width: 1024, height: 768 });
+    setStageFrame(packed.stage);
+    const inset = designHudInset({ left: 0, right: 0, top: 0, bottom: 0 });
+    expect(inset.left).toBeGreaterThan(100);
+    setStageFrame({ width: GAME_WIDTH, height: GAME_HEIGHT, left: 0, top: 0 });
+  });
+});
+
+describe("clientToGame with cropped stage", () => {
+  it("maps the visible left edge when the canvas overhangs the viewport", () => {
+    // 800×600 viewport, height-fill stage ~1067×600 centred → left ≈ -133.5
+    const packed = containStage({ width: 800, height: 600 });
+    const canvas = {
+      left: packed.stage.left,
+      top: 0,
+      width: packed.stage.width,
+      height: packed.stage.height,
+    };
+    const atViewportLeft = clientToGame(0, 300, canvas);
+    expect(atViewportLeft.x).toBeCloseTo((-packed.stage.left / packed.stage.width) * GAME_WIDTH, 0);
+    expect(atViewportLeft.x).toBeGreaterThan(100);
+    const atViewportRight = clientToGame(800, 300, canvas);
+    expect(atViewportRight.x).toBeCloseTo(((800 - packed.stage.left) / packed.stage.width) * GAME_WIDTH, 0);
+    expect(atViewportRight.x).toBeLessThan(GAME_WIDTH - 100);
   });
 });
 

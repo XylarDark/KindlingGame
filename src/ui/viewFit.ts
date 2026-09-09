@@ -162,6 +162,51 @@ export function designSafeInset(view: ViewSize, css: SafeInset): SafeInset {
   };
 }
 
+/**
+ * CSS pixels of the 16:9 stage clipped past the viewport when height-fill crops
+ * the sides. Stage is centred, so left and right crops match.
+ */
+export function stageCropCss(stage: { left: number }): { left: number; right: number } {
+  const crop = Math.max(0, -stage.left);
+  return { left: crop, right: crop };
+}
+
+/**
+ * Safe-area plus height-fill side crop, in design pixels. HUD chrome must use this
+ * (not bare {@link designSafeInset}) or cog/pad sit in the clipped overhang on iPads.
+ */
+export function designLayoutInset(stage: ViewSize & { left: number }, css: SafeInset): SafeInset {
+  const crop = stageCropCss(stage);
+  const safe = designSafeInset(stage, css);
+  return {
+    left: safe.left + cssPxToDesign(crop.left, "x", stage),
+    right: safe.right + cssPxToDesign(crop.right, "x", stage),
+    top: safe.top,
+    bottom: safe.bottom,
+  };
+}
+
+/** Last stage frame from the shell — includes negative `left` when sides are cropped. */
+let currentStageFrame: (ViewSize & { left: number; top: number }) | null = null;
+
+export function setStageFrame(stage: ViewSize & { left: number; top: number }): void {
+  currentStageFrame = {
+    width: stage.width,
+    height: stage.height,
+    left: stage.left,
+    top: stage.top,
+  };
+}
+
+export function getStageFrame(): ViewSize & { left: number; top: number } {
+  return currentStageFrame ?? { width: GAME_WIDTH, height: GAME_HEIGHT, left: 0, top: 0 };
+}
+
+/** Convenience for scenes: crop-aware inset from the live shell stage. */
+export function designHudInset(css: SafeInset): SafeInset {
+  return designLayoutInset(getStageFrame(), css);
+}
+
 function insetFromStyle(style: CSSStyleDeclaration): SafeInset {
   const read = (name: string): number => {
     const raw = style.getPropertyValue(name).trim();

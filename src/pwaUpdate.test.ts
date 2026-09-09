@@ -34,6 +34,22 @@ describe("update wiring", () => {
     expect(src).toContain("SKIP_WAITING_MESSAGE");
   });
 
+  it("does not await network update before returning ready", () => {
+    const src = read("src/pwaUpdate.ts");
+    expect(src).not.toContain("await Promise.race([reg.update()");
+    expect(src).toContain("void reg.update()");
+  });
+
+  it("does not activate a waiting worker on resume (would reload mid-shift)", () => {
+    const src = read("src/pwaUpdate.ts");
+    const resumeFrom = src.indexOf("function bindResumeUpdateCheck");
+    if (resumeFrom < 0) throw new Error("bindResumeUpdateCheck missing");
+    const resume = src.slice(resumeFrom);
+    expect(resume).toContain("reg.update()");
+    expect(resume).not.toContain("activateWaiting");
+    expect(resume).not.toContain("skipWaiting");
+  });
+
   it("keeps the worker handshake string in lockstep with sw.js", () => {
     const sw = read("public/sw.js");
     expect(sw).toContain(`event.data === "${SKIP_WAITING_MESSAGE}"`);
@@ -58,7 +74,7 @@ describe("update wiring", () => {
     expect(vite).toContain("serviceWorkerBuildId");
   });
 
-  it("boots the game only after the PWA update check resolves", () => {
+  it("boots the game after PWA registration, skipping start when reloading", () => {
     const main = read("src/main.ts");
     expect(main).toContain("bootKindlingPwa");
     expect(main).toContain('if (outcome === "reloading") return');
