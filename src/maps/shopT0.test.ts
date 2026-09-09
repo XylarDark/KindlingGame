@@ -11,9 +11,6 @@ import {
   COUNTER_RIGHT,
   COUNTER_TOP,
   CUSTOMER_BUBBLE_MIN_X,
-  CUSTOMER_SPEECH_BASE,
-  CUSTOMER_SPEECH_GAP,
-  CUSTOMER_SPEECH_H,
   CUSTOMER_SPEECH_MAX_W,
   CUSTOMER_SPEECH_MIN_W,
   CUSTOMER_SLOT_PITCH,
@@ -123,13 +120,13 @@ describe("customer standing slots", () => {
     }
   });
 
-  it("keeps the speech band between the counter lip and the tallest hair under it", () => {
-    // The whole point of the band: a chip that fills it still ends above the head it
-    // belongs to. Chips hang from the base line upward, so the top edge is the tall case.
+  it("keeps each customer's head fully visible below the counter front", () => {
+    // After side messaging reclaimed the overhead speech band, heads sit just under the
+    // counter lip — not cropped by it, and not pushed down by an unused chip row.
     const headTop = CUSTOMER_SPOT.y - PERSON_DISPLAY_H;
-    expect(CUSTOMER_SPEECH_BASE - CUSTOMER_SPEECH_H, "chip clears the counter lip").toBeGreaterThan(COUNTER_FRONT);
-    expect(CUSTOMER_SPEECH_BASE, "chip ends above the hair").toBeLessThanOrEqual(headTop - CUSTOMER_SPEECH_GAP);
     expect(headTop, "the head itself hangs below the counter front").toBeGreaterThan(COUNTER_FRONT);
+    expect(headTop - COUNTER_FRONT, "modest clearance under the lip").toBeGreaterThanOrEqual(8);
+    expect(headTop - COUNTER_FRONT, "not wasting the old speech band").toBeLessThan(40);
   });
 
   it("still shows a head and a chest once the queue stands lower", () => {
@@ -139,25 +136,17 @@ describe("customer standing slots", () => {
     expect(visible, "head and chest are on screen").toBeGreaterThan(160);
   });
 
-  it("gives a chip the room its neighbours leave it", () => {
-    expect(customerSpeechWidth(Infinity), "alone on the floor").toBe(CUSTOMER_SPEECH_MAX_W);
-    expect(customerSpeechWidth(CUSTOMER_SLOT_PITCH), "next slot taken").toBe(CUSTOMER_SPEECH_MIN_W);
-    expect(customerSpeechWidth(2 * CUSTOMER_SLOT_PITCH), "a slot's grace either side").toBeGreaterThan(
-      CUSTOMER_SPEECH_MIN_W,
-    );
-    // Two chips centred on their owners cannot reach each other while each stays inside
-    // the gap — that is the invariant the single row rests on.
-    for (const gap of [CUSTOMER_SLOT_PITCH, 2 * CUSTOMER_SLOT_PITCH, 3 * CUSTOMER_SLOT_PITCH]) {
-      expect(customerSpeechWidth(gap), `two chips ${gap} apart`).toBeLessThanOrEqual(gap);
-    }
+  it("gives a side chip the room its chosen side leaves it", () => {
+    expect(customerSpeechWidth(Infinity), "open side").toBe(CUSTOMER_SPEECH_MAX_W);
+    expect(customerSpeechWidth(CUSTOMER_SPEECH_MIN_W), "tight side").toBe(CUSTOMER_SPEECH_MIN_W);
+    expect(customerSpeechWidth(400), "cap at max").toBe(CUSTOMER_SPEECH_MAX_W);
   });
 
   it("holds speech back while its owner is still crossing the floor", () => {
-    // A walk-in passes within a body's width of everyone already served, which is nearer
-    // than any width rule can cover, so the chip waits rather than sliding under theirs.
-    expect(customerSpeechShows(false, 40), "mid-walk, right past someone").toBe(false);
-    expect(customerSpeechShows(true, 40), "parked, however tight").toBe(true);
-    expect(customerSpeechShows(false, CUSTOMER_SLOT_PITCH), "walking in clear air").toBe(true);
+    // Side chips would jump every frame while x is changing, so they wait for settle.
+    expect(customerSpeechShows(false, 40), "mid-walk").toBe(false);
+    expect(customerSpeechShows(true, 40), "parked").toBe(true);
+    expect(customerSpeechShows(false, CUSTOMER_SLOT_PITCH), "walking in clear air").toBe(false);
   });
 
   it("holds four customers inside the clear lobby", () => {

@@ -2,10 +2,14 @@ import { PERSON_W } from "../art/peopleSize";
 import { GAME_WIDTH } from "../sim/constants";
 
 /** Shop cutaway at 1920×1080. Staff behind the counter; lobby in front. */
-export const FLOOR_Y = 830;
-/** Dropped ~5% of the screen so the wall can hold wider TVs. */
-export const COUNTER_TOP = 710;
-export const COUNTER_FRONT = 830;
+export const FLOOR_Y = 860;
+/**
+ * Counter dropped further after speech moved aside — reclaim the old overhead speech
+ * band (~50px) so the wall / counter-and-up band can grow. Customers stay fully visible
+ * below the counter front (see CUSTOMER_HEAD_CLEAR).
+ */
+export const COUNTER_TOP = 750;
+export const COUNTER_FRONT = 860;
 /** Original slab 256–1504; left was pushed right 15% to widen the door bay. */
 const SCREEN_5 = Math.round(GAME_WIDTH * 0.05);
 const COUNTER_LEFT_WIDE = 256 + Math.round((1504 - 256) * 0.15);
@@ -26,7 +30,7 @@ export const BAG_SCALE = 0.7;
 export const PERSON_DISPLAY_H = Math.round(PERSON_NATIVE_H * PEOPLE_SCALE);
 
 /** Shirt mark sits above the laminate; head stays under the TVs. */
-export const KEYLEAD = { x: COUNTER_MID, y: COUNTER_TOP + 68 };
+export const KEYLEAD = { x: COUNTER_MID, y: COUNTER_TOP + 78 };
 
 const COUNTER_SIGN_H = 64;
 /** Shade band + painted edge along the bottom of the counter face. */
@@ -106,34 +110,30 @@ export const BENCH = {
   y: COUNTER_TOP + Math.floor((COUNTER_FRONT - COUNTER_TOP) / 2),
 };
 /**
- * Air under the counter lip that belongs to customer speech, and nothing else.
- *
- * Chips used to hang at the middle of the customer they belonged to, which reads as a
- * sticker across the model rather than as speech. There was nowhere else for them to go:
- * the lobby is 250px deep, a standing person draws {@link PERSON_DISPLAY_H}, and the
- * counter face above is already carrying the shop sign and the HUD readouts. So the queue
- * stands a band lower and the air above their hair is reserved. Cropping the lobby at the
- * chest is the perspective the cutaway already implies — these people are nearer the
- * camera than the staff behind the counter, and their feet were off-frame before this.
- *
- * Sized off a two-line chip at the message step plus its padding, measured at 66px.
+ * Side speech chip size. Chips sit beside settled customers (not in an overhead band),
+ * so the lobby no longer reserves a vertical strip under the counter for copy.
  */
 export const CUSTOMER_SPEECH_H = 66;
-/** Daylight between the bottom of a chip and the hair beneath it. */
+/** Daylight between stacked speech / feedback chips, and above a model's head when hanging. */
 export const CUSTOMER_SPEECH_GAP = 10;
+/** Horizontal gap from the customer's body edge to the near edge of their chip. */
+export const CUSTOMER_SPEECH_SIDE_GAP = 12;
+/** Hair sits this far below the counter front so heads stay fully visible. */
+export const CUSTOMER_HEAD_CLEAR = 12;
 /**
- * The line every chip hangs from: its **bottom** edge, not its middle. A box grows
- * downward from its centre as copy wraps, so anchoring the centre is what let a two-line
- * callout reach a face that a one-liner cleared.
+ * @deprecated Overhead band removed — alias of the head-clear line for migrating callers.
+ * Prefer {@link CUSTOMER_HEAD_CLEAR}.
  */
-export const CUSTOMER_SPEECH_BASE = COUNTER_FRONT + 2 + CUSTOMER_SPEECH_H;
-/** Feet on the lobby boards; hair clears the speech band above it. */
+export const CUSTOMER_SPEECH_BASE = COUNTER_FRONT + CUSTOMER_HEAD_CLEAR;
+/** Feet on the lobby boards; hair clears the counter front above it. */
 export const CUSTOMER_SPOT = {
   x: COUNTER_MID,
-  y: CUSTOMER_SPEECH_BASE + CUSTOMER_SPEECH_GAP + PERSON_DISPLAY_H,
+  y: COUNTER_FRONT + CUSTOMER_HEAD_CLEAR + PERSON_DISPLAY_H,
 };
 /** Bubbles must clear the lobby sandwich board on the far left. */
 export const CUSTOMER_BUBBLE_MIN_X = 300;
+/** Bubbles must clear the settings cog column on the far right. */
+export const CUSTOMER_BUBBLE_MAX_X = GAME_WIDTH - 120;
 
 export const DOOR_W = 200;
 export const DOOR_H = 372;
@@ -169,46 +169,112 @@ export function customerSlotX(index: number): number {
 /** Daylight left between one chip and the next. */
 export const CUSTOMER_SPEECH_PAD = 8;
 /** Widest a chip draws when the floor is quiet enough to give it the room. */
-export const CUSTOMER_SPEECH_MAX_W = 328;
-/** What a chip gets when the neighbouring slot is taken: the pitch, less the daylight. */
-export const CUSTOMER_SPEECH_MIN_W = CUSTOMER_SLOT_PITCH - CUSTOMER_SPEECH_PAD;
+export const CUSTOMER_SPEECH_MAX_W = 280;
+/** Narrowest side chip when neighbours leave little room. */
+export const CUSTOMER_SPEECH_MIN_W = 120;
 
-/**
- * How wide a chip may draw, given the distance to the nearest other customer on the floor.
- *
- * Every chip shares one row, so width is the only thing keeping two of them apart, and a
- * chip centred on its owner cannot reach a neighbour's while it stays inside the gap
- * between them. Reading the room off the live distance rather than off the slot pitch is
- * what lets a lone customer have the whole box for their order and a full floor tighten
- * up: the copy shrinks to fit rather than being clipped.
- */
-export function customerSpeechWidth(nearestGap: number): number {
-  if (!Number.isFinite(nearestGap)) return CUSTOMER_SPEECH_MAX_W;
-  const room = nearestGap - CUSTOMER_SPEECH_PAD;
-  return Math.max(CUSTOMER_SPEECH_MIN_W, Math.min(CUSTOMER_SPEECH_MAX_W, room));
+export type CustomerSpeechSide = "left" | "right";
+
+export interface CustomerSpeechBox {
+  orderId: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  side: CustomerSpeechSide;
 }
 
 /**
- * Whether a chip shows at all.
- *
- * Width alone keeps chips apart once everyone is standing on a slot, because the slots are
- * a pitch apart and {@link CUSTOMER_SPEECH_MIN_W} fits inside that. It cannot hold for
- * someone still crossing the floor, who passes within a body's width of every customer
- * already served. Their speech waits until they have found their spot instead of sliding
- * under a neighbour's — the arrival toast already says they are on their way in.
+ * How wide a side chip may draw given free horizontal room on its chosen side.
  */
-export function customerSpeechShows(settled: boolean, nearestGap: number): boolean {
-  return settled || nearestGap >= CUSTOMER_SLOT_PITCH;
+export function customerSpeechWidth(sideRoom: number): number {
+  if (!Number.isFinite(sideRoom)) return CUSTOMER_SPEECH_MAX_W;
+  return Math.max(CUSTOMER_SPEECH_MIN_W, Math.min(CUSTOMER_SPEECH_MAX_W, sideRoom));
+}
+
+/**
+ * Side chips only show once the customer has settled — walking-in chips would jump every
+ * frame as x changes, and they would collide with everyone they pass.
+ */
+export function customerSpeechShows(settled: boolean, _nearestGap?: number): boolean {
+  return settled;
+}
+
+/** Horizontal room on `side` of a customer before hitting a screen / chrome bound. */
+export function customerSideRoom(customerX: number, side: CustomerSpeechSide): number {
+  const body = PERSON_DISPLAY_W / 2;
+  if (side === "right") {
+    return CUSTOMER_BUBBLE_MAX_X - (customerX + body + CUSTOMER_SPEECH_SIDE_GAP);
+  }
+  return customerX - body - CUSTOMER_SPEECH_SIDE_GAP - CUSTOMER_BUBBLE_MIN_X;
+}
+
+function chipCentreX(customerX: number, side: CustomerSpeechSide, bubbleW: number): number {
+  const body = PERSON_DISPLAY_W / 2;
+  if (side === "right") {
+    return customerX + body + CUSTOMER_SPEECH_SIDE_GAP + bubbleW / 2;
+  }
+  return customerX - body - CUSTOMER_SPEECH_SIDE_GAP - bubbleW / 2;
+}
+
+function rectsOverlap(
+  a: { x: number; y: number; w: number; h: number },
+  b: { x: number; y: number; w: number; h: number },
+): boolean {
+  return (
+    a.x - a.w / 2 < b.x + b.w / 2 &&
+    b.x - b.w / 2 < a.x + a.w / 2 &&
+    a.y - a.h / 2 < b.y + b.h / 2 &&
+    b.y - b.h / 2 < a.y + a.h / 2
+  );
+}
+
+/**
+ * Place settled customers' speech beside them. Prefer each customer's right; flip left
+ * when the right side collides with another chip, the screen edge, the sandwich board, or
+ * the settings column. Callers pass customers front-of-queue first so earlier speakers
+ * keep their preferred side.
+ */
+export function layoutCustomerSpeech(
+  customers: readonly { orderId: string; x: number }[],
+  bubbleH: number = CUSTOMER_SPEECH_H,
+): CustomerSpeechBox[] {
+  const placed: CustomerSpeechBox[] = [];
+  // Mid-upper torso / head band beside the model.
+  const y = CUSTOMER_SPOT.y - PERSON_DISPLAY_H + Math.max(48, bubbleH);
+  for (const customer of customers) {
+    const trySide = (side: CustomerSpeechSide): CustomerSpeechBox | null => {
+      const room = customerSideRoom(customer.x, side);
+      if (room < CUSTOMER_SPEECH_MIN_W) return null;
+      const w = customerSpeechWidth(room);
+      const x = chipCentreX(customer.x, side, w);
+      const box: CustomerSpeechBox = { orderId: customer.orderId, x, y, w, h: bubbleH, side };
+      // Keep clear of the counter lip.
+      if (box.y - box.h / 2 < COUNTER_FRONT + 2) return null;
+      if (box.x - box.w / 2 < CUSTOMER_BUBBLE_MIN_X) return null;
+      if (box.x + box.w / 2 > CUSTOMER_BUBBLE_MAX_X) return null;
+      for (const other of placed) {
+        if (rectsOverlap(box, other)) return null;
+      }
+      return box;
+    };
+    const box = trySide("right") ?? trySide("left");
+    if (box) placed.push(box);
+  }
+  return placed;
 }
 
 export const TV_COUNT = 3;
 export const TV_COLS = 3;
 export const STRAINS_PER_TV = 3;
-/** 15% larger than the original 304×220 bank, then 5% shorter for headroom. */
+/**
+ * Counter-and-up growth after the speech-band reclaim: TVs enlarge with the rest of the
+ * wall band (not TV-only). Prior pass was 1.15× then 5% shorter; this pass adds ~8% more.
+ */
 const TV_BASE_W = 304;
 const TV_BASE_H = 220;
-const TV_BASE_TOP = 152;
-const TV_SCALE = 1.15;
+const TV_BASE_TOP = 140;
+const TV_SCALE = 1.24;
 export const TV_W = Math.round(TV_BASE_W * TV_SCALE);
 export const TV_H = Math.round(TV_BASE_H * TV_SCALE * 0.95);
 /** Chassis-to-chassis wall; ~32px of plaster shows after the 4px sit-on-wall reveal. */
@@ -256,8 +322,8 @@ export const WINDOW = {
 /** Driver keeps their original spot; only the glass grew. */
 export const DRIVER = { x: WINDOW_BASE_MID, y: BENCH.y + 48 };
 
-export const TABLET_W = 176;
-export const TABLET_H = 112;
+export const TABLET_W = 190;
+export const TABLET_H = 122;
 export const TABLET_HEADER_H = 16;
 export const TABLET_HOME_H = 0;
 /** Oak shelf flush with the chair rail. */

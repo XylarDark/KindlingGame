@@ -8,14 +8,12 @@ import {
   BAG_PANEL,
   BAG_STACK,
   CUSTOMER_SPOT,
-  CUSTOMER_BUBBLE_MIN_X,
-  CUSTOMER_SPEECH_BASE,
   CUSTOMER_SPEECH_GAP,
   CUSTOMER_SPEECH_H,
   CUSTOMER_SPEECH_MAX_W,
   customerSlotX,
   customerSpeechShows,
-  customerSpeechWidth,
+  layoutCustomerSpeech,
   DRIVER,
   KEYLEAD,
   PICKUP_BAG,
@@ -76,19 +74,6 @@ const MSG_PX = "19.2px";
 const MSG_PAD = { x: 12, y: 7 };
 
 /**
- * Speech sits centred on the customer it belongs to, which is what makes it theirs
- * without needing a tail drawn to them. Height is handled by the speech band and width by
- * `customerSpeechWidth`, so all this has left to do is keep the chip on screen and off
- * the lobby sandwich board.
- */
-function bubbleX(customerX: number, bubbleW: number): number {
-  const half = bubbleW / 2;
-  const min = CUSTOMER_BUBBLE_MIN_X + half;
-  const max = GAME_WIDTH - 24 - half;
-  return Phaser.Math.Clamp(customerX, Math.min(min, max), max);
-}
-
-/**
  * Hang a chip in the air above a model's head, measuring off what it rendered rather than
  * off a guessed centre offset. A box grows downward from its middle as its copy wraps, so
  * a fixed offset that clears a one-line callout puts a two-line one across the face — the
@@ -96,16 +81,6 @@ function bubbleX(customerX: number, bubbleW: number): number {
  */
 function hangAboveHead(chip: Phaser.GameObjects.Text, model: Phaser.GameObjects.Image): void {
   chip.setY(model.getBounds().y - CUSTOMER_SPEECH_GAP - chip.height / 2);
-}
-
-/** Distance to the nearest other customer on the floor, or Infinity when alone. */
-function nearestCustomerGap(customer: CustomerView, list: readonly CustomerView[]): number {
-  let nearest = Infinity;
-  for (const other of list) {
-    if (other.orderId === customer.orderId) continue;
-    nearest = Math.min(nearest, Math.abs(other.x - customer.x));
-  }
-  return nearest;
 }
 
 export class ShopScene extends Phaser.Scene {
@@ -120,6 +95,9 @@ export class ShopScene extends Phaser.Scene {
   private driverBubble!: Phaser.GameObjects.Text;
   private customers = new Map<string, Phaser.GameObjects.Image>();
   private bubbles = new Map<string, Phaser.GameObjects.Text>();
+  private feedbackChips = new Map<string, Phaser.GameObjects.Text>();
+  private ordersNotice!: Phaser.GameObjects.Text;
+  private targetCallout!: Phaser.GameObjects.Text;
   private readyBag!: Phaser.GameObjects.Image;
   private readyCount!: Phaser.GameObjects.Text;
   private pickupBag!: Phaser.GameObjects.Image;
@@ -198,6 +176,32 @@ export class ShopScene extends Phaser.Scene {
     })
       .setOrigin(0.5)
       .setDepth(13)
+      .setVisible(false);
+
+    // Light ORDERS notice — former toast spawn / ticket cues live here during shop play.
+    this.ordersNotice = addSignText(this, TABLET.x, tab.top + tab.h + 18, "", {
+      size: Type.caption,
+      padding: { x: 10, y: 5 },
+      align: "center",
+      fontStyle: "600",
+      maxWidth: 260,
+      maxHeight: 52,
+    })
+      .setOrigin(0.5, 0)
+      .setDepth(13)
+      .setVisible(false);
+
+    this.targetCallout = addSignText(this, 0, 0, "", {
+      size: Type.caption,
+      padding: { x: 10, y: 5 },
+      align: "center",
+      fontStyle: "700",
+      accent: Color.danger,
+      maxWidth: 200,
+      maxHeight: 44,
+    })
+      .setOrigin(0.5, 1)
+      .setDepth(14)
       .setVisible(false);
 
     this.keyLeadBubble = addSignText(this, KEYLEAD.x - 168, KEYLEAD.y - PERSON_DISPLAY_H - 24, "", {
@@ -296,8 +300,32 @@ export class ShopScene extends Phaser.Scene {
     });
 
     this.syncTablet(snap, tabletPulse, next?.kind === "tablet");
+    this.syncOrdersNotice(snap);
+    this.syncTargetCallout(snap);
     this.syncCustomers(snap.customers, pulse, next?.kind === "customer" ? next.orderId : null);
     this.syncOutgoing(snap);
+  }
+
+  private syncOrdersNotice(snap: SimSnapshot): void {
+    const text = snap.ordersNotice ?? "";
+    this.ordersNotice.setText(text);
+    this.ordersNotice.setVisible(!!text && snap.playerRole === "keyLead");
+  }
+
+  private syncTargetCallout(snap: SimSnapshot): void {
+    const cue = snap.targetCallout;
+    if (!cue || snap.playerRole !== "keyLead") {
+      this.targetCallout.setVisible(false);
+      return;
+    }
+    const idx = getSim().catalog.findIndex((s) => s.id === cue.skuId);
+    if (idx < 0) {
+      this.targetCallout.setVisible(false);
+      return;
+    }
+    const p = strainPos(idx);
+    this.targetCallout.setText(cue.text).setVisible(true);
+    this.targetCallout.setPosition(p.x, p.y - strainSlotH() / 2 - 6);
   }
 
   private departNow(): void {
@@ -437,8 +465,20 @@ export class ShopScene extends Phaser.Scene {
         this.customers.delete(id);
         this.bubbles.get(id)?.destroy();
         this.bubbles.delete(id);
+        this.feedbackChips.get(id)?.destroy();
+        this.feedbackChips.delete(id);
       }
     }
+
+    // Place only settled speakers so walking-in chips do not jump every frame (R5).
+    const settledList = list.filter(
+      (c) => Math.abs(c.x - customerSlotX(c.slot)) < 1 && customerSpeechShows(true),
+    );
+    // Front-of-queue first keeps preferred right side for earlier arrivals.
+    const ordered = [...settledList].sort((a, b) => a.slot - b.slot);
+    const layouts = layoutCustomerSpeech(ordered.map((c) => ({ orderId: c.orderId, x: c.x })));
+    const layoutById = new Map(layouts.map((box) => [box.orderId, box]));
+
     for (const customer of list) {
       let sprite = this.customers.get(customer.orderId);
       if (!sprite) {
@@ -453,7 +493,7 @@ export class ShopScene extends Phaser.Scene {
         sprite.on("pointerdown", () => getSim().shopClick({ type: "customer", orderId: customer.orderId }));
         wireHover(sprite);
         this.customers.set(customer.orderId, sprite);
-        const bubble = addSignText(this, bubbleX(customer.x, 0), CUSTOMER_SPEECH_BASE, "", {
+        const bubble = addSignText(this, customer.x, CUSTOMER_SPOT.y - PERSON_DISPLAY_H, "", {
           size: MSG_PX,
           padding: MSG_PAD,
           align: "center",
@@ -464,25 +504,48 @@ export class ShopScene extends Phaser.Scene {
           .setOrigin(0.5)
           .setDepth(7);
         this.bubbles.set(customer.orderId, bubble);
+        const feedback = addSignText(this, customer.x, CUSTOMER_SPOT.y - PERSON_DISPLAY_H, "", {
+          size: Type.caption,
+          padding: { x: 10, y: 5 },
+          align: "center",
+          fontStyle: "600",
+          accent: Color.danger,
+          maxWidth: CUSTOMER_SPEECH_MAX_W,
+          maxHeight: 48,
+        })
+          .setOrigin(0.5)
+          .setDepth(7)
+          .setVisible(false);
+        this.feedbackChips.set(customer.orderId, feedback);
       }
       const focus = customer.orderId === focusId;
       sprite.setPosition(customer.x, CUSTOMER_SPOT.y);
       sprite.setAlpha(focus ? pulse : 1);
       sprite.setTint(focus ? Color.flash : 0xffffff);
       const bubble = this.bubbles.get(customer.orderId);
+      const feedback = this.feedbackChips.get(customer.orderId);
+      const layout = layoutById.get(customer.orderId);
       if (bubble) {
-        // Width is set from the room this customer actually has, so the box has to be
-        // refitted before it is measured — the copy reflows into whatever it is given.
-        const gap = nearestCustomerGap(customer, list);
-        bubble.setText(customer.bubble).setAlpha(1);
-        fitTypeToBox(bubble, customerSpeechWidth(gap), CUSTOMER_SPEECH_H);
-        const settled = Math.abs(customer.x - customerSlotX(customer.slot)) < 1;
-        bubble.setVisible(customerSpeechShows(settled, gap));
-        bubble.setPosition(bubbleX(customer.x, bubble.width), CUSTOMER_SPEECH_BASE - bubble.height / 2);
+        if (layout && customer.bubble) {
+          bubble.setText(customer.bubble).setAlpha(1).setVisible(true);
+          // Refit before measuring — side room is the layout's width budget.
+          fitTypeToBox(bubble, layout.w, CUSTOMER_SPEECH_H);
+          bubble.setPosition(layout.x, layout.y);
+        } else {
+          bubble.setVisible(false);
+        }
+        setSignAccent(bubble, focus ? Color.lime : undefined);
       }
-      // The customer to serve next is named by their frame, not by a different chip:
-      // every box in the game is ink on white now, so state lives in the ring.
-      if (bubble) setSignAccent(bubble, focus ? Color.lime : undefined);
+      if (feedback) {
+        const note = customer.feedback;
+        if (layout && note) {
+          feedback.setText(note).setVisible(true);
+          fitTypeToBox(feedback, layout.w, 48);
+          feedback.setPosition(layout.x, layout.y + layout.h / 2 + CUSTOMER_SPEECH_GAP + feedback.height / 2);
+        } else {
+          feedback.setVisible(false);
+        }
+      }
     }
   }
 

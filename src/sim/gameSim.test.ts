@@ -218,7 +218,7 @@ describe("GameSim order loops", () => {
     const order = sim.spawnOrder("inStore");
     sim.shopClick({ type: "strain", skuId: order.skuId });
     expect(sim.snapshot().handSkuId).toBeNull();
-    expect(sim.snapshot().toast).toContain("walking in");
+    expect(sim.snapshot().customers.find((c) => c.orderId === order.id)?.feedback).toContain("walking in");
     waitForCustomerAtCounter(sim, order.id);
     sim.shopClick({ type: "strain", skuId: order.skuId });
     waitForFetch(sim);
@@ -288,7 +288,8 @@ describe("GameSim order loops", () => {
     sim.shopClick({ type: "strain", skuId: other.id });
     expect(sim.snapshot().handSkuId).toBeNull();
     expect(sim.snapshot().keyLead.phase).toBe("idle");
-    expect(sim.snapshot().toast).toMatch(/^Wrong TV\./);
+    expect(sim.snapshot().targetCallout?.text).toMatch(/Wrong TV/);
+    expect(sim.snapshot().ordersNotice).toMatch(/Wrong TV/);
     expect(sim.snapshot().sfxCue?.kind).toBe("wrong");
     sim.shopClick({ type: "strain", skuId: order.skuId });
     waitForFetch(sim);
@@ -298,7 +299,7 @@ describe("GameSim order loops", () => {
     expect(sim.snapshot().sfxCue?.kind).toBe("pack");
   });
 
-  it("toasts Wrong TV for walk-ins and prefers them over a selected ticket", () => {
+  it("puts Wrong TV feedback beside the walk-in and on the tapped TV", () => {
     const sim = GameSim.create({ seed: 2, autoSpawn: false });
     const ticket = sim.spawnOrder("pickup");
     const walkIn = sim.spawnOrder("inStore");
@@ -307,8 +308,9 @@ describe("GameSim order loops", () => {
     const other = sim.catalog.find((s) => s.id !== walkIn.skuId)!;
     sim.shopClick({ type: "strain", skuId: other.id });
     expect(sim.snapshot().handSkuId).toBeNull();
-    expect(sim.snapshot().toast).toMatch(/^Wrong TV\./);
-    expect(sim.snapshot().toast).toContain(walkIn.customerName);
+    expect(sim.snapshot().targetCallout?.skuId).toBe(other.id);
+    expect(sim.snapshot().customers.find((c) => c.orderId === walkIn.id)?.feedback).toMatch(/Wrong TV/);
+    expect(sim.snapshot().toast).toBe("");
     sim.shopClick({ type: "strain", skuId: walkIn.skuId });
     waitForFetch(sim);
     expect(sim.snapshot().handSkuId).toBe(walkIn.skuId);
@@ -1410,6 +1412,7 @@ describe("resetting the day returns a cold start", () => {
    */
   const CARRIES_OVER = new Set([
     "toast", // names the reset instead of welcoming the player
+    "ordersNotice", // names the reset on ORDERS instead of welcoming
     "nameSeed", // a new day brings new customers, not yesterday's again
     "scoreFlashSeq", // monotonic UI event id the HUD dedupes against its last-seen id
     "sfxSeq", // likewise for the sound cue

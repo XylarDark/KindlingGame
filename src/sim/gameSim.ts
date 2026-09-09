@@ -91,6 +91,11 @@ export interface CustomerView {
   orderId: string;
   x: number;
   bubble: string;
+  /**
+   * Customer-specific feedback that used to live in the bottom toast (Wrong TV that names
+   * their ask, still-walking, etc.). Rendered in that customer's side stack.
+   */
+  feedback: string | null;
   kind: "inStore" | "pickup";
   /** Which standing slot they hold — see `customerSlotX`. The scene places speech off it. */
   slot: number;
@@ -155,6 +160,10 @@ export interface SimSnapshot {
   shopCover: ShopCoverView;
   dropoff: DropoffView;
   toast: string;
+  /** Light spawn / ticket notice on the ORDERS tablet (shop). */
+  ordersNotice: string | null;
+  /** Wrong-TV / jar callout anchored near that strain slot. */
+  targetCallout: { skuId: string; text: string } | null;
   serveLine: string;
   highlightSkuId: string | null;
   canHitTheRoad: boolean;
@@ -222,6 +231,10 @@ export class GameSim {
   playerRole: PlayerRole = "keyLead";
   vehicle = tileToWorld(CITY.shopSpawn);
   toast = "Welcome to Kindling. Watch the order screen.";
+  /** Shop-only ORDERS tablet notice; toast stays for drive / doorstep. */
+  ordersNotice: string | null = "Welcome — watch ORDERS.";
+  targetCallout: { skuId: string; text: string } | null = null;
+  private customerFeedback = new Map<string, string>();
   input = { dx: 0, dy: 0 };
   autoSpawn: boolean;
   shiftEnded = false;
@@ -329,6 +342,9 @@ export class GameSim {
     this.driveRoute = [];
     this.parkHeading = null;
     this.toast = "Shift over. See your results.";
+    this.ordersNotice = null;
+    this.targetCallout = null;
+    this.customerFeedback.clear();
   }
 
   /** Tester shortcut: same results card as 23:00, for time played so far. */
@@ -397,6 +413,9 @@ export class GameSim {
     // sound of the new day. `nameSeed` carries so a new day brings new customers rather
     // than replaying yesterday's. The toast names the reset instead of saying welcome.
     this.toast = "New day. Clock is 9:00 AM.";
+    this.ordersNotice = "New day — watch ORDERS.";
+    this.targetCallout = null;
+    this.customerFeedback.clear();
   }
 
   snapshot(): SimSnapshot {
@@ -431,6 +450,7 @@ export class GameSim {
         kind: c.kind,
         slot: c.slot,
         bubble: this.customerBubble(c),
+        feedback: this.customerFeedback.get(c.orderId) ?? null,
         look: this.customerLookFor(c.orderId),
       })),
       orders: this.orders.filter(isOpen).map((o) => this.toView(o)),
@@ -440,6 +460,8 @@ export class GameSim {
       shopCover: this.shopCoverView(),
       dropoff: this.toDropoffView(),
       toast: this.toast,
+      ordersNotice: this.playerRole === "keyLead" ? this.ordersNotice : null,
+      targetCallout: this.playerRole === "keyLead" ? this.targetCallout : null,
       serveLine: this.serveLine(),
       highlightSkuId: this.focusSkuId(),
       // A walk-in no longer pins the driver to the floor — the key lead covers the counter.
@@ -478,7 +500,7 @@ export class GameSim {
     if (this.shiftEnded) return;
     switch (click.type) {
       case "keyLead":
-        this.toast = "Pick a flashing ticket, then the strain.";
+        this.setOrdersNotice("Pick a flashing ticket, then the strain.");
         return;
       case "bagRack":
         this.packSelected();
@@ -526,27 +548,16 @@ export class GameSim {
     this.orders.push(order);
     if (type === "inStore") {
       this.customers.push(this.newCustomer(order.id, "inStore"));
-      // The walk-in's own speech bubble carries the ask — keep the toast for errors/score.
-      // Mid-run the toast is the driver's own banner, and the counter is the key lead's
-      // problem, so a walk-in arriving behind them must not wipe it.
+      // Walk-in speech carries the ask. Mid-run, leave the driver's banner alone.
       if (this.playerRole === "keyLead") this.toast = "";
     } else if (type === "pickup") {
-      // Don't restate the strain on the bottom chip while a walk-in is mid-ask.
-      const walkInAsking = this.customers.some((c) => {
-        const o = this.orderById(c.orderId);
-        return o?.type === "inStore" && o.status === "atRegister" && Math.abs(c.x - c.targetX) <= 24;
-      });
-      this.toast = walkInAsking
-        ? `Pickup ticket: ${order.customerName}`
-        : `Pickup ticket: ${order.customerName} — ${sku.name}`;
+      const notice = `Pickup: ${order.customerName} — ${sku.name}`;
+      if (this.playerRole === "keyLead") this.setOrdersNotice(notice);
+      else this.toast = notice;
     } else {
-      const walkInAsking = this.customers.some((c) => {
-        const o = this.orderById(c.orderId);
-        return o?.type === "inStore" && o.status === "atRegister" && Math.abs(c.x - c.targetX) <= 24;
-      });
-      this.toast = walkInAsking
-        ? `Delivery to ${destLabel(order)}: ${order.customerName}`
-        : `Delivery to ${destLabel(order)}: ${order.customerName} — ${sku.name}`;
+      const notice = `Delivery: ${destLabel(order)} · ${order.customerName} — ${sku.name}`;
+      if (this.playerRole === "keyLead") this.setOrdersNotice(notice);
+      else this.toast = notice;
     }
     return order;
   }
@@ -653,20 +664,21 @@ export class GameSim {
   private packSelected(): void {
     const order = this.selectedTicket();
     if (!order) {
-      this.toast = "Tap a flashing ticket, then the strain.";
+      this.setOrdersNotice("Tap a flashing ticket, then the strain.");
       return;
     }
     if (this.keyLeadPhase !== "idle") {
-      this.toast = "Wait — they're grabbing it.";
+      this.setOrdersNotice("Wait — they're grabbing it.");
       return;
     }
     if (!this.handSkuId) {
       const sku = skuById(this.catalog, order.skuId);
-      this.toast = `Tap ${sku?.name ?? "the strain"} on the wall first.`;
+      this.setOrdersNotice(`Tap ${sku?.name ?? "the strain"} on the wall first.`);
       return;
     }
     if (this.handSkuId !== order.skuId) {
-      this.toast = `Wrong item for ${order.customerName}.`;
+      this.setOrdersNotice(`Wrong item for ${order.customerName}.`);
+      this.setTargetCallout(this.handSkuId, "Wrong jar");
       return;
     }
     this.handSkuId = null;
@@ -684,56 +696,59 @@ export class GameSim {
     const sku = skuById(this.catalog, skuId);
     if (!sku) return;
     if (this.keyLeadPhase !== "idle") {
-      this.toast = "They're already in the back.";
+      this.setOrdersNotice("They're already in the back.");
       return;
     }
     const walkIn = this.orders.find((o) => o.type === "inStore" && o.status === "atRegister");
     if (walkIn && this.customerAtCounter(walkIn.id)) {
       if (skuId !== walkIn.skuId) {
-        this.toast = `Wrong TV. ${walkIn.customerName} wants ${skuById(this.catalog, walkIn.skuId)?.name}.`;
+        const want = skuById(this.catalog, walkIn.skuId)?.name;
+        this.setCustomerFeedback(walkIn.id, `Wrong TV — wants ${want}.`);
+        this.setTargetCallout(skuId, "Wrong TV");
         this.pushSfx("wrong");
         return;
       }
       if (this.handSkuId === skuId) {
-        this.toast = `Already holding ${sku.name}. Tap ${walkIn.customerName}.`;
+        this.setCustomerFeedback(walkIn.id, `Already holding ${sku.name}. Tap me.`);
         return;
       }
+      this.clearCustomerFeedback(walkIn.id);
       this.startFetch(skuId);
       return;
     }
     if (walkIn && !this.customerAtCounter(walkIn.id)) {
-      this.toast = `${walkIn.customerName} is still walking in.`;
+      this.setCustomerFeedback(walkIn.id, `${walkIn.customerName} is still walking in.`);
       return;
     }
     const ticket = this.selectedTicket();
     if (ticket) {
       if (this.handSkuId === ticket.skuId) {
-        this.toast = `Already holding ${skuById(this.catalog, ticket.skuId)?.name}. Tap a bag.`;
+        this.setOrdersNotice(`Already holding ${skuById(this.catalog, ticket.skuId)?.name}. Tap a bag.`);
         return;
       }
       if (skuId !== ticket.skuId) {
-        this.toast = `Wrong TV. ${ticket.customerName} ordered ${skuById(this.catalog, ticket.skuId)?.name}.`;
+        const want = skuById(this.catalog, ticket.skuId)?.name;
+        this.setTargetCallout(skuId, "Wrong TV");
+        this.setOrdersNotice(`Wrong TV. ${ticket.customerName} ordered ${want}.`);
         this.pushSfx("wrong");
         return;
       }
       this.startFetch(skuId);
       return;
     }
-    this.toast = "Select a ticket first — walk-ins can tap the TV they asked for.";
+    this.setOrdersNotice("Select a ticket first — walk-ins can tap the TV they asked for.");
   }
 
   private startFetch(skuId: string): void {
-    const sku = skuById(this.catalog, skuId);
     if (this.handSkuId === skuId) {
-      this.toast = this.selectedTicket()
-        ? `Holding ${sku?.name}. Tap a bag.`
-        : `Holding ${sku?.name}. Tap the customer.`;
+      // keyLeadCallout already shows Holding…; nothing else to say.
+      this.clearTargetCallout();
       return;
     }
     this.fetchSkuId = skuId;
     this.keyLeadPhase = "toBack";
     this.keyLeadFacing = -1;
-    this.toast = `Grabbing ${sku?.name ?? "it"} from the back…`;
+    this.clearTargetCallout();
   }
 
   private tickKeyLead(dtMs: number): void {
@@ -779,12 +794,7 @@ export class GameSim {
       if (Math.abs(this.keyLeadX - dest) <= step) {
         this.keyLeadX = dest;
         this.keyLeadPhase = "idle";
-        const sku = this.handSkuId ? skuById(this.catalog, this.handSkuId) : undefined;
-        const ticket = this.selectedTicket();
-        const walkIn = this.orders.find((o) => o.type === "inStore" && o.status === "atRegister");
-        this.toast = ticket
-          ? `Got ${sku?.name}. Tap a bag.`
-          : `Got ${sku?.name}. Tap ${walkIn?.customerName ?? "the customer"}.`;
+        // Holding callout on the key lead covers "Got X — tap …".
       } else {
         this.keyLeadX += Math.sign(dest - this.keyLeadX) * step;
       }
@@ -797,15 +807,15 @@ export class GameSim {
       if (this.playerRole === "driver") {
         order.slaDeferred = true;
         delete order.slaStartGameMs;
-        this.toast = `Bag labeled ${destLabel(order)} · ${order.customerName}. Waiting on the van.`;
+        this.setOrdersNotice(`Bag · ${destLabel(order)} · ${order.customerName}`);
       } else {
         order.slaStartGameMs = this.clock.gameMs;
-        this.toast = `Bag labeled ${destLabel(order)} · ${order.customerName}. Packed — ready to roll.`;
+        this.setOrdersNotice(`Packed · ${destLabel(order)} · ${order.customerName}`);
       }
     } else {
       order.status = "onPickupShelf";
       order.slaStartGameMs = this.clock.gameMs;
-      this.toast = `Pickup bag packed for ${order.customerName}.`;
+      this.setOrdersNotice(`Pickup packed · ${order.customerName}`);
     }
     this.awaitingBag = false;
     if (this.selectedOrderId === order.id) this.selectedOrderId = null;
@@ -827,20 +837,21 @@ export class GameSim {
     this.selectedOrderId = order.id;
     this.driverLine = null;
     const sku = skuById(this.catalog, order.skuId);
-    this.toast =
+    this.setOrdersNotice(
       order.type === "delivery"
-        ? `Delivery to ${destLabel(order)}: ${order.customerName} — ${sku?.name}. Tap that TV, then a bag.`
-        : `Pickup: ${order.customerName} — ${sku?.name}. Tap that TV, then a bag.`;
+        ? `Delivery · ${order.customerName} — ${sku?.name}`
+        : `Pickup · ${order.customerName} — ${sku?.name}`,
+    );
     this.pushSfx("ticket");
   }
 
   private enqueueTicket(order: Order): void {
     if (this.packQueue.includes(order.id)) {
-      this.toast = `Already queued ${order.customerName}.`;
+      this.setOrdersNotice(`Already queued ${order.customerName}.`);
       return;
     }
     this.packQueue.push(order.id);
-    this.toast = `Queued ${order.customerName}. Finish packing first.`;
+    this.setOrdersNotice(`Queued ${order.customerName}. Finish packing first.`);
   }
 
   private advancePackQueue(): void {
@@ -861,19 +872,19 @@ export class GameSim {
   private selectTicket(orderId: string): void {
     const order = this.orderById(orderId);
     if (!order || !isOpen(order) || order.type === "inStore") {
-      this.toast = "That ticket is not on the tablet.";
+      this.setOrdersNotice("That ticket is not on the tablet.");
       return;
     }
     if (order.status !== "queued") {
-      this.toast = "That ticket is not on the tablet.";
+      this.setOrdersNotice("That ticket is not on the tablet.");
       return;
     }
     if (this.selectedOrderId === order.id) {
-      this.toast = `Already packing ${order.customerName}.`;
+      this.setOrdersNotice(`Already packing ${order.customerName}.`);
       return;
     }
     if (this.packQueue.includes(order.id)) {
-      this.toast = `Already queued ${order.customerName}.`;
+      this.setOrdersNotice(`Already queued ${order.customerName}.`);
       return;
     }
     if (this.ticketInProgress()) {
@@ -890,7 +901,8 @@ export class GameSim {
       this.complete(waiting);
       return;
     }
-    this.toast = waiting ? "Wait for them at the counter." : "Nobody is waiting for a bag.";
+    if (waiting) this.setCustomerFeedback(waiting.id, "Wait for them at the counter.");
+    else this.setOrdersNotice("Nobody is waiting for a bag.");
   }
 
   private onCustomerTap(orderId: string): void {
@@ -898,7 +910,7 @@ export class GameSim {
     if (!order || !isOpen(order)) return;
     if (order.type === "inStore") {
       if (!this.customerAtCounter(orderId)) {
-        this.toast = `${order.customerName} is still walking in.`;
+        this.setCustomerFeedback(orderId, `${order.customerName} is still walking in.`);
         return;
       }
       this.selectedOrderId = orderId;
@@ -907,7 +919,7 @@ export class GameSim {
     }
     if (order.status === "readyForHandoff") {
       if (!this.customerAtCounter(orderId)) {
-        this.toast = "Wait for them at the counter.";
+        this.setCustomerFeedback(orderId, "Wait for them at the counter.");
         return;
       }
       this.complete(order);
@@ -921,20 +933,23 @@ export class GameSim {
       order ?? this.orders.find((o) => o.type === "inStore" && o.status === "atRegister");
     if (!target) return false;
     if (!this.customerAtCounter(target.id)) {
-      this.toast = `Wait for ${target.customerName} at the counter.`;
+      this.setCustomerFeedback(target.id, `Wait for ${target.customerName} at the counter.`);
       return true;
     }
     const sku = skuById(this.catalog, target.skuId);
     if (!this.handSkuId) {
-      this.toast = "";
       return true;
     }
     if (this.keyLeadPhase !== "idle") {
-      this.toast = "Wait — they're grabbing it.";
+      this.setCustomerFeedback(target.id, "Wait — they're grabbing it.");
       return true;
     }
     if (this.handSkuId !== target.skuId) {
-      this.toast = `Wrong TV. ${target.customerName} wants ${sku?.name ?? "a different jar"}. Tap that TV first.`;
+      this.setCustomerFeedback(
+        target.id,
+        `Wrong TV — wants ${sku?.name ?? "a different jar"}.`,
+      );
+      this.setTargetCallout(this.handSkuId, "Wrong jar");
       this.pushSfx("wrong");
       return true;
     }
@@ -1274,14 +1289,19 @@ export class GameSim {
         if (order?.type === "inStore" && order.arriveAtGameMs === undefined && order.status === "atRegister") {
           order.arriveAtGameMs = this.clock.gameMs;
           if (!this.selectedOrderId) this.selectedOrderId = order.id;
-          this.toast = "";
+          this.clearCustomerFeedback(order.id);
         } else if (
           order?.type === "pickup" &&
           order.status === "readyForHandoff" &&
           order.arriveAtGameMs === undefined
         ) {
           order.arriveAtGameMs = this.clock.gameMs;
-          this.toast = `${order.customerName} is at the counter for pickup.`;
+          this.setCustomerFeedback(order.id, "Tap me — pickup ready.");
+          if (this.playerRole === "keyLead") {
+            this.setOrdersNotice(`${order.customerName} is at the counter for pickup.`);
+          } else {
+            this.toast = `${order.customerName} is at the counter for pickup.`;
+          }
         }
         continue;
       }
@@ -1397,7 +1417,11 @@ export class GameSim {
             if (!this.customers.some((c) => c.orderId === order.id)) {
               this.customers.push(this.newCustomer(order.id, "pickup"));
             }
-            this.toast = `${order.customerName} is here for pickup.`;
+            if (this.playerRole === "keyLead") {
+              this.setOrdersNotice(`${order.customerName} is here for pickup.`);
+            } else {
+              this.toast = `${order.customerName} is here for pickup.`;
+            }
           }
         } else if (order.status === "readyForHandoff") {
           if (order.arriveAtGameMs === undefined) {
@@ -1474,6 +1498,18 @@ export class GameSim {
   }
 
   private keyLeadCallout(selected: Order | undefined): string | null {
+    // Holding / Grabbing attach to the key lead (or held item) instead of the toast chip.
+    if (this.keyLeadPhase !== "idle" && this.fetchSkuId) {
+      const sku = skuById(this.catalog, this.fetchSkuId);
+      return `Grabbing ${sku?.name ?? "it"}…`;
+    }
+    if (this.handSkuId) {
+      const sku = skuById(this.catalog, this.handSkuId);
+      const name = sku?.name ?? "it";
+      return this.selectedTicket()
+        ? `Holding ${name}. Tap a bag.`
+        : `Holding ${name}. Tap the customer.`;
+    }
     if (!selected || selected.type === "inStore") return null;
     const sku = skuById(this.catalog, selected.skuId);
     if (!sku) return null;
@@ -1777,10 +1813,14 @@ export class GameSim {
     if (this.selectedOrderId === order.id) this.selectedOrderId = null;
     this.dropQueuedTicket(order.id);
     const sku = skuById(this.catalog, order.skuId);
+    this.clearCustomerFeedback(order.id);
     if (order.type === "delivery" && order.late) {
       this.toast = `Late drop (−${Math.abs(SCORE_DELIVERY_LATE)}): ${sku?.name}.`;
     } else if (order.type === "delivery") {
       this.toast = `On-time drop (+${SCORE_DELIVERY_ON_TIME}): ${sku?.name} to ${order.customerName}!`;
+    } else if (this.playerRole === "keyLead") {
+      // Score plate pop owns the delta; no bottom chip during counter play.
+      this.toast = "";
     } else {
       this.toast = `Sold ${sku?.name ?? "item"} to ${order.customerName}! (+${delta})`;
     }
@@ -1819,7 +1859,13 @@ export class GameSim {
       this.keyLeadFacing = 1;
       this.backroomLeftMs = 0;
     }
-    this.toast = `${reason} (${delta})`;
+    this.clearCustomerFeedback(order.id);
+    if (this.playerRole === "keyLead") {
+      this.toast = "";
+      this.setOrdersNotice(`${reason} (${delta})`);
+    } else {
+      this.toast = `${reason} (${delta})`;
+    }
     this.pushSfx("deny");
   }
 
@@ -1831,6 +1877,30 @@ export class GameSim {
   private pushSfx(kind: SfxKind): void {
     this.sfxSeq += 1;
     this.sfxCue = { id: this.sfxSeq, kind };
+  }
+
+
+  /** Shop cues that name a customer land in their side stack, not the toast chip. */
+  private setCustomerFeedback(orderId: string, text: string): void {
+    this.customerFeedback.set(orderId, text);
+  }
+
+  private clearCustomerFeedback(orderId: string): void {
+    this.customerFeedback.delete(orderId);
+  }
+
+  /** Wrong-TV / jar cue near the tapped strain; cleared on the next successful fetch. */
+  private setTargetCallout(skuId: string, text: string): void {
+    this.targetCallout = { skuId, text };
+  }
+
+  private clearTargetCallout(): void {
+    this.targetCallout = null;
+  }
+
+  /** Light ORDERS tablet notice for ticket spawn / pack events during shop play. */
+  private setOrdersNotice(text: string): void {
+    this.ordersNotice = text;
   }
 
   private customerX(orderId: string): number | undefined {
