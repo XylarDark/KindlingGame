@@ -1,7 +1,10 @@
 import { isStandaloneDisplay } from "../shell";
 
-/** localStorage flag — dismiss survives reloads; Settings can force-show anyway. */
+/** localStorage key — dismiss timestamp (ms); legacy value "1" counts as dismissed now. */
 export const INSTALL_COACH_DISMISSED_KEY = "kindling.installCoachDismissed";
+
+/** Auto-show again this long after dismiss if still not installed. */
+export const INSTALL_COACH_DISMISS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export type InstallPlatform = "ios" | "android" | "other";
 
@@ -47,17 +50,32 @@ export function detectInstallPlatform(
   return "other";
 }
 
-export function isInstallCoachDismissed(storage: StorageLike = defaultStorage()): boolean {
+/**
+ * True while dismiss is still within the TTL. Legacy `"1"` (pre-timestamp) is
+ * treated as expired so phone users see the coach again after this change.
+ */
+export function isInstallCoachDismissed(
+  storage: StorageLike = defaultStorage(),
+  nowMs = Date.now(),
+): boolean {
   try {
-    return storage?.getItem(INSTALL_COACH_DISMISSED_KEY) === "1";
+    const raw = storage?.getItem(INSTALL_COACH_DISMISSED_KEY);
+    if (raw == null || raw === "") return false;
+    if (raw === "1") {
+      storage?.removeItem(INSTALL_COACH_DISMISSED_KEY);
+      return false;
+    }
+    const at = Number(raw);
+    if (!Number.isFinite(at)) return false;
+    return nowMs - at < INSTALL_COACH_DISMISS_TTL_MS;
   } catch {
     return false;
   }
 }
 
-export function dismissInstallCoach(storage: StorageLike = defaultStorage()): void {
+export function dismissInstallCoach(storage: StorageLike = defaultStorage(), nowMs = Date.now()): void {
   try {
-    storage?.setItem(INSTALL_COACH_DISMISSED_KEY, "1");
+    storage?.setItem(INSTALL_COACH_DISMISSED_KEY, String(nowMs));
   } catch {
     /* quota / private mode */
   }
@@ -198,6 +216,7 @@ async function runPrimaryAction(): Promise<void> {
 /**
  * Wire DOM + beforeinstallprompt once. Safe to call repeatedly.
  * Does not auto-present — TitleScene / Settings call {@link presentInstallCoach}.
+ * When BIP arrives later, re-present so the primary button can become Install.
  */
 export function installInstallCoach(): void {
   if (typeof document === "undefined") return;
@@ -209,6 +228,8 @@ export function installInstallCoach(): void {
     const bip = event as unknown as BeforeInstallPromptLike;
     bip.preventDefault?.();
     noteDeferredInstallPrompt(bip);
+    // Refresh copy / visibility if the title coach already ran without a prompt.
+    presentInstallCoach();
   }) as EventListener);
 
   const el = ensureCoachDom();

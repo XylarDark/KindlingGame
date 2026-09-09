@@ -88,6 +88,14 @@ the thing it described.
 - **Fix:** `designLayoutInset` / `designHudInset` fold `stageCropCss` into the inset; the shell publishes the live stage frame via `setStageFrame`.
 - **Prevention:** any layout that pads from the design edge must use the crop-aware inset when height-fill can set `stage.left < 0`. Cover with a test that places the cog inside the visible design range on a 1024×768 contain.
 
+### Waiting-worker activate blanked phone cold opens for seconds
+
+- **Date:** 2026-09-09
+- **Symptom:** phone Chrome took a couple of seconds of sky/blank before Welcome; install coach often never appeared on the first attempt.
+- **Cause:** `main` awaited `bootKindlingPwa`, which `skipWaiting`'d a waiting worker, slept 800ms, returned `"reloading"`, and skipped `startGame` until `location.reload` — a full double boot after every deploy that left a waiting SW. Navigations already use `cache: "no-store"`, so the reload was unnecessary for fresh HTML/JS.
+- **Fix:** start Phaser immediately; register the SW in the background; never activate/reload on boot or resume.
+- **Prevention:** do not gate `startGame` on service-worker outcomes. Source-guard that `startGame()` precedes `void bootKindlingPwa()` and that `pwaUpdate` has no `activateWaiting` / `location.reload`.
+
 ### Shrink-to-fit plus a CSS floor drew glyphs outside the box
 
 - **Date:** 2026-09-09

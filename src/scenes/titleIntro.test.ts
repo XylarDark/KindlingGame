@@ -8,8 +8,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(here, "TitleScene.ts"), "utf8").replace(/\r\n/g, "\n");
 
 describe("title welcome / howto intro scale", () => {
-  it("exports a dedicated ~50% intro scale for welcome and howto", () => {
-    expect(src).toContain("export const TITLE_INTRO_SCALE = 1.5");
+  it("exports a dedicated 2× intro scale for welcome and howto", () => {
+    expect(src).toContain("export const TITLE_INTRO_SCALE = 2.0");
   });
 
   it("scales welcome type from the pre-bump baselines by TITLE_INTRO_SCALE", () => {

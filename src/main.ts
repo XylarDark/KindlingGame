@@ -17,7 +17,6 @@ function startGame(): void {
   }
 }
 
-void bootKindlingPwa().then((outcome) => {
-  if (outcome === "reloading") return;
-  startGame();
-});
+// Phaser first — never blank the page waiting on a service-worker activate/reload.
+startGame();
+void bootKindlingPwa();

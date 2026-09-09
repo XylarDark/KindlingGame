@@ -15,10 +15,10 @@ import { fitTypeToWidth } from "../ui/typekit";
 import { designHudInset, readCssSafeArea, VIEWFIT_EVENT } from "../ui/viewFit";
 
 /**
- * Welcome + how-to: dedicated ~50% readability bump in design space.
+ * Welcome + how-to: dedicated 2× readability bump in design space.
  * Separate from MSG_SCALE / MOBILE_TEXT_SCALE — those screens are the first read.
  */
-export const TITLE_INTRO_SCALE = 1.5;
+export const TITLE_INTRO_SCALE = 2.0;
 
 /** Pre-bump welcome sizes (kept as the 1.0 baseline for the intro scale). */
 const WELCOME_TITLE_BASE_PX = 36.3;
@@ -213,7 +213,7 @@ export class TitleScene extends Phaser.Scene {
 
   private drawHowTo(): void {
     // Three cards must fit 1920 wide — width uses leftover after side margins + gaps,
-    // while type/height take the full ~1.5× bump so nothing clips at 16:9 contain.
+    // while type/height take the full intro scale bump so nothing clips at 16:9 contain.
     const side = 36;
     const gap = Math.max(20, introN(20));
     const cardW = Math.floor((GAME_WIDTH - side * 2 - gap * 2) / 3);
@@ -318,7 +318,7 @@ export class TitleScene extends Phaser.Scene {
       ease: "Sine.inOut",
     });
 
-    // How-to tap hint: base seed already on scaleMsg*; add the intro 1.5× on top.
+    // How-to tap hint: base seed already on scaleMsg*; add the intro scale on top.
     const hintSeed = 13 * TITLE_INTRO_SCALE;
     addSignText(this, GAME_WIDTH / 2, play.y + btnH + hintGap, HOWTO_HINT, {
       size: scaleMsgPx(hintSeed),

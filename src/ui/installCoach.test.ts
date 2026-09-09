@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  INSTALL_COACH_DISMISS_TTL_MS,
   INSTALL_COACH_DISMISSED_KEY,
   clearInstallCoachDismissed,
   detectInstallPlatform,
@@ -39,14 +40,22 @@ function memoryStore(init: Record<string, string> = {}): Storage {
 }
 
 describe("install coach dismiss persistence", () => {
-  it("persists dismiss in localStorage under kindling.installCoachDismissed", () => {
+  it("persists a dismiss timestamp and expires after the TTL", () => {
     const store = memoryStore();
-    expect(isInstallCoachDismissed(store)).toBe(false);
-    dismissInstallCoach(store);
-    expect(store.getItem(INSTALL_COACH_DISMISSED_KEY)).toBe("1");
-    expect(isInstallCoachDismissed(store)).toBe(true);
+    const now = 1_700_000_000_000;
+    expect(isInstallCoachDismissed(store, now)).toBe(false);
+    dismissInstallCoach(store, now);
+    expect(store.getItem(INSTALL_COACH_DISMISSED_KEY)).toBe(String(now));
+    expect(isInstallCoachDismissed(store, now + 1000)).toBe(true);
+    expect(isInstallCoachDismissed(store, now + INSTALL_COACH_DISMISS_TTL_MS)).toBe(false);
     clearInstallCoachDismissed(store);
+    expect(isInstallCoachDismissed(store, now)).toBe(false);
+  });
+
+  it("clears legacy dismiss flag so the coach can auto-show again", () => {
+    const store = memoryStore({ [INSTALL_COACH_DISMISSED_KEY]: "1" });
     expect(isInstallCoachDismissed(store)).toBe(false);
+    expect(store.getItem(INSTALL_COACH_DISMISSED_KEY)).toBeNull();
   });
 });
 
@@ -165,9 +174,17 @@ describe("wiring", () => {
     expect(src).toContain("openInstallCoachFromSettings");
   });
 
-  it("main boots the PWA update check before the game", () => {
+  it("main starts the game then registers PWA in the background", () => {
     const src = read("../main.ts");
     expect(src).toContain("bootKindlingPwa");
     expect(src).toContain("installInstallCoach");
+    expect(src).toContain("void bootKindlingPwa()");
+    expect(src).not.toContain("void bootKindlingPwa().then");
+  });
+
+  it("re-presents the coach when beforeinstallprompt arrives", () => {
+    const src = read("./installCoach.ts");
+    expect(src).toContain('addEventListener("beforeinstallprompt"');
+    expect(src).toContain("presentInstallCoach()");
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { serviceWorkerUrl, shouldActivateWaitingWorker } from "./pwaUpdate";
+import { serviceWorkerUrl } from "./pwaUpdate";
 import { SKIP_WAITING_MESSAGE } from "./pwaMessages";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -7,14 +7,6 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (rel: string): string => readFileSync(join(root, rel), "utf8").replace(/\r\n/g, "\n");
-
-describe("shouldActivateWaitingWorker", () => {
-  it("activates a waiting worker only when this page already had a controller", () => {
-    expect(shouldActivateWaitingWorker(true, true)).toBe(true);
-    expect(shouldActivateWaitingWorker(true, false)).toBe(false);
-    expect(shouldActivateWaitingWorker(false, true)).toBe(false);
-  });
-});
 
 describe("serviceWorkerUrl", () => {
   it("joins sw.js onto the Vite base, with or without a trailing slash", () => {
@@ -28,10 +20,8 @@ describe("update wiring", () => {
   it("registers without HTTP-caching the worker script", () => {
     const src = read("src/pwaUpdate.ts");
     expect(src).toContain('updateViaCache: "none"');
-    expect(src).toContain("reg.update()");
+    expect(src).toContain("void reg.update()");
     expect(src).toContain("visibilitychange");
-    expect(src).toContain("location.reload()");
-    expect(src).toContain("SKIP_WAITING_MESSAGE");
   });
 
   it("does not await network update before returning ready", () => {
@@ -40,14 +30,16 @@ describe("update wiring", () => {
     expect(src).toContain("void reg.update()");
   });
 
-  it("does not activate a waiting worker on resume (would reload mid-shift)", () => {
+  it("does not activate a waiting worker on boot or resume", () => {
     const src = read("src/pwaUpdate.ts");
+    expect(src).not.toContain("activateWaiting");
+    expect(src).not.toContain("skipWaiting");
+    expect(src).not.toContain("location.reload()");
+    expect(src).not.toContain("SKIP_WAITING_MESSAGE");
     const resumeFrom = src.indexOf("function bindResumeUpdateCheck");
     if (resumeFrom < 0) throw new Error("bindResumeUpdateCheck missing");
     const resume = src.slice(resumeFrom);
     expect(resume).toContain("reg.update()");
-    expect(resume).not.toContain("activateWaiting");
-    expect(resume).not.toContain("skipWaiting");
   });
 
   it("keeps the worker handshake string in lockstep with sw.js", () => {
@@ -74,11 +66,16 @@ describe("update wiring", () => {
     expect(vite).toContain("serviceWorkerBuildId");
   });
 
-  it("boots the game after PWA registration, skipping start when reloading", () => {
+  it("starts the game immediately and registers the PWA in the background", () => {
     const main = read("src/main.ts");
     expect(main).toContain("bootKindlingPwa");
-    expect(main).toContain('if (outcome === "reloading") return');
     expect(main).toContain("startGame()");
-    expect(main).toContain("void bootKindlingPwa().then");
+    expect(main).toContain("void bootKindlingPwa()");
+    expect(main).not.toContain("void bootKindlingPwa().then");
+    expect(main).not.toContain('if (outcome === "reloading") return');
+    const startAt = main.indexOf("startGame();");
+    const pwaAt = main.indexOf("void bootKindlingPwa()");
+    if (startAt < 0 || pwaAt < 0) throw new Error("startGame / bootKindlingPwa missing");
+    expect(startAt).toBeLessThan(pwaAt);
   });
 });
