@@ -21,7 +21,7 @@ export function addPanel(
   return g;
 }
 
-/** Tall enough that a stretched phone canvas still hits ~44 CSS px. */
+/** Tall enough that a phone canvas still hits ~44 CSS px after scale. */
 export const HUD_BUTTON_MIN_H = HUD_TOUCH_MIN_DESIGN;
 
 export function addHudButton(
@@ -39,7 +39,7 @@ export function addHudButton(
     caption?: string;
     /**
      * Floor for the button box, defaulting to {@link HUD_BUTTON_MIN_H}. Going under that
-     * default drops the control below {@link MIN_CSS_TOUCH_PX} once a phone stretches the
+     * default drops the control below {@link MIN_CSS_TOUCH_PX} once a phone scales the
      * canvas, so only pass it for a panel that is deliberately sized down.
      */
     minHeight?: number;
@@ -103,8 +103,17 @@ export function addHudButton(
     // given in the same coordinates as the fill above therefore lands half a button up
     // and to the left of the paint: most of the button dead, and a matching slab of
     // empty panel live. Shift it back by the origin so hit area and paint coincide.
+    // Hit area ~10% larger than paint for fat-finger mobile taps (visual size unchanged).
+    const hitScale = 1.1;
+    const hw = w * hitScale;
+    const hh = h * hitScale;
     container.setInteractive(
-      new Phaser.Geom.Rectangle(left + container.displayOriginX, top + container.displayOriginY, w, h),
+      new Phaser.Geom.Rectangle(
+        left + container.displayOriginX - (hw - w) / 2,
+        top + container.displayOriginY - (hh - h) / 2,
+        hw,
+        hh,
+      ),
       Phaser.Geom.Rectangle.Contains,
     );
     container.input!.cursor = "pointer";
