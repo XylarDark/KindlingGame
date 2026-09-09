@@ -28,8 +28,10 @@ function constant(name: string): number {
   return Number(hit[1]);
 }
 
-/** Read a message px seed — either `"Npx"` or `scaleMsgPx(N)` — out of the source. */
+/** Read a message px seed — lazy `name = () => scaleMsgPx(N)` or legacy const forms. */
 function pxConstant(name: string): number {
+  const lazy = new RegExp(`const ${name} = \\(\\): string => scaleMsgPx\\(([\\d.]+)\\);`).exec(src);
+  if (lazy) return Number(lazy[1]) * 1.25;
   const scaled = new RegExp(`const ${name} = scaleMsgPx\\(([\\d.]+)\\);`).exec(src);
   if (scaled) return Number(scaled[1]) * 1.25;
   const hit = new RegExp(`const ${name} = "([\\d.]+)px";`).exec(src);
@@ -96,7 +98,7 @@ describe("doorstep tap target flash", () => {
 
 describe("doorstep prompt", () => {
   it("seeds the prompt with the shared +25% message bump over 25px", () => {
-    expect(pxConstant("DOOR_PROMPT_PX")).toBeCloseTo(31.25, 5);
+    expect(pxConstant("doorPromptPx")).toBeCloseTo(31.25, 5);
   });
 
   it("grows the prompt's box with its font, because fitTypeToBox only shrinks", () => {

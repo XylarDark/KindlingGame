@@ -174,7 +174,7 @@ describe("ORDERS against the counter readouts", () => {
 
 describe("SCORE caption type size", () => {
   it("is seeded at the value's step, not a caption step of its own", () => {
-    expect(captionBlock).toContain("size: `${HUD_SCORE_PX}px`");
+    expect(captionBlock).toContain("size: scaleChromePx(HUD_SCORE_PX)");
     // Measured in-browser at 1920x1080: "SCORE" renders 164x59 at 44px with its
     // tracking. `fitTypeToBox` only ever shrinks, so a box under that would quietly
     // hand back a smaller caption and the sizes would stop matching — which is the
@@ -200,7 +200,7 @@ describe("ORDERS type size", () => {
     expect(hud).toContain("export const HUD_SCORE_PX = 44;");
     expect(shop).toContain('import { HUD_SCORE_PX } from "./HudScene";');
     expect(shop).toContain("const TABLET_LABEL_PX = HUD_SCORE_PX;");
-    expect(ordersBlock).toContain("size: `${TABLET_LABEL_PX}px`");
+    expect(ordersBlock).toContain("size: scaleChromePx(TABLET_LABEL_PX)");
   });
 
   it("gives the label the whole tablet screen bar a hairline, because the seed will not fit", () => {

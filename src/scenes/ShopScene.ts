@@ -46,10 +46,23 @@ import { wireHover } from "../ui/chrome";
 import { addSignText, setSignAccent } from "../ui/signText";
 import { addUiText } from "../ui/text";
 import { fitTypeToBox } from "../ui/typekit";
-import { Color, scaleMsgBox, scaleMsgPad, scaleMsgPx, Type } from "../ui/theme";
+import {
+  Color,
+  MSG_MIN_CSS_PX,
+  HUD_CHROME_MIN_CSS_PX,
+  scaleChromePx,
+  scaleMsgBox,
+  scaleMsgPad,
+  scaleMsgPx,
+  Type,
+} from "../ui/theme";
 import { HUD_SCORE_PX } from "./HudScene";
 
-/** Strain names on the wall screens run 21% over the heading step. */
+/**
+ * Strain names on the wall screens run 21% over the heading step.
+ * TODO(mobile-text): tier TV board names onto the chrome/mobile ramp once box
+ * budgets are verified — skipping blind scale in this first readability slice.
+ */
 const TV_LABEL_PX = "24.2px";
 
 /**
@@ -68,13 +81,14 @@ const TABLET_LABEL_INSET = 4;
 
 /**
  * Customer / driver action messages: prior +20% over body, then the shared
- * {@link scaleMsgPx} +25% bump so chips stay readable across the lobby.
+ * {@link scaleMsgPx} bump (+25%, plus mobile ramp / CSS floors when the contain
+ * stage is small). Lazy so create() sees the shell's published stage scale.
  */
-const MSG_PX = scaleMsgPx(19.2);
-const MSG_PAD = scaleMsgPad({ x: 12, y: 7 });
-const MSG_NOTICE_PX = scaleMsgPx(13);
-const MSG_NOTICE_PAD = scaleMsgPad({ x: 10, y: 5 });
-const FEEDBACK_H = scaleMsgBox(48);
+const msgPx = (): string => scaleMsgPx(19.2);
+const msgPad = (): { x: number; y: number } => scaleMsgPad({ x: 12, y: 7 });
+const msgNoticePx = (): string => scaleMsgPx(13);
+const msgNoticePad = (): { x: number; y: number } => scaleMsgPad({ x: 10, y: 5 });
+const feedbackH = (): number => scaleMsgBox(48);
 
 /**
  * Hang a chip in the air above a model's head, measuring off what it rendered rather than
@@ -148,7 +162,7 @@ export class ShopScene extends Phaser.Scene {
     const tab = tabletLayout();
     this.tabletScreen = this.add.graphics().setDepth(10);
     this.tabletLabel = addUiText(this, TABLET.x, tab.screenTop + tab.screenH / 2, "ORDERS", {
-      size: `${TABLET_LABEL_PX}px`,
+      size: scaleChromePx(TABLET_LABEL_PX),
       color: Color.creamHex,
       fontStyle: "700",
       // Caps tracking would spend 8% of a 144px screen on the gaps between six letters.
@@ -156,6 +170,7 @@ export class ShopScene extends Phaser.Scene {
       letterSpacing: 0,
       noWrap: true,
       strokeThickness: 0,
+      minCssFloor: HUD_CHROME_MIN_CSS_PX,
       maxWidth: tab.screenW - TABLET_LABEL_INSET * 2,
       maxHeight: tab.screenH - TABLET_LABEL_INSET * 2,
     })
@@ -183,10 +198,11 @@ export class ShopScene extends Phaser.Scene {
 
     // Light ORDERS notice — former toast spawn / ticket cues live here during shop play.
     this.ordersNotice = addSignText(this, TABLET.x, tab.top + tab.h + 18, "", {
-      size: MSG_NOTICE_PX,
-      padding: MSG_NOTICE_PAD,
+      size: msgNoticePx(),
+      padding: msgNoticePad(),
       align: "center",
       fontStyle: "600",
+      minCssFloor: MSG_MIN_CSS_PX,
       maxWidth: scaleMsgBox(260),
       maxHeight: scaleMsgBox(52),
     })
@@ -195,11 +211,12 @@ export class ShopScene extends Phaser.Scene {
       .setVisible(false);
 
     this.targetCallout = addSignText(this, 0, 0, "", {
-      size: MSG_NOTICE_PX,
-      padding: MSG_NOTICE_PAD,
+      size: msgNoticePx(),
+      padding: msgNoticePad(),
       align: "center",
       fontStyle: "700",
       accent: Color.danger,
+      minCssFloor: MSG_MIN_CSS_PX,
       maxWidth: scaleMsgBox(200),
       maxHeight: scaleMsgBox(44),
     })
@@ -208,10 +225,11 @@ export class ShopScene extends Phaser.Scene {
       .setVisible(false);
 
     this.keyLeadBubble = addSignText(this, KEYLEAD.x - 168, KEYLEAD.y - PERSON_DISPLAY_H - 24, "", {
-      size: MSG_PX,
-      padding: MSG_PAD,
+      size: msgPx(),
+      padding: msgPad(),
       align: "center",
       fontStyle: "600",
+      minCssFloor: MSG_MIN_CSS_PX,
       maxWidth: scaleMsgBox(340),
       maxHeight: scaleMsgBox(104),
     })
@@ -225,10 +243,11 @@ export class ShopScene extends Phaser.Scene {
     wireHover(this.driver);
 
     this.driverBubble = addSignText(this, DRIVER.x - 24, DRIVER.y - PERSON_DISPLAY_H - 8, "", {
-      size: MSG_PX,
-      padding: MSG_PAD,
+      size: msgPx(),
+      padding: msgPad(),
       align: "center",
       fontStyle: "600",
+      minCssFloor: MSG_MIN_CSS_PX,
       maxWidth: scaleMsgBox(336),
       maxHeight: scaleMsgBox(124),
     })
@@ -497,24 +516,26 @@ export class ShopScene extends Phaser.Scene {
         wireHover(sprite);
         this.customers.set(customer.orderId, sprite);
         const bubble = addSignText(this, customer.x, CUSTOMER_SPOT.y - PERSON_DISPLAY_H, "", {
-          size: MSG_PX,
-          padding: MSG_PAD,
+          size: msgPx(),
+          padding: msgPad(),
           align: "center",
           fontStyle: "600",
-          maxWidth: CUSTOMER_SPEECH_MAX_W,
+          minCssFloor: MSG_MIN_CSS_PX,
+      maxWidth: CUSTOMER_SPEECH_MAX_W,
           maxHeight: CUSTOMER_SPEECH_H,
         })
           .setOrigin(0.5)
           .setDepth(7);
         this.bubbles.set(customer.orderId, bubble);
         const feedback = addSignText(this, customer.x, CUSTOMER_SPOT.y - PERSON_DISPLAY_H, "", {
-          size: MSG_NOTICE_PX,
-          padding: MSG_NOTICE_PAD,
+          size: msgNoticePx(),
+          padding: msgNoticePad(),
           align: "center",
           fontStyle: "600",
           accent: Color.danger,
-          maxWidth: CUSTOMER_SPEECH_MAX_W,
-          maxHeight: FEEDBACK_H,
+          minCssFloor: MSG_MIN_CSS_PX,
+      maxWidth: CUSTOMER_SPEECH_MAX_W,
+          maxHeight: feedbackH(),
         })
           .setOrigin(0.5)
           .setDepth(7)
@@ -543,7 +564,7 @@ export class ShopScene extends Phaser.Scene {
         const note = customer.feedback;
         if (layout && note) {
           feedback.setText(note).setVisible(true);
-          fitTypeToBox(feedback, layout.w, FEEDBACK_H);
+          fitTypeToBox(feedback, layout.w, feedbackH());
           feedback.setPosition(layout.x, layout.y + layout.h / 2 + CUSTOMER_SPEECH_GAP + feedback.height / 2);
         } else {
           feedback.setVisible(false);

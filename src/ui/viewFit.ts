@@ -213,6 +213,25 @@ export function fillsParent(view: ViewSize, parent: ViewSize, epsilon = 1): bool
   return Math.abs(view.width - parent.width) <= epsilon && Math.abs(view.height - parent.height) <= epsilon;
 }
 
+/** Uniform CSS-contain scale: stageCssWidth / designWidth (≈ stageCssHeight / designHeight). */
+export function stageContainScale(stage: ViewSize, designW = GAME_WIDTH): number {
+  return stage.width / Math.max(designW, 1);
+}
+
+/**
+ * Latest shell contain scale. Defaults to 1 (desktop artboard) until
+ * {@link setStageContainScale} runs from `installMobileShell`.
+ */
+let currentStageContainScale = 1;
+
+export function getStageContainScale(): number {
+  return currentStageContainScale;
+}
+
+export function setStageContainScale(scale: number): void {
+  currentStageContainScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
+}
+
 /** Phaser Scale.NONE never fires RESIZE; shell emits this when CSS fill or safe-area changes. */
 export const VIEWFIT_EVENT = "kindling-viewfit";
 

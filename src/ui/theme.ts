@@ -1,4 +1,7 @@
 /** Kindling visual tokens — dusk dispensary, chunky wood, muted leaf. */
+import { GAME_WIDTH } from "../sim/constants";
+import { getStageContainScale } from "./viewFit";
+
 export const Color = {
   ink: 0x140e0a,
   inkHex: "#140e0a",
@@ -55,8 +58,9 @@ export const Color = {
 /**
  * Design-space type ramp for the 1920×1080 layout.
  * Sized to fit chrome; `fitTypeToBox` shrinks further when a container is tighter.
- * Aspirational on-screen CSS floors (mobile HUD) are documented in docs/qa-typography.md —
- * fill-stretch makes true CSS floors conflict with fixed containers.
+ * On-screen CSS floors after 16:9 contain live in {@link MSG_MIN_CSS_PX} /
+ * {@link HUD_CHROME_MIN_CSS_PX} and are enforced via {@link scaleMsgPx} /
+ * {@link scaleChromePx} + `fitTypeToBox` `minCssFloor`.
  */
 export const Type = {
   display: "36px",
@@ -73,25 +77,142 @@ export const TYPE_MIN_FIT_PX = 10;
 /**
  * Shared bump for chip / speech / toast message UI (~+25% type, padding, and box).
  * Applied on top of each scene's authored message sizes rather than raising the Type
- * ramp, so chrome readouts (SCORE, clock, ORDERS label, settings) stay put.
+ * ramp, so chrome readouts (SCORE, clock, ORDERS label, settings) stay put on desktop.
  */
 export const MSG_SCALE = 1.25;
 
-/** Scale a design-space px size and return a CSS fontSize string. */
-export function scaleMsgPx(px: number): string {
-  const scaled = px * MSG_SCALE;
-  // Trim float noise while keeping quarters (31.25, 42.1875).
-  const rounded = Math.round(scaled * 10000) / 10000;
-  return `${rounded}px`;
+/**
+ * Extra multiplier for message chips + HUD chrome when the contained stage is small
+ * (phone landscape letterbox / pillarbox). Stacks on {@link MSG_SCALE} for messages;
+ * chrome uses this alone (chrome does not take MSG_SCALE).
+ */
+export const MOBILE_TEXT_SCALE = 1.2;
+
+/** Apply mobile text ramp when stageCssWidth/1920 is strictly below this. */
+export const MOBILE_STAGE_SCALE_MAX = 0.6;
+
+/** Coarse-pointer + viewport width under this also gates the mobile ramp. */
+export const MOBILE_TEXT_VIEWPORT_MAX_CSS = 900;
+
+/** Message-chip body type: minimum on-screen CSS px after contain. */
+export const MSG_MIN_CSS_PX = 14;
+
+/** Primary HUD chrome labels: minimum on-screen CSS px after contain. */
+export const HUD_CHROME_MIN_CSS_PX = 12;
+
+/** Extra padding scale on message chips while the mobile ramp is active. */
+export const MOBILE_MSG_PAD_EXTRA = 1.15;
+
+/** Design-space px needed so `minCssPx` survives the current contain scale. */
+export function designPxForMinCss(minCssPx: number, stageScale: number): number {
+  if (!(stageScale > 0) || !(minCssPx > 0)) return Math.ceil(Math.max(0, minCssPx));
+  return Math.ceil(minCssPx / stageScale);
 }
 
-/** Scale chip padding. */
-export function scaleMsgPad(pad: { x: number; y: number }): { x: number; y: number } {
-  return { x: Math.round(pad.x * MSG_SCALE), y: Math.round(pad.y * MSG_SCALE) };
+export interface MobileTextHints {
+  coarsePointer?: boolean;
+  viewportCssWidth?: number;
 }
 
-/** Scale a maxWidth / maxHeight box edge. */
-export function scaleMsgBox(n: number): number {
-  return Math.round(n * MSG_SCALE);
+/**
+ * Gate for {@link MOBILE_TEXT_SCALE}: small contain scale, or coarse pointer on a
+ * narrow viewport (phone landscape even when scale sits near the threshold).
+ */
+export function shouldApplyMobileTextRamp(
+  stageScale: number,
+  hints: MobileTextHints = {},
+): boolean {
+  if (stageScale > 0 && stageScale < MOBILE_STAGE_SCALE_MAX) return true;
+  if (
+    hints.coarsePointer === true &&
+    hints.viewportCssWidth !== undefined &&
+    hints.viewportCssWidth < MOBILE_TEXT_VIEWPORT_MAX_CSS
+  ) {
+    return true;
+  }
+  return false;
 }
 
+function readMobileHints(): MobileTextHints {
+  const coarse =
+    typeof globalThis.matchMedia === "function"
+      ? (globalThis.matchMedia("(pointer: coarse)").matches ?? false)
+      : false;
+  const view = globalThis.visualViewport;
+  const width = Math.round(view?.width ?? globalThis.innerWidth ?? GAME_WIDTH);
+  return { coarsePointer: coarse, viewportCssWidth: width };
+}
+
+export function effectiveMsgScale(mobile: boolean): number {
+  return MSG_SCALE * (mobile ? MOBILE_TEXT_SCALE : 1);
+}
+
+export function effectiveChromeScale(mobile: boolean): number {
+  return mobile ? MOBILE_TEXT_SCALE : 1;
+}
+
+function roundPx(n: number): number {
+  return Math.round(n * 10000) / 10000;
+}
+
+function resolveMobile(stageScale: number, hints?: MobileTextHints): boolean {
+  return shouldApplyMobileTextRamp(stageScale, hints ?? readMobileHints());
+}
+
+/** Scale a design-space px size and return a CSS fontSize string (message tier). */
+export function scaleMsgPx(
+  px: number,
+  stageScale = getStageContainScale(),
+  hints?: MobileTextHints,
+): string {
+  const mobile = resolveMobile(stageScale, hints);
+  const scaled = px * effectiveMsgScale(mobile);
+  const floored = Math.max(scaled, designPxForMinCss(MSG_MIN_CSS_PX, stageScale));
+  return `${roundPx(floored)}px`;
+}
+
+/** Scale chip padding (slightly more under the mobile ramp). */
+export function scaleMsgPad(
+  pad: { x: number; y: number },
+  stageScale = getStageContainScale(),
+  hints?: MobileTextHints,
+): { x: number; y: number } {
+  const mobile = resolveMobile(stageScale, hints);
+  const factor = effectiveMsgScale(mobile) * (mobile ? MOBILE_MSG_PAD_EXTRA : 1);
+  return { x: Math.round(pad.x * factor), y: Math.round(pad.y * factor) };
+}
+
+/** Scale a maxWidth / maxHeight box edge (message tier). */
+export function scaleMsgBox(
+  n: number,
+  stageScale = getStageContainScale(),
+  hints?: MobileTextHints,
+): number {
+  const mobile = resolveMobile(stageScale, hints);
+  return Math.round(n * effectiveMsgScale(mobile));
+}
+
+/** `fitTypeToBox` floor so message chips stay ≥ {@link MSG_MIN_CSS_PX} on screen. */
+export function msgMinFitPx(stageScale = getStageContainScale()): number {
+  return Math.max(TYPE_MIN_FIT_PX, designPxForMinCss(MSG_MIN_CSS_PX, stageScale));
+}
+
+/**
+ * HUD chrome: apply {@link MOBILE_TEXT_SCALE} (not MSG_SCALE) + CSS floor.
+ * Use for SCORE / clock / ORDERS-adjacent labels — not TV board strain names.
+ */
+export function scaleChromePx(
+  px: number,
+  stageScale = getStageContainScale(),
+  hints?: MobileTextHints,
+): string {
+  const mobile = resolveMobile(stageScale, hints);
+  const scaled = px * effectiveChromeScale(mobile);
+  const floored = Math.max(scaled, designPxForMinCss(HUD_CHROME_MIN_CSS_PX, stageScale));
+  return `${roundPx(floored)}px`;
+}
+
+/** `fitTypeToBox` floor so HUD chrome stays ≥ {@link HUD_CHROME_MIN_CSS_PX} on screen. */
+export function chromeMinFitPx(stageScale = getStageContainScale()): number {
+  return Math.max(TYPE_MIN_FIT_PX, designPxForMinCss(HUD_CHROME_MIN_CSS_PX, stageScale));
+}
