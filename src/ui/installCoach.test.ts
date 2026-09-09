@@ -165,10 +165,9 @@ describe("wiring", () => {
     expect(src).toContain("openInstallCoachFromSettings");
   });
 
-  it("main registers the existing sw.js for installability", () => {
+  it("main boots the PWA update check before the game", () => {
     const src = read("../main.ts");
-    expect(src).toContain("serviceWorker");
-    expect(src).toContain("sw.js");
+    expect(src).toContain("bootKindlingPwa");
     expect(src).toContain("installInstallCoach");
   });
 });

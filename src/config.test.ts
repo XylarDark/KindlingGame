@@ -33,6 +33,7 @@ describe("game scale config", () => {
     expect(html).toContain('id="rail-right"');
     expect(html).toContain("viewport-fit=cover");
     expect(html).toContain("100dvh");
+    expect(html).toContain("no-cache, no-store, must-revalidate");
   });
 
   it("paints OS chrome and letterbox as sky, keeping leaf on the side rails", () => {
