@@ -113,7 +113,6 @@ export class ShopScene extends Phaser.Scene {
   private customers = new Map<string, Phaser.GameObjects.Image>();
   private bubbles = new Map<string, Phaser.GameObjects.Text>();
   private feedbackChips = new Map<string, Phaser.GameObjects.Text>();
-  private ordersNotice!: Phaser.GameObjects.Text;
   private targetCallout!: Phaser.GameObjects.Text;
   private readyBag!: Phaser.GameObjects.Image;
   private readyCount!: Phaser.GameObjects.Text;
@@ -193,20 +192,6 @@ export class ShopScene extends Phaser.Scene {
       maxHeight: 28,
     })
       .setOrigin(0.5)
-      .setDepth(13)
-      .setVisible(false);
-
-    // Light ORDERS notice — former toast spawn / ticket cues live here during shop play.
-    this.ordersNotice = addSignText(this, TABLET.x, tab.top + tab.h + 18, "", {
-      size: msgNoticePx(),
-      padding: msgNoticePad(),
-      align: "center",
-      fontStyle: "600",
-      minCssFloor: MSG_MIN_CSS_PX,
-      maxWidth: scaleMsgBox(260),
-      maxHeight: scaleMsgBox(52),
-    })
-      .setOrigin(0.5, 0)
       .setDepth(13)
       .setVisible(false);
 
@@ -322,16 +307,9 @@ export class ShopScene extends Phaser.Scene {
     });
 
     this.syncTablet(snap, tabletPulse, next?.kind === "tablet");
-    this.syncOrdersNotice(snap);
     this.syncTargetCallout(snap);
     this.syncCustomers(snap.customers, pulse, next?.kind === "customer" ? next.orderId : null);
     this.syncOutgoing(snap);
-  }
-
-  private syncOrdersNotice(snap: SimSnapshot): void {
-    const text = snap.ordersNotice ?? "";
-    this.ordersNotice.setText(text);
-    this.ordersNotice.setVisible(!!text && snap.playerRole === "keyLead");
   }
 
   private syncTargetCallout(snap: SimSnapshot): void {

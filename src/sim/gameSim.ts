@@ -282,6 +282,8 @@ export class GameSim {
   private backroomLeftMs = 0;
   /** Blocks a second door/curb interact from the same tap (ASK ID → deny/next, etc.). */
   private dropoffInteractReadyAt = 0;
+  /** After a doorstep advance, absorb held/repeat presses until a quiet frame. */
+  private dropoffAwaitRelease = false;
 
   constructor(options: SimOptions = {}) {
     const seed = options.seed ?? 1;
@@ -398,6 +400,7 @@ export class GameSim {
     this.queuedInteract = false;
     this.input = { dx: 0, dy: 0 };
     this.dropoffInteractReadyAt = 0;
+    this.dropoffAwaitRelease = false;
     this.lastAutoSpawn = 0;
     this.nextOrderId = 1;
     this.nextDeliveryHouse = 0;
@@ -639,7 +642,14 @@ export class GameSim {
     this.tickCall();
     if (this.queuedInteract) {
       this.queuedInteract = false;
-      this.interact();
+      // Held key-repeat / double-fire: absorb until a frame with no press after a step.
+      if (this.playerRole === "driver" && this.dropoffAwaitRelease) {
+        /* keep latched while presses keep arriving */
+      } else {
+        this.interact();
+      }
+    } else if (this.dropoffAwaitRelease) {
+      this.dropoffAwaitRelease = false;
     }
     if (this.playerRole === "driver") this.tickCounterCover(dtMs);
     this.tickTimers();
@@ -1553,7 +1563,11 @@ export class GameSim {
     const d = this.dropoff;
     if (!d) return;
     // Drop taps during the lock — re-queuing auto-skipped bag/photo after ID click-through.
-    if (this.clock.gameMs < this.dropoffInteractReadyAt) return;
+    if (this.clock.gameMs < this.dropoffInteractReadyAt) {
+      this.dropoffAwaitRelease = true;
+      return;
+    }
+    if (this.dropoffAwaitRelease) return;
 
     if (d.phase === "atCurb") {
       d.phase = "calling";
@@ -1627,6 +1641,7 @@ export class GameSim {
 
   private armDropoffInteract(ms = Math.min(220, NPC_INTERACT_COOLDOWN_MS)): void {
     this.dropoffInteractReadyAt = this.clock.gameMs + ms;
+    this.dropoffAwaitRelease = true;
   }
 
   private beginCurb(stopId: string): void {
@@ -1649,6 +1664,7 @@ export class GameSim {
 
   private clearDropoff(): void {
     this.dropoff = null;
+    this.dropoffAwaitRelease = false;
   }
 
   private syncCurb(): void {
@@ -1716,7 +1732,8 @@ export class GameSim {
       canAct = true;
       hint = `Tap the bag in their hands to take the photo.`;
     }
-    const interactArmed = this.clock.gameMs >= this.dropoffInteractReadyAt;
+    const interactArmed =
+      this.clock.gameMs >= this.dropoffInteractReadyAt && !this.dropoffAwaitRelease;
     if (!interactArmed) canAct = false;
     return {
       phase: d.phase,
