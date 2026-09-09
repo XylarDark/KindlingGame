@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { getMusicPrefs, setMusicEnabled, setMusicVolume, syncMusicToClock } from "../audio/music";
+import { loadDisplayPrefs, saveDisplayPrefs } from "../ui/displayPrefs";
 import { playCameraClick, playUiSfx } from "../audio/sfx";
 import { customerPortraitKey } from "../art/people";
 import { PORTRAIT_H, PORTRAIT_W } from "../art/peopleSize";
@@ -89,7 +90,9 @@ const SET_ROW_TOP = 64;
 const SET_VOL_ROW_TOP = 124;
 const VOL_KNOB_R = 12;
 const VOL_TRACK = { x: SET_PAD, y: 176, w: Math.round(312 * SET_BTN_SCALE), h: 16 };
-const SET_STACK_TOP = 208;
+/** Below the volume knob so the Start-fullscreen row clears the slider hit box. */
+const SET_FS_ROW_TOP = VOL_TRACK.y + VOL_KNOB_R + 28;
+const SET_STACK_TOP = SET_FS_ROW_TOP + 60;
 const SET_END_SHIFT_Y = SET_STACK_TOP;
 const SET_RESET_Y = SET_END_SHIFT_Y + SET_BTN_H + SET_BTN_GAP;
 const SET_HINT_Y = SET_RESET_Y + SET_BTN_H + SET_BTN_GAP;
@@ -273,6 +276,7 @@ export class HudScene extends Phaser.Scene {
   private settingsDim!: Phaser.GameObjects.Rectangle;
   private settingsPanel!: Phaser.GameObjects.Container;
   private musicValue!: Phaser.GameObjects.Text;
+  private fullscreenValue!: Phaser.GameObjects.Text;
   private volumeTrack!: Phaser.GameObjects.Rectangle;
   private volumeFill!: Phaser.GameObjects.Rectangle;
   private volumeKnob!: Phaser.GameObjects.Arc;
@@ -1062,6 +1066,33 @@ export class HudScene extends Phaser.Scene {
       this.draggingVol = false;
     });
 
+    const fullscreenLabel = addUiText(this, SET_PAD, SET_FS_ROW_TOP, "Start fullscreen", {
+      size: SET_ROW_PX,
+      color: Color.inkHex,
+      fontStyle: "600",
+      strokeThickness: 0,
+      maxWidth: 220,
+      maxHeight: 30,
+    });
+    this.fullscreenValue = addUiText(this, SETTINGS_W - SET_PAD, rowMidY(fullscreenLabel), "", {
+      size: SET_VALUE_PX,
+      color: Color.inkHex,
+      fontStyle: "700",
+      strokeThickness: 0,
+      maxWidth: 140,
+      maxHeight: 32,
+    }).setOrigin(1, 0.5);
+    const fullscreenBand = rowBand(fullscreenLabel, this.fullscreenValue);
+    const fullscreenHit = this.add
+      .rectangle(SETTINGS_W / 2, fullscreenBand.mid, SET_BTN_W, fullscreenBand.height, 0x000000, 0.001)
+      .setInteractive({ useHandCursor: true });
+    fullscreenHit.on("pointerdown", (p: Phaser.Input.Pointer) => {
+      p.event.stopPropagation();
+      const prefs = loadDisplayPrefs();
+      saveDisplayPrefs({ startInFullscreen: !prefs.startInFullscreen });
+      this.refreshFullscreenControl();
+    });
+
     // "END SHIFT" is nine characters, so it clears the narrower label box with room to
     // spare and takes the bump.
     const endShift = addHudButton(this, SET_PAD, SET_END_SHIFT_Y, END_SHIFT_LABEL, () => this.endShiftEarly(), {
@@ -1113,6 +1144,9 @@ export class HudScene extends Phaser.Scene {
       this.volumeFill,
       this.volumeKnob,
       this.volumeHit,
+      fullscreenLabel,
+      this.fullscreenValue,
+      fullscreenHit,
       endShift,
       reset,
       resetHint,
@@ -1153,6 +1187,7 @@ export class HudScene extends Phaser.Scene {
     enableItemHit(this.cogCaption);
     this.cogCaption.on("pointerdown", toggleSettings);
     this.refreshMusicControls();
+    this.refreshFullscreenControl();
   }
 
   private armSettingsDim(on: boolean): void {
@@ -1180,6 +1215,7 @@ export class HudScene extends Phaser.Scene {
     this.settingsPanel.setVisible(true);
     this.setCogCaptionShown(false);
     this.refreshMusicControls();
+    this.refreshFullscreenControl();
     this.refreshEndShiftButton();
   }
 
@@ -1219,6 +1255,12 @@ export class HudScene extends Phaser.Scene {
     this.volumeFill.width = Math.max(8, VOL_TRACK.w * t);
     this.volumeKnob.setPosition(VOL_TRACK.x + VOL_TRACK.w * t, VOL_TRACK.y);
     this.volumePct.setText(`${Math.round(t * 100)}%`);
+  }
+
+  private refreshFullscreenControl(): void {
+    const on = loadDisplayPrefs().startInFullscreen;
+    this.fullscreenValue.setText(on ? "ON" : "OFF");
+    this.fullscreenValue.setColor(on ? "#3d6a44" : Color.muteHex);
   }
 
   private setVolumeFromPointer(p: Phaser.Input.Pointer): void {

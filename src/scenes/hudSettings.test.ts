@@ -23,11 +23,14 @@ function between(text: string, start: string, end: string, what: string): string
 }
 
 describe("settings cog panel", () => {
-  it("offers music, volume, end shift, and a 9am reset without tutorial toggles", () => {
+  it("offers music, volume, start-fullscreen, end shift, and a 9am reset without tutorial toggles", () => {
     expect(src).not.toContain("Tutorial arrows");
     expect(src).not.toContain("setTutorialMode");
     expect(src).toContain("Music");
     expect(src).toContain("Volume");
+    expect(src).toContain("Start fullscreen");
+    expect(src).toContain("loadDisplayPrefs");
+    expect(src).toContain("saveDisplayPrefs");
     expect(src).toContain("END_SHIFT_LABEL");
     expect(src).toContain("endShiftEarly");
     expect(src).toContain("RESET TO 9 AM");
