@@ -466,8 +466,15 @@ export class HudScene extends Phaser.Scene {
     this.keys = kb
       ? (kb.addKeys("W,A,S,D,E,UP,DOWN,LEFT,RIGHT,SPACE") as Record<string, Phaser.Input.Keyboard.Key>)
       : {};
-    kb?.on("keydown-E", () => getSim().queueInteract());
-    kb?.on("keydown-SPACE", () => getSim().queueInteract());
+    // Ignore OS key-repeat — holding E/SPACE used to race past HAND BAG / PHOTO after CHECK ID.
+    kb?.on("keydown-E", (event: KeyboardEvent) => {
+      if (event.repeat) return;
+      getSim().queueInteract();
+    });
+    kb?.on("keydown-SPACE", (event: KeyboardEvent) => {
+      if (event.repeat) return;
+      getSim().queueInteract();
+    });
 
     this.input.addPointer(2);
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => this.onPointerDown(p));
