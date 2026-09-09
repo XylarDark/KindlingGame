@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { getMusicPrefs, setMusicEnabled, setMusicVolume, syncMusicToClock } from "../audio/music";
 import { loadDisplayPrefs, saveDisplayPrefs } from "../ui/displayPrefs";
+import { openInstallCoachFromSettings } from "../ui/installCoach";
 import { playCameraClick, playUiSfx } from "../audio/sfx";
 import { customerPortraitKey } from "../art/people";
 import { PORTRAIT_H, PORTRAIT_W } from "../art/peopleSize";
@@ -101,7 +102,9 @@ const VOL_KNOB_R = 12;
 const VOL_TRACK = { x: SET_PAD, y: 176, w: Math.round(312 * SET_BTN_SCALE), h: 16 };
 /** Below the volume knob so the Start-fullscreen row clears the slider hit box. */
 const SET_FS_ROW_TOP = VOL_TRACK.y + VOL_KNOB_R + 28;
-const SET_STACK_TOP = SET_FS_ROW_TOP + 60;
+/** Install coach re-open — sits under Start fullscreen, above End Shift. */
+const SET_INSTALL_ROW_TOP = SET_FS_ROW_TOP + 52;
+const SET_STACK_TOP = SET_INSTALL_ROW_TOP + 52;
 const SET_END_SHIFT_Y = SET_STACK_TOP;
 const SET_RESET_Y = SET_END_SHIFT_Y + SET_BTN_H + SET_BTN_GAP;
 const SET_HINT_Y = SET_RESET_Y + SET_BTN_H + SET_BTN_GAP;
@@ -1115,6 +1118,31 @@ export class HudScene extends Phaser.Scene {
       this.refreshFullscreenControl();
     });
 
+    const installLabel = addUiText(this, SET_PAD, SET_INSTALL_ROW_TOP, "Install for full screen", {
+      size: SET_ROW_PX,
+      color: Color.inkHex,
+      fontStyle: "600",
+      strokeThickness: 0,
+      maxWidth: 260,
+      maxHeight: 30,
+    });
+    const installValue = addUiText(this, SETTINGS_W - SET_PAD, rowMidY(installLabel), "How", {
+      size: SET_VALUE_PX,
+      color: "#3d6a44",
+      fontStyle: "700",
+      strokeThickness: 0,
+      maxWidth: 100,
+      maxHeight: 32,
+    }).setOrigin(1, 0.5);
+    const installBand = rowBand(installLabel, installValue);
+    const installHit = this.add
+      .rectangle(SETTINGS_W / 2, installBand.mid, SET_BTN_W, installBand.height, 0x000000, 0.001)
+      .setInteractive({ useHandCursor: true });
+    installHit.on("pointerdown", (p: Phaser.Input.Pointer) => {
+      p.event.stopPropagation();
+      openInstallCoachFromSettings();
+    });
+
     // "END SHIFT" is nine characters, so it clears the narrower label box with room to
     // spare and takes the bump.
     const endShift = addHudButton(this, SET_PAD, SET_END_SHIFT_Y, END_SHIFT_LABEL, () => this.endShiftEarly(), {
@@ -1169,6 +1197,9 @@ export class HudScene extends Phaser.Scene {
       fullscreenLabel,
       this.fullscreenValue,
       fullscreenHit,
+      installLabel,
+      installValue,
+      installHit,
       endShift,
       reset,
       resetHint,
