@@ -526,14 +526,27 @@ export class GameSim {
     this.orders.push(order);
     if (type === "inStore") {
       this.customers.push(this.newCustomer(order.id, "inStore"));
-      // The walk-in's own speech bubble carries this — keep the toast for errors/score.
+      // The walk-in's own speech bubble carries the ask — keep the toast for errors/score.
       // Mid-run the toast is the driver's own banner, and the counter is the key lead's
       // problem, so a walk-in arriving behind them must not wipe it.
       if (this.playerRole === "keyLead") this.toast = "";
     } else if (type === "pickup") {
-      this.toast = `Pickup ticket: ${order.customerName} — ${sku.name}`;
+      // Don't restate the strain on the bottom chip while a walk-in is mid-ask.
+      const walkInAsking = this.customers.some((c) => {
+        const o = this.orderById(c.orderId);
+        return o?.type === "inStore" && o.status === "atRegister" && Math.abs(c.x - c.targetX) <= 24;
+      });
+      this.toast = walkInAsking
+        ? `Pickup ticket: ${order.customerName}`
+        : `Pickup ticket: ${order.customerName} — ${sku.name}`;
     } else {
-      this.toast = `Delivery to ${destLabel(order)}: ${order.customerName} — ${sku.name}`;
+      const walkInAsking = this.customers.some((c) => {
+        const o = this.orderById(c.orderId);
+        return o?.type === "inStore" && o.status === "atRegister" && Math.abs(c.x - c.targetX) <= 24;
+      });
+      this.toast = walkInAsking
+        ? `Delivery to ${destLabel(order)}: ${order.customerName}`
+        : `Delivery to ${destLabel(order)}: ${order.customerName} — ${sku.name}`;
     }
     return order;
   }
