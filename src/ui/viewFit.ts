@@ -64,32 +64,23 @@ export interface ContainedStage {
   railBottom: number;
 }
 
-/** Fit a 16:9 stage inside the viewport (pillarbox on wide phones, letterbox if taller). */
+/**
+ * Fit a 16:9 stage that always fills the viewport height.
+ * Leftover width becomes side rails; taller-than-16:9 viewports crop the sides
+ * instead of letterboxing, so there is never an empty top/bottom bar.
+ */
 export function containStage(view: ViewSize, aspect = GAME_ASPECT): ContainedStage {
   const vw = Math.max(view.width, 1);
   const vh = Math.max(view.height, 1);
-  const viewAspect = vw / vh;
-  let stageW: number;
-  let stageH: number;
-  let left: number;
-  let top: number;
-  if (viewAspect > aspect) {
-    stageH = vh;
-    stageW = stageH * aspect;
-    left = (vw - stageW) / 2;
-    top = 0;
-  } else {
-    stageW = vw;
-    stageH = stageW / aspect;
-    left = 0;
-    top = (vh - stageH) / 2;
-  }
+  const stageH = vh;
+  const stageW = stageH * aspect;
+  const left = (vw - stageW) / 2;
   return {
-    stage: { width: stageW, height: stageH, left, top },
-    railLeft: left,
-    railRight: vw - left - stageW,
-    railTop: top,
-    railBottom: vh - top - stageH,
+    stage: { width: stageW, height: stageH, left, top: 0 },
+    railLeft: Math.max(0, left),
+    railRight: Math.max(0, vw - left - stageW),
+    railTop: 0,
+    railBottom: 0,
   };
 }
 

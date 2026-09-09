@@ -23,7 +23,7 @@ export const Color = {
   panelHex: "#221c16",
   panelStroke: 0x6a5640,
   skyTop: 0x1b2238,
-  /** Shop/drive zenith — OS chrome and letterbox, not the leaf rails. */
+  /** Shop/drive zenith — OS chrome / shell fill, not the leaf rails. */
   skyTopHex: "#1b2238",
   skyMid: 0x3d3a5c,
   skyLow: 0x8a5a62,
@@ -85,7 +85,7 @@ export const MSG_SCALE = 1.25;
 
 /**
  * Extra multiplier for message chips + HUD chrome when the contained stage is small
- * (phone landscape letterbox / pillarbox). Stacks on {@link MSG_SCALE} for messages;
+ * (phone landscape side rails / height-fill crop). Stacks on {@link MSG_SCALE} for messages;
  * chrome uses this alone (chrome does not take MSG_SCALE).
  */
 export const MOBILE_TEXT_SCALE = 1.2;

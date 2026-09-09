@@ -38,15 +38,33 @@ describe("displayScale NONE + CSS contain", () => {
     }
   });
 
-  it("pillarboxes wide phones and letterboxes tall viewports", () => {
+  it("pillarboxes wide phones and never letterboxes tall viewports", () => {
     const phone = containStage({ width: 844, height: 390 });
     expect(phone.stage.width / phone.stage.height).toBeCloseTo(GAME_ASPECT, 5);
+    expect(phone.stage.height).toBe(390);
+    expect(phone.railTop).toBe(0);
+    expect(phone.railBottom).toBe(0);
     expect(phone.railLeft).toBeGreaterThan(RAIL_MIN_CSS_PX);
     expect(phone.railRight).toBeGreaterThan(RAIL_MIN_CSS_PX);
     expect(phone.railLeft + phone.stage.width + phone.railRight).toBeCloseTo(844, 0);
     const tall = containStage({ width: 800, height: 600 });
-    expect(tall.railTop + tall.stage.height + tall.railBottom).toBeCloseTo(600, 0);
-    expect(tall.railLeft).toBeLessThan(1);
+    expect(tall.stage.height).toBe(600);
+    expect(tall.railTop).toBe(0);
+    expect(tall.railBottom).toBe(0);
+    expect(tall.stage.width).toBeGreaterThan(800);
+    expect(tall.railLeft).toBe(0);
+    expect(tall.railRight).toBe(0);
+    expect(tall.stage.left).toBeLessThan(0);
+  });
+
+  it("keeps railTop and railBottom at zero on every popular landscape size", () => {
+    for (const view of POPULAR_MOBILE_LANDSCAPE) {
+      const packed = containStage(view);
+      expect(packed.railTop).toBe(0);
+      expect(packed.railBottom).toBe(0);
+      expect(packed.stage.height).toBe(view.height);
+      expect(packed.stage.top).toBe(0);
+    }
   });
 
   it("includes iPhone 16 Pro / Pro Max and iPad mini landscape sizes", () => {

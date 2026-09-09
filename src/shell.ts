@@ -81,8 +81,9 @@ function layoutRails(
 }
 
 /**
- * Keep a uniform 16:9 playfield in the visual viewport; leftover width becomes
- * Kindling side rails (pillarbox). Letterbox top/bottom when the viewport is taller.
+ * Keep a uniform 16:9 playfield that always fills viewport height. Leftover
+ * width becomes Kindling side rails; taller viewports crop the sides — never a
+ * top/bottom letterbox.
  */
 export function installMobileShell(game: Phaser.Game): void {
   const shell = document.getElementById("kindling-shell");

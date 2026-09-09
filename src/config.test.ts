@@ -24,7 +24,7 @@ describe("game scale config", () => {
     expect(src).toContain("HUD_BUTTON_MIN_H = HUD_TOUCH_MIN_DESIGN");
   });
 
-  it("letterboxes a 16:9 stage with Kindling side rails (no fill-stretch)", () => {
+  it("sizes a height-filled 16:9 stage with Kindling side rails (no fill-stretch)", () => {
     const html = readFileSync(join(root, "index.html"), "utf8");
     expect(html).toContain("object-fit: contain");
     expect(html).not.toContain("object-fit: fill");
@@ -34,9 +34,10 @@ describe("game scale config", () => {
     expect(html).toContain("viewport-fit=cover");
     expect(html).toContain("100dvh");
     expect(html).toContain("no-cache, no-store, must-revalidate");
+    expect(html).toMatch(/#kindling-shell \{[\s\S]*?overflow:\s*hidden/);
   });
 
-  it("paints OS chrome and letterbox as sky, keeping leaf on the side rails", () => {
+  it("paints OS chrome as sky, keeping leaf on the side rails", () => {
     const html = readFileSync(join(root, "index.html"), "utf8").replace(/\r\n/g, "\n");
     const manifest = readFileSync(join(root, "public/manifest.webmanifest"), "utf8");
     const config = readFileSync(join(root, "src/config.ts"), "utf8");

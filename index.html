@@ -49,8 +49,8 @@
         --kindling-safe-bottom: env(safe-area-inset-bottom, 0px);
         --kindling-safe-left: env(safe-area-inset-left, 0px);
       }
-      /* Full visual viewport; shell.ts sizes children to a 16:9 stage + side rails.
-         Letterbox (top/bottom) is sky; pillarbox rails keep the leaf brand. */
+      /* Full visual viewport; shell.ts sizes a height-filled 16:9 stage + side rails.
+         Overflow clips side overhang on tall viewports — no top/bottom letterbox. */
       #kindling-shell {
         position: absolute;
         left: 0;
@@ -59,6 +59,7 @@
         height: 100%;
         box-sizing: border-box;
         touch-action: none;
+        overflow: hidden;
         background: #1b2238;
       }
       .kindling-rail {
