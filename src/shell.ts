@@ -6,6 +6,8 @@ import {
   phaserDisplayScale,
   RAIL_MIN_CSS_PX,
   readCssSafeArea,
+  setStageContainScale,
+  stageContainScale,
 } from "./ui/viewFit";
 
 /** Phone-sized portrait: shop is 16:9 landscape, so ask them to turn. */
@@ -104,6 +106,8 @@ export function installMobileShell(game: Phaser.Game): void {
     }
 
     const packed = containStage({ width, height });
+    // Publish contain scale before viewfit so type floors / mobile ramp see it.
+    setStageContainScale(stageContainScale(packed.stage));
     const sw = Math.round(packed.stage.width);
     const sh = Math.round(packed.stage.height);
     const sl = Math.round(packed.stage.left);

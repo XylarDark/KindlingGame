@@ -8,6 +8,9 @@ import {
   RAIL_MIN_CSS_PX,
   clientToGame,
   containStage,
+  stageContainScale,
+  getStageContainScale,
+  setStageContainScale,
   cssPxFromDesign,
   cssPxToDesign,
   designSafeInset,
@@ -132,5 +135,20 @@ describe("clientToGame pointer mapping", () => {
     const css = displayScale(view);
     expect(phaser.x * css.x).toBeCloseTo(1);
     expect(phaser.y * css.y).toBeCloseTo(1);
+  });
+});
+
+describe("stageContainScale", () => {
+  it("is stageCssWidth / 1920 under uniform contain", () => {
+    const { stage } = containStage({ width: 844, height: 390 });
+    expect(stageContainScale(stage)).toBeCloseTo(stage.width / GAME_WIDTH, 6);
+    expect(stageContainScale(stage)).toBeCloseTo(stage.height / GAME_HEIGHT, 5);
+  });
+
+  it("publishes through set/get for the shell → theme path", () => {
+    setStageContainScale(0.42);
+    expect(getStageContainScale()).toBeCloseTo(0.42, 6);
+    setStageContainScale(1);
+    expect(getStageContainScale()).toBe(1);
   });
 });

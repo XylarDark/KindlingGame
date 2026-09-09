@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { MARK } from "./copy";
-import { TYPE_MIN_FIT_PX, Type } from "./theme";
+import { TYPE_MIN_FIT_PX, Type, designPxForMinCss } from "./theme";
 import {
   capsTracking,
   currentDpr,
@@ -11,7 +11,7 @@ import {
   typeResolution,
   UI_FONT,
 } from "./typeMetrics";
-import { VIEWFIT_EVENT } from "./viewFit";
+import { VIEWFIT_EVENT, getStageContainScale } from "./viewFit";
 
 export { capsTracking, currentDpr, displayFit, isAllCaps, overlayStroke, parseFontPx, typeResolution, UI_FONT };
 export type { TypeResolutionInput } from "./typeMetrics";
@@ -24,6 +24,8 @@ type TypeBox = {
   maxWidth?: number;
   maxHeight?: number;
   minPx?: number;
+  /** Recompute design floor from on-screen CSS px on each fit (viewfit-safe). */
+  minCssFloor?: number;
   basePx?: number;
   noWrap?: boolean;
 };
@@ -85,7 +87,11 @@ export function fitTypeToBox(
   text.setScale(1);
   const box: TypeBox = text.getData(TYPEKIT_BOX) ?? {};
   const basePx = box.basePx ?? parseFontPx(text.style.fontSize);
-  const floor = Math.max(MIN_FIT_PX, minPx);
+  const cssFloor =
+    box.minCssFloor !== undefined
+      ? designPxForMinCss(box.minCssFloor, getStageContainScale())
+      : 0;
+  const floor = Math.max(MIN_FIT_PX, minPx, cssFloor);
   let px = basePx;
 
   const widthLimit = maxWidth ?? box.maxWidth;
@@ -122,6 +128,7 @@ export function fitTypeToBox(
     maxWidth: widthLimit,
     maxHeight: heightLimit,
     minPx: floor,
+    minCssFloor: box.minCssFloor,
     basePx,
     noWrap,
   } satisfies TypeBox);
@@ -186,6 +193,11 @@ export interface TypeStyle {
   maxHeight?: number;
   /** Floor for shrink-to-fit (default {@link TYPE_MIN_FIT_PX}). */
   minPx?: number;
+  /**
+   * On-screen CSS px floor. Converted to design px via current contain scale on each
+   * fit so viewfit refresh cannot silently drop below the readability contract.
+   */
+  minCssFloor?: number;
   /** Keep authored line breaks — shrink to fit width instead of wrapping. */
   noWrap?: boolean;
 }
@@ -225,6 +237,7 @@ function finishType(
     maxWidth: options.maxWidth ?? options.wordWrap?.width,
     maxHeight: options.maxHeight,
     minPx: options.minPx ?? MIN_FIT_PX,
+    minCssFloor: options.minCssFloor,
     basePx,
     noWrap: options.noWrap ?? false,
   } satisfies TypeBox);

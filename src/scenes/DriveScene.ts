@@ -24,7 +24,7 @@ import type { SimSnapshot } from "../sim/gameSim";
 import { tutorialHints } from "../sim/tutorialHints";
 import { formatSlaClock, isSlaUrgent } from "../ui/copy";
 import { addSignText, setSignAccent } from "../ui/signText";
-import { Color, Type, scaleMsgBox, scaleMsgPad, scaleMsgPx } from "../ui/theme";
+import { Color, MSG_MIN_CSS_PX, Type, scaleMsgBox, scaleMsgPad, scaleMsgPx } from "../ui/theme";
 import { addUiText } from "../ui/text";
 import { addMark, fitTypeToWidth, overlayStroke } from "../ui/typekit";
 
@@ -34,8 +34,8 @@ const HOUSE_TEX = ["tex-house", "tex-house-alt", "tex-house-3", "tex-house-4", "
  * The road's share of the "what to do next" family, 25% over the shared ramp.
  * Local constants, because `Type` feeds every screen in the game.
  */
-const PIN_LABEL_PX = scaleMsgPx(25);
-const VAN_BANNER_PX = scaleMsgPx(20);
+const pinLabelPx = (): string => scaleMsgPx(25);
+const vanBannerPx = (): string => scaleMsgPx(20);
 
 export class DriveScene extends Phaser.Scene {
   private vehicle!: Phaser.GameObjects.Image;
@@ -99,12 +99,13 @@ export class DriveScene extends Phaser.Scene {
       ease: "Sine.easeInOut",
     });
     this.pinLabel = addSignText(this, 0, 0, "", {
-      size: PIN_LABEL_PX,
+      size: pinLabelPx(),
       padding: scaleMsgPad({ x: 20, y: 14 }),
       align: "center",
       fontStyle: "700",
       lineSpacing: scaleMsgBox(6),
       noWrap: true,
+      minCssFloor: MSG_MIN_CSS_PX,
       maxWidth: scaleMsgBox(460),
       maxHeight: scaleMsgBox(150),
     })
@@ -113,10 +114,11 @@ export class DriveScene extends Phaser.Scene {
       .setDepth(13)
       .setVisible(false);
     this.vanBanner = addSignText(this, 0, 0, "", {
-      size: VAN_BANNER_PX,
+      size: vanBannerPx(),
       padding: scaleMsgPad({ x: 18, y: 10 }),
       align: "center",
       fontStyle: "600",
+      minCssFloor: MSG_MIN_CSS_PX,
       maxWidth: scaleMsgBox(500),
       maxHeight: scaleMsgBox(70),
     })
@@ -406,6 +408,7 @@ export class DriveScene extends Phaser.Scene {
       size: scaleMsgPx(16),
       padding: scaleMsgPad({ x: 12, y: 6 }),
       fontStyle: "700",
+      minCssFloor: MSG_MIN_CSS_PX,
       maxWidth: CITY.shopLot.w * TILE - 24,
       maxHeight: scaleMsgBox(52),
     })

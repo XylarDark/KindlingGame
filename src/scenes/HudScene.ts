@@ -26,7 +26,16 @@ import { addHudButton, addPanel, HUD_BUTTON_MIN_H } from "../ui/chrome";
 import { END_SHIFT_CAPTION, END_SHIFT_LABEL, RESULTS_NEW_DAY, RESULTS_TITLE } from "../ui/copy";
 import { addSignText, setSignAccent } from "../ui/signText";
 import { addUiText } from "../ui/text";
-import { Color, scaleMsgBox, scaleMsgPad, scaleMsgPx, Type } from "../ui/theme";
+import {
+  Color,
+  HUD_CHROME_MIN_CSS_PX,
+  MSG_MIN_CSS_PX,
+  scaleChromePx,
+  scaleMsgBox,
+  scaleMsgPad,
+  scaleMsgPx,
+  Type,
+} from "../ui/theme";
 import { parseFontPx, refitType, retypeSize } from "../ui/typekit";
 import { designSafeInset, HUD_TOUCH_MIN_DESIGN, readCssSafeArea, VIEWFIT_EVENT, viewFromScale } from "../ui/viewFit";
 
@@ -40,7 +49,7 @@ const HUD_READOUT_PX = 40;
 export const HUD_SCORE_PX = 44;
 const HUD_CAPTION_PX = 18;
 /** Order banner runs 25% over the ramp — read across the room, mid-task. */
-const HUD_TOAST_PX = scaleMsgPx(20);
+const hudToastPx = (): string => scaleMsgPx(20);
 const HUD_SIGN_GAP = 28;
 /** Corner fallback keeps clear of the ceiling band on the road and at doors. */
 const HUD_CORNER_TOP = 76;
@@ -164,7 +173,7 @@ const PHONE_STATUS_H = PHONE_CELL * 4;
 const PHONE_MAP_GAP = PHONE_CELL * 0.25;
 const PHONE_TITLE_PX = "20px";
 const PHONE_STATUS_PX = "20px";
-const PAD_LABEL_PX = scaleMsgPx(16.25);
+const padLabelPx = (): string => scaleMsgPx(16.25);
 
 /**
  * The map panel carries the city's own 1.43:1 aspect. The old 204x108 panel was
@@ -309,10 +318,11 @@ export class HudScene extends Phaser.Scene {
     // Readouts sit over bright shop walls AND dark night streets, so contrast comes
     // from an ink outline on the glyphs rather than a chip behind them.
     this.scoreText = addUiText(this, 0, 0, "", {
-      size: `${HUD_SCORE_PX}px`,
+      size: scaleChromePx(HUD_SCORE_PX),
       color: Color.creamHex,
       fontStyle: "700",
       align: "right",
+      minCssFloor: HUD_CHROME_MIN_CSS_PX,
       maxWidth: 360,
       maxHeight: 68,
       ...readoutOutline(HUD_SCORE_PX),
@@ -324,11 +334,12 @@ export class HudScene extends Phaser.Scene {
     // value's height and wide enough for tracked caps at 44px (164px of glyphs), so
     // shrink-to-fit leaves the seed alone at the size it was authored for.
     this.scoreCaption = addUiText(this, 0, 0, "SCORE", {
-      size: `${HUD_SCORE_PX}px`,
+      size: scaleChromePx(HUD_SCORE_PX),
       color: Color.creamHex,
       fontStyle: "700",
       align: "right",
       letterSpacing: 2,
+      minCssFloor: HUD_CHROME_MIN_CSS_PX,
       maxWidth: 220,
       maxHeight: 68,
       ...readoutOutline(HUD_SCORE_PX),
@@ -338,9 +349,10 @@ export class HudScene extends Phaser.Scene {
     this.scorePopLayer = this.add.container(0, 0).setDepth(30);
 
     this.clockText = addUiText(this, 0, 0, "", {
-      size: `${HUD_READOUT_PX}px`,
+      size: scaleChromePx(HUD_READOUT_PX),
       color: Color.creamHex,
       fontStyle: "700",
+      minCssFloor: HUD_CHROME_MIN_CSS_PX,
       maxWidth: 360,
       maxHeight: 62,
       ...readoutOutline(HUD_READOUT_PX),
@@ -397,10 +409,11 @@ export class HudScene extends Phaser.Scene {
     this.paintPhoneChrome();
 
     this.toastText = addSignText(this, GAME_WIDTH / 2, GAME_HEIGHT - 36, "", {
-      size: HUD_TOAST_PX,
+      size: hudToastPx(),
       padding: scaleMsgPad({ x: 22, y: 13 }),
       align: "center",
       fontStyle: "600",
+      minCssFloor: MSG_MIN_CSS_PX,
       maxWidth: scaleMsgBox(900),
       maxHeight: scaleMsgBox(80),
     })
@@ -413,6 +426,7 @@ export class HudScene extends Phaser.Scene {
       padding: scaleMsgPad({ x: 12, y: 6 }),
       fontStyle: "600",
       noWrap: true,
+      minCssFloor: MSG_MIN_CSS_PX,
       maxWidth: scaleMsgBox(560),
       maxHeight: scaleMsgBox(40),
     })
@@ -435,9 +449,10 @@ export class HudScene extends Phaser.Scene {
     this.drawPad();
     this.padKnob = this.add.circle(this.padCenter.x, this.padCenter.y, 40, Color.cream, 0.92).setDepth(20);
     this.padLabel = addSignText(this, this.padCenter.x, this.padCenter.y - 128, "Heading to stop…", {
-      size: PAD_LABEL_PX,
+      size: padLabelPx(),
       padding: scaleMsgPad({ x: 13, y: 8 }),
       fontStyle: "600",
+      minCssFloor: MSG_MIN_CSS_PX,
       maxWidth: scaleMsgBox(300),
       maxHeight: scaleMsgBox(50),
     })
@@ -1175,10 +1190,11 @@ export class HudScene extends Phaser.Scene {
     // to the left. layoutHud repositions it from the same expression — the two must agree,
     // or the caption drifts off the control it labels on the first resize.
     this.cogCaption = addSignText(this, cogX - cogSize / 2, cogY - cogSize - 8, "Settings", {
-      size: `${HUD_COG_CAPTION_PX}px`,
+      size: scaleChromePx(HUD_COG_CAPTION_PX),
       padding: HUD_COG_CAPTION_PAD,
       fontStyle: "600",
       align: "center",
+      minCssFloor: HUD_CHROME_MIN_CSS_PX,
       maxWidth: HUD_COG_CAPTION_BOX.w,
       maxHeight: HUD_COG_CAPTION_BOX.h,
     })

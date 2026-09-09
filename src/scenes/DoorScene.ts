@@ -11,7 +11,7 @@ import { skyAt } from "../sim/dayNight";
 import type { SimSnapshot } from "../sim/gameSim";
 import { formatSlaClock, isSlaUrgent } from "../ui/copy";
 import { addSignText, setSignAccent } from "../ui/signText";
-import { Color, scaleMsgBox, scaleMsgPad, scaleMsgPx } from "../ui/theme";
+import { Color, MSG_MIN_CSS_PX, scaleMsgBox, scaleMsgPad, scaleMsgPx } from "../ui/theme";
 import { fitTypeToWidth } from "../ui/typekit";
 import { designSafeInset, readCssSafeArea, VIEWFIT_EVENT, viewFromScale } from "../ui/viewFit";
 
@@ -24,11 +24,11 @@ const BAG_HIT_PAD = 88; // ~10% over prior 80 for mobile taps
 
 /**
  * Doorstep message chips: prior sizes (prompt 25px / title 33.75px) then the shared
- * +25% {@link scaleMsgPx} bump. `maxHeight` must move with the seed — `fitTypeToBox`
- * only ever shrinks, so a box left short silently renders smaller than the constant.
+ * {@link scaleMsgPx} bump. Lazy so create() sees the shell contain scale.
+ * `maxHeight` must move with the seed — `fitTypeToBox` only ever shrinks.
  */
-const DOOR_PROMPT_PX = scaleMsgPx(25);
-const DOOR_TITLE_PX = scaleMsgPx(33.75);
+const doorPromptPx = (): string => scaleMsgPx(25);
+const doorTitlePx = (): string => scaleMsgPx(33.75);
 /** Gap between a sprite's edge and the chip anchored off it. */
 const DOOR_CHIP_GAP = 20;
 /** Keep a wide chip on screen when the sprite it hangs off is near an edge. */
@@ -82,9 +82,10 @@ export class DoorScene extends Phaser.Scene {
     paintDoorstep(this.backdrop, 0, skyAt(0));
 
     this.houseLabel = addSignText(this, DOORSTEP_DOOR_X, 56, "", {
-      size: DOOR_TITLE_PX,
+      size: doorTitlePx(),
       padding: scaleMsgPad({ x: 20, y: 10 }),
       fontStyle: "700",
+      minCssFloor: MSG_MIN_CSS_PX,
       maxWidth: scaleMsgBox(900),
       maxHeight: scaleMsgBox(72),
     })
@@ -117,10 +118,11 @@ export class DoorScene extends Phaser.Scene {
     // Anchored over the customer's head rather than parked at a fixed y — the
     // instruction names them, so it should be pointing at them.
     this.prompt = addSignText(this, CUSTOMER_X, 0, "", {
-      size: DOOR_PROMPT_PX,
+      size: doorPromptPx(),
       padding: scaleMsgPad({ x: 20, y: 12 }),
       align: "center",
       fontStyle: "600",
+      minCssFloor: MSG_MIN_CSS_PX,
       maxWidth: scaleMsgBox(720),
       // Prior box was 113 for the 25px seed; grow with MSG_SCALE so fitTypeToBox
       // cannot silently shrink the larger seed back down.
