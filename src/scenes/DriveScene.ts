@@ -24,8 +24,8 @@ import type { SimSnapshot } from "../sim/gameSim";
 import { tutorialHints } from "../sim/tutorialHints";
 import { formatSlaClock, isSlaUrgent } from "../ui/copy";
 import { addSignText, setSignAccent } from "../ui/signText";
+import { Color, Type, scaleMsgBox, scaleMsgPad, scaleMsgPx } from "../ui/theme";
 import { addUiText } from "../ui/text";
-import { Color, Type } from "../ui/theme";
 import { addMark, fitTypeToWidth, overlayStroke } from "../ui/typekit";
 
 const HOUSE_TEX = ["tex-house", "tex-house-alt", "tex-house-3", "tex-house-4", "tex-house-5", "tex-house-6"];
@@ -34,8 +34,8 @@ const HOUSE_TEX = ["tex-house", "tex-house-alt", "tex-house-3", "tex-house-4", "
  * The road's share of the "what to do next" family, 25% over the shared ramp.
  * Local constants, because `Type` feeds every screen in the game.
  */
-const PIN_LABEL_PX = "25px";
-const VAN_BANNER_PX = "20px";
+const PIN_LABEL_PX = scaleMsgPx(25);
+const VAN_BANNER_PX = scaleMsgPx(20);
 
 export class DriveScene extends Phaser.Scene {
   private vehicle!: Phaser.GameObjects.Image;
@@ -100,13 +100,13 @@ export class DriveScene extends Phaser.Scene {
     });
     this.pinLabel = addSignText(this, 0, 0, "", {
       size: PIN_LABEL_PX,
-      padding: { x: 20, y: 14 },
+      padding: scaleMsgPad({ x: 20, y: 14 }),
       align: "center",
       fontStyle: "700",
-      lineSpacing: 6,
+      lineSpacing: scaleMsgBox(6),
       noWrap: true,
-      maxWidth: 460,
-      maxHeight: 150,
+      maxWidth: scaleMsgBox(460),
+      maxHeight: scaleMsgBox(150),
     })
       .setOrigin(0.5, 1)
       // Above the van/walker sprites — the stop label must never be clipped.
@@ -114,11 +114,11 @@ export class DriveScene extends Phaser.Scene {
       .setVisible(false);
     this.vanBanner = addSignText(this, 0, 0, "", {
       size: VAN_BANNER_PX,
-      padding: { x: 18, y: 10 },
+      padding: scaleMsgPad({ x: 18, y: 10 }),
       align: "center",
       fontStyle: "600",
-      maxWidth: 500,
-      maxHeight: 70,
+      maxWidth: scaleMsgBox(500),
+      maxHeight: scaleMsgBox(70),
     })
       .setOrigin(0.5, 1)
       .setDepth(12)
@@ -403,11 +403,11 @@ export class DriveScene extends Phaser.Scene {
     fitTypeToWidth(mark, CITY.shopLot.w * TILE - 32);
 
     this.shopCaption = addSignText(this, shop.x, shop.y + CITY.shopLot.h * TILE * 0.42, "Tap Kindling to return", {
-      size: Type.body,
-      padding: { x: 12, y: 6 },
+      size: scaleMsgPx(16),
+      padding: scaleMsgPad({ x: 12, y: 6 }),
       fontStyle: "700",
       maxWidth: CITY.shopLot.w * TILE - 24,
-      maxHeight: 52,
+      maxHeight: scaleMsgBox(52),
     })
       .setOrigin(0.5, 0)
       .setDepth(8)

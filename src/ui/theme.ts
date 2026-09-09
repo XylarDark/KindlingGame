@@ -69,3 +69,29 @@ export const Type = {
 
 /** Absolute shrink floor — below this, prefer wrapping/ellipsis over unreadable glyphs. */
 export const TYPE_MIN_FIT_PX = 10;
+
+/**
+ * Shared bump for chip / speech / toast message UI (~+25% type, padding, and box).
+ * Applied on top of each scene's authored message sizes rather than raising the Type
+ * ramp, so chrome readouts (SCORE, clock, ORDERS label, settings) stay put.
+ */
+export const MSG_SCALE = 1.25;
+
+/** Scale a design-space px size and return a CSS fontSize string. */
+export function scaleMsgPx(px: number): string {
+  const scaled = px * MSG_SCALE;
+  // Trim float noise while keeping quarters (31.25, 42.1875).
+  const rounded = Math.round(scaled * 10000) / 10000;
+  return `${rounded}px`;
+}
+
+/** Scale chip padding. */
+export function scaleMsgPad(pad: { x: number; y: number }): { x: number; y: number } {
+  return { x: Math.round(pad.x * MSG_SCALE), y: Math.round(pad.y * MSG_SCALE) };
+}
+
+/** Scale a maxWidth / maxHeight box edge. */
+export function scaleMsgBox(n: number): number {
+  return Math.round(n * MSG_SCALE);
+}
+

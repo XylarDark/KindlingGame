@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { Pal } from "./art/palette";
+import { COUNTER_BAG_H, COUNTER_BAG_W } from "./maps/shopT0";
 import {
   PEOPLE_PX,
   PERSON_H,
@@ -566,11 +567,18 @@ function bag(scene: Phaser.Scene): void {
 }
 
 /**
- * Counter bags carry their own printed label, so they bake at 112×84 and draw
- * 1:1 — the sill above the counter caps the height, so the room for type had to
- * come from width. `tex-bag` stays the smaller sheet for the road and the door.
+ * Counter bags carry their own printed label and draw 1:1 at {@link COUNTER_BAG_W}×
+ * {@link COUNTER_BAG_H}. Grown taller so they overlap ORDERS a bit; `tex-bag` stays
+ * the smaller sheet for the road and the door.
  */
-const CBAG = { w: 28, h: 21, panelX: 4, panelY: 6, panelW: 20, panelH: 13 };
+const CBAG = {
+  w: COUNTER_BAG_W / PX,
+  h: COUNTER_BAG_H / PX,
+  panelX: 4,
+  panelY: 6,
+  panelW: 20,
+  panelH: 13,
+};
 const COUNTER_BAG_PX = { w: CBAG.w * PX, h: CBAG.h * PX };
 
 /**
@@ -587,12 +595,17 @@ const BAG_FACE_SHADE = 0xdcdcd6;
  * rather than in whatever suited the one it replaced.
  */
 function counterBag(scene: Phaser.Scene, key: string, panel: number, faceShade: number): void {
+  const bodyTop = 4;
+  const bodyH = CBAG.h - bodyTop;
+  const faceTop = 5;
+  const faceH = CBAG.h - faceTop - 1;
+  const footY = CBAG.h - 2;
   bake(scene, key, COUNTER_BAG_PX.w, COUNTER_BAG_PX.h, (g) => {
-    cells(g, 1, 4, 26, 17, Pal.ink);
-    cells(g, 2, 5, 24, 15, Pal.leaf);
-    cells(g, 2, 5, 2, 15, Pal.leafDark);
-    cells(g, 24, 5, 2, 15, Pal.leafDark);
-    cells(g, 2, 19, 24, 1, Pal.leafDark);
+    cells(g, 1, bodyTop, 26, bodyH, Pal.ink);
+    cells(g, 2, faceTop, 24, faceH, Pal.leaf);
+    cells(g, 2, faceTop, 2, faceH, Pal.leafDark);
+    cells(g, 24, faceTop, 2, faceH, Pal.leafDark);
+    cells(g, 2, footY, 24, 1, Pal.leafDark);
     cells(g, CBAG.panelX, CBAG.panelY, CBAG.panelW, CBAG.panelH, panel);
     cells(g, CBAG.panelX, CBAG.panelY + CBAG.panelH - 1, CBAG.panelW, 1, faceShade);
     // Handles over the sack mouth, drawn last so they read in front of it.

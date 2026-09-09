@@ -8,7 +8,7 @@ import { HOWTO_HINT, HOWTO_STEPS, PAUSE_HINT, WELCOME_HINT, WELCOME_TITLE } from
 import { SIGN_FRAME_W, signPlaqueRings } from "../ui/signPlaque";
 import { addSignText } from "../ui/signText";
 import { addUiText } from "../ui/text";
-import { Color, Type } from "../ui/theme";
+import { Color, scaleMsgBox, scaleMsgPad, scaleMsgPx, Type } from "../ui/theme";
 import { fitTypeToWidth } from "../ui/typekit";
 import { designSafeInset, readCssSafeArea, VIEWFIT_EVENT, viewFromScale } from "../ui/viewFit";
 
@@ -278,12 +278,12 @@ export class TitleScene extends Phaser.Scene {
     });
 
     addSignText(this, GAME_WIDTH / 2, play.y + btnH + hintGap, HOWTO_HINT, {
-      size: Type.caption,
-      padding: { x: 16, y: 7 },
+      size: scaleMsgPx(13),
+      padding: scaleMsgPad({ x: 16, y: 7 }),
       fontStyle: "700",
       lineSpacing: 0,
-      maxWidth: 640,
-      maxHeight: 32,
+      maxWidth: scaleMsgBox(640),
+      maxHeight: scaleMsgBox(32),
     })
       .setOrigin(0.5, 0)
       .setDepth(43);
