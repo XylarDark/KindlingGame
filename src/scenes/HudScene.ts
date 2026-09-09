@@ -225,24 +225,6 @@ const ID_CARD_FILL = 0xf4e8c1;
 const ID_FIELD_X = -ID_CARD_W / 2 + ID_PAD + ID_PHOTO_W + 28;
 const ID_FIELD_W = ID_CARD_W / 2 - ID_PAD - ID_FIELD_X;
 
-/** Errors / score / action cues stay; restating "I want X" at the bottom does not. */
-function toastKeepWhileCustomerAsks(toast: string): boolean {
-  return (
-    /^(Wrong |Already |Holding |Grabbing |Sold |Late |On-time |Bag |Queued |Denied|ID |Phone |Parked|Calling|Drive |Hit |Need |Wait |Select |Tap |Back |Multi|New day|Shift |Welcome|Nothing |Head )/.test(
-      toast,
-    ) ||
-    toast.includes("(+") ||
-    toast.includes("(-") ||
-    toast.includes("— 19+") ||
-    toast.includes("Hand ") ||
-    toast.includes("Snap the photo")
-  );
-}
-
-function customerIsAsking(customers: readonly { bubble: string }[]): boolean {
-  return customers.some((c) => c.bubble.startsWith("I want "));
-}
-
 export class HudScene extends Phaser.Scene {
   private scoreText!: Phaser.GameObjects.Text;
   private scoreCaption!: Phaser.GameObjects.Text;
@@ -902,16 +884,15 @@ export class HudScene extends Phaser.Scene {
     const driving = snap.playerRole === "driver" && !atDoor;
     // Drive prompts float over the van; ID/phone keep their own UI.
     const driveBanner = driving && !!snap.toast;
-    // Speech bubbles already say "I want …" — hide the bottom chip unless it is an action/error.
-    const askEcho =
-      customerIsAsking(snap.customers) && !!snap.toast && !toastKeepWhileCustomerAsks(snap.toast);
+    // Shop / key-lead counter play: no bottom-centre toast chip (R1). Drive + doorstep keep theirs.
+    const shopPlay = snap.playerRole === "keyLead";
     this.toastText.setVisible(
       !!snap.toast &&
+        !shopPlay &&
         !showId &&
         snap.dropoff.phase !== "atDoor" &&
         !showPhone &&
-        !driveBanner &&
-        !askEcho,
+        !driveBanner,
     );
     this.paintCover(snap);
     const showPad =
