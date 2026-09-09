@@ -3,6 +3,7 @@ import { startSessionMusic, unlockAudio } from "../audio/music";
 import { COUNTER_SIGN } from "../maps/shopT0";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import { beginPlay, shouldShowHowTo } from "../session";
+import { maybeEnterFullscreenOnStart } from "../ui/displayPrefs";
 import { addHudButton, addPanel, HUD_BUTTON_MIN_H } from "../ui/chrome";
 import { HOWTO_HINT, HOWTO_STEPS, PAUSE_HINT, WELCOME_HINT, WELCOME_TITLE } from "../ui/copy";
 import { SIGN_FRAME_W, signPlaqueRings } from "../ui/signPlaque";
@@ -303,6 +304,9 @@ export class TitleScene extends Phaser.Scene {
   private begin(): void {
     if (this.started) return;
     this.started = true;
+    // User-gesture path: prefer fullscreen when the Settings toggle is on. A deny
+    // or missing API must not block entering the shift.
+    maybeEnterFullscreenOnStart();
     beginPlay();
     startSessionMusic(this.game);
     this.scene.resume("shop");
