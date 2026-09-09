@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import {
+  GAME_ASPECT,
   HUD_TOUCH_MIN_DESIGN,
   MIN_CSS_TOUCH_PX,
   POPULAR_MOBILE_LANDSCAPE,
+  RAIL_MIN_CSS_PX,
   clientToGame,
+  containStage,
   cssPxFromDesign,
   cssPxToDesign,
   designSafeInset,
@@ -17,18 +20,30 @@ import {
   VIEWFIT_EVENT,
 } from "./viewFit";
 
-describe("displayScale NONE + CSS stretch", () => {
+describe("displayScale NONE + CSS contain", () => {
   it("is 1×1 on the desktop 1920×1080 artboard", () => {
     expect(displayScale({ width: GAME_WIDTH, height: GAME_HEIGHT })).toEqual({ x: 1, y: 1 });
   });
 
-  it("stretches every popular landscape phone/tablet to fill the screen", () => {
+  it("maps a contained stage onto design space uniformly", () => {
     for (const view of POPULAR_MOBILE_LANDSCAPE) {
-      const scale = displayScale(view);
-      expect(view.width / scale.x).toBeCloseTo(GAME_WIDTH);
-      expect(view.height / scale.y).toBeCloseTo(GAME_HEIGHT);
-      expect(fillsParent({ width: GAME_WIDTH * scale.x, height: GAME_HEIGHT * scale.y }, view)).toBe(true);
+      const { stage } = containStage(view);
+      const scale = displayScale(stage);
+      expect(scale.x).toBeCloseTo(scale.y, 5);
+      expect(stage.width / scale.x).toBeCloseTo(GAME_WIDTH);
+      expect(stage.height / scale.y).toBeCloseTo(GAME_HEIGHT);
     }
+  });
+
+  it("pillarboxes wide phones and letterboxes tall viewports", () => {
+    const phone = containStage({ width: 844, height: 390 });
+    expect(phone.stage.width / phone.stage.height).toBeCloseTo(GAME_ASPECT, 5);
+    expect(phone.railLeft).toBeGreaterThan(RAIL_MIN_CSS_PX);
+    expect(phone.railRight).toBeGreaterThan(RAIL_MIN_CSS_PX);
+    expect(phone.railLeft + phone.stage.width + phone.railRight).toBeCloseTo(844, 0);
+    const tall = containStage({ width: 800, height: 600 });
+    expect(tall.railTop + tall.stage.height + tall.railBottom).toBeCloseTo(600, 0);
+    expect(tall.railLeft).toBeLessThan(1);
   });
 
   it("includes iPhone 16 Pro / Pro Max and iPad mini landscape sizes", () => {
@@ -90,7 +105,7 @@ describe("viewfit notify", () => {
   });
 });
 
-describe("HUD touch after stretch", () => {
+describe("HUD touch after scale", () => {
   it("keeps HUD buttons at least ~44 CSS px on every popular landscape size", () => {
     expect(HUD_TOUCH_MIN_DESIGN).toBe(minDesignPx(MIN_CSS_TOUCH_PX, "y"));
     for (const view of POPULAR_MOBILE_LANDSCAPE) {
@@ -111,7 +126,7 @@ describe("clientToGame pointer mapping", () => {
     expect(end.y).toBeCloseTo(GAME_HEIGHT);
   });
 
-  it("is the inverse of CSS stretch (Phaser displayScale)", () => {
+  it("is the inverse of CSS scale (Phaser displayScale)", () => {
     const view = { width: 800, height: 360 };
     const phaser = phaserDisplayScale(view);
     const css = displayScale(view);

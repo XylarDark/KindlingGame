@@ -28,7 +28,7 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
     arcade: { gravity: { x: 0, y: 0 }, debug: false },
   },
   scale: {
-    // Game stays 1920×1080. CSS stretches #game-root canvas (object-fit: fill).
+    // Game stays 1920×1080. Shell sizes #game-root to a uniform 16:9 stage (CSS contain).
     mode: Phaser.Scale.NONE,
     autoCenter: Phaser.Scale.NO_CENTER,
     parent: "game-root",

@@ -1,6 +1,12 @@
 import type Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH } from "./sim/constants";
-import { notifyViewfit, phaserDisplayScale, readCssSafeArea } from "./ui/viewFit";
+import {
+  containStage,
+  notifyViewfit,
+  phaserDisplayScale,
+  RAIL_MIN_CSS_PX,
+  readCssSafeArea,
+} from "./ui/viewFit";
 
 /** Phone-sized portrait: shop is 16:9 landscape, so ask them to turn. */
 export function isPortraitPhone(
@@ -35,7 +41,7 @@ export function tryLockLandscape(orientation: Pick<ScreenOrientation, "lock"> | 
   return true;
 }
 
-/** Keep Phaser pointer mapping in 1920×1080 after CSS stretches the canvas. */
+/** Keep Phaser pointer mapping in 1920×1080 after CSS sizes the canvas. */
 export function applyCanvasDisplayScale(game: Phaser.Game): void {
   const canvas = game.canvas;
   if (!canvas) return;
@@ -47,10 +53,41 @@ export function applyCanvasDisplayScale(game: Phaser.Game): void {
   game.scale.displayScale.set(scale.x, scale.y);
 }
 
-/** Keep the canvas in the visual viewport so CSS can stretch 1920×1080 to the whole screen. */
+function layoutRails(
+  leftRail: HTMLElement | null,
+  rightRail: HTMLElement | null,
+  railLeft: number,
+  railRight: number,
+  viewH: number,
+): void {
+  const showLeft = railLeft >= RAIL_MIN_CSS_PX;
+  const showRight = railRight >= RAIL_MIN_CSS_PX;
+  if (leftRail) {
+    leftRail.hidden = !showLeft;
+    leftRail.style.width = `${Math.max(0, Math.round(railLeft))}px`;
+    leftRail.style.height = `${Math.round(viewH)}px`;
+    leftRail.style.top = "0px";
+    leftRail.style.left = "0px";
+  }
+  if (rightRail) {
+    rightRail.hidden = !showRight;
+    rightRail.style.width = `${Math.max(0, Math.round(railRight))}px`;
+    rightRail.style.height = `${Math.round(viewH)}px`;
+    rightRail.style.top = "0px";
+    rightRail.style.right = "0px";
+  }
+}
+
+/**
+ * Keep a uniform 16:9 playfield in the visual viewport; leftover width becomes
+ * Kindling side rails (pillarbox). Letterbox top/bottom when the viewport is taller.
+ */
 export function installMobileShell(game: Phaser.Game): void {
+  const shell = document.getElementById("kindling-shell");
   const root = document.getElementById("game-root");
   const gate = document.getElementById("rotate-gate");
+  const leftRail = document.getElementById("rail-left");
+  const rightRail = document.getElementById("rail-right");
   if (!root) return;
 
   const coarse = () => globalThis.matchMedia?.("(pointer: coarse)")?.matches ?? false;
@@ -58,9 +95,27 @@ export function installMobileShell(game: Phaser.Game): void {
   const sync = (): void => {
     const { width, height } = viewportSize();
     const view = globalThis.visualViewport;
-    root.style.width = `${width}px`;
-    root.style.height = `${height}px`;
-    root.style.transform = `translate(${Math.round(view?.offsetLeft ?? 0)}px, ${Math.round(view?.offsetTop ?? 0)}px)`;
+    const ox = Math.round(view?.offsetLeft ?? 0);
+    const oy = Math.round(view?.offsetTop ?? 0);
+    if (shell) {
+      shell.style.width = `${width}px`;
+      shell.style.height = `${height}px`;
+      shell.style.transform = `translate(${ox}px, ${oy}px)`;
+    }
+
+    const packed = containStage({ width, height });
+    const sw = Math.round(packed.stage.width);
+    const sh = Math.round(packed.stage.height);
+    const sl = Math.round(packed.stage.left);
+    const st = Math.round(packed.stage.top);
+    root.style.width = `${sw}px`;
+    root.style.height = `${sh}px`;
+    root.style.left = `${sl}px`;
+    root.style.top = `${st}px`;
+    root.style.transform = "";
+
+    layoutRails(leftRail, rightRail, packed.railLeft, packed.railRight, height);
+
     if (gate) {
       const portrait = isPortraitPhone(width, height, coarse());
       gate.hidden = !portrait;
@@ -68,7 +123,8 @@ export function installMobileShell(game: Phaser.Game): void {
     }
     game.scale.refresh();
     applyCanvasDisplayScale(game);
-    notifyViewfit(game, { width, height }, readCssSafeArea(root));
+    // Viewfit follows the stage (canvas), not the full phone chrome.
+    notifyViewfit(game, { width: sw, height: sh }, readCssSafeArea(shell ?? root));
   };
 
   const blockScroll = (event: Event): void => {

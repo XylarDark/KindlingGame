@@ -19,8 +19,8 @@ import { designSafeInset, readCssSafeArea, VIEWFIT_EVENT, viewFromScale } from "
 const DOOR_BAG_SCALE = BAG_SCALE * 1.25;
 const DRIVER_X = DOORSTEP_DOOR_X - 160;
 const CUSTOMER_X = DOORSTEP_DOOR_X + 200;
-const PERSON_HIT_PAD = 72;
-const BAG_HIT_PAD = 80;
+const PERSON_HIT_PAD = 80; // ~10% over prior 72 for mobile taps
+const BAG_HIT_PAD = 88; // ~10% over prior 80 for mobile taps
 
 /**
  * The "what to do next" copy runs 25% over the shared ramp. Held as local

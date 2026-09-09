@@ -49,6 +49,51 @@ export const POPULAR_MOBILE_LANDSCAPE: readonly ViewSize[] = [
   { width: 1366, height: 1024 }, // iPad Pro 12.9 landscape-ish
 ];
 
+/** Design aspect (1920×1080). */
+export const GAME_ASPECT = GAME_WIDTH / GAME_HEIGHT;
+
+/** Hide rail wordmarks when leftover CSS width is below this. */
+export const RAIL_MIN_CSS_PX = 24;
+
+export interface ContainedStage {
+  /** Uniform 16:9 playfield inside the viewport. */
+  stage: ViewSize & { left: number; top: number };
+  railLeft: number;
+  railRight: number;
+  railTop: number;
+  railBottom: number;
+}
+
+/** Fit a 16:9 stage inside the viewport (pillarbox on wide phones, letterbox if taller). */
+export function containStage(view: ViewSize, aspect = GAME_ASPECT): ContainedStage {
+  const vw = Math.max(view.width, 1);
+  const vh = Math.max(view.height, 1);
+  const viewAspect = vw / vh;
+  let stageW: number;
+  let stageH: number;
+  let left: number;
+  let top: number;
+  if (viewAspect > aspect) {
+    stageH = vh;
+    stageW = stageH * aspect;
+    left = (vw - stageW) / 2;
+    top = 0;
+  } else {
+    stageW = vw;
+    stageH = stageW / aspect;
+    left = 0;
+    top = (vh - stageH) / 2;
+  }
+  return {
+    stage: { width: stageW, height: stageH, left, top },
+    railLeft: left,
+    railRight: vw - left - stageW,
+    railTop: top,
+    railBottom: vh - top - stageH,
+  };
+}
+
+
 export function displayScale(view: ViewSize, gameW = GAME_WIDTH, gameH = GAME_HEIGHT): DisplayScale {
   return {
     x: view.width / gameW,
@@ -67,7 +112,7 @@ export function phaserDisplayScale(view: ViewSize, gameW = GAME_WIDTH, gameH = G
   };
 }
 
-/** Map a CSS client point on the stretched canvas into 1920×1080 game space. */
+/** Map a CSS client point on the canvas into 1920×1080 game space. */
 export function clientToGame(
   clientX: number,
   clientY: number,
@@ -82,7 +127,7 @@ export function clientToGame(
   };
 }
 
-/** CSS pixels (safe-area, notches) → 1920×1080 design pixels under NONE + CSS stretch. */
+/** CSS pixels (safe-area, notches) → 1920×1080 design pixels under NONE + CSS contain. */
 export function cssPxToDesign(cssPx: number, axis: "x" | "y", view: ViewSize): number {
   const scale = displayScale(view);
   const factor = axis === "x" ? scale.x : scale.y;
@@ -114,7 +159,7 @@ export function minDesignPx(
   return Math.ceil(cssPx / minDisplayFactor(axis, views));
 }
 
-/** Design pixels so a HUD control stays ≥ {@link MIN_CSS_TOUCH_PX} after the worst Y stretch. */
+/** Design pixels so a HUD control stays ≥ {@link MIN_CSS_TOUCH_PX} after the worst Y scale. */
 export const HUD_TOUCH_MIN_DESIGN = minDesignPx(MIN_CSS_TOUCH_PX, "y");
 
 export function designSafeInset(view: ViewSize, css: SafeInset): SafeInset {
