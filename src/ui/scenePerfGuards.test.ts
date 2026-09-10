@@ -111,16 +111,18 @@ describe("scene perf guards", () => {
     expect(door).toContain("skyVisualDirtyKey");
   });
 
-  it("Boot registers atlases after generateTextures", () => {
+  it("Boot registers atlases after generateTextures and flushes before people pack", () => {
     const boot = read("src/scenes/BootScene.ts");
     expect(boot).toContain("registerCityTileAtlas");
     expect(boot).toContain("registerPeopleAtlases");
     const art = boot.indexOf("generateTextures(this)");
     const cityAtlas = boot.indexOf("registerCityTileAtlas(this)");
+    const firstFlush = boot.indexOf("await this.flushTextures()", cityAtlas);
     const peopleAtlas = boot.indexOf("registerPeopleAtlases(this)");
     expect(art).toBeGreaterThan(-1);
     expect(cityAtlas).toBeGreaterThan(art);
-    expect(peopleAtlas).toBeGreaterThan(cityAtlas);
+    expect(firstFlush).toBeGreaterThan(cityAtlas);
+    expect(peopleAtlas).toBeGreaterThan(firstFlush);
   });
 
   it("Drive uses cityTileImageKey for ground tiles", () => {

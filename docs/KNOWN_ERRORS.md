@@ -344,6 +344,14 @@ the thing it described.
 - **Fix:** under `#loading-gate`, flush textures for a full frame; launch shop/hud; warm DayNight; `launch` drive then door, render ≥2 frames each, then `sleep` so Hud prefers wake. Shop pre-allocates a customer visual pool. Door dirty-guards `houseLabel` setText/fitTypeToWidth.
 - **Prevention:** never first-create drive/door mid-shift; warm must **draw** PostFX/scenes under the loading gate. Pool walk-in display objects at shop create. Do not treat “Loading…” idle wait as a hitch fix without real warm draws.
 
+### People atlas boot blanked installed PWA (rails only, no loading/title)
+
+- **Date:** 2026-09-10
+- **Symptom:** after PR #25 deployed, installed PWA showed green KINDLING side rails and a blank sky center — no `#loading-gate`, title never appeared. Browser tab could still work.
+- **Cause:** (1) `#loading-gate` only opened in `BootScene.create()` after audio preload, so the shell laid out rails first with no overlay. (2) `peopleAtlas` packed ~1920×1088 sheets via `canvas drawImage(getSourceImage())`, which throws or no-ops on some installed iOS/Android WebGL paths; uncaught failure could abort boot. (3) `flushTextures` stamped every baked key **and** both atlases **and** all 50+ individual people textures in one frame — mobile WebGL context loss → permanent blank canvas.
+- **Fix:** `showLoading` from `main.ts` before `Phaser.Game`; pack people atlases with `RenderTexture.draw` + try/catch fallback to legacy keys; flush baked tiles before people pack; destroy packed source textures after atlas build so boot flush does not double-upload.
+- **Prevention:** never rely on BootScene alone for first paint of the loading gate. Atlas builds must fail open (legacy texture keys). Do not stamp both atlas sheets and their unpacked sources in one boot flush.
+
 ### Loading gate click-through and orphan Door stall on installed mobile
 
 - **Date:** 2026-09-10
