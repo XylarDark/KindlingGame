@@ -48,6 +48,11 @@ describe("DriveScene grade throttle and dirty guards", () => {
     expect(src).toContain("cityBuildReady");
   });
 
+  it("skips shop caption plaque work when not driving", () => {
+    expect(src).toContain("if (!driving)");
+    expect(src).toContain("Skip plaque setText");
+  });
+
   it("bakes static ground/props into RenderTextures and keeps movers live", () => {
     expect(src).toContain("bakeStaticCityMap");
     expect(src).toContain("staticBakeList");

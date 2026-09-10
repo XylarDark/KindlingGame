@@ -9,25 +9,51 @@ export type RenderBudget = {
    * WebGL backbuffer scale vs design 1920×1080. Camera zoom matches so
    * layout/sim stay in GAME_* coordinates; CSS shell still presents a 16:9 stage.
    *
-   * Tier table (2026-09-10 doctrine — prefer sustained phone FPS over fixed 1×):
-   * | tier | renderScale | postFx | maxLights | uploadMinMs | notes |
-   * | high | 1.0         | on     | 8         | 16          | desktop default |
-   * | mid  | 0.55        | off    | 0         | 100         | phone default; Drive/Door prefer this |
-   * | low  | 0.4         | off    | 0         | 200         | heavy stress / coarse demotion |
+   * Tier table (2026-09-10 drawing-board — prefer sustained phone FPS over fixed 1×):
+   * | tier | renderScale | postFx | postFxScale | maxLights | uploadMinMs | notes |
+   * | high | 1.0         | on     | 0.5         | 8         | 16          | desktop; half-res DayNight |
+   * | mid  | 0.45        | off    | 0.5         | 0         | 100         | phone default; Drive/Door prefer this |
+   * | low  | 0.32        | off    | 0.5         | 0         | 200         | heavy stress / coarse demotion |
    */
   renderScale: number;
   postFx: boolean;
+  /**
+   * When postFx is on, DayNight runs on a Phaser halfFrame RT at this scale
+   * (0.5 = half-res fill-rate) then blits up — GAME_* layout unchanged.
+   */
+  postFxScale: number;
   maxLights: number;
   /** Min ms between DayNight uniform uploads. */
   uploadMinMs: number;
 };
 
 /** Desktop high — phones seed/stay mid so they skip fullscreen DayNight by default. */
-const HIGH: RenderBudget = { tier: "high", renderScale: 1, postFx: true, maxLights: 8, uploadMinMs: 16 };
-/** Mid: ~0.55× pixels; PostFX off — lights still read via Graphics glow. */
-const MID: RenderBudget = { tier: "mid", renderScale: 0.55, postFx: false, maxLights: 0, uploadMinMs: 100 };
-/** Low: ~0.4× backbuffer; PostFX off. Soft on small GPUs; UI may look softer. */
-const LOW: RenderBudget = { tier: "low", renderScale: 0.4, postFx: false, maxLights: 0, uploadMinMs: 200 };
+const HIGH: RenderBudget = {
+  tier: "high",
+  renderScale: 1,
+  postFx: true,
+  postFxScale: 0.5,
+  maxLights: 8,
+  uploadMinMs: 16,
+};
+/** Mid: ~0.45× pixels; PostFX off — lights still read via Graphics glow. */
+const MID: RenderBudget = {
+  tier: "mid",
+  renderScale: 0.45,
+  postFx: false,
+  postFxScale: 0.5,
+  maxLights: 0,
+  uploadMinMs: 100,
+};
+/** Low: ~0.32× backbuffer; PostFX off. Soft on small GPUs; UI may look softer. */
+const LOW: RenderBudget = {
+  tier: "low",
+  renderScale: 0.32,
+  postFx: false,
+  postFxScale: 0.5,
+  maxLights: 0,
+  uploadMinMs: 200,
+};
 
 /** Promote above this; demote below the lower band (hysteresis). */
 const PROMOTE_FPS = 48;

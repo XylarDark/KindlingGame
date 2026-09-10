@@ -158,7 +158,7 @@ function drawPassWindow(g: Phaser.GameObjects.Graphics): void {
   fill(g, left, top + h - 8, w, 8, PAINT_SHADE);
 }
 
-function drawSillBench(scene: Phaser.Scene): void {
+function drawSillBench(scene: Phaser.Scene): Phaser.GameObjects.Graphics {
   const g = scene.add.graphics().setDepth(8);
   const left = PASS_WINDOW.x - PASS_WINDOW.w / 2 - 12;
   const w = PASS_WINDOW.w + 24;
@@ -175,6 +175,7 @@ function drawSillBench(scene: Phaser.Scene): void {
   for (let x = left + 16; x < left + w - 12; x += 20) {
     fill(g, x, top + 4, PX, h - 8, 0xa88858, 0.4);
   }
+  return g;
 }
 
 function drawTabletShell(g: Phaser.GameObjects.Graphics, left: number, top: number, w: number, h: number): void {
@@ -191,15 +192,16 @@ function drawTabletShell(g: Phaser.GameObjects.Graphics, left: number, top: numb
   fill(g, left + w - 12, top + h / 2 - 14, 4, 28, 0xc8ccd0);
 }
 
-function drawTabletOnSill(scene: Phaser.Scene): void {
+function drawTabletOnSill(scene: Phaser.Scene): Phaser.GameObjects.Graphics {
   const g = scene.add.graphics().setDepth(9);
   const orders = tabletLayout();
   drawTabletShell(g, orders.left, orders.top, orders.w, orders.h);
   fill(g, orders.left + 10, orders.top + orders.h - 2, orders.w - 20, 6, 0x1a1008, 0.35);
+  return g;
 }
 
 /** Lightning/USB-C cable on the oak sill into a wall outlet by the pass-through. Depth 8: on the sill, under tablet 9+, over people 5. Plugs into the center of the landscape tablet's right short end. */
-function drawTabletCharger(scene: Phaser.Scene): void {
+function drawTabletCharger(scene: Phaser.Scene): Phaser.GameObjects.Graphics {
   const g = scene.add.graphics().setDepth(8);
   const orders = tabletLayout();
   const tabRight = snap(orders.left + orders.w);
@@ -240,6 +242,7 @@ function drawTabletCharger(scene: Phaser.Scene): void {
   fill(g, outX + 8, onSillY, 4, downH, cableSh);
   fill(g, outX - 4, outY + 10, 8, 8, 0x1a1c1e);
   fill(g, outX - 2, outY + 12, 6, 4, 0x4a5056);
+  return g;
 }
 
 function tvBezel(g: Phaser.GameObjects.Graphics, left: number, top: number, w: number, h: number): void {
@@ -667,12 +670,12 @@ function paintDoorHoursPanel(g: Phaser.GameObjects.Graphics, x: number, y: numbe
  */
 const HOURS_NUDGE_X = 4;
 
-function drawStreetDoorHours(scene: Phaser.Scene): void {
+function drawStreetDoorHours(scene: Phaser.Scene): Phaser.GameObjects.GameObject[] {
   const pane = streetDoorGlass();
   const cx = pane.x + pane.w / 2;
   const inset = 12;
   const maxW = pane.w - inset * 2;
-  addMark(scene, cx, pane.y + Math.floor(pane.h * 0.34), {
+  const mark = addMark(scene, cx, pane.y + Math.floor(pane.h * 0.34), {
     size: Type.heading,
     color: Color.inkHex,
     align: "center",
@@ -696,6 +699,7 @@ function drawStreetDoorHours(scene: Phaser.Scene): void {
     .setOrigin(0.5)
     .setDepth(1);
   fitTypeToWidth(hours, maxW);
+  return [mark, hours];
 }
 
 /** No painted window spill — shopGrade uses pots + ambient only. */
@@ -867,7 +871,7 @@ function drawBoardFloor(g: Phaser.GameObjects.Graphics): void {
   }
 }
 
-function drawKindlingMat(scene: Phaser.Scene, g: Phaser.GameObjects.Graphics): void {
+function drawKindlingMat(scene: Phaser.Scene, g: Phaser.GameObjects.Graphics): Phaser.GameObjects.GameObject {
   const w = DOOR_W + 28;
   const h = 148;
   const x = DOOR.x - w / 2;
@@ -885,7 +889,7 @@ function drawKindlingMat(scene: Phaser.Scene, g: Phaser.GameObjects.Graphics): v
     fill(g, x, fy, 4, 4, Pal.leaf);
     fill(g, x + w - 4, fy, 4, 4, Pal.leaf);
   }
-  addMark(scene, DOOR.x, y + Math.floor(h / 2), {
+  return addMark(scene, DOOR.x, y + Math.floor(h / 2), {
     size: Type.title,
     color: Color.creamHex,
     stroke: "#2a4a30",
@@ -897,12 +901,20 @@ function drawKindlingMat(scene: Phaser.Scene, g: Phaser.GameObjects.Graphics): v
     .setDepth(1);
 }
 
-function drawStaffDoor(scene: Phaser.Scene): void {
+function drawStaffDoor(scene: Phaser.Scene): Phaser.GameObjects.Graphics {
   const g = scene.add.graphics().setDepth(4);
   drawDoor(g, BACK_DOOR.x, COUNTER_FRONT, BACK_DOOR_W, BACK_DOOR_H, "panel", COUNTER_TOP);
+  return g;
 }
 
-export function drawShopInterior(scene: Phaser.Scene): void {
+export type ShopStaticBake = {
+  /** Walls/floor/doors/mat — bake at depth 0. */
+  background: Phaser.GameObjects.GameObject[];
+  /** Counter/sill/tablet shell — bake at depth 7 (above people). */
+  midground: Phaser.GameObjects.GameObject[];
+};
+
+export function drawShopInterior(scene: Phaser.Scene): ShopStaticBake {
   const g = scene.add.graphics();
 
   fill(g, 0, 0, GAME_WIDTH, COUNTER_FRONT, WALL);
@@ -925,9 +937,9 @@ export function drawShopInterior(scene: Phaser.Scene): void {
   }
 
   drawPassWindow(g);
-  drawSillBench(scene);
-  drawTabletCharger(scene);
-  drawTabletOnSill(scene);
+  const sill = drawSillBench(scene);
+  const charger = drawTabletCharger(scene);
+  const tabletShell = drawTabletOnSill(scene);
 
   const winLeft = WINDOW.x - WINDOW.w / 2;
   const winTop = WINDOW_TOP;
@@ -948,8 +960,8 @@ export function drawShopInterior(scene: Phaser.Scene): void {
   for (const x of pots) potFloorPool(g, x);
 
   drawDoor(g, DOOR.x, COUNTER_FRONT, DOOR_W, DOOR_H, "glass");
-  drawStreetDoorHours(scene);
-  drawKindlingMat(scene, g);
+  const doorHours = drawStreetDoorHours(scene);
+  const matMark = drawKindlingMat(scene, g);
 
   const seatY = BENCH.y;
   const benchLeft = BENCH_LEFT;
@@ -978,7 +990,11 @@ export function drawShopInterior(scene: Phaser.Scene): void {
   fill(g, winLeft - 6, sillY, WINDOW.w + 12, 4, WIN_PAINT_HI);
   fill(g, winLeft - 6, sillY + sillH - 4, WINDOW.w + 12, 4, WIN_PAINT_SHADE);
 
-  drawStaffDoor(scene);
+  const staffDoor = drawStaffDoor(scene);
+  return {
+    background: [g, staffDoor, matMark, ...doorHours],
+    midground: [sill, charger, tabletShell],
+  };
 }
 
 /** Half-widths (logical px) from leaflet base to tip — fat mid-blade, fine point. */
@@ -1038,7 +1054,10 @@ function drawCounterPlant(g: Phaser.GameObjects.Graphics, cx: number, footY: num
   fanLeaflet(g, cx, stemTop, 0, -1, 76);
 }
 
-export function drawShopCounter(scene: Phaser.Scene): Phaser.GameObjects.Graphics {
+export function drawShopCounter(scene: Phaser.Scene): {
+  graphics: Phaser.GameObjects.Graphics;
+  plaqueMark: Phaser.GameObjects.GameObject;
+} {
   const g = scene.add.graphics().setDepth(7);
   const w = COUNTER_RIGHT - COUNTER_LEFT;
   const depth = 24;
@@ -1073,7 +1092,7 @@ export function drawShopCounter(scene: Phaser.Scene): Phaser.GameObjects.Graphic
   fill(g, plaqueLeft, plaqueTop, plaqueW, plaqueH, Pal.leafDark);
   fill(g, plaqueLeft + 3, plaqueTop + 3, plaqueW - 6, plaqueH - 6, Pal.leaf);
   fill(g, plaqueLeft + plaqueBorder, plaqueTop + plaqueBorder, plaqueW - plaqueBorder * 2, plaqueH - plaqueBorder * 2, SIGN_WHITE);
-  addMark(scene, cx, plaqueTop + Math.floor(plaqueH / 2), {
+  const plaqueMark = addMark(scene, cx, plaqueTop + Math.floor(plaqueH / 2), {
     size: "25px",
     color: Color.inkHex,
     maxWidth: plaqueW - 40,
@@ -1082,5 +1101,5 @@ export function drawShopCounter(scene: Phaser.Scene): Phaser.GameObjects.Graphic
     .setOrigin(0.5)
     .setDepth(8);
 
-  return g;
+  return { graphics: g, plaqueMark };
 }

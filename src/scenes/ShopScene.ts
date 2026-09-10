@@ -148,6 +148,8 @@ export class ShopScene extends Phaser.Scene {
   private lastReceiptKey = "";
   private lastTvKey = "";
   private onPreRenderLighting = (): void => this.syncLighting(getSim().gameMs());
+  /** Static shop Graphics/Text collapsed into RTs (Drive-style). */
+  private shopBakeLayers: Phaser.GameObjects.RenderTexture[] = [];
 
   constructor() {
     super("shop");
@@ -156,7 +158,7 @@ export class ShopScene extends Phaser.Scene {
   create(): void {
     this.input.setTopOnly(false);
     syncSceneRenderCamera(this);
-    drawShopInterior(this);
+    const interiorBake = drawShopInterior(this);
     this.sky = this.add.graphics().setDepth(0.5);
     this.windowGlow = this.add.graphics().setDepth(3).setBlendMode(Phaser.BlendModes.ADD);
     const startMs = getSim().snapshot().gameMs;
@@ -180,7 +182,12 @@ export class ShopScene extends Phaser.Scene {
       .setOrigin(0.5, 1)
       .setScale(PEOPLE_SCALE)
       .setDepth(5);
-    drawShopCounter(this);
+    const counterBake = drawShopCounter(this);
+    this.bakeStaticShop(interiorBake.background, 0);
+    this.bakeStaticShop(
+      [...interiorBake.midground, counterBake.graphics, counterBake.plaqueMark],
+      7,
+    );
     this.makeReadyBoard();
 
     const tab = tabletLayout();
@@ -514,6 +521,26 @@ export class ShopScene extends Phaser.Scene {
     // setText refits the type box, so only pay for it when the count changes.
     if (count.text !== label) count.setText(label);
     count.setColor(urgent ? Color.dangerHex : Color.inkHex);
+  }
+
+
+  /**
+   * Stamp non-moving shop Graphics/Text into one RenderTexture, then destroy
+   * individuals — customers/keylead/hand/interactive stay live.
+   */
+  private bakeStaticShop(objects: Phaser.GameObjects.GameObject[], depth: number): void {
+    if (objects.length === 0) return;
+    const layers = [...objects].sort((a, b) => {
+      const da = "depth" in a ? Number((a as { depth: number }).depth) : 0;
+      const db = "depth" in b ? Number((b as { depth: number }).depth) : 0;
+      return da - db;
+    });
+    const rt = this.add.renderTexture(0, 0, GAME_WIDTH, GAME_HEIGHT).setOrigin(0, 0).setDepth(depth);
+    rt.beginDraw();
+    for (const obj of layers) rt.batchDraw(obj);
+    rt.endDraw();
+    this.shopBakeLayers.push(rt);
+    for (const obj of objects) obj.destroy();
   }
 
   private warmCustomerPool(): void {

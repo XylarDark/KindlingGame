@@ -1,8 +1,32 @@
 # Smooth 2D / WebGL runtime (Kindling)
 
-**Purpose:** how Kindling keeps Drive/Door/Shop feeling smooth on phones after wall-clock sim — frame budget, adaptive `renderScale`, PostFX policy, Drive static-vs-dynamic draw split, warm/preload, measurement, and what **not** to do.
+**Purpose:** how Kindling keeps Drive/Door/Shop feeling smooth on phones after wall-clock sim — frame budget, adaptive `renderScale`, PostFX policy, static-vs-dynamic draw split, atlases, warm/preload, measurement, and what **not** to do.
 
 **Read with:** [KNOWN_ERRORS.md](../KNOWN_ERRORS.md) entry *Full-resolution DayNight PostFX looked like a "slow game" after wall-clock sim*.
+
+---
+
+## Industry checklist (Done / Partial / Next)
+
+Cite: KNOWN_ERRORS — *Full-resolution DayNight PostFX looked like a "slow game" after wall-clock sim* (wall-clock `rawDelta` unmasked GPU fill-rate; adaptive scale + PostFX off on phones; Drive bake; drawing-board follow-ups).
+
+| Technique | Status | Kindling notes |
+|-----------|--------|----------------|
+| **Measure** (`actualFps` / p95 `rawDelta`, PostFX on/off, each tier) | **Done** | Do not treat “sim clock matches wall” as smoothness. Dev: `kindlingRenderBudget.force` + `apply()`. |
+| **Resolution** (adaptive backbuffer + camera zoom; GAME_* layout) | **Done** | high **1.0** / mid **0.45** / low **0.32**; `syncSceneRenderCamera` every scene `create`. |
+| **PostFX** (attach only shop/drive/door; mid/low off) | **Done** | DayNight never on Hud/Title; coarse never lingers on high in Drive/Door. |
+| **Half-res FX** (`postFxScale` 0.5 via Phaser `halfFrame`) | **Done** | Desktop high: downsample → DayNight → blit up. Coarse stays mid/low (PostFX off). |
+| **Static bake** (non-movers → RenderTexture) | **Done** | Drive city ≤2048px cells; Shop interior + counter RTs; movers/interactive live. |
+| **Atlases** (batch small tiles) | **Partial** | City grass/road/parking packed (`atlas-city-tiles`) after `generateTextures`. People multi-frame atlas still **Next**. |
+| **Pooling** | **Done** | Shop customer visuals; Hud score pops; traffic sprite cap. |
+| **Cull** | **Done** | Drive camera cull on; traffic `TRAFFIC_CULL_PAD`; night-glow camera pad cull. |
+| **Overdraw** | **Partial** | Lot glow stroke-only; night glow coarser bands + view cull; skip hidden shop caption plaque. Door/shop translucent FX still reviewable. |
+| **FPS / thermal** | **Done** | Coarse: `fps.target`+`limit` **30**; prefer sustained smoothness over chasing 60. |
+| **No alloc** (hot paths) | **Partial** | DayNight reuses Float32 buffers / in-place grade; avoid per-frame `lights.slice`. Remaining: watch Text/typekit and sky Graphics clears. |
+| **Warm** | **Done** | `#loading-gate`: textures, DayNight, launch Drive/Door ≥2 frames, city build+bake complete before sleep. |
+| **Mobile pipeline** | **Done** | `autoMobilePipeline` in config; coarse seed mid. |
+| **Texture format** | **Next** | Canvas-baked RGBA sheets today; ASTC/ETC compressed packs for installable builds not yet. |
+| **No smoothed time** | **Done** | `fps.smoothStep: false`; sim from `game.loop.rawDelta` (capped) — see KNOWN_ERRORS wall-clock entry. |
 
 ---
 
@@ -12,17 +36,17 @@
 |--------------|------------------------|----------------|
 | Target FPS | 60 (`fps.target`) | **30** (`fps.limit` + `target`) — sustained smoothness over chasing 60 |
 | Seed RenderBudget tier | `high` | `mid` (never auto-promote to `high` on coarse) |
-| `renderScale` | 1.0 | **0.55** mid / **0.4** low |
-| DayNight PostFX | on (≤8 lights) | **off** on mid/low — Graphics glow still paints |
+| `renderScale` | 1.0 | **0.45** mid / **0.32** low |
+| DayNight PostFX | on (≤8 lights), **`postFxScale` 0.5** | **off** on mid/low — Graphics glow still paints |
 | Sim clock | `game.loop.rawDelta` (capped) | same — never smoothed `delta` |
 
-Design layout stays **1920×1080** (`GAME_*`). CSS shell presents 16:9. Only the WebGL backbuffer + camera zoom shrink.
+Design layout stays **1920×1080** (`GAME_*`). CSS shell presents 16:9. Only the WebGL backbuffer + camera zoom shrink (and PostFX may run on a halfFrame).
 
 ---
 
 ## Adaptive `renderScale` doctrine
 
-1. **Prefer fewer GPU pixels on phones** over fixed 1080p forever. Mid **0.55** and low **0.4** exist because fill-rate (fullscreen PostFX + city overdraw) was the hitch after sim time went wall-clock.
+1. **Prefer fewer GPU pixels on phones** over fixed 1080p forever. Mid **0.45** and low **0.32** exist because fill-rate (fullscreen PostFX + city overdraw) was the hitch after sim time went wall-clock (KNOWN_ERRORS).
 2. **Always** pair `scale.resize` with `syncSceneRenderCamera` on every scene `create` (READY can race late scenes).
 3. Pointer / CSS fit must use **live** `gameSize`, not a frozen 1920×1080 assumption (`applyCanvasDisplayScale`).
 4. Coarse + Drive/Door: demote earlier; **never linger on high** (fullscreen DayNight) even if FPS briefly looks fine.
@@ -36,18 +60,21 @@ Source of truth: `src/ui/renderBudget.ts`.
 
 - Attach DayNight only to **shop / drive / door** cameras — never Hud/Title.
 - Mid/low: `postFx: false`, `maxLights: 0`; grade still via Graphics where needed.
+- High: `postFx: true` with **`postFxScale: 0.5`** — `DayNightPipeline.onDraw` copies the camera RT into Phaser `halfFrame1`, grades into `halfFrame2`, then `copyToGame` (fill-rate win without changing GAME_*).
 - Uniform uploads throttled by `uploadMinMs` per tier.
 - First-use shader compile belongs in **Boot warm** under `#loading-gate`, not the first shop/door frame.
 
 ---
 
-## Drive map cost — static vs dynamic draw split
+## Drive + Shop — static vs dynamic draw split
+
+### Drive
 
 The city is deterministic. Paying ~1100+ tile `Image` draw calls every frame is the wrong default.
 
 **Static (bake once, then destroy/hide individuals):**
 
-- Ground / road / parking / wall tile Images
+- Ground / road / parking / wall tile Images (prefer `atlas-city-tiles` frames)
 - House roofs, street lamps (poles), curb props, access-path Graphics
 
 After chunked row placement + overlays, `DriveScene.bakeStaticCityMap()` stamps those into a grid of **≤2048px `RenderTexture` cells** (map is 4800×3360 — over typical mobile max texture size as one sheet), scrolls each RT camera to the cell origin, `batchDraw`s depth-sorted statics, then **destroys** the per-tile Images. Camera cull drops off-screen cells for free.
@@ -56,18 +83,22 @@ After chunked row placement + overlays, `DriveScene.bakeStaticCityMap()` stamps 
 
 - Vehicle, walker, traffic cars, destination pin + pulse + labels
 - Interactive shop building (hit target) + captions / lot numbers (few Texts)
-- Lot glow + night lamp-pool Graphics (animated lighting)
+- Lot glow (stroke-only) + night lamp-pool Graphics (camera-culled, coarse dirty key)
 - Hud (other scene)
+
+### Shop
+
+Mirror Drive lightly: after create/warm art, bake non-moving interior Graphics/Text into **background (depth 0)** and **midground (depth 7)** RenderTextures. Keep customers / keylead / driver / bags / interactive tablet / sky / windowGlow / receipts live.
 
 **Rule:** if it does not move or animate, it should not remain a per-instance draw after bake. If it moves, keep it a sprite and let camera + modest view padding cull it (`TRAFFIC_CULL_PAD`).
 
-Preserve: dropoff gate, wall-clock `rawDelta`, chunked warm build, `#loading-gate`, `syncSceneRenderCamera`.
+Preserve: dropoff gate, wall-clock `rawDelta`, chunked warm build, `#loading-gate`, `syncSceneRenderCamera`, install coach.
 
 ---
 
 ## Warm / preload
 
-Under `#loading-gate`: flush textures a full frame; launch shop/hud; warm DayNight; `launch` drive then door for ≥2 rendered frames each; wait for `isCityBuildComplete()` (includes bake) before sleep. Mid-shift must **wake**, not first-create, Drive/Door.
+Under `#loading-gate`: flush textures a full frame; register city tile atlas; launch shop/hud; warm DayNight; `launch` drive then door for ≥2 rendered frames each; wait for `isCityBuildComplete()` (includes bake) before sleep. Mid-shift must **wake**, not first-create, Drive/Door.
 
 ---
 
@@ -75,8 +106,8 @@ Under `#loading-gate`: flush textures a full frame; launch shop/hud; warm DayNig
 
 1. Phone Chrome (or AVD): note `game.loop.actualFps` and p95 `rawDelta` on Drive with PostFX forced on vs off and at mid/low scales.
 2. Dev harness: `kindlingRenderBudget.force('mid'|'low'|'high')` then `apply()`.
-3. Compare draw cost mentally: after bake, Drive display list should be **movers + a handful of RT cells + glow**, not a thousand tiles.
-4. Do **not** use “clock matches wall” alone — that only proves sim stepping.
+3. Compare draw cost mentally: after bake, Drive display list should be **movers + a handful of RT cells + glow**, not a thousand tiles; Shop should be **two RTs + interactive/live**.
+4. Do **not** use “clock matches wall” alone — that only proves sim stepping (KNOWN_ERRORS wall-clock entry).
 
 ---
 
@@ -91,12 +122,17 @@ Under `#loading-gate`: flush textures a full frame; launch shop/hud; warm DayNig
 | Leave per-tile city Images alive after bake | Defeats the static/dynamic split |
 | First-create Drive/Door mid-delivery | Hitch on city draw + shader compile |
 | Treat IDE-pane FPS as phone truth | Use coarse seed + real device / emulator |
+| Run full-res PostFX when `postFxScale` 0.5 is enough | Half-res path exists for desktop high |
 
 ---
 
 ## Related
 
-- `src/ui/renderBudget.ts` — tiers and camera sync
+- `src/ui/renderBudget.ts` — tiers, `postFxScale`, camera sync
+- `src/art/dayNightPipeline.ts` — halfFrame PostFX path
 - `src/scenes/DriveScene.ts` — chunked build + `bakeStaticCityMap`
+- `src/scenes/ShopScene.ts` — `bakeStaticShop`
+- `src/art/cityTileAtlas.ts` — grass/road/parking atlas
 - `src/config.ts` / `src/main.ts` — `smoothStep: false`, `autoMobilePipeline`, coarse 30fps limit
+- [plans/2026-09-10-drawing-board-perf.md](../plans/2026-09-10-drawing-board-perf.md) — ranked execution plan
 - [KNOWN_ERRORS.md](../KNOWN_ERRORS.md) — DayNight / wall-clock hitch history

@@ -13,6 +13,7 @@ import { ceilingPots } from "../maps/shopT0";
 import { MS_PER_GAME_HOUR } from "../sim/constants";
 import { skyAt } from "../sim/dayNight";
 import { installMusicUnlock, preloadMusic } from "../audio/music";
+import { registerCityTileAtlas } from "../art/cityTileAtlas";
 import { generateTextures } from "../pixelArt";
 import { startSession } from "../session";
 import { applyCanvasDisplayScale } from "../shell";
@@ -102,6 +103,7 @@ export class BootScene extends Phaser.Scene {
     if (this.warmAborted) return;
     this.showBootStage("Art");
     generateTextures(this);
+    registerCityTileAtlas(this);
     await this.flushTextures();
     if (this.warmAborted) return;
 

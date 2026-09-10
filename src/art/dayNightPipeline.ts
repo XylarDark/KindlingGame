@@ -106,7 +106,24 @@ export class DayNightPipeline extends Phaser.Renderer.WebGL.Pipelines.PostFXPipe
   onDraw(renderTarget: Phaser.Renderer.WebGL.RenderTarget): void {
     this.syncViewFromCamera();
     this.uploadThrottled();
+    // Half-res DayNight when postFxScale < 1 (desktop high): downsample → grade → blit up.
+    // GAME_* / camera zoom stay full design; only the PostFX fill-rate shrinks.
+    if (this.shouldRunHalfResPostFx()) {
+      const half = this.halfFrame1;
+      const graded = this.halfFrame2;
+      if (half && graded) {
+        this.copyFrame(renderTarget, half);
+        this.bindAndDraw(half, graded);
+        this.copyToGame(graded);
+        return;
+      }
+    }
     this.bindAndDraw(renderTarget);
+  }
+
+  private shouldRunHalfResPostFx(): boolean {
+    const budget = getRenderBudget();
+    return budget.postFx && budget.postFxScale > 0 && budget.postFxScale < 0.999;
   }
 
   private syncViewFromCamera(): void {
