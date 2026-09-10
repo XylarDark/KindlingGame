@@ -112,6 +112,17 @@ function fillTicket(
 }
 
 describe("GameSim order loops", () => {
+  it("archives terminal orders off the hot list without losing shift breakdown", () => {
+    const sim = GameSim.create({ seed: 2, autoSpawn: false });
+    for (let i = 0; i < 8; i++) {
+      const order = fillTicket(sim, "inStore");
+      expect(sim.orderById(order.id)?.status).toBe("completed");
+    }
+    expect(sim.activeOrderCount()).toBe(0);
+    expect(sim.endShiftEarly()).toBe(true);
+    expect(sim.snapshot().shiftResults!.breakdown.inStore).toBe(8);
+  });
+
   it("completes pickup: bag, strain, counter, arrive, handoff", () => {
     const sim = GameSim.create({ seed: 1, autoSpawn: false });
     const order = fillTicket(sim, "pickup");

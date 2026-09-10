@@ -51,12 +51,13 @@ describe("loading gate wiring", () => {
     expect(src).toContain("preventDefault");
   });
 
-  it("ShopScene pre-allocates a customer visual pool instead of mid-walk create", () => {
+  it("ShopScene pre-allocates a capped customer visual pool instead of mid-walk create", () => {
     const src = read("src/scenes/ShopScene.ts");
     expect(src).toContain("warmCustomerPool");
     expect(src).toContain("acquireCustomerVisual");
     expect(src).toContain("releaseCustomerVisual");
     expect(src).toContain("CUSTOMER_VISUAL_POOL");
+    expect(src).toContain("CUSTOMER_VISUAL_MAX");
   });
 
   it("DoorScene dirty-guards houseLabel setText and fitTypeToWidth", () => {

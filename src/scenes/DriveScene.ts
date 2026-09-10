@@ -62,6 +62,9 @@ export class DriveScene extends Phaser.Scene {
   private lastGradeMs = -1e9;
   private lastPinWho = "";
   private lastLotGlowKey = "";
+  private lastVanToast = "";
+  private lastShopCaptionKey = "";
+  private onPreRenderDayNight = (): void => this.paintDayNight(getSim().snapshot());
   private trafficLoops: TrafficLoop[] = [];
   private trafficSprites: Phaser.GameObjects.Image[] = [];
   private trafficAngles = new Map<string, number>();
@@ -78,7 +81,10 @@ export class DriveScene extends Phaser.Scene {
     this.nightGlow = this.add.graphics().setDepth(2);
     this.glow = this.add.graphics().setDepth(3);
     this.paintDayNight(getSim().snapshot());
-    this.events.on(Phaser.Scenes.Events.PRE_RENDER, () => this.paintDayNight(getSim().snapshot()));
+    this.events.on(Phaser.Scenes.Events.PRE_RENDER, this.onPreRenderDayNight);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.events.off(Phaser.Scenes.Events.PRE_RENDER, this.onPreRenderDayNight);
+    });
     this.pinPulse = this.add.ellipse(0, 0, 56, 22, Color.amber, 0.35).setDepth(4);
     this.pin = this.add
       .image(0, 0, "tex-pin")
@@ -261,12 +267,14 @@ export class DriveScene extends Phaser.Scene {
 
     // GPS pin + label already carry the stop — van toast stacks on them mid-route.
     if (driving && snap.toast && !stopId) {
-      this.vanBanner
-        .setVisible(true)
-        .setText(snap.toast)
-        .setPosition(snap.vehicle.x, snap.vehicle.y - 78);
-      fitTypeToWidth(this.vanBanner, 500);
+      this.vanBanner.setVisible(true).setPosition(snap.vehicle.x, snap.vehicle.y - 78);
+      if (snap.toast !== this.lastVanToast) {
+        this.lastVanToast = snap.toast;
+        this.vanBanner.setText(snap.toast);
+        fitTypeToWidth(this.vanBanner, 500);
+      }
     } else {
+      this.lastVanToast = "";
       this.vanBanner.setVisible(false);
     }
 
@@ -286,19 +294,26 @@ export class DriveScene extends Phaser.Scene {
     this.shopImg.setTint(flashShop && canTapShop ? Color.flash : 0xffffff);
     this.shopCaption.setVisible(driving);
     this.shopCaption.setAlpha(1);
-    if (snap.run?.nextStopId) {
-      this.shopCaption.setText("Kindling");
-      setSignAccent(this.shopCaption);
-    } else {
-      this.shopCaption.setText(nearShop ? "Tap Kindling to return" : snap.autoDriving ? "Van heading to Kindling" : "Drive to Kindling");
-      // In reach, so the frame goes lime; the flash that says "this is the tap" is now a
-      // pulse on the plaque rather than a third background colour.
-      setSignAccent(this.shopCaption, nearShop ? Color.lime : undefined);
+    const captionText = snap.run?.nextStopId
+      ? "Kindling"
+      : nearShop
+        ? "Tap Kindling to return"
+        : snap.autoDriving
+          ? "Van heading to Kindling"
+          : "Drive to Kindling";
+    const captionKey = `${captionText}:${nearShop ? 1 : 0}`;
+    if (captionKey !== this.lastShopCaptionKey) {
+      this.lastShopCaptionKey = captionKey;
+      this.shopCaption.setText(captionText);
+      setSignAccent(this.shopCaption, snap.run?.nextStopId ? undefined : nearShop ? Color.lime : undefined);
+    }
+    if (!snap.run?.nextStopId) {
       this.shopCaption.setAlpha(flashShop && nearShop ? 0.8 + 0.2 * (0.5 + 0.5 * Math.sin(snap.gameMs / 200)) : 1);
     }
   }
 
   private paintDayNight(snap: SimSnapshot): void {
+    if (!this.sys.isActive()) return;
     const sky = skyAt(snap.gameMs);
     this.cameras.main.setBackgroundColor(sky.mapGrass);
     if (getRenderBudget().postFx) {

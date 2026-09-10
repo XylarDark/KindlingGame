@@ -93,8 +93,9 @@ const msgNoticePx = (): string => scaleMsgPx(13);
 const msgNoticePad = (): { x: number; y: number } => scaleMsgPad({ x: 10, y: 5 });
 const feedbackH = (): number => scaleMsgBox(48);
 
-/** Concurrent walk-ins the pool covers without mid-frame allocate (slots grow unbounded; 4 is typical peak). */
+/** Concurrent customers the pool covers without mid-frame allocate (4 is typical peak). */
 const CUSTOMER_VISUAL_POOL = 4;
+const CUSTOMER_VISUAL_MAX = CUSTOMER_VISUAL_POOL;
 
 type CustomerVisual = {
   sprite: Phaser.GameObjects.Image;
@@ -144,6 +145,8 @@ export class ShopScene extends Phaser.Scene {
   /** Catalog id → sku for TV fills (avoids catalog.find per TV per frame). */
   private skuById = new Map<string, Sku>();
   private lastTabletKey = "";
+  private lastReceiptKey = "";
+  private onPreRenderLighting = (): void => this.syncLighting(getSim().snapshot().gameMs);
 
   constructor() {
     super("shop");
@@ -159,7 +162,10 @@ export class ShopScene extends Phaser.Scene {
     paintWindowGlow(this.windowGlow, startMs);
     this.lighting = attachDayNight(this.cameras.main);
     this.syncLighting(getSim().snapshot().gameMs);
-    this.events.on(Phaser.Scenes.Events.PRE_RENDER, () => this.syncLighting(getSim().snapshot().gameMs));
+    this.events.on(Phaser.Scenes.Events.PRE_RENDER, this.onPreRenderLighting);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.events.off(Phaser.Scenes.Events.PRE_RENDER, this.onPreRenderLighting);
+    });
     this.makeHotspots();
     this.warmCustomerPool();
 
@@ -266,10 +272,11 @@ export class ShopScene extends Phaser.Scene {
 
   private syncLighting(gameMs: number): void {
     if (!getRenderBudget().postFx) return;
+    // Sleeping shop still renders behind drive/title — skip PostFX when inactive.
+    if (!this.sys.isActive()) return;
     const pipe = this.lighting ?? dayNightFrom(this.cameras.main);
     this.lighting = pipe;
-    const playing = this.sys.isActive();
-    if (playing && Math.abs(gameMs - this.lastLightMs) < 80) return;
+    if (Math.abs(gameMs - this.lastLightMs) < 80) return;
     this.lastLightMs = gameMs;
     applyDayNight(pipe, shopGrade(skyAt(gameMs), ceilingPots()), {
       x: 0,
@@ -356,7 +363,8 @@ export class ShopScene extends Phaser.Scene {
       return;
     }
     const p = strainPos(idx);
-    this.targetCallout.setText(cue.text).setVisible(true);
+    if (this.targetCallout.text !== cue.text) this.targetCallout.setText(cue.text);
+    this.targetCallout.setVisible(true);
     this.targetCallout.setPosition(p.x, p.y - strainSlotH() / 2 - 6);
   }
 
@@ -474,7 +482,11 @@ export class ShopScene extends Phaser.Scene {
     this.showBagCount(this.pickupBag, this.pickupCount, tally.pickup, false);
     this.receiptSlip.setVisible(tally.delivery + tally.pickup > 0);
 
-    drawReceiptRail(this.receiptRail, slips.map((s) => ({ kind: s.kind, urgent: s.urgent })));
+    const railKey = slips.map((s) => `${s.kind}:${s.urgent ? 1 : 0}:${s.line}`).join("|");
+    if (railKey !== this.lastReceiptKey) {
+      this.lastReceiptKey = railKey;
+      drawReceiptRail(this.receiptRail, slips.map((s) => ({ kind: s.kind, urgent: s.urgent })));
+    }
     this.receiptRows.forEach((row, i) => {
       const slip = slips[i];
       row.setVisible(!!slip);
@@ -548,8 +560,17 @@ export class ShopScene extends Phaser.Scene {
   }
 
   private acquireCustomerVisual(orderId: string, look: number): CustomerVisual {
-    const free = this.customerPool.find((v) => v.orderId == null) ?? this.makeCustomerVisual();
-    if (!this.customerPool.includes(free)) this.customerPool.push(free);
+    let free = this.customerPool.find((v) => v.orderId == null);
+    if (!free) {
+      if (this.customerPool.length < CUSTOMER_VISUAL_MAX) {
+        free = this.makeCustomerVisual();
+        this.customerPool.push(free);
+      } else {
+        // All slots busy — recycle the oldest slot rather than grow PRE_RENDER listeners.
+        free = this.customerPool[0]!;
+        if (free.orderId) this.releaseCustomerVisual(free.orderId);
+      }
+    }
     free.orderId = orderId;
     free.sprite.setData("orderId", orderId);
     free.sprite.setTexture(customerTextureKey(look));
