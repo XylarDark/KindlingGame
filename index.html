@@ -150,10 +150,13 @@
         color: #f4e8c1;
         font-family: Inter, system-ui, sans-serif;
         text-align: center;
-        pointer-events: none;
+        /* Catch taps so Title under the gate cannot start mid-warm. */
+        pointer-events: auto;
+        touch-action: none;
       }
       #loading-gate[hidden] {
         display: none;
+        pointer-events: none;
       }
       .loading-gate__card {
         max-width: 360px;

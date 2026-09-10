@@ -14,6 +14,28 @@ const UPDATE_COPY = "Updating…";
 let gateEl: HTMLElement | null = null;
 let titleEl: HTMLElement | null = null;
 let stageEl: HTMLElement | null = null;
+let inputBlocked = false;
+
+function swallowPointer(event: Event): void {
+  event.preventDefault();
+  event.stopPropagation();
+}
+
+function bindInputBlock(el: HTMLElement): void {
+  if (inputBlocked) return;
+  inputBlocked = true;
+  el.addEventListener("pointerdown", swallowPointer, { capture: true });
+  el.addEventListener("touchstart", swallowPointer, { capture: true, passive: false });
+  el.addEventListener("click", swallowPointer, { capture: true });
+}
+
+function unbindInputBlock(el: HTMLElement): void {
+  if (!inputBlocked) return;
+  inputBlocked = false;
+  el.removeEventListener("pointerdown", swallowPointer, { capture: true } as AddEventListenerOptions);
+  el.removeEventListener("touchstart", swallowPointer, { capture: true } as AddEventListenerOptions);
+  el.removeEventListener("click", swallowPointer, { capture: true } as AddEventListenerOptions);
+}
 
 function ensureGate(): HTMLElement | null {
   if (typeof document === "undefined") return null;
@@ -56,6 +78,7 @@ export function showLoading(opts: ShowLoadingOpts = {}): void {
   el.setAttribute("aria-busy", "true");
   el.setAttribute("aria-hidden", "false");
   el.dataset.mode = mode;
+  bindInputBlock(el);
 }
 
 export function hideLoading(): void {
@@ -65,6 +88,7 @@ export function hideLoading(): void {
   el.setAttribute("aria-busy", "false");
   el.setAttribute("aria-hidden", "true");
   delete el.dataset.mode;
+  unbindInputBlock(el);
 }
 
 export function isLoadingVisible(): boolean {

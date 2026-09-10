@@ -9,20 +9,46 @@ const read = (rel: string): string => readFileSync(join(root, rel), "utf8").repl
 describe("loading gate wiring", () => {
   it("BootScene shows and hides the loading gate around warm-up", () => {
     const src = read("src/scenes/BootScene.ts");
-    expect(src).toContain('showLoading({ mode: "boot"');
+    expect(src).toContain("showBootStage");
     expect(src).toContain("hideLoading()");
     expect(src).toContain("flushTextures");
     expect(src).toContain("warmAndSleepScene");
     expect(src).toContain("WARM_BOOT_TIMEOUT_MS");
   });
 
+  it("BootScene aborts warm on wall clock and never re-shows after abort", () => {
+    const src = read("src/scenes/BootScene.ts");
+    expect(src).toContain("warmAborted");
+    expect(src).toContain("globalThis.setTimeout");
+    expect(src).toContain("if (this.warmAborted) return");
+    expect(src).toContain("showBootStage");
+    // Overall cap must not rely only on Phaser game-time delayedCall.
+    const bootReady = src.slice(src.indexOf("private async bootReady"));
+    const raceBlock = bootReady.slice(0, bootReady.indexOf("private async runBootWarm"));
+    expect(raceBlock).not.toContain("this.time.delayedCall(WARM_BOOT_TIMEOUT_MS");
+    expect(raceBlock).toContain("globalThis.setTimeout");
+  });
+
   it("BootScene pre-warms drive and door under the loading gate then sleeps them", () => {
     const src = read("src/scenes/BootScene.ts");
-    expect(src).toContain('showLoading({ mode: "boot", stage: "Map" })');
-    expect(src).toContain('showLoading({ mode: "boot", stage: "Door" })');
+    expect(src).toContain('this.showBootStage("Map")');
+    expect(src).toContain('this.showBootStage("Door")');
     expect(src).toContain('warmAndSleepScene("drive")');
     expect(src).toContain('warmAndSleepScene("door")');
     expect(src).toContain("this.scene.sleep(key)");
+    expect(src).toContain("WARM_SCENE_TIMEOUT_MS");
+  });
+
+  it("loading gate captures pointers while visible", () => {
+    const html = read("index.html");
+    const gateCss = html.slice(html.indexOf("#loading-gate {"), html.indexOf("#loading-gate[hidden]"));
+    expect(gateCss).toContain("pointer-events: auto");
+    expect(gateCss).toContain("touch-action: none");
+    expect(gateCss).not.toContain("pointer-events: none");
+    const src = read("src/ui/loadingGate.ts");
+    expect(src).toContain("bindInputBlock");
+    expect(src).toContain("swallowPointer");
+    expect(src).toContain("preventDefault");
   });
 
   it("ShopScene pre-allocates a customer visual pool instead of mid-walk create", () => {

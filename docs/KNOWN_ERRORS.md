@@ -342,6 +342,14 @@ the thing it described.
 - **Fix:** under `#loading-gate`, flush textures for a full frame; launch shop/hud; warm DayNight; `launch` drive then door, render ≥2 frames each, then `sleep` so Hud prefers wake. Shop pre-allocates a customer visual pool. Door dirty-guards `houseLabel` setText/fitTypeToWidth.
 - **Prevention:** never first-create drive/door mid-shift; warm must **draw** PostFX/scenes under the loading gate. Pool walk-in display objects at shop create. Do not treat “Loading…” idle wait as a hitch fix without real warm draws.
 
+### Loading gate click-through and orphan Door stall on installed mobile
+
+- **Date:** 2026-09-10
+- **Symptom:** taps reached Title under “Loading Kindling…”; on installed phones the gate stuck on the Door stage and never cleared.
+- **Cause:** `#loading-gate` used `pointer-events: none`. Boot `Promise.race`d warm against Phaser `delayedCall` (game-time), which barely advances during sync Drive create; when the race “won,” `hideLoading` + Title ran while orphaned `runBootWarm` kept going and called `showLoading(Door)` again with no second hide.
+- **Fix:** gate uses `pointer-events: auto` + swallow pointer/touch/click while visible. Warm abort is wall-clock `setTimeout` + `warmAborted` flag; `showBootStage` no-ops after abort; per-scene warm capped; `waitFrames` falls back to wall `setTimeout`.
+- **Prevention:** never gate a loading overlay with `pointer-events: none`. Never `Promise.race` a continuing async warm that can `showLoading` after the race loser path already hid the gate — abort flag before every show.
+
 ---
 
 ## Related
