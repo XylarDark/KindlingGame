@@ -6,18 +6,23 @@ import { describe, expect, it } from "vitest";
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (rel: string): string => readFileSync(join(here, rel), "utf8").replace(/\r\n/g, "\n");
 
-describe("HudScene smoothed sim tick", () => {
-  it("ticks the sim from Phaser's smoothed scene delta, not rawDelta", () => {
+describe("HudScene fixed-step wall-clock sim tick", () => {
+  it("advances sim through kindlingClock with rawDelta in fixedRaw mode", () => {
     const src = read("HudScene.ts");
-    expect(src).toMatch(/sim\.tick\(Math\.min\(Math\.max\(0, delta\), MAX_SIM_STEP_MS\)\)/);
-    expect(src).not.toContain("this.game.loop.rawDelta");
+    expect(src).toContain("advanceSimClock");
+    expect(src).toContain("this.game.loop.rawDelta");
+    expect(src).toContain("getClockMode()");
+    expect(src).not.toMatch(/sim\.tick\(Math\.min\(Math\.max\(0, delta\), MAX_SIM_STEP_MS\)\)/);
   });
 
-  it("enables Phaser fps.smoothStep for hitch-frame easing", () => {
+  it("defaults fixedRaw with smoothStep off; smooth fallback via clock mode", () => {
     const config = read("../config.ts");
-    expect(config).toContain("smoothStep: true");
+    expect(config).toContain("smoothStep: false");
     const main = read("../main.ts");
-    expect(main).toContain("smoothStep: true");
+    expect(main).toContain("wantsSmoothStep(clockMode)");
+    expect(main).toContain("resolveClockMode()");
+    const clock = read("../sim/kindlingClock.ts");
+    expect(clock).toContain('return "fixedRaw"');
   });
 
   it("limits coarse phones to ~30fps target for sustained smoothness", () => {
@@ -28,6 +33,11 @@ describe("HudScene smoothed sim tick", () => {
     expect(config).toContain("autoMobilePipeline: true");
     expect(config).toContain("pixelArt: true");
     expect(config).toContain("antialias: false");
+  });
+
+  it("exposes feel meter hook from Hud update", () => {
+    const src = read("HudScene.ts");
+    expect(src).toContain("updateFeelMeter");
   });
 });
 

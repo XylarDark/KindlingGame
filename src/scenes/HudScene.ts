@@ -29,7 +29,10 @@ import { END_SHIFT_CAPTION, END_SHIFT_LABEL, RESULTS_NEW_DAY, RESULTS_TITLE } fr
 import { addSignText, setSignAccent } from "../ui/signText";
 import { addUiText } from "../ui/text";
 import { settingsGeom, type SettingsGeom } from "../ui/settingsGeom";
+import { ackTap, releaseTapAck } from "../input/tapAck";
+import { advanceSimClock, getClockMode } from "../sim/kindlingClock";
 import { syncSceneRenderCamera, tickRenderBudget } from "../ui/renderBudget";
+import { updateFeelMeter } from "../ui/feelMeter";
 import {
   Color,
   HUD_TYPE_FIT,
@@ -412,6 +415,8 @@ export class HudScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true });
     this.phoneHit.on("pointerdown", (p: Phaser.Input.Pointer) => {
       p.event.stopPropagation();
+      ackTap(this.phoneBody);
+      playUiSfx(this.game, "ticket");
       getSim().pressDropoffConfirm();
     });
     this.phoneHit.on("pointerup", () => getSim().releaseDropoffConfirm());
@@ -540,6 +545,8 @@ export class HudScene extends Phaser.Scene {
     enableItemHit(this.idBg);
     this.idBg.on("pointerdown", (p: Phaser.Input.Pointer) => {
       p.event.stopPropagation();
+      ackTap(this.idBg);
+      playUiSfx(this.game, "ticket");
       getSim().pressDropoffConfirm();
     });
     this.idBg.on("pointerup", () => getSim().releaseDropoffConfirm());
@@ -743,10 +750,16 @@ export class HudScene extends Phaser.Scene {
     } else {
       sim.setPlayerInput(0, 0);
     }
-    // Product: smoothed delta (fps.smoothStep) — hitch frames ease instead of stalling.
-    sim.tick(Math.min(Math.max(0, delta), MAX_SIM_STEP_MS));
+    const rawDelta = this.game.loop.rawDelta;
+    const frameMs = getClockMode() === "fixedRaw" ? rawDelta : delta;
+    advanceSimClock({
+      frameMs,
+      tick: (dt) => sim.tick(Math.min(Math.max(0, dt), MAX_SIM_STEP_MS)),
+      snapshot: () => sim.snapshot(),
+    });
     const snap = sim.snapshot();
     tickRenderBudget(this.game.loop.actualFps, performance.now());
+    updateFeelMeter(this.game, rawDelta);
     // Title / shift-ended only — calling every frame was a pointless hop (diag #11).
     if (snap.shiftEnded !== this.pwaIdleShiftEnded) {
       this.pwaIdleShiftEnded = snap.shiftEnded;
@@ -1842,11 +1855,18 @@ export class HudScene extends Phaser.Scene {
   private onPointerDown(p: Phaser.Input.Pointer): void {
     if (!this.padRing.visible) return;
     const d = Phaser.Math.Distance.Between(p.x, p.y, this.padCenter.x, this.padCenter.y);
-    if (d <= HUD_TOUCH_MIN_DESIGN) this.pointerId = p.id;
+    if (d <= HUD_TOUCH_MIN_DESIGN) {
+      this.pointerId = p.id;
+      ackTap(this.padKnob);
+      playUiSfx(this.game, "ticket");
+    }
   }
 
   private onPointerUp(p: Phaser.Input.Pointer): void {
-    if (this.pointerId === p.id) this.pointerId = null;
+    if (this.pointerId === p.id) {
+      this.pointerId = null;
+      releaseTapAck(this.padKnob, 1, 1);
+    }
   }
 }
 

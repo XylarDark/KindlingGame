@@ -61,6 +61,8 @@ let lastDemotionAt = 0;
 let autoEnabled = true;
 /** Phones: tier seeded at boot (mid) — no mid-session resize (scale.resize refits all typekit). */
 let sessionTierLocked = false;
+/** Dev meter: count mid-session scale.resize calls (should stay 0 on coarse). */
+let resizeCount = 0;
 let listeners: Array<(b: RenderBudget) => void> = [];
 
 export function resetRenderBudgetForTests(): void {
@@ -71,7 +73,12 @@ export function resetRenderBudgetForTests(): void {
   lastDemotionAt = 0;
   autoEnabled = true;
   sessionTierLocked = false;
+  resizeCount = 0;
   listeners = [];
+}
+
+export function getRenderResizeCount(): number {
+  return resizeCount;
 }
 
 export function isSessionTierLocked(): boolean {
@@ -190,6 +197,7 @@ export function applyRenderScale(game: Phaser.Game, scale: number): void {
     const w = Math.max(320, Math.round(GAME_WIDTH * scale));
     const h = Math.max(180, Math.round(GAME_HEIGHT * scale));
     game.scale.resize(w, h);
+    resizeCount += 1;
   }
   for (const scene of game.scene.getScenes(false)) {
     syncSceneRenderCamera(scene, scale);

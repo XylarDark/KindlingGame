@@ -5,15 +5,18 @@ import { bootKindlingPwa } from "./pwaUpdate";
 import { applyCanvasDisplayScale, installMobileShell } from "./shell";
 import { installInstallCoach } from "./ui/installCoach";
 import { showLoading } from "./ui/loadingGate";
+import { getClockMode, getClockStats, resolveClockMode, setClockMode, wantsSmoothStep } from "./sim/kindlingClock";
 import {
   applyRenderBudgetToGame,
   forceRenderBudget,
   getRenderBudget,
+  getRenderResizeCount,
   initRenderBudget,
   onRenderBudgetChange,
   setRenderBudgetAuto,
   tickRenderBudget,
 } from "./ui/renderBudget";
+import { feelMeterEnabled } from "./ui/feelMeter";
 import "@fontsource/inter/latin-400.css";
 import "@fontsource/inter/latin-600.css";
 import "@fontsource/inter/latin-700.css";
@@ -42,13 +45,14 @@ function startGame(): void {
   // PWA cold open: shell rails layout before BootScene.create — show gate immediately.
   showLoading({ mode: "boot", stage: "Starting" });
   const coarse = globalThis.matchMedia?.("(pointer: coarse)")?.matches ?? false;
+  const clockMode = resolveClockMode();
   initRenderBudget(coarse);
   // Prefer sustained smoothness on phones over chasing 60Hz fill-rate.
   const config: Phaser.Types.Core.GameConfig = {
     ...gameConfig,
     fps: {
       ...(typeof gameConfig.fps === "object" && gameConfig.fps ? gameConfig.fps : {}),
-      smoothStep: true,
+      smoothStep: wantsSmoothStep(clockMode),
       target: coarse ? 30 : 60,
       limit: coarse ? 30 : 0,
     },
@@ -59,28 +63,40 @@ function startGame(): void {
   onRenderBudgetChange(() => applyBudget(game));
   game.events.once(Phaser.Core.Events.READY, () => applyBudget(game));
   // Dev-only handle for the typography/layout QA harness (see docs/qa-typography.md).
-  if (import.meta.env.DEV) {
-    const handle = globalThis as unknown as {
-      kindlingGame?: Phaser.Game;
-      kindlingRenderBudget?: {
-        get: typeof getRenderBudget;
-        apply: () => void;
-        tick: typeof tickRenderBudget;
-        init: typeof initRenderBudget;
-        force: typeof forceRenderBudget;
-        setAuto: typeof setRenderBudgetAuto;
-      };
+  const handle = globalThis as unknown as {
+    kindlingGame?: Phaser.Game;
+    kindlingRenderBudget?: {
+      get: typeof getRenderBudget;
+      apply: () => void;
+      tick: typeof tickRenderBudget;
+      init: typeof initRenderBudget;
+      force: typeof forceRenderBudget;
+      setAuto: typeof setRenderBudgetAuto;
+      resizeCount: typeof getRenderResizeCount;
     };
-    handle.kindlingGame = game;
-    handle.kindlingRenderBudget = {
-      get: getRenderBudget,
-      apply: () => applyBudget(game),
-      tick: tickRenderBudget,
-      init: initRenderBudget,
-      force: forceRenderBudget,
-      setAuto: setRenderBudgetAuto,
+    kindlingClock?: {
+      mode: typeof getClockMode;
+      stats: typeof getClockStats;
+      setMode: typeof setClockMode;
+      meter: boolean;
     };
-  }
+  };
+  handle.kindlingGame = game;
+  handle.kindlingRenderBudget = {
+    get: getRenderBudget,
+    apply: () => applyBudget(game),
+    tick: tickRenderBudget,
+    init: initRenderBudget,
+    force: forceRenderBudget,
+    setAuto: setRenderBudgetAuto,
+    resizeCount: getRenderResizeCount,
+  };
+  handle.kindlingClock = {
+    mode: getClockMode,
+    stats: getClockStats,
+    setMode: setClockMode,
+    meter: feelMeterEnabled(),
+  };
 }
 
 // Phaser first — never blank the page waiting on a service-worker activate/reload.
