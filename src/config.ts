@@ -38,5 +38,10 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   input: {
     activePointers: 3,
   },
+  // Keep Phaser's own step on wall time too — smoothStep caps delta when !inFocus /
+  // after blur, which soft-throttles tweens alongside the sim (Hud uses rawDelta).
+  fps: {
+    smoothStep: false,
+  },
   scene: [BootScene, ShopScene, DriveScene, DoorScene, HudScene, TitleScene],
 };

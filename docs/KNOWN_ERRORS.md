@@ -96,6 +96,14 @@ the thing it described.
 - **Fix:** start Phaser immediately; register the SW in the background; never activate/reload on boot or resume.
 - **Prevention:** do not gate `startGame` on service-worker outcomes. Source-guard that `startGame()` precedes `void bootKindlingPwa()` and that `pwaUpdate` has no `activateWaiting` / `location.reload`.
 
+### Phaser smoothed delta put the whole sim in slow motion on phones
+
+- **Date:** 2026-09-09
+- **Symptom:** clock, walkers, and van all felt slower than real time on phone Chrome — one game minute took longer than one real second, and motion matched.
+- **Cause:** `HudScene` fed Phaser's smoothed `delta` into `GameSim.tick`. With `fps.smoothStep` (default true), `TimeStep.smoothDelta` caps each step to ~16.7 ms whenever `!inFocus` or during post-blur `_coolDown`. Low-FPS phone frames still take ~40–50 ms wall time, so the sim advanced only a fraction of real time.
+- **Fix:** tick from `game.loop.rawDelta` (capped at 1000 ms — tight caps like 100 ms re-slow low-FPS phones) and set `fps.smoothStep: false` in the game config.
+- **Prevention:** never drive the sim from smoothed scene `delta`; source-guard `rawDelta` in HudScene.
+
 ### Shrink-to-fit plus a CSS floor drew glyphs outside the box
 
 - **Date:** 2026-09-09

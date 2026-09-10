@@ -45,6 +45,12 @@ import { designHudInset, HUD_TOUCH_MIN_DESIGN, readCssSafeArea, VIEWFIT_EVENT } 
 /** Readouts sit either side of the counter sign, 10% over the display ramp. */
 const HUD_READOUT_PX = 40;
 /**
+ * Cap one sim step so a long background pause does not jump the shift clock.
+ * Must stay ≥ ~1s: capture/phone Chrome often runs well under 15 fps, and a tighter
+ * cap (e.g. 100ms) re-introduces slow-motion whenever rawDelta exceeds the cap.
+ */
+const MAX_SIM_STEP_MS = 1_000;
+/**
  * The score carries a further 10%: it is the number the player is playing for. Exported
  * because the shop tablet's ORDERS label is specified as "the same size as the score",
  * and a copy of the number over there would be a copy that drifts.
@@ -701,7 +707,7 @@ export class HudScene extends Phaser.Scene {
     drawSignature(this.idSignature, card.name, photoX + 12, sigTop + 26, ID_PHOTO_W - 24);
   }
 
-  update(_time: number, delta: number): void {
+  update(_time: number, _delta: number): void {
     const sim = getSim();
     const snap = sim.snapshot();
     if (!snap.autoDriving) {
@@ -710,7 +716,10 @@ export class HudScene extends Phaser.Scene {
     } else {
       sim.setPlayerInput(0, 0);
     }
-    sim.tick(delta);
+    // Phaser's smoothed `delta` caps to ~16.7ms when !inFocus / post-blur cooldown —
+    // on a low-FPS phone that puts the whole sim in slow motion. rawDelta is wall time.
+    const raw = this.game.loop.rawDelta;
+    sim.tick(Math.min(Math.max(0, raw), MAX_SIM_STEP_MS));
     this.paintHud(sim.snapshot());
   }
 

@@ -130,6 +130,10 @@ describe("GameSim order loops", () => {
     sim.tick(PICKUP_ARRIVE_MS);
     expect(sim.orderById(order.id)?.status).toBe("readyForHandoff");
     sim.tick(4000);
+    const atCounter = sim.snapshot().customers.find((c) => c.orderId === order.id);
+    expect(atCounter?.bubble).toBe("Tap me — pickup");
+    // Arrival must not stack a near-identical feedback chip under the bubble.
+    expect(atCounter?.feedback ?? "").toBe("");
     sim.shopClick({ type: "customer", orderId: order.id });
     expect(sim.orderById(order.id)?.status).toBe("completed");
     expect(sim.score).toBe(SCORE_PICKUP);
@@ -861,15 +865,13 @@ describe("GameSim order loops", () => {
     expect(types).toHaveLength(4);
   });
 
-  it("paces the tablet at ~45% of its original rate (¾, −15%, then −30%)", () => {
-    // Was a flat "caps waves at 58 seconds". The cap moved when arrivals were slowed, so
-    // the claim is now the thing that actually matters: the gap, and therefore the rate.
-    expect(TICKET_WAVE_MIN_MS).toBe(22_409);
-    expect(TICKET_WAVE_MAX_MS).toBe(129_972);
+  it("paces the tablet at three quarters of its original rate", () => {
+    // Was a flat "caps waves at 58 seconds". The claim that matters is the gap (and rate).
+    expect(TICKET_WAVE_MIN_MS).toBe(13_333);
+    expect(TICKET_WAVE_MAX_MS).toBe(77_333);
     const meanGap = (TICKET_WAVE_MIN_MS + TICKET_WAVE_MAX_MS) / 2;
-    expect(meanGap / ((10_000 + 58_000) / 2)).toBeCloseTo(1 / (0.75 * 0.85 * 0.7), 3);
-    // Waves stayed 1–2 tickets; only the gap between them grew.
-    expect(TICKET_WAVE_GAP_SCALE).toBeCloseTo((4 / 3) / 0.85 / 0.7, 6);
+    expect(meanGap / ((10_000 + 58_000) / 2)).toBeCloseTo(4 / 3, 3);
+    expect(TICKET_WAVE_GAP_SCALE).toBeCloseTo(4 / 3, 6);
   });
 
   it("calls out strain and customer after the tablet is tapped", () => {
@@ -1271,10 +1273,10 @@ describe("recurring walk-in traffic", () => {
   it("keeps the door swinging all shift, not just at open", () => {
     const sim = GameSim.create({ seed: 3 });
     const log = watchDoor(sim);
-    // ~12–20 walk-ins at the slowed 40–101s beat. The band is wide enough for any seed but far
+    // ~14–28 walk-ins at the original 24–60s beat. The band is wide enough for any seed but far
     // above the single scripted walk-in that used to be the whole day's foot traffic.
-    expect(log.ids.length).toBeGreaterThanOrEqual(10);
-    expect(log.ids.length).toBeLessThanOrEqual(28);
+    expect(log.ids.length).toBeGreaterThanOrEqual(12);
+    expect(log.ids.length).toBeLessThanOrEqual(32);
     // Spread across the shift, not bunched into the opening.
     expect(log.spawnedAt[log.spawnedAt.length - 1]).toBeGreaterThan(SHIFT_MS * 0.8);
   });

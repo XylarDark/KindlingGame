@@ -41,8 +41,8 @@ function pxConstant(name: string): number {
 
 describe("doorstep tap target flash", () => {
   it("throbs on a period a person can see, not a strobe", () => {
-    // gameMs advances 1:1 with real milliseconds (GameSim.tick feeds Phaser's frame
-    // delta straight into GameClock), so sin(gameMs / RATE) has a real period of
+    // gameMs advances 1:1 with real milliseconds (HudScene ticks rawDelta into GameSim),
+    // so sin(gameMs / RATE) has a real period of
     // 2*PI*RATE ms. Shrinking the rate is the one edit that would turn this into a
     // flicker while still looking like a working flash in the source.
     const periodMs = 2 * Math.PI * constant("DOOR_FLASH_RATE");
@@ -99,6 +99,17 @@ describe("doorstep tap target flash", () => {
 describe("doorstep prompt", () => {
   it("seeds the prompt with the shared +25% message bump over 25px", () => {
     expect(pxConstant("doorPromptPx")).toBeCloseTo(31.25, 5);
+  });
+
+  it("seeds the house title 50% above the prior 33.75px base (then MSG_SCALE)", () => {
+    expect(pxConstant("doorTitlePx")).toBeCloseTo(50.625 * 1.25, 5);
+    const box = between(src, "this.houseLabel = addSignText(", ".setOrigin(0.5)", "house title box");
+    expect(box).toContain("maxHeight: scaleMsgBox(108)");
+    expect(box).toContain("maxWidth: scaleMsgBox(1200)");
+  });
+
+  it("lifts the prompt farther above the customer head", () => {
+    expect(constant("DOOR_CHIP_GAP")).toBe(36);
   });
 
   it("grows the prompt's box with its font, because clamp-fit will drop a tight box", () => {

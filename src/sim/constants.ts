@@ -38,27 +38,24 @@ export const TABLET_QUEUE_MAX = 6;
 const TICKET_WAVE_BASE_MIN_MS = 10_000;
 const TICKET_WAVE_BASE_MAX_MS = 58_000;
 /**
- * Tablet work arrives slower than the original 10–58s beat. Passes: three quarters of
- * that rate (gap ×4/3), then another 15% slower (rate ×0.85 → gaps /0.85), then another
- * 30% slower (rate ×0.7 → gaps /0.7). Overall rate is 0.75×0.85×0.7 of the original.
- * Stretching the gap rather than thinning the waves keeps a wave worth 1–2 jobs — there
- * is simply more room between them. Waves land every ~22.4–130.0s, averaging one every
- * ~76.2s: about 1.2 tickets a minute.
+ * Tablet work arrives a bit slower than the original 10–58s beat: three quarters of
+ * that rate (gap ×4/3). Stretching the gap rather than thinning the waves keeps a wave
+ * worth 1–2 jobs — there is simply more room between them. Waves land every ~13.3–77.3s,
+ * averaging one every ~45.3s: about 1.3 tickets a minute.
  */
-export const TICKET_WAVE_GAP_SCALE = (4 / 3) / 0.85 / 0.7;
+export const TICKET_WAVE_GAP_SCALE = 4 / 3;
 export const TICKET_WAVE_MIN_MS = Math.round(TICKET_WAVE_BASE_MIN_MS * TICKET_WAVE_GAP_SCALE);
 export const TICKET_WAVE_MAX_MS = Math.round(TICKET_WAVE_BASE_MAX_MS * TICKET_WAVE_GAP_SCALE);
 /** The opening beat is scripted onboarding, not steady-state pacing — left at its old pace. */
 export const FIRST_TICKET_WAVE_MS = 2_000;
 /**
- * Foot traffic through the front door, slowed in lockstep with the tablet so the walk-in
- * / pickup / delivery mix stays put. Never two walk-ins at once — a walk-in is the only
- * order with a person on the floor who leaves angry.
+ * Foot traffic through the front door. Never two walk-ins at once — a walk-in is the only
+ * order with a person on the floor who leaves angry. Kept at the original 24–60s beat so
+ * the floor stays lively while tablet waves alone take the “longer between orders” pass.
  */
 const WALKIN_GAP_BASE_MIN_MS = 24_000;
 const WALKIN_GAP_BASE_MAX_MS = 60_000;
-/** Same cumulative slowdown as {@link TICKET_WAVE_GAP_SCALE}'s latest pass (−15% then −30%). */
-export const WALKIN_GAP_SCALE = 1 / 0.85 / 0.7;
+export const WALKIN_GAP_SCALE = 1;
 export const WALKIN_GAP_MIN_MS = Math.round(WALKIN_GAP_BASE_MIN_MS * WALKIN_GAP_SCALE);
 export const WALKIN_GAP_MAX_MS = Math.round(WALKIN_GAP_BASE_MAX_MS * WALKIN_GAP_SCALE);
 /** The first unscripted walk-in waits out the opening beats and the first ticket wave. */

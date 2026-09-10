@@ -23,14 +23,14 @@ const PERSON_HIT_PAD = 80; // ~10% over prior 72 for mobile taps
 const BAG_HIT_PAD = 88; // ~10% over prior 80 for mobile taps
 
 /**
- * Doorstep message chips: prior sizes (prompt 25px / title 33.75px) then the shared
- * {@link scaleMsgPx} bump. Lazy so create() sees the shell contain scale.
+ * Doorstep message chips: prompt 25px / title 50.625px (50% over the prior 33.75)
+ * then the shared {@link scaleMsgPx} bump. Lazy so create() sees the shell contain scale.
  * `maxHeight` must move with the seed — clamp-fit will otherwise drop below it.
  */
 const doorPromptPx = (): string => scaleMsgPx(25);
-const doorTitlePx = (): string => scaleMsgPx(33.75);
+const doorTitlePx = (): string => scaleMsgPx(50.625);
 /** Gap between a sprite's edge and the chip anchored off it. */
-const DOOR_CHIP_GAP = 20;
+const DOOR_CHIP_GAP = 36;
 /** Keep a wide chip on screen when the sprite it hangs off is near an edge. */
 const DOOR_CHIP_MARGIN = 24;
 
@@ -86,8 +86,8 @@ export class DoorScene extends Phaser.Scene {
       padding: scaleMsgPad({ x: 20, y: 10 }),
       fontStyle: "700",
       ...MSG_TYPE_FIT,
-      maxWidth: scaleMsgBox(900),
-      maxHeight: scaleMsgBox(72),
+      maxWidth: scaleMsgBox(1200),
+      maxHeight: scaleMsgBox(108),
     })
       .setOrigin(0.5)
       .setDepth(4);
@@ -196,7 +196,7 @@ export class DoorScene extends Phaser.Scene {
     // The clock in this title is the urgent part, and it stays ink on white like every
     // other box; the frame is what reddens when the SLA is running out.
     setSignAccent(this.houseLabel, destOrder && isSlaUrgent(destOrder.slaRemainingMs) ? Color.danger : undefined);
-    fitTypeToWidth(this.houseLabel, 900);
+    fitTypeToWidth(this.houseLabel, 1200);
 
     const flash = doorFlashPhase(snap.gameMs);
     const pulse = 0.7 + 0.3 * flash;

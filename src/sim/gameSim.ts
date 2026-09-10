@@ -1306,7 +1306,7 @@ export class GameSim {
           order.arriveAtGameMs === undefined
         ) {
           order.arriveAtGameMs = this.clock.gameMs;
-          this.setCustomerFeedback(order.id, "Tap me — pickup ready.");
+          this.clearCustomerFeedback(order.id);
           if (this.playerRole === "keyLead") {
             this.setOrdersNotice(`${order.customerName} is at the counter for pickup.`);
           } else {
