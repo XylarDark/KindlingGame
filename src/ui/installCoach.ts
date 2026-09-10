@@ -1,9 +1,14 @@
 import { isStandaloneDisplay } from "../shell";
 
-/** localStorage key — dismiss timestamp (ms); legacy value "1" counts as dismissed now. */
+/** sessionStorage key — dismiss for this tab/session only ("Not now"). */
 export const INSTALL_COACH_DISMISSED_KEY = "kindling.installCoachDismissed";
 
-/** Auto-show again this long after dismiss if still not installed. */
+/**
+ * Within-session TTL for a dismiss timestamp. Cross-visit bans are impossible
+ * because dismiss lives in sessionStorage (cleared when the tab closes).
+ * Legacy localStorage values are cleared on boot — see
+ * {@link clearLegacyInstallCoachLocalDismiss}.
+ */
 export const INSTALL_COACH_DISMISS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export type InstallPlatform = "ios" | "android" | "other";
@@ -53,13 +58,16 @@ export function detectInstallPlatform(
 /**
  * Phones that should see the install coach. Prefer pointer media queries, then
  * touch points, then UA — some Android Chrome builds report a fine primary pointer.
+ * Callers may also treat a deferred install prompt (`canPrompt`) as audience.
  */
 export function isInstallCoachAudience(opts: {
   coarsePointer?: boolean;
   anyCoarsePointer?: boolean;
   maxTouchPoints?: number;
   platform?: InstallPlatform;
+  canPrompt?: boolean;
 } = {}): boolean {
+  if (opts.canPrompt) return true;
   if (opts.coarsePointer) return true;
   if (opts.anyCoarsePointer) return true;
   if ((opts.maxTouchPoints ?? 0) > 1) return true;
@@ -68,11 +76,11 @@ export function isInstallCoachAudience(opts: {
 }
 
 /**
- * True while dismiss is still within the TTL. Legacy `"1"` (pre-timestamp) is
- * treated as expired so phone users see the coach again after this change.
+ * True while dismiss is still within the TTL (sessionStorage by default).
+ * Legacy `"1"` (pre-timestamp) is treated as expired so older builds recover.
  */
 export function isInstallCoachDismissed(
-  storage: StorageLike = defaultStorage(),
+  storage: StorageLike = defaultSessionStorage(),
   nowMs = Date.now(),
 ): boolean {
   try {
@@ -90,7 +98,10 @@ export function isInstallCoachDismissed(
   }
 }
 
-export function dismissInstallCoach(storage: StorageLike = defaultStorage(), nowMs = Date.now()): void {
+export function dismissInstallCoach(
+  storage: StorageLike = defaultSessionStorage(),
+  nowMs = Date.now(),
+): void {
   try {
     storage?.setItem(INSTALL_COACH_DISMISSED_KEY, String(nowMs));
   } catch {
@@ -98,9 +109,23 @@ export function dismissInstallCoach(storage: StorageLike = defaultStorage(), now
   }
 }
 
-export function clearInstallCoachDismissed(storage: StorageLike = defaultStorage()): void {
+export function clearInstallCoachDismissed(storage: StorageLike = defaultSessionStorage()): void {
   try {
     storage?.removeItem(INSTALL_COACH_DISMISSED_KEY);
+  } catch {
+    /* quota / private mode */
+  }
+}
+
+/**
+ * Remove the old localStorage dismiss key so a prior 7-day ban cannot suppress
+ * the coach after PWA uninstall (same origin keeps localStorage).
+ */
+export function clearLegacyInstallCoachLocalDismiss(
+  local: StorageLike = defaultLocalStorage(),
+): void {
+  try {
+    local?.removeItem(INSTALL_COACH_DISMISSED_KEY);
   } catch {
     /* quota / private mode */
   }
@@ -169,7 +194,15 @@ export function getDeferredInstallPrompt(): BeforeInstallPromptLike | null {
   return deferredPrompt;
 }
 
-function defaultStorage(): StorageLike {
+function defaultSessionStorage(): StorageLike {
+  try {
+    return globalThis.sessionStorage ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function defaultLocalStorage(): StorageLike {
   try {
     return globalThis.localStorage ?? null;
   } catch {
@@ -239,9 +272,11 @@ async function runPrimaryAction(): Promise<void> {
  * Wire DOM + beforeinstallprompt once. Safe to call repeatedly.
  * Does not auto-present — TitleScene / Settings call {@link presentInstallCoach}.
  * When BIP arrives later, force-present so Install is not lost after an early dismiss.
+ * Clears legacy localStorage dismiss so uninstall → revisit can show the coach again.
  */
 export function installInstallCoach(): void {
   if (typeof document === "undefined") return;
+  clearLegacyInstallCoachLocalDismiss();
   if (installed) return;
   installed = true;
   ensureCoachDom();
@@ -278,11 +313,13 @@ export function presentInstallCoach(opts: InstallCoachShowOpts = {}): boolean {
   const dismissed = opts.dismissed ?? isInstallCoachDismissed();
   const coarsePointer = opts.coarsePointer ?? readCoarse();
   const platform = opts.platform ?? detectInstallPlatform();
+  const canPrompt = opts.canPrompt ?? deferredPrompt !== null;
   const audience = isInstallCoachAudience({
     coarsePointer,
     anyCoarsePointer: readAnyCoarse(),
     maxTouchPoints: typeof navigator !== "undefined" ? navigator.maxTouchPoints : 0,
     platform,
+    canPrompt,
   });
   const show = shouldShowInstallCoach({
     standalone,
@@ -298,7 +335,6 @@ export function presentInstallCoach(opts: InstallCoachShowOpts = {}): boolean {
     return false;
   }
 
-  const canPrompt = opts.canPrompt ?? deferredPrompt !== null;
   const copy = installCoachCopy({ platform, canPrompt });
   el.querySelector("[data-coach-title]")!.textContent = copy.title;
   el.querySelector("[data-coach-body]")!.textContent = copy.body;
