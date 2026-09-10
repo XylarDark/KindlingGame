@@ -3,7 +3,7 @@ import { cityTileImageKey } from "../art/cityTileAtlas";
 import { applyPersonTexture, personImageKey } from "../art/peopleAtlas";
 import { driveGrade } from "../art/dayNightGrade";
 import { applyDayNight, attachDayNight, dayNightFrom, shouldApplyGrade, type DayNightPipeline } from "../art/dayNightPipeline";
-import { getRenderBudget, phoneFxQuality, syncSceneRenderCamera, trafficVisualMax } from "../ui/renderBudget";
+import { getRenderBudget, syncSceneRenderCamera } from "../ui/renderBudget";
 import {
   CITY,
   MAP_PX_H,
@@ -44,6 +44,7 @@ const DRIVE_FOCUS_GRID = 64;
 const CITY_BAKE_CELL = 2048;
 /** Extra world px around the camera before hiding traffic sprites (Phaser also culls). */
 const TRAFFIC_CULL_PAD = 192;
+const TRAFFIC_SPRITE_CAP = 12;
 
 /**
  * The road's share of the "what to do next" family, 25% over the shared ramp.
@@ -76,7 +77,6 @@ export class DriveScene extends Phaser.Scene {
   private lastGradeMs = -1e9;
   private lastPinWho = "";
   private lastLotGlowKey = "";
-  private lastLotFxQuality = phoneFxQuality();
   private lastVanToast = "";
   private lastShopCaptionKey = "";
   private onPreRenderDayNight = (): void => this.paintDayNight(getSim().snapshot());
@@ -194,8 +194,7 @@ export class DriveScene extends Phaser.Scene {
     });
     const turnT = 1 - Math.exp(-(this.game.loop.rawDelta / 1000) * 6);
     const seen = new Set<string>();
-    const trafficCap = trafficVisualMax();
-    while (this.trafficSprites.length < traffic.length && this.trafficSprites.length < trafficCap) {
+    while (this.trafficSprites.length < traffic.length && this.trafficSprites.length < TRAFFIC_SPRITE_CAP) {
       this.trafficSprites.push(this.add.image(0, 0, "tex-car").setDepth(5).setDisplaySize(120, 72).setAlpha(0.92));
     }
     this.trafficSprites.forEach((sprite, i) => {
@@ -245,18 +244,11 @@ export class DriveScene extends Phaser.Scene {
         const home = lotCenter(house.house, house.lotW, house.lotH);
         const hw = house.lotW * TILE;
         const hh = house.lotH * TILE;
-        // Lot glow only when the stop or FX tier changes — skip on low tier (stroke still overdraws the lot).
-        const fxQ = phoneFxQuality();
-        const lotGlow = fxQ !== "minimal";
-        if (stopId !== this.lastLotGlowKey || fxQ !== this.lastLotFxQuality) {
+        if (stopId !== this.lastLotGlowKey) {
           this.lastLotGlowKey = stopId;
-          this.lastLotFxQuality = fxQ;
           this.glow.clear();
-          if (lotGlow) {
-            const stroke = fxQ === "lite" ? 2 : 4;
-            this.glow.lineStyle(stroke, Color.lime, 0.9);
-            this.glow.strokeRect(home.x - hw / 2 - 8, home.y - hh / 2 - 8, hw + 16, hh + 16);
-          }
+          this.glow.lineStyle(2, Color.lime, 0.9);
+          this.glow.strokeRect(home.x - hw / 2 - 8, home.y - hh / 2 - 8, hw + 16, hh + 16);
         }
         this.pinBase.x = x;
         this.pinBase.y = y - 6;
@@ -388,26 +380,23 @@ export class DriveScene extends Phaser.Scene {
 
   private paintNightGlow(sky: ReturnType<typeof skyAt>): void {
     if (!this.nightGlow) return;
-    // PostFX carries lamps/windows — skip redundant Graphics fill when the pipeline is on.
     if (getRenderBudget().postFx) return;
-    const quality = phoneFxQuality();
-    // Coarser bands + view cells on phone tiers cut translucent redraw cadence.
     const view = this.cameras.main.worldView;
-    const viewStep = quality === "minimal" ? 512 : quality === "lite" ? 384 : 256;
-    const bandSteps = quality === "minimal" ? 4 : quality === "lite" ? 6 : 12;
+    const viewStep = 384;
+    const bandSteps = 6;
     const viewCell = `${Math.round(view.x / viewStep)}:${Math.round(view.y / viewStep)}`;
-    const key = `${(sky.windowGlow * bandSteps) | 0}:${(sky.lampAlpha * bandSteps) | 0}:${viewCell}:${quality}`;
+    const key = `${(sky.windowGlow * bandSteps) | 0}:${(sky.lampAlpha * bandSteps) | 0}:${viewCell}`;
     if (key === this.lastGlowKey) return;
     this.lastGlowKey = key;
     this.nightGlow.clear();
     if (sky.windowGlow < 0.04 && sky.lampAlpha < 0.04) return;
-    const pad = quality === "minimal" ? 32 : quality === "lite" ? 48 : 64;
+    const pad = 48;
     const left = view.x - pad;
     const right = view.x + view.width + pad;
     const top = view.y - pad;
     const bottom = view.y + view.height + pad;
-    if (quality !== "minimal" && sky.windowGlow >= 0.04) {
-      const winA = quality === "lite" ? 0.08 + 0.22 * sky.windowGlow : 0.1 + 0.35 * sky.windowGlow;
+    if (sky.windowGlow >= 0.04) {
+      const winA = 0.08 + 0.22 * sky.windowGlow;
       for (const house of CITY.houses) {
         const home = lotCenter(house.house, house.lotW, house.lotH);
         if (home.x < left || home.x > right || home.y < top || home.y > bottom) continue;
@@ -423,8 +412,8 @@ export class DriveScene extends Phaser.Scene {
       }
     }
     if (sky.lampAlpha >= 0.04) {
-      const lampA = quality === "minimal" ? 0.06 + 0.12 * sky.lampAlpha : quality === "lite" ? 0.04 + 0.16 * sky.lampAlpha : 0.05 + 0.22 * sky.lampAlpha;
-      const lampR = quality === "minimal" ? 14 + 6 * sky.lampAlpha : quality === "lite" ? 18 + 8 * sky.lampAlpha : 22 + 12 * sky.lampAlpha;
+      const lampA = 0.04 + 0.16 * sky.lampAlpha;
+      const lampR = 18 + 8 * sky.lampAlpha;
       for (const lamp of this.streetLamps) {
         if (lamp.x < left || lamp.x > right || lamp.y < top || lamp.y > bottom) continue;
         this.nightGlow.fillStyle(0xffc070, lampA);
