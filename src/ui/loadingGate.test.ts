@@ -95,6 +95,14 @@ describe("loading gate wiring", () => {
     expect(html).toContain('aria-live="polite"');
   });
 
+  it("main shows loading gate before Phaser boots (PWA cold-open gap)", () => {
+    const src = read("src/main.ts");
+    const showAt = src.indexOf("showLoading({ mode: \"boot\"");
+    const gameAt = src.indexOf("new Phaser.Game(config)");
+    expect(showAt).toBeGreaterThan(-1);
+    expect(gameAt).toBeGreaterThan(showAt);
+  });
+
   it("loadingGate module exports show/hide with boot and update copy", () => {
     const src = read("src/ui/loadingGate.ts");
     expect(src).toContain("Loading Kindling");

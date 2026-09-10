@@ -4,6 +4,7 @@ import { gameConfig } from "./config";
 import { bootKindlingPwa } from "./pwaUpdate";
 import { applyCanvasDisplayScale, installMobileShell } from "./shell";
 import { installInstallCoach } from "./ui/installCoach";
+import { showLoading } from "./ui/loadingGate";
 import {
   applyRenderBudgetToGame,
   forceRenderBudget,
@@ -38,6 +39,8 @@ function applyBudget(game: Phaser.Game): void {
 }
 
 function startGame(): void {
+  // PWA cold open: shell rails layout before BootScene.create — show gate immediately.
+  showLoading({ mode: "boot", stage: "Starting" });
   const coarse = globalThis.matchMedia?.("(pointer: coarse)")?.matches ?? false;
   initRenderBudget(coarse);
   // Prefer sustained smoothness on phones over chasing 60Hz fill-rate.

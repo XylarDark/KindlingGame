@@ -17,8 +17,11 @@ describe("peopleAtlas", () => {
     expect(PEOPLE_STANDING_ATLAS_FRAMES).toContain("tex-customer-0");
     expect(PEOPLE_STANDING_ATLAS_FRAMES).toContain("tex-driver");
     expect(PEOPLE_STANDING_ATLAS_FRAMES).toContain("tex-keylead");
-    expect(src).toContain("createCanvas");
-    expect(src).toContain("canvasTex.add");
+    expect(src).toContain("saveTexture");
+    expect(src).toContain("saved.add");
+    expect(src).toContain("renderTexture");
+    expect(src).toContain("destroyPackedSources");
+    expect(src).toContain("peopleAtlas: build failed");
   });
 
   it("packs portrait keys into a separate faces atlas", () => {

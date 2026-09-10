@@ -253,6 +253,10 @@ describe("wiring", () => {
     expect(src).toContain("installInstallCoach");
     expect(src).toContain("void bootKindlingPwa()");
     expect(src).not.toContain("void bootKindlingPwa().then");
+    const showAt = src.indexOf("showLoading({ mode: \"boot\"");
+    const gameAt = src.indexOf("new Phaser.Game(config)");
+    expect(showAt).toBeGreaterThan(-1);
+    expect(gameAt).toBeGreaterThan(showAt);
   });
 
   it("force-presents the coach when beforeinstallprompt arrives", () => {

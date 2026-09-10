@@ -105,7 +105,10 @@ export class BootScene extends Phaser.Scene {
     this.showBootStage("Art");
     generateTextures(this);
     registerCityTileAtlas(this);
+    // Flush baked tiles before people atlas — GPU upload must land before RT.pack on phones.
+    await this.flushTextures();
     registerPeopleAtlases(this);
+    // One frame for atlas sheets only; packed sources are removed to avoid double-stamp OOM.
     await this.flushTextures();
     if (this.warmAborted) return;
 

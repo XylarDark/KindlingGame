@@ -72,6 +72,16 @@ function packFrames(keys: readonly string[], portrait = false): { rects: PackRec
   return { rects, sheetW, sheetH: y + rowH };
 }
 
+function destroyPackedSources(scene: Phaser.Scene, frames: readonly string[]): void {
+  for (const key of frames) {
+    if (scene.textures.exists(key)) scene.textures.remove(key);
+  }
+}
+
+/**
+ * Pack frames via Phaser RenderTexture (not raw canvas drawImage on getSourceImage).
+ * Canvas 2d drawImage on WebGL-backed sources fails on some installed PWAs; RT.draw is reliable.
+ */
 function buildAtlas(
   scene: Phaser.Scene,
   atlasKey: string,
@@ -81,20 +91,30 @@ function buildAtlas(
   const textures = scene.textures;
   if (textures.exists(atlasKey)) return true;
   const missing = frames.filter((k) => !textures.exists(k));
-  if (missing.length > 0) return false;
+  if (missing.length > 0) {
+    console.debug("peopleAtlas: missing sources", { atlasKey, count: missing.length });
+    return false;
+  }
 
   const { rects, sheetW, sheetH } = packFrames(frames, portrait);
-  const canvasTex = textures.createCanvas(atlasKey, sheetW, sheetH);
-  if (!canvasTex) return false;
-  const ctx = canvasTex.getContext();
-
-  for (const rect of rects) {
-    const src = textures.get(rect.key).getSourceImage() as CanvasImageSource;
-    ctx.drawImage(src, rect.x, rect.y, rect.w, rect.h);
-    canvasTex.add(rect.key, 0, rect.x, rect.y, rect.w, rect.h);
+  let rt: Phaser.GameObjects.RenderTexture | null = null;
+  try {
+    rt = scene.add.renderTexture(0, 0, sheetW, sheetH).setVisible(false);
+    for (const rect of rects) {
+      rt.draw(rect.key, rect.x, rect.y);
+    }
+    const saved = rt.saveTexture(atlasKey);
+    for (const rect of rects) {
+      saved.add(rect.key, 0, rect.x, rect.y, rect.w, rect.h);
+    }
+    // Do not destroy rt — saveTexture aliases this RT's backing store in the Texture Manager.
+    return textures.exists(atlasKey);
+  } catch (err) {
+    console.debug("peopleAtlas: build failed", { atlasKey, err: String(err) });
+    rt?.destroy();
+    if (textures.exists(atlasKey)) textures.remove(atlasKey);
+    return false;
   }
-  canvasTex.refresh();
-  return textures.exists(atlasKey);
 }
 
 /**
@@ -107,6 +127,7 @@ export function registerPeopleStandingAtlas(scene: Phaser.Scene): boolean {
   }
   const ok = buildAtlas(scene, PEOPLE_STANDING_ATLAS_KEY, PEOPLE_STANDING_ATLAS_FRAMES);
   standingReady = ok && scene.textures.exists(PEOPLE_STANDING_ATLAS_KEY);
+  if (standingReady) destroyPackedSources(scene, PEOPLE_STANDING_ATLAS_FRAMES);
   return standingReady;
 }
 
@@ -117,6 +138,7 @@ export function registerPeoplePortraitAtlas(scene: Phaser.Scene): boolean {
   }
   const ok = buildAtlas(scene, PEOPLE_PORTRAIT_ATLAS_KEY, PEOPLE_PORTRAIT_ATLAS_FRAMES, true);
   portraitReady = ok && scene.textures.exists(PEOPLE_PORTRAIT_ATLAS_KEY);
+  if (portraitReady) destroyPackedSources(scene, PEOPLE_PORTRAIT_ATLAS_FRAMES);
   return portraitReady;
 }
 
