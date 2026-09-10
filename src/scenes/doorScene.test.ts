@@ -41,7 +41,7 @@ function pxConstant(name: string): number {
 
 describe("doorstep tap target flash", () => {
   it("throbs on a period a person can see, not a strobe", () => {
-    // gameMs advances 1:1 with real milliseconds (HudScene ticks rawDelta into GameSim),
+    // gameMs advances with Phaser smoothed delta (HudScene ticks scene delta into GameSim),
     // so sin(gameMs / RATE) has a real period of
     // 2*PI*RATE ms. Shrinking the rate is the one edit that would turn this into a
     // flicker while still looking like a working flash in the source.
