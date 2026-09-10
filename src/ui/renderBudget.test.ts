@@ -44,17 +44,23 @@ describe("init / tickRenderBudget", () => {
 
   it("low tier turns PostFX off without shrinking the canvas", () => {
     initRenderBudget(false);
-    // Demotion is sticky: two consecutive low samples per step.
-    expect(tickRenderBudget(20, 2_000)).toBe(false);
+    // Mild sag: two consecutive samples per step (above SEVERE_DEMOTE_FPS).
+    expect(tickRenderBudget(35, 2_000)).toBe(false);
     expect(getRenderBudget().tier).toBe("high");
-    expect(tickRenderBudget(20, 3_100)).toBe(true);
+    expect(tickRenderBudget(35, 3_100)).toBe(true);
     expect(getRenderBudget().tier).toBe("mid");
-    expect(tickRenderBudget(20, 4_200)).toBe(false);
+    expect(tickRenderBudget(28, 4_200)).toBe(false);
     expect(getRenderBudget().tier).toBe("mid");
-    expect(tickRenderBudget(20, 5_300)).toBe(true);
+    expect(tickRenderBudget(28, 5_300)).toBe(true);
     expect(getRenderBudget().tier).toBe("low");
     expect(getRenderBudget().postFx).toBe(false);
     expect(getRenderBudget().renderScale).toBe(1);
+  });
+
+  it("demotes on one strike when FPS is severely collapsed", () => {
+    initRenderBudget(false);
+    expect(tickRenderBudget(22, 2_000)).toBe(true);
+    expect(getRenderBudget().tier).toBe("mid");
   });
 });
 

@@ -123,7 +123,22 @@ export function addSignText(
   if (accent !== undefined) text.setData(ACCENT, accent);
 
   const plaque = scene.add.graphics();
+  let lastPaintKey = "";
   const sync = (): void => {
+    const key = [
+      text.visible,
+      text.alpha,
+      accentOf(text),
+      text.x,
+      text.y,
+      text.width,
+      text.height,
+      text.originX,
+      text.originY,
+      text.depth,
+    ].join(":");
+    if (key === lastPaintKey) return;
+    lastPaintKey = key;
     reparent(plaque, text, scene);
     paint(plaque, text);
   };

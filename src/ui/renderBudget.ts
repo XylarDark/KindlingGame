@@ -25,6 +25,8 @@ const LOW: RenderBudget = { tier: "low", renderScale: 1, postFx: false, maxLight
 const PROMOTE_FPS = 48;
 const DEMOTE_TO_MID_FPS = 42;
 const DEMOTE_TO_LOW_FPS = 30;
+/** One-strike demote when FPS collapses — avoids staying on PostFX during a death spiral. */
+const SEVERE_DEMOTE_FPS = 24;
 
 let current: RenderBudget = HIGH;
 let lastEvalAt = 0;
@@ -123,7 +125,8 @@ export function tickRenderBudget(actualFps: number, nowMs = performance.now()): 
   const rank = { high: 2, mid: 1, low: 0 } as const;
   if (rank[next] < rank[current.tier]) {
     demoteStrikes += 1;
-    if (demoteStrikes < 2) return false;
+    const severe = actualFps > 0 && actualFps < SEVERE_DEMOTE_FPS;
+    if (!severe && demoteStrikes < 2) return false;
   } else {
     demoteStrikes = 0;
   }

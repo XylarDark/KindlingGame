@@ -64,6 +64,11 @@ describe("text boxes are all the counter plaque", () => {
     expect(helper).toContain("plaque.destroy()");
   });
 
+  it("skips plaque repaint when bounds and accent are unchanged", () => {
+    expect(helper).toContain("lastPaintKey");
+    expect(helper).toContain("if (key === lastPaintKey) return");
+  });
+
   it("follows its text into a container", () => {
     // The score pop and the delivery phone both add their text to a container after it
     // is built. A scene-level plaque would be drawn under the whole container — behind

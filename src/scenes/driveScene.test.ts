@@ -24,6 +24,20 @@ describe("DriveScene grade throttle and dirty guards", () => {
     expect(src).toContain("lastLotGlowKey");
     expect(src).toContain("if (stopId !== this.lastLotGlowKey)");
   });
+
+  it("skips paintDayNight when inactive and dirty-guards van banner + shop caption", () => {
+    const paint = src.slice(src.indexOf("private paintDayNight"), src.indexOf("private paintNightGlow"));
+    expect(paint).toContain("if (!this.sys.isActive()) return");
+    expect(src).toContain("lastVanToast");
+    expect(src).toContain("if (snap.toast !== this.lastVanToast)");
+    expect(src).toContain("lastShopCaptionKey");
+    expect(src).toContain("if (captionKey !== this.lastShopCaptionKey)");
+  });
+
+  it("removes PRE_RENDER day/night on SHUTDOWN", () => {
+    expect(src).toContain("onPreRenderDayNight");
+    expect(src).toContain("events.off(Phaser.Scenes.Events.PRE_RENDER, this.onPreRenderDayNight)");
+  });
 });
 
 describe("DoorScene grade throttle", () => {

@@ -1015,9 +1015,12 @@ export class HudScene extends Phaser.Scene {
     ]
       .filter(Boolean)
       .join("  ·  ");
-    this.coverText.setText(`COUNTER  ·  ${cover.line}${tally ? `  ·  ${tally}` : ""}`);
+    const line = `COUNTER  ·  ${cover.line}${tally ? `  ·  ${tally}` : ""}`;
+    if (this.coverText.text !== line) {
+      this.coverText.setText(line);
+      refitType(this.coverText);
+    }
     this.coverText.setPosition(this.readoutCorner.left, this.readoutCorner.top + 40);
-    refitType(this.coverText);
   }
 
   private syncDriveScene(snap: SimSnapshot): void {

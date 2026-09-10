@@ -257,6 +257,8 @@ export class GameSim {
   private packQueue: string[] = [];
 
   private orders: Order[] = [];
+  /** Completed/failed orders kept for shift results and orderById — pruned from the hot path. */
+  private shiftLedger: Order[] = [];
   private customers: CustomerState[] = [];
   private nextOrderId = 1;
   private nextDeliveryHouse = 0;
@@ -386,6 +388,7 @@ export class GameSim {
     this.driveWaypoint = 0;
     this.driveArrived = false;
     this.orders = [];
+    this.shiftLedger = [];
     this.customers = [];
     this.runOrderIds = [];
     this.handSkuId = null;
@@ -483,7 +486,7 @@ export class GameSim {
       driverLine: this.playerRole === "keyLead" ? this.driverLine : null,
       shiftEnded: this.shiftEnded,
       shiftResults: this.shiftEnded
-        ? buildShiftResults(this.orders, this.score, this.clock.gameMs, this.under19Fails)
+        ? buildShiftResults(this.shiftLedger.concat(this.orders), this.score, this.clock.gameMs, this.under19Fails)
         : null,
       canEndShiftEarly: !this.shiftEnded && this.scoredActions >= 1,
       scoreFlash: this.scoreFlash,
@@ -680,7 +683,12 @@ export class GameSim {
   }
 
   orderById(id: string): Order | undefined {
-    return this.orders.find((o) => o.id === id);
+    return this.orders.find((o) => o.id === id) ?? this.shiftLedger.find((o) => o.id === id);
+  }
+
+  /** Active orders only — terminal orders live in shiftLedger. */
+  activeOrderCount(): number {
+    return this.orders.length;
   }
 
   setDriverPosition(x: number, y: number): void {
@@ -1441,6 +1449,7 @@ export class GameSim {
   }
 
   private tickTimers(): void {
+    // Copy — failOrder archives (splices) mid-loop.
     for (const order of [...this.orders]) {
       if (order.type === "pickup" && order.slaStartGameMs !== undefined && isOpen(order)) {
         const elapsed = this.clock.gameMs - order.slaStartGameMs;
@@ -1867,6 +1876,7 @@ export class GameSim {
       this.toast = `Sold ${sku?.name ?? "item"} to ${order.customerName}! (+${delta})`;
     }
     this.pushSfx("sell");
+    this.archiveTerminalOrder(order);
   }
 
   private failOrder(order: Order, reason: string): void {
@@ -1909,6 +1919,15 @@ export class GameSim {
       this.toast = `${reason} (${delta})`;
     }
     this.pushSfx("deny");
+    this.archiveTerminalOrder(order);
+  }
+
+  /** Drop terminal orders from the per-frame hot list; shift results read shiftLedger. */
+  private archiveTerminalOrder(order: Order): void {
+    const idx = this.orders.indexOf(order);
+    if (idx < 0) return;
+    this.orders.splice(idx, 1);
+    this.shiftLedger.push(order);
   }
 
   private pushScoreFlash(delta: number): void {
