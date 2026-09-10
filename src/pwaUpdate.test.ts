@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { serviceWorkerUrl } from "./pwaUpdate";
+import { PWA_RESUME_UPDATE_MIN_MS, serviceWorkerUrl } from "./pwaUpdate";
 import { SKIP_WAITING_MESSAGE } from "./pwaMessages";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -24,6 +24,22 @@ describe("update wiring", () => {
     expect(src).toContain("visibilitychange");
   });
 
+  it("skips service-worker registration in DEV so HMR is not on the SW hop", () => {
+    const src = read("src/pwaUpdate.ts");
+    expect(src).toContain("import.meta.env.DEV");
+    expect(src).toContain('return "skipped"');
+    expect(src).not.toContain("registered (dev)");
+  });
+
+  it("throttles resume update checks to at least ten minutes", () => {
+    expect(PWA_RESUME_UPDATE_MIN_MS).toBe(10 * 60 * 1000);
+    const src = read("src/pwaUpdate.ts");
+    expect(src).toContain("PWA_RESUME_UPDATE_MIN_MS");
+    const resumeFrom = src.indexOf("function bindResumeUpdateCheck");
+    if (resumeFrom < 0) throw new Error("bindResumeUpdateCheck missing");
+    expect(src.slice(resumeFrom)).toContain("PWA_RESUME_UPDATE_MIN_MS");
+  });
+
   it("does not await network update before returning ready", () => {
     const src = read("src/pwaUpdate.ts");
     expect(src).not.toContain("await Promise.race([reg.update()");
@@ -42,11 +58,17 @@ describe("update wiring", () => {
     expect(resume).toContain("reg.update()");
   });
 
-  it("keeps the worker handshake string in lockstep with sw.js", () => {
+  it("intercepts navigations only — asset GETs must not hit respondWith", () => {
     const sw = read("public/sw.js");
     expect(sw).toContain(`event.data === "${SKIP_WAITING_MESSAGE}"`);
     expect(sw).toContain('cache: "no-store"');
     expect(sw).toContain('req.mode === "navigate"');
+    expect(sw).toContain("if (!navigate) return");
+    const fetchFrom = sw.indexOf('self.addEventListener("fetch"');
+    if (fetchFrom < 0) throw new Error("fetch listener missing");
+    const fetchBody = sw.slice(fetchFrom);
+    // Blanket respondWith on every GET was the choppy path.
+    expect(fetchBody).not.toMatch(/respondWith\(fetch\(req, init\)/);
   });
 
   it("does not skipWaiting on install — that would swap the worker mid-shift", () => {

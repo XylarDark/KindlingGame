@@ -272,14 +272,14 @@ export const TV_COLS = 3;
 export const STRAINS_PER_TV = 3;
 /**
  * Counter-and-up growth after the speech-band reclaim: TVs enlarge with the rest of the
- * wall band (not TV-only). Prior pass was 1.15× then 5% shorter; this pass adds ~8% more.
+ * wall band (not TV-only). Full scale (no 0.95 trim) so each strain row gets a taller hit.
  */
 const TV_BASE_W = 304;
 const TV_BASE_H = 220;
 const TV_BASE_TOP = 140;
 const TV_SCALE = 1.24;
 export const TV_W = Math.round(TV_BASE_W * TV_SCALE);
-export const TV_H = Math.round(TV_BASE_H * TV_SCALE * 0.95);
+export const TV_H = Math.round(TV_BASE_H * TV_SCALE);
 /** Chassis-to-chassis wall; ~32px of plaster shows after the 4px sit-on-wall reveal. */
 export const TV_GAP_X = 40;
 export const TV_GAP_Y = 0;
@@ -291,7 +291,7 @@ export const CEILING_POT_RIGHT = 1760;
 /** Menu TVs centered over the key-lead. */
 export const TV_GRID_MID = KEYLEAD.x;
 export const TV_GRID_LEFT = Math.floor(TV_GRID_MID - TV_GRID_W / 2);
-/** Keep the bank on the wall under the cans; shorter height lifts the bottom slightly. */
+/** Keep the bank on the wall under the cans; taller TV_H lifts the top (bottom stays). */
 export const TV_GRID_TOP = TV_BASE_TOP + TV_BASE_H - TV_H;
 
 /** Grey-over-white chair rail; the pass-through oak sill sits on this band. */

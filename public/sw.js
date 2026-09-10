@@ -1,5 +1,7 @@
 /* Kindling installability + update shell.
- * Network-first. Navigations bypass HTTP cache so GitHub Pages HTML cannot stick.
+ * Navigations bypass HTTP cache so GitHub Pages HTML cannot stick.
+ * Non-document GETs are not intercepted — a blanket network-first respondWith put
+ * every asset on the SW hop and made play choppy after the update work landed.
  * Do not skipWaiting here — a mid-shift replace would reload the game under the player.
  * The page posts kindling-skip-waiting after it has checked for a waiting worker.
  */
@@ -19,6 +21,6 @@ self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
   const navigate = req.mode === "navigate" || req.destination === "document";
-  const init = navigate ? { cache: "no-store" } : undefined;
-  event.respondWith(fetch(req, init).catch(() => caches.match(req)));
+  if (!navigate) return;
+  event.respondWith(fetch(req, { cache: "no-store" }).catch(() => caches.match(req)));
 });

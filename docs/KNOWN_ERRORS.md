@@ -104,6 +104,14 @@ the thing it described.
 - **Fix:** tick from `game.loop.rawDelta` (capped at 1000 ms — tight caps like 100 ms re-slow low-FPS phones) and set `fps.smoothStep: false` in the game config.
 - **Prevention:** never drive the sim from smoothed scene `delta`; source-guard `rawDelta` in HudScene.
 
+### Service-worker fetch-on-every-GET made play choppy after PWA updates
+
+- **Date:** 2026-09-09
+- **Symptom:** after the installed-app update work, gameplay felt hitchy/choppy even once wall-clock sim time was fixed; local DEV was especially bad.
+- **Cause:** `public/sw.js` called `respondWith(fetch(...))` on every GET, putting Vite assets (and prod static files) on the SW hop with no CacheStorage win. DEV also registered the same worker, so HMR traffic paid the same cost. Resume `reg.update()` on every visibility flicker added spikes.
+- **Fix:** intercept navigations only; skip SW registration in DEV; throttle resume updates to ≥10 minutes.
+- **Prevention:** do not blanket-`respondWith` asset GETs for installability. Measure `actualFps` / p95 `rawDelta` with controller on vs off before changing SW fetch policy.
+
 ### Shrink-to-fit plus a CSS floor drew glyphs outside the box
 
 - **Date:** 2026-09-09

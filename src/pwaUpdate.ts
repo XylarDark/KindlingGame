@@ -9,6 +9,9 @@ export function serviceWorkerUrl(baseUrl: string): string {
   return `${base}sw.js`;
 }
 
+/** Minimum gap between resume-triggered update() calls. */
+export const PWA_RESUME_UPDATE_MIN_MS = 10 * 60 * 1000;
+
 function debug(message: string, data?: Record<string, unknown>): void {
   console.debug(`pwa: ${message}`, data ?? {});
 }
@@ -20,14 +23,13 @@ export async function bootKindlingPwa(): Promise<"ready" | "skipped"> {
     return "skipped";
   }
 
-  const url = serviceWorkerUrl(import.meta.env.BASE_URL);
+  // DEV: Vite HMR / module traffic through a SW makes local play choppy. Prod only.
   if (import.meta.env.DEV) {
-    void navigator.serviceWorker.register(url, { updateViaCache: "none" }).then(
-      (reg) => debug("registered (dev)", { scope: reg.scope }),
-      (err: unknown) => debug("register failed (dev)", { err: String(err) }),
-    );
-    return "ready";
+    debug("skipped (dev)");
+    return "skipped";
   }
+
+  const url = serviceWorkerUrl(import.meta.env.BASE_URL);
 
   try {
     const reg = await navigator.serviceWorker.register(url, { updateViaCache: "none" });
@@ -43,10 +45,17 @@ export async function bootKindlingPwa(): Promise<"ready" | "skipped"> {
   return "ready";
 }
 
-/** Foreground: fetch a newer worker script only. Never activate mid-shift. */
+/** Foreground: fetch a newer worker script only, throttled. Never activate mid-shift. */
 function bindResumeUpdateCheck(reg: ServiceWorkerRegistration): void {
+  let lastUpdateAt = 0;
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState !== "visible") return;
+    const now = Date.now();
+    if (now - lastUpdateAt < PWA_RESUME_UPDATE_MIN_MS) {
+      debug("resume update skipped (throttle)");
+      return;
+    }
+    lastUpdateAt = now;
     void reg.update().then(
       () => debug("resume update finished", { waiting: Boolean(reg.waiting) }),
       (err: unknown) => debug("resume update failed", { err: String(err) }),
