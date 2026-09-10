@@ -9,11 +9,11 @@ export type RenderBudget = {
    * WebGL backbuffer scale vs design 1920×1080. Camera zoom matches so
    * layout/sim stay in GAME_* coordinates; CSS shell still presents a 16:9 stage.
    *
-   * Tier table (2026-09-10 drawing-board — prefer sustained phone FPS over fixed 1×):
+   * Tier table (2026-09-10 density-first — sharp pixels + cheap FX, not soft full-frame scale):
    * | tier | renderScale | postFx | postFxScale | maxLights | uploadMinMs | notes |
    * | high | 1.0         | on     | 0.5         | 8         | 16          | desktop; half-res DayNight |
-   * | mid  | 0.45        | off    | 0.5         | 0         | 100         | phone default; Drive/Door prefer this |
-   * | low  | 0.32        | off    | 0.5         | 0         | 200         | heavy stress / coarse demotion |
+   * | mid  | 0.85        | off    | 0.5         | 0         | 100         | phone default; Graphics mood only |
+   * | low  | 0.65        | off    | 0.5         | 0         | 200         | demotion only; still sharp vs 0.45/0.32 |
    */
   renderScale: number;
   postFx: boolean;
@@ -36,19 +36,19 @@ const HIGH: RenderBudget = {
   maxLights: 8,
   uploadMinMs: 16,
 };
-/** Mid: ~0.45× pixels; PostFX off — lights still read via Graphics glow. */
+/** Mid: 0.85× backbuffer — phone default; PostFX off — mood via Graphics sky/lamp/window. */
 const MID: RenderBudget = {
   tier: "mid",
-  renderScale: 0.45,
+  renderScale: 0.85,
   postFx: false,
   postFxScale: 0.5,
   maxLights: 0,
   uploadMinMs: 100,
 };
-/** Low: ~0.32× backbuffer; PostFX off. Soft on small GPUs; UI may look softer. */
+/** Low: 0.65× backbuffer; PostFX off. Demotion tier — honest 30fps over blurry almost-60. */
 const LOW: RenderBudget = {
   tier: "low",
-  renderScale: 0.32,
+  renderScale: 0.65,
   postFx: false,
   postFxScale: 0.5,
   maxLights: 0,

@@ -13,7 +13,7 @@ Cite: KNOWN_ERRORS — *Full-resolution DayNight PostFX looked like a "slow game
 | Technique | Status | Kindling notes |
 |-----------|--------|----------------|
 | **Measure** (`actualFps` / p95 `rawDelta`, PostFX on/off, each tier) | **Done** | Do not treat “sim clock matches wall” as smoothness. Dev: `kindlingRenderBudget.force` + `apply()`. |
-| **Resolution** (adaptive backbuffer + camera zoom; GAME_* layout) | **Done** | high **1.0** / mid **0.45** / low **0.32**; `syncSceneRenderCamera` every scene `create`. |
+| **Resolution** (adaptive backbuffer + camera zoom; GAME_* layout) | **Done** | high **1.0** / mid **0.85** / low **0.65** (density-first); `syncSceneRenderCamera` every scene `create`. |
 | **PostFX** (attach only shop/drive/door; mid/low off) | **Done** | DayNight never on Hud/Title; coarse never lingers on high in Drive/Door. |
 | **Half-res FX** (`postFxScale` 0.5 via Phaser `halfFrame`) | **Done** | Desktop high: downsample → DayNight → blit up. Coarse stays mid/low (PostFX off). |
 | **Static bake** (non-movers → RenderTexture) | **Done** | Drive city ≤2048px cells; Shop interior + counter RTs; **Door facade/yard RT**; movers/interactive live. |
@@ -36,7 +36,7 @@ Cite: KNOWN_ERRORS — *Full-resolution DayNight PostFX looked like a "slow game
 |--------------|------------------------|----------------|
 | Target FPS | 60 (`fps.target`) | **30** (`fps.limit` + `target`) — sustained smoothness over chasing 60 |
 | Seed RenderBudget tier | `high` | `mid` (never auto-promote to `high` on coarse) |
-| `renderScale` | 1.0 | **0.45** mid / **0.32** low |
+| `renderScale` | 1.0 | **0.85** mid / **0.65** low |
 | DayNight PostFX | on (≤8 lights), **`postFxScale` 0.5** | **off** on mid/low — Graphics glow still paints |
 | Sim clock | `game.loop.rawDelta` (capped) | same — never smoothed `delta` |
 
@@ -44,13 +44,14 @@ Design layout stays **1920×1080** (`GAME_*`). CSS shell presents 16:9. Only the
 
 ---
 
-## Adaptive `renderScale` doctrine
+## Adaptive `renderScale` doctrine (density-first)
 
-1. **Prefer fewer GPU pixels on phones** over fixed 1080p forever. Mid **0.45** and low **0.32** exist because fill-rate (fullscreen PostFX + city overdraw) was the hitch after sim time went wall-clock (KNOWN_ERRORS).
+1. **Prefer sharp pixels + cheap FX** over soft full-frame scale. Mid **0.85** and low **0.65** keep phone art readable; cut fill-rate via PostFX off, static bakes, atlases, and overdraw — not by shrinking to **0.45 / 0.32** (superseded — that was a blunt hammer that killed the look).
 2. **Always** pair `scale.resize` with `syncSceneRenderCamera` on every scene `create` (READY can race late scenes).
 3. Pointer / CSS fit must use **live** `gameSize`, not a frozen 1920×1080 assumption (`applyCanvasDisplayScale`).
-4. Coarse + Drive/Door: demote earlier; **never linger on high** (fullscreen DayNight) even if FPS briefly looks fine.
-5. Measuring “sim clock matches wall” is **not** proof of smoothness — measure `actualFps` / p95 `rawDelta` at each tier with PostFX on/off.
+4. Coarse + Drive/Door: demote earlier; **never linger on high** (fullscreen DayNight) even if FPS briefly looks fine. Coarse seeds mid and never auto-promotes to high.
+5. Honest **30fps** on coarse phones beats blurry almost-60 — `fps.target` + `limit` 30 unchanged.
+6. Measuring “sim clock matches wall” is **not** proof of smoothness — measure `actualFps` / p95 `rawDelta` at each tier with PostFX on/off.
 
 Source of truth: `src/ui/renderBudget.ts`.
 
@@ -121,7 +122,8 @@ Under `#loading-gate`: flush textures a full frame; register city + people atlas
 |-------|-----|
 | Re-enable `fps.smoothStep` | Caps delta when unfocused / after blur → whole sim in slow-mo on phones |
 | Tick sim from scene `delta` | Same class of bug — use `rawDelta` |
-| Fix “choppy” by locking 1920×1080 forever | Fill-rate is the cost; scales exist on purpose |
+| Fix “choppy” by locking 1920×1080 forever | Fill-rate is the cost; demotion tiers exist on purpose |
+| Soft-scale phones to 0.45 / 0.32 | Superseded — kills pixel sharpness; use 0.85 / 0.65 + FX cuts instead |
 | Attach DayNight to Hud/Title | Wasted fullscreen passes |
 | Leave per-tile city Images alive after bake | Defeats the static/dynamic split |
 | First-create Drive/Door mid-delivery | Hitch on city draw + shader compile |
@@ -140,5 +142,6 @@ Under `#loading-gate`: flush textures a full frame; register city + people atlas
 - `src/art/cityTileAtlas.ts` — grass/road/parking atlas
 - `src/art/peopleAtlas.ts` — standing + portrait atlases
 - `src/config.ts` / `src/main.ts` — `smoothStep: false`, `autoMobilePipeline`, coarse 30fps limit
-- [plans/2026-09-10-drawing-board-perf.md](../plans/2026-09-10-drawing-board-perf.md) — ranked execution plan
+- [plans/2026-09-10-density-first-budget.md](../plans/2026-09-10-density-first-budget.md) — current phone scale doctrine
+- [plans/2026-09-10-drawing-board-perf.md](../plans/2026-09-10-drawing-board-perf.md) — prior ranked execution plan
 - [KNOWN_ERRORS.md](../KNOWN_ERRORS.md) — DayNight / wall-clock hitch history
