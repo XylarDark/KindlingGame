@@ -46,6 +46,19 @@ describe("speech stays off the models it belongs to", () => {
     expect(src, "no fixed head offsets left in sync").not.toMatch(/setPosition\([^)]*PERSON_DISPLAY_H - \d+\)/);
   });
 
+  it("dirty-guards key-lead and driver bubble setText so fetch walk is not a refit every frame", () => {
+    const sync = between(src, "private sync(snap: SimSnapshot)", "const packNext", "shop sync");
+    expect(sync, "key-lead text guarded").toMatch(
+      /if \(this\.keyLeadBubble\.text !== callout\) this\.keyLeadBubble\.setText\(callout\)/,
+    );
+    expect(sync, "driver text guarded").toMatch(
+      /if \(this\.driverBubble\.text !== driverLine\) this\.driverBubble\.setText\(driverLine\)/,
+    );
+    expect(sync, "no unconditional key-lead setText").not.toMatch(/keyLeadBubble[\s\S]*?\.setText\(callout \?\? ""\)/);
+    expect(sync, "hang key-lead only when shown").toMatch(/if \(showKeyLeadBubble\)/);
+    expect(sync, "hang driver only when shown").toMatch(/if \(showDriverBubble\)/);
+  });
+
   it("places customer chips beside settled speakers via layoutCustomerSpeech", () => {
     const sync = between(src, "private syncCustomers(", "private makeHotspots(", "syncCustomers");
     expect(sync, "uses side layout").toMatch(/layoutCustomerSpeech\(/);

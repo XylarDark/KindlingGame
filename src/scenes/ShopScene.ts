@@ -288,11 +288,14 @@ export class ShopScene extends Phaser.Scene {
     this.keyLead.setVisible(snap.keyLead.visible && snap.playerRole === "keyLead");
     this.keyLead.setPosition(snap.keyLead.x, snap.keyLead.y);
     const callout = snap.keyLeadLine;
-    this.keyLeadBubble
-      .setVisible(!!callout && snap.keyLead.visible && snap.playerRole === "keyLead")
-      .setText(callout ?? "")
-      .setX(snap.keyLead.x - 168);
-    hangAboveHead(this.keyLeadBubble, this.keyLead);
+    const showKeyLeadBubble = !!callout && snap.keyLead.visible && snap.playerRole === "keyLead";
+    this.keyLeadBubble.setVisible(showKeyLeadBubble);
+    // setText refits typekit — only pay when the Grabbing line changes (not every walk frame).
+    if (showKeyLeadBubble) {
+      if (this.keyLeadBubble.text !== callout) this.keyLeadBubble.setText(callout);
+      this.keyLeadBubble.setX(snap.keyLead.x - 168);
+      hangAboveHead(this.keyLeadBubble, this.keyLead);
+    }
 
     const next = nextShopHint(snap);
     const pulse = 0.62 + 0.38 * (0.5 + 0.5 * Math.sin(snap.gameMs / 420));
@@ -300,9 +303,13 @@ export class ShopScene extends Phaser.Scene {
     const highlightGo = next?.kind === "hitTheRoad";
     const readyLine = driverReadyCopy(snap.bagsInBin.length);
     const driverLine = highlightGo ? (snap.driverLine ?? readyLine) : null;
-    this.driverBubble.setVisible(!!driverLine && snap.playerRole === "keyLead").setText(driverLine ?? "");
-    this.driverBubble.setAlpha(1);
-    hangAboveHead(this.driverBubble, this.driver);
+    const showDriverBubble = !!driverLine && snap.playerRole === "keyLead";
+    this.driverBubble.setVisible(showDriverBubble);
+    if (showDriverBubble) {
+      if (this.driverBubble.text !== driverLine) this.driverBubble.setText(driverLine);
+      this.driverBubble.setAlpha(1);
+      hangAboveHead(this.driverBubble, this.driver);
+    }
     this.driver.setAlpha(highlightGo ? pulse : 1);
     this.driver.setTint(highlightGo ? Color.flash : 0xffffff);
     if (this.driver.input) this.driver.input.enabled = highlightGo;
