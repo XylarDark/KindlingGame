@@ -58,3 +58,23 @@ describe("boot warm wiring", () => {
     expect(hideAt).toBeGreaterThan(finallyAt);
   });
 });
+
+describe("expanded boot/Title preload warm", () => {
+  it("Boot warms shop dusk hour and drive/door noon+night grades", () => {
+    const boot = read("src/scenes/BootScene.ts");
+    expect(boot).toContain("WARM_SHOP_HOURS = [12, 16, 20.5]");
+    expect(boot).toContain("WARM_SCENE_HOURS");
+    expect(boot).toContain("WARM_BOOT_TIMEOUT_MS = 9000");
+    const flush = boot.slice(boot.indexOf("private async flushTextures"), boot.indexOf("private async warmBootPipeline"));
+    expect(flush).toContain("waitFrames(2)");
+  });
+
+  it("Title deferred warm recompiles shop PostFX before drive/door", () => {
+    const title = read("src/scenes/TitleScene.ts");
+    expect(title).toContain("warmShopPostFx");
+    const body = title.slice(title.indexOf("finishDeferredWarm"), title.indexOf("private async warmAndSleepScene"));
+    expect(body.indexOf("warmShopPostFx")).toBeLessThan(body.indexOf("warmAndSleepScene"));
+    expect(body).toContain('stage: "Shaders"');
+  });
+});
+

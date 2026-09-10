@@ -53,4 +53,34 @@ describe("scene perf guards", () => {
     const pop = hud.slice(hud.indexOf("private spawnScorePop"), hud.indexOf("private syncResults"));
     expect(pop).not.toContain("label.destroy()");
   });
+
+  it("Door dirty-guards prompt setText", () => {
+    const door = read("src/scenes/DoorScene.ts");
+    expect(door).toContain("lastPrompt");
+    const sync = door.slice(door.indexOf("private sync(snap"), door.indexOf("private paintDoorDayNight"));
+    expect(sync).toContain("if (promptLine !== this.lastPrompt)");
+  });
+
+  it("Shop dirty-guards bag texture and TV pulse bands", () => {
+    const shop = read("src/scenes/ShopScene.ts");
+    expect(shop).toContain("lastTvKey");
+    expect(shop).toContain("if (this.bagRack.texture.key !== bagTex)");
+    expect(shop).toContain("getSim().gameMs()");
+  });
+
+  it("Hud skips pre-tick snapshot and dirty-guards ID/pad/phone map", () => {
+    const hud = read("src/scenes/HudScene.ts");
+    const update = hud.slice(hud.indexOf("update(_time"), hud.indexOf("private layoutHud"));
+    expect(update).toContain("isAutoDriving()");
+    expect(update).not.toContain("const pre = sim.snapshot()");
+    expect(hud).toContain("lastIdTextKey");
+    expect(hud).toContain("lastPadFlash");
+    expect(hud).toContain("lastPhoneMapKey");
+  });
+
+  it("Drive skips redundant traffic setTexture when key unchanged", () => {
+    const drive = read("src/scenes/DriveScene.ts");
+    const update = drive.slice(drive.indexOf("update(): void"), drive.indexOf("private paintDayNight"));
+    expect(update).toContain("if (sprite.texture.key !== car.key) sprite.setTexture(car.key)");
+  });
 });

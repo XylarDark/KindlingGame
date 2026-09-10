@@ -192,7 +192,8 @@ export class DriveScene extends Phaser.Scene {
       const prev = this.trafficAngles.get(car.id) ?? car.angle;
       const angle = lerpAngle(prev, car.angle, turnT);
       this.trafficAngles.set(car.id, angle);
-      sprite.setTexture(car.key).setPosition(car.x, car.y).setRotation(angle + Math.PI).setVisible(true);
+      if (sprite.texture.key !== car.key) sprite.setTexture(car.key);
+      sprite.setPosition(car.x, car.y).setRotation(angle + Math.PI).setVisible(true);
     });
     for (const id of this.trafficAngles.keys()) {
       if (!seen.has(id)) this.trafficAngles.delete(id);

@@ -292,6 +292,8 @@ export class GameSim {
   private dropoffGate: DropoffConfirmGate | null = null;
   /** True while E/SPACE or a door pointer is held — one edge per press/tap. */
   private dropoffConfirmHeld = false;
+  /** Reused across same-frame Shop/Drive/Door/Hud readers until the next mutation. */
+  private snapCache: SimSnapshot | null = null;
 
   constructor(options: SimOptions = {}) {
     const seed = options.seed ?? 1;
@@ -305,6 +307,7 @@ export class GameSim {
   /** Start the opening ticket wave after the how-to overlay dismisses. */
   enableSpawns(): void {
     if (this.autoSpawn) return;
+    this.touch();
     this.autoSpawn = true;
     this.queueOpeningOrders();
   }
@@ -338,12 +341,14 @@ export class GameSim {
    * always a field list drifting behind the other, so there is now only one.
    */
   resetToMorning(): void {
+    this.touch();
     this.startNewDay();
   }
 
   /** End the shift early (settings) or when the clock hits 23:00. */
   endShift(): void {
     if (this.shiftEnded) return;
+    this.touch();
     this.shiftEnded = true;
     this.clearDropoff();
     this.queuedInteract = false;
@@ -372,6 +377,7 @@ export class GameSim {
    * rather than stranding a customer.
    */
   startNewDay(): void {
+    this.touch();
     this.shiftEnded = false;
     this.score = 0;
     this.under19Fails = 0;
@@ -430,9 +436,25 @@ export class GameSim {
     this.customerFeedback.clear();
   }
 
+  /** Drop cached view — any mutation that can change what snapshot() returns. */
+  private touch(): void {
+    this.snapCache = null;
+  }
+
+  /** Game clock without allocating a full SimSnapshot (PostFX / sky paths). */
+  gameMs(): number {
+    return this.clock.gameMs;
+  }
+
+  /** Cheap auto-drive probe for Hud input — avoids a full snapshot before tick. */
+  isAutoDriving(): boolean {
+    return this.playerRole === "driver" && this.dropoff?.phase !== "atDoor" && !this.driveArrived;
+  }
+
   snapshot(): SimSnapshot {
+    if (this.snapCache) return this.snapCache;
     const selected = this.selectedOrderId ? this.orderById(this.selectedOrderId) : undefined;
-    return {
+    this.snapCache = {
       gameMs: this.clock.gameMs,
       clockLabel: formatGameClock(this.clock.gameMs),
       score: this.score,
@@ -492,6 +514,7 @@ export class GameSim {
       scoreFlash: this.scoreFlash,
       sfxCue: this.sfxCue,
     };
+    return this.snapCache;
   }
 
   setPlayerInput(dx: number, dy: number): void {
@@ -500,6 +523,7 @@ export class GameSim {
   }
 
   queueInteract(): void {
+    this.touch();
     this.queuedInteract = true;
   }
 
@@ -510,22 +534,26 @@ export class GameSim {
    */
   pressDropoffConfirm(): void {
     if (this.dropoffConfirmHeld) return;
+    this.touch();
     this.dropoffConfirmHeld = true;
     if (this.driverDropoffGated() && !this.dropoffConfirmAccepts()) return;
     this.queueInteract();
   }
 
   releaseDropoffConfirm(): void {
+    this.touch();
     this.dropoffConfirmHeld = false;
   }
 
   interact(): void {
+    this.touch();
     if (this.playerRole === "driver") this.interactDriver();
     else this.shopClick({ type: "handoff" });
   }
 
   shopClick(click: ShopClick): void {
     if (this.shiftEnded) return;
+    this.touch();
     switch (click.type) {
       case "keyLead":
         this.setOrdersNotice("Pick a flashing ticket, then the strain.");
@@ -549,12 +577,14 @@ export class GameSim {
   }
 
   setVehiclePosition(x: number, y: number): void {
+    this.touch();
     this.vehicle.x = x;
     this.vehicle.y = y;
     if (this.playerRole === "driver") this.refreshDriveRoute();
   }
 
   spawnOrder(type: OrderType, opts: { skuId?: string; destinationId?: string; ageOk?: boolean } = {}): Order {
+    this.touch();
     const sku = opts.skuId
       ? skuById(this.catalog, opts.skuId)
       : this.catalog[Math.floor(this.rng() * this.catalog.length)];
@@ -591,6 +621,7 @@ export class GameSim {
   }
 
   hitTheRoad(): boolean {
+    this.touch();
     if (this.shiftEnded) return false;
     const fresh = this.orders.filter((o) => o.status === "inBin");
     if (this.playerRole === "keyLead" && fresh.length === 0 && this.runOrderIds.length === 0) {
@@ -619,6 +650,7 @@ export class GameSim {
   }
 
   backToShop(): boolean {
+    this.touch();
     if (this.playerRole !== "driver") return false;
     const shop = tileToWorld(CITY.shopSpawn);
     if (dist(this.vehicle.x, this.vehicle.y, shop.x, shop.y) > HANDOFF_RADIUS) {
@@ -654,6 +686,7 @@ export class GameSim {
 
   tick(dtMs: number): void {
     if (this.shiftEnded) return;
+    this.touch();
     this.clock.tick(dtMs);
     if (this.clock.gameMs >= SHIFT_MS) {
       this.endShift();
@@ -692,6 +725,7 @@ export class GameSim {
   }
 
   setDriverPosition(x: number, y: number): void {
+    this.touch();
     if (this.dropoff?.driver) {
       this.dropoff.driver.x = x;
       this.dropoff.driver.y = y;
@@ -699,6 +733,7 @@ export class GameSim {
   }
 
   dropoffAct(): void {
+    this.touch();
     this.interactDriver();
   }
 
