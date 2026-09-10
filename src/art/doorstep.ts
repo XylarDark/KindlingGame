@@ -36,12 +36,22 @@ export function doorFacade(houseIndex: number): DoorFacade {
   return { style, ...FACADES[style] };
 }
 
-/** Outdoor porch in front of a house — people stand on the walk. Facade is stable per destination. */
-export function paintDoorstep(g: Phaser.GameObjects.Graphics, houseIndex: number, sky: SkySample): void {
-  g.clear();
+export const DOORSTEP_FLOOR_Y = FLOOR_Y;
+export const DOORSTEP_DOOR_X = GAME_WIDTH / 2;
+export const DOORSTEP_PORCH = { x: GAME_WIDTH / 2, y: FLOOR_Y - 200 };
+
+/** Sky band height — grass and facade start below this. */
+export const DOORSTEP_SKY_H = FLOOR_Y - 80;
+
+/** Live sky bands only (shop window + door). */
+export function paintDoorstepSky(g: Phaser.GameObjects.Graphics, sky: SkySample): void {
+  paintSky(g, 0, 0, GAME_WIDTH, DOORSTEP_SKY_H, sky, { sunRadius: 36, moonRadius: 22 });
+}
+
+/** Yard, facade, porch structure — baked per house; windows at day, no lamp glow. */
+export function paintDoorstepStatic(g: Phaser.GameObjects.Graphics, houseIndex: number): void {
   const facade = doorFacade(houseIndex);
-  const skyH = FLOOR_Y - 80;
-  paintSky(g, 0, 0, GAME_WIDTH, skyH, sky, { sunRadius: 36, moonRadius: 22 });
+  const skyH = DOORSTEP_SKY_H;
 
   g.fillStyle(Pal.grassDark, 1);
   g.fillRect(0, skyH, GAME_WIDTH, GAME_HEIGHT - skyH);
@@ -86,19 +96,43 @@ export function paintDoorstep(g: Phaser.GameObjects.Graphics, houseIndex: number
   g.fillStyle(Pal.gold, 1);
   g.fillCircle(dx + doorW - 22, dy + doorH / 2, 8);
 
-  const night = sky.windowGlow;
-  windowPane(g, hx + 80, hy + 180, night);
-  windowPane(g, hx + houseW - 80 - 160, hy + 180, night);
+  windowPane(g, hx + 80, hy + 180, 0);
+  windowPane(g, hx + houseW - 80 - 160, hy + 180, 0);
   if (facade.style !== "ranch") {
-    windowPane(g, hx + 80, hy + 360, night);
-    windowPane(g, hx + houseW - 80 - 160, hy + 360, night);
+    windowPane(g, hx + 80, hy + 360, 0);
+    windowPane(g, hx + houseW - 80 - 160, hy + 360, 0);
   } else {
-    windowPane(g, hx + 280, hy + 200, night);
-    windowPane(g, hx + houseW - 280 - 160, hy + 200, night);
+    windowPane(g, hx + 280, hy + 200, 0);
+    windowPane(g, hx + houseW - 280 - 160, hy + 200, 0);
   }
 
-  paintPorch(g, hx, houseW, dx, doorW, sky, houseIndex);
+  paintPorchStatic(g, hx, houseW, dx, doorW, houseIndex);
   paintYardProps(g, hx, houseW, skyH, facade, houseIndex);
+}
+
+/** Lamp halos + window glow — redraw only when sky sample changes. */
+export function paintDoorstepNightFx(g: Phaser.GameObjects.Graphics, houseIndex: number, sky: SkySample): void {
+  const facade = doorFacade(houseIndex);
+  const skyH = DOORSTEP_SKY_H;
+  const houseW = facade.style === "town" || facade.style === "twoStory" ? 840 : facade.style === "ranch" ? 1040 : 920;
+  const houseH = facade.style === "ranch" ? 440 : facade.style === "cottage" ? 480 : 520;
+  const hx = Math.floor((GAME_WIDTH - houseW) / 2);
+  const hy = skyH - houseH;
+  const doorW = facade.style === "modern" ? 160 : 140;
+  const doorH = 280;
+  const dx = hx + Math.floor((houseW - doorW) / 2);
+  const dy = hy + houseH - doorH;
+
+  paintPorchLampGlow(g, dx, doorW, sky);
+  paintWindowGlowOverlay(g, hx, hy, houseW, facade, sky.windowGlow);
+}
+
+/** Full doorstep (tests + legacy) — sky + static + night FX in one pass. */
+export function paintDoorstep(g: Phaser.GameObjects.Graphics, houseIndex: number, sky: SkySample): void {
+  g.clear();
+  paintDoorstepSky(g, sky);
+  paintDoorstepStatic(g, houseIndex);
+  paintDoorstepNightFx(g, houseIndex, sky);
 }
 
 function paintRoof(g: Phaser.GameObjects.Graphics, hx: number, hy: number, houseW: number, facade: DoorFacade): void {
@@ -123,13 +157,12 @@ function paintRoof(g: Phaser.GameObjects.Graphics, hx: number, hy: number, house
   g.fillRect(hx - 48, hy + 112, houseW + 96, 16);
 }
 
-function paintPorch(
+function paintPorchStatic(
   g: Phaser.GameObjects.Graphics,
   hx: number,
   houseW: number,
   dx: number,
   doorW: number,
-  sky: SkySample,
   houseIndex: number,
 ): void {
   const walkX = hx + houseW / 2 - 90;
@@ -150,12 +183,6 @@ function paintPorch(
   g.fillRect(lampX - 4, lampY, 8, 36);
   g.fillStyle(Pal.gold, 1);
   g.fillRect(lampX - 16, lampY + 28, 32, 18);
-  if (sky.lampAlpha > 0.08) {
-    g.fillStyle(0xffe0a8, 0.12 + 0.38 * sky.lampAlpha);
-    g.fillCircle(lampX, lampY + 48, 70 + 40 * sky.lampAlpha);
-    g.fillStyle(0xfff0c8, 0.2 + 0.45 * sky.lampAlpha);
-    g.fillCircle(lampX, lampY + 40, 22);
-  }
 
   g.fillStyle(Pal.woodDark, 1);
   g.fillRect(dx - 70, FLOOR_Y - 80 - 8, 36, 48);
@@ -163,6 +190,44 @@ function paintPorch(
   g.fillRect(dx - 66, FLOOR_Y - 80 - 40, 28, 32);
   g.fillStyle(Pal.leafDark, 1);
   g.fillRect(dx - 60, FLOOR_Y - 80 - 52, 16, 16);
+}
+
+function paintPorchLampGlow(g: Phaser.GameObjects.Graphics, dx: number, doorW: number, sky: SkySample): void {
+  if (sky.lampAlpha <= 0.08) return;
+  const lampX = dx + doorW / 2;
+  const lampY = FLOOR_Y - 80 - 300;
+  g.fillStyle(0xffe0a8, 0.12 + 0.38 * sky.lampAlpha);
+  g.fillCircle(lampX, lampY + 48, 70 + 40 * sky.lampAlpha);
+  g.fillStyle(0xfff0c8, 0.2 + 0.45 * sky.lampAlpha);
+  g.fillCircle(lampX, lampY + 40, 22);
+}
+
+function paintWindowGlowOverlay(
+  g: Phaser.GameObjects.Graphics,
+  hx: number,
+  hy: number,
+  houseW: number,
+  facade: DoorFacade,
+  glow: number,
+): void {
+  if (glow <= 0.2) return;
+  const windows: { x: number; y: number }[] = [
+    { x: hx + 80, y: hy + 180 },
+    { x: hx + houseW - 80 - 160, y: hy + 180 },
+  ];
+  if (facade.style !== "ranch") {
+    windows.push({ x: hx + 80, y: hy + 360 }, { x: hx + houseW - 80 - 160, y: hy + 360 });
+  } else {
+    windows.push({ x: hx + 280, y: hy + 200 }, { x: hx + houseW - 280 - 160, y: hy + 200 });
+  }
+  for (const w of windows) {
+    g.fillStyle(Pal.gold, 0.2 + 0.55 * glow);
+    g.fillRect(w.x + 20, w.y + 20, 50, 40);
+    if (glow > 0.25) {
+      g.fillStyle(0xffe8b0, 0.18 + 0.35 * glow);
+      g.fillRect(w.x + 8, w.y + 8, 144, 104);
+    }
+  }
 }
 
 function paintYardProps(
@@ -208,7 +273,3 @@ function windowPane(g: Phaser.GameObjects.Graphics, x: number, y: number, glow: 
     g.fillRect(x + 8, y + 8, 144, 104);
   }
 }
-
-export const DOORSTEP_FLOOR_Y = FLOOR_Y;
-export const DOORSTEP_DOOR_X = GAME_WIDTH / 2;
-export const DOORSTEP_PORCH = { x: GAME_WIDTH / 2, y: FLOOR_Y - 200 };

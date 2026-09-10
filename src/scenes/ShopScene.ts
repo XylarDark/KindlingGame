@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { customerTextureKey } from "../art/people";
+import { applyCrewTexture, applyPersonTexture, personImageKey } from "../art/peopleAtlas";
 import { drawReceiptRail } from "../art/receiptRail";
 import { shopGrade } from "../art/dayNightGrade";
 import { applyDayNight, attachDayNight, dayNightFrom, type DayNightPipeline } from "../art/dayNightPipeline";
@@ -38,7 +38,7 @@ import {
 import { enableItemHit } from "../input/hit";
 import { getSim } from "../session";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
-import { skyAt } from "../sim/dayNight";
+import { skyAt, skyVisualDirtyKey } from "../sim/dayNight";
 import type { Sku } from "../sim/catalog";
 import type { CustomerView, SimSnapshot } from "../sim/gameSim";
 import { nextShopHint } from "../sim/tutorialHints";
@@ -182,6 +182,7 @@ export class ShopScene extends Phaser.Scene {
       .setOrigin(0.5, 1)
       .setScale(PEOPLE_SCALE)
       .setDepth(5);
+    applyCrewTexture(this.keyLead, "tex-keylead");
     const counterBake = drawShopCounter(this);
     this.bakeStaticShop(interiorBake.background, 0);
     this.bakeStaticShop(
@@ -256,6 +257,7 @@ export class ShopScene extends Phaser.Scene {
       .setVisible(false);
 
     this.driver = this.add.image(DRIVER.x, DRIVER.y, "tex-driver-sit").setOrigin(0.5, 1).setScale(PEOPLE_SCALE).setDepth(10);
+    applyCrewTexture(this.driver, "tex-driver-sit");
     enableItemHit(this.driver);
     this.driver.on("pointerdown", () => this.departNow());
     wireHover(this.driver);
@@ -297,7 +299,7 @@ export class ShopScene extends Phaser.Scene {
 
   private sync(snap: SimSnapshot): void {
     const sky = skyAt(snap.gameMs);
-    const skyKey = `${sky.zenith}:${sky.haze}:${sky.lampAlpha.toFixed(2)}:${sky.windowGlow.toFixed(2)}`;
+    const skyKey = skyVisualDirtyKey(sky);
     if (skyKey !== this.lastSkyKey) {
       this.lastSkyKey = skyKey;
       paintShopDayNight(this.sky, snap.gameMs);
@@ -550,8 +552,9 @@ export class ShopScene extends Phaser.Scene {
   }
 
   private makeCustomerVisual(): CustomerVisual {
+    const stand = personImageKey("tex-customer-0");
     const sprite = this.add
-      .image(-400, CUSTOMER_SPOT.y, customerTextureKey(0))
+      .image(-400, CUSTOMER_SPOT.y, stand.key, stand.frame)
       .setOrigin(0.5, 1)
       .setScale(PEOPLE_SCALE)
       .setDepth(5)
@@ -605,7 +608,7 @@ export class ShopScene extends Phaser.Scene {
     }
     free.orderId = orderId;
     free.sprite.setData("orderId", orderId);
-    free.sprite.setTexture(customerTextureKey(look));
+    applyPersonTexture(free.sprite, look);
     free.sprite.setVisible(true).setActive(true);
     this.customers.set(orderId, free);
     return free;
@@ -641,8 +644,8 @@ export class ShopScene extends Phaser.Scene {
       let visual = this.customers.get(customer.orderId);
       if (!visual) {
         visual = this.acquireCustomerVisual(customer.orderId, customer.look);
-      } else if (visual.sprite.texture.key !== customerTextureKey(customer.look)) {
-        visual.sprite.setTexture(customerTextureKey(customer.look));
+      } else {
+        applyPersonTexture(visual.sprite, customer.look);
       }
       const { sprite, bubble, feedback } = visual;
       const focus = customer.orderId === focusId;

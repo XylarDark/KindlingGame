@@ -13,9 +13,10 @@ Preserve: dropoff gate, rawDelta, Drive bake, syncSceneRenderCamera, install coa
 | 3 | Shop static bake bg+mid RTs | Landed |
 | 4 | City tile atlas grass/road/parking | Landed |
 | 5 | Overdraw cuts lot/night glow/plaques | Landed |
-| 6 | Compressed textures ASTC/ETC | Deferred |
-| 7 | People multi-frame atlas | Deferred |
-| 8 | Further no-alloc / sky cadence | Deferred |
+| 6 | Compressed textures ASTC/ETC | Deferred — canvas-baked RGBA; atlases cut binds/memory |
+| 7 | People multi-frame atlas | Landed |
+| 8 | Further no-alloc / sky cadence | Landed |
+| 9 | Door static bake (facade RT) | Landed |
 
 ## Docs
 

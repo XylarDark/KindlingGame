@@ -1,14 +1,21 @@
 import Phaser from "phaser";
-import { customerTextureKey } from "../art/people";
+import { applyCrewTexture, applyPersonTexture } from "../art/peopleAtlas";
 import { doorGrade } from "../art/dayNightGrade";
 import { applyDayNight, attachDayNight, dayNightFrom, shouldApplyGrade, type DayNightPipeline } from "../art/dayNightPipeline";
 import { getRenderBudget, syncSceneRenderCamera } from "../ui/renderBudget";
-import { paintDoorstep, DOORSTEP_DOOR_X, DOORSTEP_FLOOR_Y, DOORSTEP_PORCH } from "../art/doorstep";
+import {
+  paintDoorstepNightFx,
+  paintDoorstepSky,
+  paintDoorstepStatic,
+  DOORSTEP_DOOR_X,
+  DOORSTEP_FLOOR_Y,
+  DOORSTEP_PORCH,
+} from "../art/doorstep";
 import { itemHitSize } from "../input/hitRect";
 import { BAG_SCALE, PEOPLE_SCALE, PERSON_DISPLAY_H } from "../maps/shopT0";
 import { getSim } from "../session";
-import { GAME_WIDTH } from "../sim/constants";
-import { skyAt } from "../sim/dayNight";
+import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
+import { skyAt, skyVisualDirtyKey } from "../sim/dayNight";
 import type { SimSnapshot } from "../sim/gameSim";
 import { formatSlaClock, isSlaUrgent } from "../ui/copy";
 import { addSignText, setSignAccent } from "../ui/signText";
@@ -58,7 +65,10 @@ const DOOR_FLASH_SWELL = 0.12;
 const DOOR_FLASH_DIM = 0.45;
 
 export class DoorScene extends Phaser.Scene {
-  private backdrop!: Phaser.GameObjects.Graphics;
+  private skyLayer!: Phaser.GameObjects.Graphics;
+  private nightFx!: Phaser.GameObjects.Graphics;
+  /** Baked yard + facade per house — static draw split (Drive/Shop-style). */
+  private facadeBake?: Phaser.GameObjects.RenderTexture;
   private driver!: Phaser.GameObjects.Image;
   private customer!: Phaser.GameObjects.Image;
   private bag!: Phaser.GameObjects.Image;
@@ -86,8 +96,12 @@ export class DoorScene extends Phaser.Scene {
     this.cameras.main.disableCull = false;
     syncSceneRenderCamera(this);
     this.lighting = attachDayNight(this.cameras.main);
-    this.backdrop = this.add.graphics().setDepth(0);
-    paintDoorstep(this.backdrop, 0, skyAt(0));
+    this.skyLayer = this.add.graphics().setDepth(0);
+    this.facadeBake = this.bakeDoorFacade(0);
+    this.nightFx = this.add.graphics().setDepth(1);
+    const startSky = skyAt(0);
+    paintDoorstepSky(this.skyLayer, startSky);
+    paintDoorstepNightFx(this.nightFx, 0, startSky);
 
     this.houseLabel = addSignText(this, DOORSTEP_DOOR_X, 56, "", {
       size: doorTitlePx(),
@@ -102,8 +116,9 @@ export class DoorScene extends Phaser.Scene {
 
     this.floorY = DOORSTEP_FLOOR_Y + 8;
     this.driver = this.add.image(DRIVER_X, this.floorY, "tex-driver").setOrigin(0.5, 1).setScale(PEOPLE_SCALE).setDepth(5);
+    applyCrewTexture(this.driver, "tex-driver");
     this.customer = this.add
-      .image(CUSTOMER_X, this.floorY, customerTextureKey(0))
+      .image(CUSTOMER_X, this.floorY, "tex-customer-0")
       .setOrigin(0.5, 1)
       .setScale(PEOPLE_SCALE)
       .setDepth(5);
@@ -184,17 +199,24 @@ export class DoorScene extends Phaser.Scene {
   private sync(snap: SimSnapshot): void {
     const drop = snap.dropoff;
     // Same field the ID-card photo reads, so the two cannot show different people.
-    const face = customerTextureKey(drop.customerLook ?? 0);
-    if (this.customer.texture.key !== face) this.customer.setTexture(face);
+    applyPersonTexture(this.customer, drop.customerLook ?? 0);
     const houseKey = drop.houseId ?? "house-1";
     const sky = skyAt(snap.gameMs);
-    const skyKey = `${sky.zenith}:${sky.haze}:${sky.lampAlpha.toFixed(2)}:${sky.windowGlow.toFixed(2)}`;
-    if (houseKey !== this.lastHouse || skyKey !== this.lastSkyKey) {
+    const skyKey = skyVisualDirtyKey(sky);
+    const houseIndex = (Number(houseKey.replace("house-", "")) || 1) - 1;
+    if (houseKey !== this.lastHouse) {
       this.lastHouse = houseKey;
-      this.lastSkyKey = skyKey;
       this.lastBagHanded = null;
-      const n = Number(houseKey.replace("house-", "")) || 1;
-      paintDoorstep(this.backdrop, n - 1, sky);
+      this.facadeBake?.destroy();
+      this.facadeBake = this.bakeDoorFacade(houseIndex);
+      this.lastSkyKey = "";
+    }
+    if (skyKey !== this.lastSkyKey) {
+      this.lastSkyKey = skyKey;
+      this.skyLayer.clear();
+      paintDoorstepSky(this.skyLayer, sky);
+      this.nightFx.clear();
+      paintDoorstepNightFx(this.nightFx, houseIndex, sky);
     }
     const destOrder = snap.orders.find((o) => o.destinationId === drop.houseId && o.status === "onRun");
     const sla = destOrder ? formatSlaClock(destOrder.slaRemainingMs) : "";
@@ -277,6 +299,17 @@ export class DoorScene extends Phaser.Scene {
     }
     this.prompt.setAlpha(1);
     this.placePrompt();
+  }
+
+  private bakeDoorFacade(houseIndex: number): Phaser.GameObjects.RenderTexture {
+    const scratch = this.add.graphics().setVisible(false);
+    paintDoorstepStatic(scratch, houseIndex);
+    const rt = this.add.renderTexture(0, 0, GAME_WIDTH, GAME_HEIGHT).setOrigin(0, 0).setDepth(0.5);
+    rt.beginDraw();
+    rt.batchDraw(scratch);
+    rt.endDraw();
+    scratch.destroy();
+    return rt;
   }
 
   private paintDoorDayNight(snap: SimSnapshot): void {

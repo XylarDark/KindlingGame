@@ -216,3 +216,8 @@ export function skyAt(gameMs: number): SkySample {
 export function nightFactor(gameMs: number): number {
   return skyAt(gameMs).moonAlpha;
 }
+
+/** Dirty key for shop-window / door sky Graphics — skip full clears when unchanged. */
+export function skyVisualDirtyKey(sky: SkySample): string {
+  return `${sky.zenith}:${sky.haze}:${sky.lampAlpha.toFixed(2)}:${sky.windowGlow.toFixed(2)}`;
+}
