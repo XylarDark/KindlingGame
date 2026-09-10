@@ -12,8 +12,8 @@ export type RenderBudget = {
    * Tier table (2026-09-10 doctrine — prefer sustained phone FPS over fixed 1×):
    * | tier | renderScale | postFx | maxLights | uploadMinMs | notes |
    * | high | 1.0         | on     | 8         | 16          | desktop default |
-   * | mid  | 0.7         | off    | 0         | 100         | phone default; Drive/Door prefer this |
-   * | low  | 0.5         | off    | 0         | 200         | heavy stress / coarse demotion |
+   * | mid  | 0.55        | off    | 0         | 100         | phone default; Drive/Door prefer this |
+   * | low  | 0.4         | off    | 0         | 200         | heavy stress / coarse demotion |
    */
   renderScale: number;
   postFx: boolean;
@@ -24,10 +24,10 @@ export type RenderBudget = {
 
 /** Desktop high — phones seed/stay mid so they skip fullscreen DayNight by default. */
 const HIGH: RenderBudget = { tier: "high", renderScale: 1, postFx: true, maxLights: 8, uploadMinMs: 16 };
-/** Mid: ~0.7× pixels; PostFX off — lights still read via Graphics glow. */
-const MID: RenderBudget = { tier: "mid", renderScale: 0.7, postFx: false, maxLights: 0, uploadMinMs: 100 };
-/** Low: half-res backbuffer; PostFX off. Soft on small GPUs; UI may look softer. */
-const LOW: RenderBudget = { tier: "low", renderScale: 0.5, postFx: false, maxLights: 0, uploadMinMs: 200 };
+/** Mid: ~0.55× pixels; PostFX off — lights still read via Graphics glow. */
+const MID: RenderBudget = { tier: "mid", renderScale: 0.55, postFx: false, maxLights: 0, uploadMinMs: 100 };
+/** Low: ~0.4× backbuffer; PostFX off. Soft on small GPUs; UI may look softer. */
+const LOW: RenderBudget = { tier: "low", renderScale: 0.4, postFx: false, maxLights: 0, uploadMinMs: 200 };
 
 /** Promote above this; demote below the lower band (hysteresis). */
 const PROMOTE_FPS = 48;

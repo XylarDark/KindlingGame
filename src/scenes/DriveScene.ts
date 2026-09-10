@@ -36,6 +36,13 @@ const HOUSE_TEX = ["tex-house", "tex-house-alt", "tex-house-3", "tex-house-4", "
 const DRIVE_GRADE_MIN_MS = 120;
 /** Focus quantize grid — coarser than 32px cuts lamp-pool rebuilds while driving. */
 const DRIVE_FOCUS_GRID = 64;
+/**
+ * Bake the static Drive map into ≤2048px RenderTexture cells so mobile GPUs stay
+ * under typical max-texture-size (map is 4800×3360). Few draw calls; camera culls cells.
+ */
+const CITY_BAKE_CELL = 2048;
+/** Extra world px around the camera before hiding traffic sprites (Phaser also culls). */
+const TRAFFIC_CULL_PAD = 192;
 
 /**
  * The road's share of the "what to do next" family, 25% over the shared ramp.
@@ -75,6 +82,9 @@ export class DriveScene extends Phaser.Scene {
   private trafficSprites: Phaser.GameObjects.Image[] = [];
   private trafficAngles = new Map<string, number>();
   private cityBuildReady = false;
+  /** Ground/roads/houses/props/lamps/seams staged for bake, then destroyed. */
+  private staticBakeList: Phaser.GameObjects.GameObject[] = [];
+  private cityBakeLayers: Phaser.GameObjects.RenderTexture[] = [];
 
   constructor() {
     super("drive");
@@ -82,6 +92,7 @@ export class DriveScene extends Phaser.Scene {
 
   create(): void {
     this.cameras.main.setBounds(0, 0, MAP_PX_W, MAP_PX_H);
+    this.cameras.main.disableCull = false;
     this.cameras.main.setBackgroundColor(skyAt(0).mapGrass);
     syncSceneRenderCamera(this);
     this.lighting = attachDayNight(this.cameras.main);
@@ -178,7 +189,7 @@ export class DriveScene extends Phaser.Scene {
       y: snap.vehicle.y,
       heading: snap.vehicle.heading,
     });
-    const turnT = 1 - Math.exp(-(this.game.loop.delta / 1000) * 6);
+    const turnT = 1 - Math.exp(-(this.game.loop.rawDelta / 1000) * 6);
     const seen = new Set<string>();
     while (this.trafficSprites.length < traffic.length && this.trafficSprites.length < TRAFFIC_VISUAL_MAX) {
       this.trafficSprites.push(this.add.image(0, 0, "tex-car").setDepth(5).setDisplaySize(120, 72).setAlpha(0.92));
@@ -194,7 +205,15 @@ export class DriveScene extends Phaser.Scene {
       const angle = lerpAngle(prev, car.angle, turnT);
       this.trafficAngles.set(car.id, angle);
       if (sprite.texture.key !== car.key) sprite.setTexture(car.key);
-      sprite.setPosition(car.x, car.y).setRotation(angle + Math.PI).setVisible(true);
+      sprite.setPosition(car.x, car.y).setRotation(angle + Math.PI);
+      const view = this.cameras.main.worldView;
+      const pad = TRAFFIC_CULL_PAD;
+      const onScreen =
+        car.x >= view.x - pad &&
+        car.x <= view.x + view.width + pad &&
+        car.y >= view.y - pad &&
+        car.y <= view.y + view.height + pad;
+      sprite.setVisible(onScreen);
     });
     for (const id of this.trafficAngles.keys()) {
       if (!seen.has(id)) this.trafficAngles.delete(id);
@@ -404,6 +423,8 @@ export class DriveScene extends Phaser.Scene {
       await this.yieldToRenderer();
     }
     this.drawCityOverlays(ctx);
+    // Collapse static Images/Graphics into a few RenderTextures — only movers stay live.
+    await this.bakeStaticCityMap();
     markCityBuildComplete();
     this.cityBuildReady = true;
   }
@@ -424,11 +445,11 @@ export class DriveScene extends Phaser.Scene {
         const y = r * TILE + TILE / 2;
         if (ctx.houseTiles.has(`${c},${r}`) || (kind === "shop" && ctx.shopTiles.has(`${c},${r}`))) {
           const grass = ["tex-wall", "tex-wall-2", "tex-wall-3"][(c * 3 + r * 5) % 3]!;
-          this.add.image(x, y, grass).setDisplaySize(TILE, TILE).setDepth(0);
+          this.trackStaticTile(x, y, grass);
           continue;
         }
         if (kind === "parking") {
-          this.add.image(x, y, "tex-parking").setDisplaySize(TILE, TILE).setDepth(0);
+          this.trackStaticTile(x, y, "tex-parking");
           continue;
         }
         const key =
@@ -439,19 +460,26 @@ export class DriveScene extends Phaser.Scene {
               : kind === "house"
                 ? HOUSE_TEX[(c + r) % HOUSE_TEX.length]!
                 : roadTextureKey(kinds, r, c);
-        this.add.image(x, y, key).setDisplaySize(TILE, TILE).setDepth(0);
+        this.trackStaticTile(x, y, key);
       }
     }
+  }
+
+  private trackStaticTile(x: number, y: number, key: string): void {
+    const img = this.add.image(x, y, key).setDisplaySize(TILE, TILE).setDepth(0);
+    this.staticBakeList.push(img);
   }
 
   private drawCityOverlays(_ctx: CityDrawContext): void {
     CITY.houses.forEach((house, i) => {
       const home = lotCenter(house.house, house.lotW, house.lotH);
       const tex = HOUSE_TEX[i % HOUSE_TEX.length]!;
-      this.add
+      const roof = this.add
         .image(home.x, home.y, tex)
         .setDisplaySize(house.lotW * TILE * 0.98, house.lotH * TILE * 0.96)
         .setDepth(1);
+      this.staticBakeList.push(roof);
+      // Lot numbers stay live Text (few objects; baking Text is fragile).
       const num = addUiText(this, home.x, home.y - 8, houseTitle(house.id).replace("House ", ""), {
         size: Type.body,
         color: Color.creamHex,
@@ -469,9 +497,11 @@ export class DriveScene extends Phaser.Scene {
     const accessGfx = this.add.graphics().setDepth(1.2);
     paintHouseStreetSeams(accessGfx);
     paintAccessPaths(accessGfx, cityAccessPaths());
+    this.staticBakeList.push(accessGfx);
 
     const shop = lotCenter(CITY.shopLot.origin, CITY.shopLot.w, CITY.shopLot.h);
     this.shopCenter = shop;
+    // Interactive shop building stays live for hit testing / return-to-shop.
     this.shopImg = this.add
       .image(shop.x, shop.y, "tex-shop-bldg")
       .setDisplaySize(CITY.shopLot.w * TILE, CITY.shopLot.h * TILE)
@@ -506,13 +536,47 @@ export class DriveScene extends Phaser.Scene {
 
     this.streetLamps = cityStreetLamps();
     for (const lamp of this.streetLamps) {
-      this.add.image(lamp.x, lamp.y, "tex-lamp").setDisplaySize(36, 88).setDepth(2);
+      // Lamp poles are static; nightGlow Graphics still paints pools each frame.
+      const img = this.add.image(lamp.x, lamp.y, "tex-lamp").setDisplaySize(36, 88).setDepth(2);
+      this.staticBakeList.push(img);
     }
     for (const prop of cityProps()) {
       const img = this.add.image(prop.x, prop.y, prop.key).setDepth(prop.depth);
       if (prop.display) img.setDisplaySize(prop.display.w, prop.display.h);
       else img.setDisplaySize(TILE, TILE);
+      this.staticBakeList.push(img);
     }
+  }
+
+  /**
+   * Bake ground/roads/static props into a grid of RenderTextures, then destroy the
+   * per-tile Images. Live sprites after this: vehicle, walker, traffic, pins,
+   * interactive shop, texts, and night/lot glow Graphics.
+   */
+  private async bakeStaticCityMap(): Promise<void> {
+    const layers = [...this.staticBakeList].sort((a, b) => {
+      const da = "depth" in a ? Number((a as { depth: number }).depth) : 0;
+      const db = "depth" in b ? Number((b as { depth: number }).depth) : 0;
+      return da - db;
+    });
+    for (let y = 0; y < MAP_PX_H; y += CITY_BAKE_CELL) {
+      for (let x = 0; x < MAP_PX_W; x += CITY_BAKE_CELL) {
+        const w = Math.min(CITY_BAKE_CELL, MAP_PX_W - x);
+        const h = Math.min(CITY_BAKE_CELL, MAP_PX_H - y);
+        const rt = this.add.renderTexture(x, y, w, h).setOrigin(0, 0).setDepth(0);
+        rt.camera.setScroll(x, y);
+        rt.beginDraw();
+        for (const obj of layers) {
+          if (!staticIntersectsBakeCell(obj, x, y, w, h)) continue;
+          rt.batchDraw(obj);
+        }
+        rt.endDraw();
+        this.cityBakeLayers.push(rt);
+        await this.yieldToRenderer();
+      }
+    }
+    for (const obj of this.staticBakeList) obj.destroy();
+    this.staticBakeList = [];
   }
 
   /** Yield one frame — wall-clock fallback when Phaser time freezes during sync work. */
@@ -541,4 +605,26 @@ function lotTileKeys(origin: { c: number; r: number }, w: number, h: number): st
     for (let c = origin.c; c < origin.c + w; c++) keys.push(`${c},${r}`);
   }
   return keys;
+}
+
+/** True when a static Image/Graphics likely paints inside a bake cell (Graphics always). */
+function staticIntersectsBakeCell(
+  obj: Phaser.GameObjects.GameObject,
+  cellX: number,
+  cellY: number,
+  cellW: number,
+  cellH: number,
+): boolean {
+  if (!("x" in obj) || !("y" in obj)) return true;
+  const x = Number((obj as { x: number }).x);
+  const y = Number((obj as { y: number }).y);
+  const dw =
+    "displayWidth" in obj ? Number((obj as { displayWidth: number }).displayWidth) : TILE * 2;
+  const dh =
+    "displayHeight" in obj ? Number((obj as { displayHeight: number }).displayHeight) : TILE * 2;
+  // Graphics path overlays have no useful display size — always stamp (camera clips).
+  if (!("texture" in obj)) return true;
+  const halfW = dw / 2;
+  const halfH = dh / 2;
+  return x + halfW >= cellX && x - halfW <= cellX + cellW && y + halfH >= cellY && y - halfH <= cellY + cellH;
 }

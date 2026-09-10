@@ -47,6 +47,19 @@ describe("DriveScene grade throttle and dirty guards", () => {
     expect(src).toContain("yieldToRenderer");
     expect(src).toContain("cityBuildReady");
   });
+
+  it("bakes static ground/props into RenderTextures and keeps movers live", () => {
+    expect(src).toContain("bakeStaticCityMap");
+    expect(src).toContain("staticBakeList");
+    expect(src).toContain("CITY_BAKE_CELL");
+    expect(src).toContain("renderTexture");
+    expect(src).toContain("disableCull = false");
+    expect(src).toContain("TRAFFIC_CULL_PAD");
+    // Interactive shop + movers must not be on the bake destroy list as the only path.
+    expect(src).toContain("enableItemHit(this.shopImg)");
+    expect(src).toContain("this.vehicle");
+    expect(src).toContain("trafficSprites");
+  });
 });
 
 describe("DoorScene grade throttle", () => {

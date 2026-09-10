@@ -83,6 +83,7 @@ export class DoorScene extends Phaser.Scene {
 
   create(): void {
     this.input.setTopOnly(true);
+    this.cameras.main.disableCull = false;
     syncSceneRenderCamera(this);
     this.lighting = attachDayNight(this.cameras.main);
     this.backdrop = this.add.graphics().setDepth(0);

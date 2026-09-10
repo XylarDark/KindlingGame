@@ -50,14 +50,14 @@ describe("tier → scale / effects mapping", () => {
     });
     expect(forceRenderBudget("mid")).toMatchObject({
       tier: "mid",
-      renderScale: 0.7,
+      renderScale: 0.55,
       postFx: false,
       maxLights: 0,
       uploadMinMs: 100,
     });
     expect(forceRenderBudget("low")).toMatchObject({
       tier: "low",
-      renderScale: 0.5,
+      renderScale: 0.4,
       postFx: false,
       maxLights: 0,
       uploadMinMs: 200,
@@ -72,7 +72,7 @@ describe("init / tickRenderBudget", () => {
     expect(initRenderBudget(true).tier).toBe("mid");
     expect(getRenderBudget().postFx).toBe(false);
     expect(getRenderBudget().maxLights).toBe(0);
-    expect(getRenderBudget().renderScale).toBeCloseTo(0.7);
+    expect(getRenderBudget().renderScale).toBeCloseTo(0.55);
   });
 
   it("high tier keeps PostFX on with ~16ms uniform upload throttle", () => {
@@ -90,13 +90,13 @@ describe("init / tickRenderBudget", () => {
     expect(getRenderBudget().tier).toBe("high");
     expect(tickRenderBudget(35, 3_100)).toBe(true);
     expect(getRenderBudget().tier).toBe("mid");
-    expect(getRenderBudget().renderScale).toBeCloseTo(0.7);
+    expect(getRenderBudget().renderScale).toBeCloseTo(0.55);
     expect(tickRenderBudget(28, 4_200)).toBe(false);
     expect(getRenderBudget().tier).toBe("mid");
     expect(tickRenderBudget(28, 5_300)).toBe(true);
     expect(getRenderBudget().tier).toBe("low");
     expect(getRenderBudget().postFx).toBe(false);
-    expect(getRenderBudget().renderScale).toBeCloseTo(0.5);
+    expect(getRenderBudget().renderScale).toBeCloseTo(0.4);
   });
 
   it("demotes on one strike when FPS is severely collapsed", () => {
@@ -142,11 +142,11 @@ describe("applyRenderScale / applyRenderBudgetToGame", () => {
         ],
       },
     };
-    applyRenderScale(game as unknown as Phaser.Game, 0.7);
-    expect(resizeCalls[0]).toEqual([Math.round(GAME_WIDTH * 0.7), Math.round(GAME_HEIGHT * 0.7)]);
-    expect(shopCam.zoom).toBe(0.7);
+    applyRenderScale(game as unknown as Phaser.Game, 0.55);
+    expect(resizeCalls[0]).toEqual([Math.round(GAME_WIDTH * 0.55), Math.round(GAME_HEIGHT * 0.55)]);
+    expect(shopCam.zoom).toBe(0.55);
     expect(shopCam.centered).toBe(true);
-    expect(driveCam.zoom).toBe(0.7);
+    expect(driveCam.zoom).toBe(0.55);
     expect(driveCam.centered).toBe(false);
   });
 
@@ -162,7 +162,7 @@ describe("applyRenderScale / applyRenderBudgetToGame", () => {
     };
     forceRenderBudget("low");
     applyRenderBudgetToGame(game as unknown as Phaser.Game);
-    expect(resizeCalls).toEqual([[Math.round(GAME_WIDTH * 0.5), Math.round(GAME_HEIGHT * 0.5)]]);
+    expect(resizeCalls).toEqual([[Math.round(GAME_WIDTH * 0.4), Math.round(GAME_HEIGHT * 0.4)]]);
   });
 
   it("skips resize when scale is unchanged but still re-zooms scenes", () => {
@@ -185,12 +185,12 @@ describe("applyRenderScale / applyRenderBudgetToGame", () => {
     applyRenderScale(game as unknown as Phaser.Game, 1);
     expect(resizeCalls).toEqual([]);
     expect(shopCam.zoom).toBe(1);
-    applyRenderScale(game as unknown as Phaser.Game, 0.5);
-    expect(resizeCalls).toEqual([[Math.round(GAME_WIDTH * 0.5), Math.round(GAME_HEIGHT * 0.5)]]);
+    applyRenderScale(game as unknown as Phaser.Game, 0.4);
+    expect(resizeCalls).toEqual([[Math.round(GAME_WIDTH * 0.4), Math.round(GAME_HEIGHT * 0.4)]]);
     resizeCalls.length = 0;
-    applyRenderScale(game as unknown as Phaser.Game, 0.5);
+    applyRenderScale(game as unknown as Phaser.Game, 0.4);
     expect(resizeCalls).toEqual([]);
-    expect(shopCam.zoom).toBe(0.5);
+    expect(shopCam.zoom).toBe(0.4);
   });
 
   it("syncSceneRenderCamera zooms a late-started scene without resizing", () => {
@@ -207,9 +207,9 @@ describe("applyRenderScale / applyRenderBudgetToGame", () => {
     };
     syncSceneRenderCamera(
       { sys: { settings: { key: "shop" } }, cameras: { main: cam } } as unknown as Phaser.Scene,
-      0.7,
+      0.55,
     );
-    expect(cam.zoom).toBe(0.7);
+    expect(cam.zoom).toBe(0.55);
     expect(cam.centered).toBe(true);
   });
 });

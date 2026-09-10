@@ -22,6 +22,8 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
     antialias: false,
     antialiasGL: false,
     powerPreference: "high-performance",
+    // Phaser 3.90: MobilePipeline on iOS/Android (cheaper default batching).
+    autoMobilePipeline: true,
   },
   physics: {
     default: "arcade",
@@ -43,6 +45,8 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   // after blur, which soft-throttles tweens alongside the sim (Hud uses rawDelta).
   fps: {
     smoothStep: false,
+    // Desktop target; coarse phones override limit/target to 30 in main.ts.
+    target: 60,
   },
   scene: [BootScene, ShopScene, DriveScene, DoorScene, HudScene, TitleScene],
 };
