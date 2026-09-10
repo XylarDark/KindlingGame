@@ -12,6 +12,12 @@ Always-loaded context belongs in one of two other places:
 - **`.agents/skills/<name>/SKILL.md`** — procedural knowledge. A skill costs only its `description`
   until that description matches the task, then the agent reads the body. `game-capture` is the
   project-specific one: screenshot lanes, step plans, and the Cursor browser's tab-creation race.
+  Optional / dormant skills belong in `.agents/skills-extras/`; see
+  [`.agents/README.md`](../../.agents/README.md). Kindling currently keeps template extras
+  **active** under `.agents/skills/` on purpose.
+
+Every skill `description` is always-loaded with `AGENTS.md`. That bill is tracked in `AGENTS.md`;
+adding a skill is a permanent charge against it.
 
 ## Why nothing here is always-applied
 
@@ -70,10 +76,17 @@ scoped but never loads.
 ## Keeping these in sync with the template
 
 These rules come from [DevEnvTemplate](https://github.com/XylarDark/DevEnvTemplate), embedded at
-`.devenv/`. To pull newer versions:
+`.devenv/`. Prefer the layer-aware sync (dry-run first):
 
 ```powershell
-npm run doctor -- --integrate-cursor-rules
+npm run sync
+npm run sync '--' --apply
+```
+
+Or integrate via the doctor:
+
+```powershell
+npm run doctor '--' --integrate-cursor-rules
 ```
 
 Existing files are never overwritten, so local edits survive. Compare against

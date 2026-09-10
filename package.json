@@ -13,8 +13,10 @@
     "shot:cleanup": "npx tsx scripts/agent-shot.ts --cleanup",
     "typecheck": "tsc --noEmit",
     "verify": "node scripts/verify.mjs",
+    "preflight": "node scripts/preflight.mjs",
     "doctor": "npm run doctor --prefix .devenv",
-    "doctor:fix": "npm run doctor:fix --prefix .devenv"
+    "doctor:fix": "npm run doctor:fix --prefix .devenv",
+    "sync": "npm run sync --prefix .devenv -- --template . -C .."
   },
   "dependencies": {
     "@fontsource/inter": "^5.3.0",

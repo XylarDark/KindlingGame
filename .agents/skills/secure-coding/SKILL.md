@@ -122,31 +122,32 @@ NODE_ENV=development
 
 ## The hardening pass
 
-> **Localize on copy.** The specifics below are Kindling's, and they are short because this is a
-> static browser game with no backend, no credentials, and no user data. A project with something
-> real behind it needs a much longer pass, and a runnable gate rather than a checklist.
+> **Localize on copy.** The commands and specifics below are Kindling's, and they are short because
+> this is a static browser game with no backend, no credentials, and no user data. A project with
+> something real behind it needs a much longer pass.
 
 This game is already live: `pages.yml` deploys every push to `master`. So the pass is a
 **re-hardening**, run before shipping a change large enough that the game's shape moved, not a
 one-time gate before a first release.
 
-**Run the two audits by hand.** `npm audit --audit-level=high` and `npm audit signatures`. They
-are not in any workflow, and deliberately so — the automation-gap register records that a CI
-security job was removed because every failure emails the owner, and says not to re-add one
-without asking. Hand-running them costs nothing and is the whole of this project's dependency
-gate.
+Start with `npm run preflight`. It runs the verify pipeline (typecheck, tests, and the Vite
+production build Pages will serve), `npm audit --audit-level=high`, `npm audit signatures`, and a
+`gitleaks` scan, and it writes `.devenv/preflight-report.json`. A missing `gitleaks` is reported
+as **not run**, which blocks the gate exactly as a failure does. There is still no CI security job
+— the automation-gap register says not to re-add one without asking — so this local gate is where
+those checks live.
 
-**Nothing here scans for secrets.** There is no editor hook and no CI scan; the residual risk is
+**Nothing else scans for secrets.** There is no editor hook and no CI scan; the residual risk is
 stated plainly in `docs/operational/automation-gaps.md`. Before a deploy, read your own diff for
 anything that looks like a credential, and remember that a secret pasted into a working file can
-reach an agent transcript without ever being committed. If `gitleaks` is installed locally, run
-it; if it is not, say the scan did not happen rather than that it passed.
+reach an agent transcript without ever being committed.
 
 **The deploy proves less than it looks like it proves.** `pages.yml` runs the tests and the build,
 and neither catches a boot-time crash — the failure this repository has hit repeatedly. The
 workflow ships no capture, so nothing in it demonstrates that the game renders. Capture the
-deployed URL yourself after the deploy finishes.
+deployed URL yourself after the deploy finishes. Preflight prints that as a sign-off item.
 
 **Then the things no check can see.** Who can push to `master`, and therefore deploy; whether the
 Pages environment has any protection at all; and whether the live build was made from the commit
-you think it was. Nobody is emailed about these, so someone has to look.
+you think it was. Nobody is emailed about these, so someone has to look. They are on the
+preflight sign-off list and are never marked passed.

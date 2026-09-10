@@ -37,10 +37,12 @@ as opt-in extras. They are all active here on purpose; if that changes, move the
 | Type check | `npm run typecheck` |
 | Tests | `npm test` |
 | Everything, with evidence | `npm run verify` |
+| Pre-production gate, once per release | `npm run preflight` |
 | Production build | `npm run build` |
 | Screenshot | `npx tsx scripts/agent-shot.ts --lane N` |
 | Show the game to a human | `npm run open` |
 | Repository health check | `npm run doctor` |
+| Sync agent layer from `.devenv` | `npm run sync` / `npm run sync '--' --apply` |
 
 There is **no lint or format script**, and no ESLint, Prettier, Husky or commitlint setup. Do not
 assume one exists or invent a command for it. `npm run doctor` reports their absence as a gap; that
@@ -154,10 +156,12 @@ through a boot-time crash, and that has happened here. The phase changes what yo
 whether you looked at the game.
 
 **Then hardening, once.** This is already live on GitHub Pages on every push to `master`, so the
-gate is a re-hardening rather than a first release: work the hardening pass in the `secure-coding`
-skill before shipping a change large enough that the game's shape moved. It is short on purpose —
+gate is a re-hardening rather than a first release: run `npm run preflight` and work the hardening
+pass in the `secure-coding` skill before shipping a change large enough that the game's shape
+moved. Preflight composes verify (including the production build), the dependency audit, registry
+signatures, and a secret scan. It is short on purpose —
 [docs/operational/automation-gaps.md](docs/operational/automation-gaps.md) explains why "low value
-at risk" rather than "equivalent coverage" carries the security posture here.
+at risk" rather than "equivalent coverage" carries the security posture here. No new CI workflow.
 
 ## Definition of done
 

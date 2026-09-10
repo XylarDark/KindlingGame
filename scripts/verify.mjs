@@ -22,10 +22,11 @@
  *   npm run verify -- --json    machine-readable evidence
  */
 
-import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { describe, runStage, summarize } from './pipeline.mjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const EVIDENCE_PATH = path.join(REPO_ROOT, '.devenv', 'verify-report.json');
@@ -100,94 +101,6 @@ const NOT_VERIFIABLE = [
   'Runtime behavior under real input; the tests here do not drive Phaser',
 ];
 
-/**
- * Run one stage and classify the outcome.
- *
- * @param {object} stage A STAGES entry.
- * @returns {object} Result with status, evidence, and failure detail.
- */
-function runStage(stage) {
-  const started = Date.now();
-
-  const result = spawnSync(stage.command, stage.args, {
-    cwd: REPO_ROOT,
-    encoding: 'utf8',
-    shell: process.platform === 'win32',
-  });
-
-  const stdout = result.stdout || '';
-  const stderr = result.stderr || '';
-  const code = result.status;
-  const durationMs = Date.now() - started;
-
-  if (result.error) {
-    return {
-      ...describe(stage),
-      status: 'failed',
-      durationMs,
-      evidence: null,
-      detail: `Could not run ${stage.command}: ${result.error.message}`,
-    };
-  }
-
-  const evidence = stage.evidence({ stdout, stderr, code });
-
-  // Passing requires both a zero exit code and recognizable evidence. A stage that exits zero
-  // without producing its expected output has not demonstrated anything.
-  if (code === 0 && evidence) {
-    return { ...describe(stage), status: 'passed', durationMs, evidence, detail: null };
-  }
-
-  if (code === 0 && !evidence) {
-    return {
-      ...describe(stage),
-      status: 'inconclusive',
-      durationMs,
-      evidence: null,
-      detail: 'Exited zero but produced no recognizable evidence, so nothing was demonstrated.',
-    };
-  }
-
-  return {
-    ...describe(stage),
-    status: 'failed',
-    durationMs,
-    evidence,
-    detail: failureDetail(stdout, stderr),
-  };
-}
-
-/**
- * Static description of a stage, shared by every result shape.
- *
- * @param {object} stage A STAGES entry.
- * @returns {object} Identifying fields.
- */
-function describe(stage) {
-  return {
-    id: stage.id,
-    title: stage.title,
-    proves: stage.proves,
-    command: [stage.command, ...stage.args].join(' '),
-  };
-}
-
-/**
- * The last lines of output, where the actual error almost always is.
- *
- * @param {string} stdout Standard output.
- * @param {string} stderr Standard error.
- * @returns {string} Trimmed tail.
- */
-function failureDetail(stdout, stderr) {
-  const combined = `${stdout}\n${stderr}`
-    .split('\n')
-    .map(line => line.trimEnd())
-    .filter(Boolean);
-
-  return combined.slice(-15).join('\n') || 'No output.';
-}
-
 function main() {
   const args = process.argv.slice(2);
   const runAll = args.includes('--all');
@@ -210,7 +123,7 @@ function main() {
 
     if (!asJson) process.stdout.write(`  ${stage.title}... `);
 
-    const result = runStage(stage);
+    const result = runStage(stage, REPO_ROOT);
     results.push(result);
 
     if (!asJson) {
@@ -225,21 +138,14 @@ function main() {
     if (result.status !== 'passed') stopped = true;
   }
 
-  const failed = results.filter(r => r.status === 'failed' || r.status === 'inconclusive');
-  const notRun = results.filter(r => r.status === 'not run');
-  const passed = results.filter(r => r.status === 'passed');
+  const { failed, notRun, passed, verified, counts } = summarize(results);
 
   const report = {
     generatedAt: new Date().toISOString(),
     node: process.version,
     platform: process.platform,
-    verified: failed.length === 0 && notRun.length === 0,
-    summary: {
-      passed: passed.length,
-      failed: failed.length,
-      notRun: notRun.length,
-      total: results.length,
-    },
+    verified,
+    summary: counts,
     stages: results,
     notVerifiedFromRepositoryContents: NOT_VERIFIABLE,
   };
