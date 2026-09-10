@@ -129,6 +129,7 @@ export class ShopScene extends Phaser.Scene {
   private windowGlow!: Phaser.GameObjects.Graphics;
   private lighting?: DayNightPipeline;
   private lastLightMs = -1;
+  private lastSkyKey = "";
 
   constructor() {
     super("shop");
@@ -263,9 +264,14 @@ export class ShopScene extends Phaser.Scene {
   }
 
   private sync(snap: SimSnapshot): void {
-    paintShopDayNight(this.sky, snap.gameMs);
-    paintWindowGlow(this.windowGlow, snap.gameMs);
-    this.syncLighting(snap.gameMs);
+    const sky = skyAt(snap.gameMs);
+    const skyKey = `${sky.zenith}:${sky.haze}:${sky.lampAlpha.toFixed(2)}:${sky.windowGlow.toFixed(2)}`;
+    if (skyKey !== this.lastSkyKey) {
+      this.lastSkyKey = skyKey;
+      paintShopDayNight(this.sky, snap.gameMs);
+      paintWindowGlow(this.windowGlow, snap.gameMs);
+    }
+    // PostFX lives on PRE_RENDER; keep the 80ms throttle there only.
     this.driver.setVisible(snap.playerRole === "keyLead");
     this.keyLead.setVisible(snap.keyLead.visible && snap.playerRole === "keyLead");
     this.keyLead.setPosition(snap.keyLead.x, snap.keyLead.y);

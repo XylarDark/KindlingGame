@@ -2,8 +2,8 @@
  * Navigations bypass HTTP cache so GitHub Pages HTML cannot stick.
  * Non-document GETs are not intercepted — a blanket network-first respondWith put
  * every asset on the SW hop and made play choppy after the update work landed.
- * Do not skipWaiting here — a mid-shift replace would reload the game under the player.
- * The page posts kindling-skip-waiting after it has checked for a waiting worker.
+ * Do not skipWaiting on install — a mid-shift replace would reload under the player.
+ * The page posts kindling-skip-waiting only while idle (title / shift ended).
  */
 self.addEventListener("install", () => {
   /* waiting is intentional until the page asks, or every client has closed */

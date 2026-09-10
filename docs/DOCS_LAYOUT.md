@@ -29,6 +29,7 @@ Keep new findings in that shape: one file per pass, prefix by kind, name the sli
 
 | Directory | Purpose | Notes |
 |-----------|---------|-------|
+| **guides/** | How-to docs for local tooling humans run by hand | [`android-emulator.md`](guides/android-emulator.md) — AVD + Chrome for PWA/SW install checks (not FPS) |
 | **operational/** | What automation cannot do reliably, and the manual step that covers it | [`automation-gaps.md`](operational/automation-gaps.md), per [automation-standards.mdc](../.cursor/rules/automation-standards.mdc) |
 | **promo/** | Curated stills, committed deliberately | **Authored work** — capture scripts must not bulk-overwrite these. See [18-content-and-data-pipelines.mdc](../.cursor/rules/18-content-and-data-pipelines.mdc) |
 | **qa-shots/** | Screenshot scratch from capture runs | **Gitignored.** Anything worth keeping gets curated into `promo/` |
@@ -37,7 +38,11 @@ Create a new subdirectory only when you have a document to put in it, then add a
 
 ## Deliberately absent
 
-The template offers `guides/`, `architecture/`, `adr/`, `runbooks/`, `setup/`, `security/`, `api/` and `deployment/`. None are used here: Kindling is a static browser game with no services to run, no API surface, and no deployment beyond the GitHub Pages workflow in `.github/workflows/pages.yml`. Add one of these folders if the need actually arises — and add its row here — rather than pre-creating empty scaffolding.
+The template offers `architecture/`, `adr/`, `runbooks/`, `setup/`, `security/`, `api/` and
+`deployment/`. None are used here: Kindling is a static browser game with no services to run, no
+API surface, and no deployment beyond the GitHub Pages workflow in `.github/workflows/pages.yml`.
+Add one of these folders if the need actually arises — and add its row here — rather than
+pre-creating empty scaffolding.
 
 ## Related
 

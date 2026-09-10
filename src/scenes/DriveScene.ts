@@ -56,6 +56,7 @@ export class DriveScene extends Phaser.Scene {
   private lighting?: DayNightPipeline;
   private streetLamps: CityLamp[] = [];
   private nightGlow!: Phaser.GameObjects.Graphics;
+  private lastGlowKey = "";
   private trafficLoops: TrafficLoop[] = [];
   private trafficSprites: Phaser.GameObjects.Image[] = [];
   private trafficAngles = new Map<string, number>();
@@ -188,7 +189,7 @@ export class DriveScene extends Phaser.Scene {
       this.cameras.main.centerOn(snap.vehicle.x, snap.vehicle.y);
     }
 
-    this.paintDayNight(snap);
+    // Day/night paints once in PRE_RENDER — avoid a second PostFX upload here.
     this.glow.clear();
     const next = tutorialHints(snap)[0];
     const stopId = snap.run?.nextStopId;
@@ -297,6 +298,9 @@ export class DriveScene extends Phaser.Scene {
 
   private paintNightGlow(sky: ReturnType<typeof skyAt>): void {
     if (!this.nightGlow) return;
+    const key = `${sky.windowGlow.toFixed(2)}:${sky.lampAlpha.toFixed(2)}`;
+    if (key === this.lastGlowKey) return;
+    this.lastGlowKey = key;
     this.nightGlow.clear();
     if (sky.windowGlow < 0.04 && sky.lampAlpha < 0.04) return;
     for (const house of CITY.houses) {

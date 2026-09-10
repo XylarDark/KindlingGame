@@ -6,6 +6,7 @@ import { beginPlay, shouldShowHowTo } from "../session";
 import { maybeEnterFullscreenOnStart } from "../ui/displayPrefs";
 import { addHudButton, addPanel, HUD_BUTTON_MIN_H } from "../ui/chrome";
 import { HOWTO_HINT, HOWTO_STEPS, PAUSE_HINT, WELCOME_HINT, WELCOME_TITLE } from "../ui/copy";
+import { setPwaIdle } from "../pwaUpdate";
 import { presentInstallCoach } from "../ui/installCoach";
 import { SIGN_FRAME_W, signPlaqueRings } from "../ui/signPlaque";
 import { addSignText } from "../ui/signText";
@@ -53,6 +54,8 @@ export class TitleScene extends Phaser.Scene {
     this.scene.pause("shop");
     this.scene.pause("hud");
     this.input.setTopOnly(true);
+    // Title is idle for PWA — waiting workers may activate + reload here only.
+    setPwaIdle(true);
 
     // Mobile / early play: coach install for a chrome-free session (no-op if standalone
     // or already dismissed). HTML overlay sits above the Phaser canvas.
@@ -347,6 +350,7 @@ export class TitleScene extends Phaser.Scene {
   private begin(): void {
     if (this.started) return;
     this.started = true;
+    setPwaIdle(false);
     // User-gesture path: prefer fullscreen when the Settings toggle is on. A deny
     // or missing API must not block entering the shift.
     maybeEnterFullscreenOnStart();

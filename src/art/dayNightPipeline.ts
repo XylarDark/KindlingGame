@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { DAY_NIGHT_TUNE, MAX_LIGHTS, rgb01, worldToUv, type GradeFrame, type ViewRect } from "./dayNightGrade";
+import { getRenderBudget } from "../ui/renderBudget";
 
 export const DAY_NIGHT_PIPELINE = "DayNight";
 
@@ -61,6 +62,13 @@ export class DayNightPipeline extends Phaser.Renderer.WebGL.Pipelines.PostFXPipe
   };
   viewRect: ViewRect = { x: 0, y: 0, width: 1920, height: 1080 };
 
+  private readonly posBuf = new Float32Array(MAX_LIGHTS * 2);
+  private readonly colorBuf = new Float32Array(MAX_LIGHTS * 3);
+  private readonly radiusBuf = new Float32Array(MAX_LIGHTS);
+  private readonly intensityBuf = new Float32Array(MAX_LIGHTS);
+  private readonly scaleBuf = new Float32Array(MAX_LIGHTS * 2);
+  private lastUploadMs = 0;
+
   constructor(game: Phaser.Game) {
     super({
       game,
@@ -70,18 +78,20 @@ export class DayNightPipeline extends Phaser.Renderer.WebGL.Pipelines.PostFXPipe
   }
 
   setGrade(frame: GradeFrame, view: ViewRect): void {
-    this.frame = frame;
+    const budget = getRenderBudget();
+    const lights = budget.maxLights <= 0 ? [] : frame.lights.slice(0, budget.maxLights);
+    this.frame = { ...frame, lights };
     this.viewRect = view;
   }
 
   onPreRender(): void {
     this.syncViewFromCamera();
-    this.upload();
+    this.uploadThrottled();
   }
 
   onDraw(renderTarget: Phaser.Renderer.WebGL.RenderTarget): void {
     this.syncViewFromCamera();
-    this.upload();
+    this.uploadThrottled();
     this.bindAndDraw(renderTarget);
   }
 
@@ -92,13 +102,26 @@ export class DayNightPipeline extends Phaser.Renderer.WebGL.Pipelines.PostFXPipe
     this.viewRect = { x: view.x, y: view.y, width: view.width, height: view.height };
   }
 
+  private uploadThrottled(): void {
+    const minMs = getRenderBudget().uploadMinMs;
+    const now = performance.now();
+    if (minMs > 0 && now - this.lastUploadMs < minMs) return;
+    this.lastUploadMs = now;
+    this.upload();
+  }
+
   private upload(): void {
     const { frame, viewRect: view } = this;
-    const pos = new Float32Array(MAX_LIGHTS * 2);
-    const color = new Float32Array(MAX_LIGHTS * 3);
-    const radius = new Float32Array(MAX_LIGHTS);
-    const intensity = new Float32Array(MAX_LIGHTS);
-    const scale = new Float32Array(MAX_LIGHTS * 2);
+    const pos = this.posBuf;
+    const color = this.colorBuf;
+    const radius = this.radiusBuf;
+    const intensity = this.intensityBuf;
+    const scale = this.scaleBuf;
+    pos.fill(0);
+    color.fill(0);
+    radius.fill(0);
+    intensity.fill(0);
+    scale.fill(0);
     const count = Math.min(MAX_LIGHTS, frame.lights.length);
 
     for (let i = 0; i < count; i++) {
@@ -144,7 +167,15 @@ export function dayNightFrom(camera: Phaser.Cameras.Scene2D.Camera): DayNightPip
   return pipe && typeof pipe.setGrade === "function" ? pipe : undefined;
 }
 
+export function detachDayNight(camera: Phaser.Cameras.Scene2D.Camera): void {
+  if (dayNightFrom(camera)) camera.removePostPipeline(DAY_NIGHT_PIPELINE);
+}
+
 export function attachDayNight(camera: Phaser.Cameras.Scene2D.Camera): DayNightPipeline | undefined {
+  if (!getRenderBudget().postFx) {
+    detachDayNight(camera);
+    return undefined;
+  }
   registerDayNightPipeline(camera.scene.game);
   if (camera.scene.game.renderer.type !== Phaser.WEBGL) return undefined;
   if (!dayNightFrom(camera)) camera.setPostPipeline(DAY_NIGHT_PIPELINE);
@@ -156,6 +187,7 @@ export function applyDayNight(
   frame: GradeFrame,
   view: ViewRect,
 ): void {
+  if (!getRenderBudget().postFx) return;
   pipe?.setGrade(frame, view);
 }
 

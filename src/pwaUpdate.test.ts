@@ -1,5 +1,11 @@
-import { describe, expect, it } from "vitest";
-import { PWA_RESUME_UPDATE_MIN_MS, serviceWorkerUrl } from "./pwaUpdate";
+import { describe, expect, it, beforeEach } from "vitest";
+import {
+  PWA_RESUME_UPDATE_MIN_MS,
+  serviceWorkerUrl,
+  setPwaIdle,
+  isPwaIdle,
+  tryActivateWaitingWhenIdle,
+} from "./pwaUpdate";
 import { SKIP_WAITING_MESSAGE } from "./pwaMessages";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -13,6 +19,46 @@ describe("serviceWorkerUrl", () => {
     expect(serviceWorkerUrl("./")).toBe("./sw.js");
     expect(serviceWorkerUrl("/KindlingGame/")).toBe("/KindlingGame/sw.js");
     expect(serviceWorkerUrl("/KindlingGame")).toBe("/KindlingGame/sw.js");
+  });
+});
+
+describe("idle waiting-SW activate", () => {
+  beforeEach(() => setPwaIdle(false));
+
+  it("posts skipWaiting and reloads only while idle", () => {
+    const posts: unknown[] = [];
+    const session = new Map<string, string>();
+    const store = {
+      getItem: (k: string) => session.get(k) ?? null,
+      setItem: (k: string, v: string) => {
+        session.set(k, v);
+      },
+      removeItem: (k: string) => {
+        session.delete(k);
+      },
+    } as Storage;
+    let reloads = 0;
+    const waiting = { postMessage: (m: unknown) => posts.push(m) };
+    const reg = { waiting } as ServiceWorkerRegistration;
+
+    expect(tryActivateWaitingWhenIdle(reg, { idle: false, session: store, reload: () => reloads++ })).toBe(false);
+    expect(posts).toEqual([]);
+    expect(reloads).toBe(0);
+
+    expect(tryActivateWaitingWhenIdle(reg, { idle: true, session: store, reload: () => reloads++ })).toBe(true);
+    expect(posts).toEqual([SKIP_WAITING_MESSAGE]);
+    expect(reloads).toBe(1);
+
+    // Guard blocks a second activate before the next boot clears it.
+    expect(tryActivateWaitingWhenIdle(reg, { idle: true, session: store, reload: () => reloads++ })).toBe(false);
+    expect(reloads).toBe(1);
+  });
+
+  it("tracks idle from setPwaIdle", () => {
+    setPwaIdle(true);
+    expect(isPwaIdle()).toBe(true);
+    setPwaIdle(false);
+    expect(isPwaIdle()).toBe(false);
   });
 });
 
@@ -46,16 +92,17 @@ describe("update wiring", () => {
     expect(src).toContain("void reg.update()");
   });
 
-  it("does not activate a waiting worker on boot or resume", () => {
+  it("activates a waiting worker only via idle path — never on resume alone", () => {
     const src = read("src/pwaUpdate.ts");
-    expect(src).not.toContain("activateWaiting");
-    expect(src).not.toContain("skipWaiting");
-    expect(src).not.toContain("location.reload()");
-    expect(src).not.toContain("SKIP_WAITING_MESSAGE");
+    expect(src).toContain("tryActivateWaitingWhenIdle");
+    expect(src).toContain("SKIP_WAITING_MESSAGE");
+    expect(src).toContain("setPwaIdle");
     const resumeFrom = src.indexOf("function bindResumeUpdateCheck");
     if (resumeFrom < 0) throw new Error("bindResumeUpdateCheck missing");
-    const resume = src.slice(resumeFrom);
+    const resume = src.slice(resumeFrom, src.indexOf("export function tryActivateWaitingWhenIdle"));
     expect(resume).toContain("reg.update()");
+    expect(resume).not.toContain("postMessage(SKIP_WAITING_MESSAGE)");
+    expect(resume).not.toContain("location.reload()");
   });
 
   it("intercepts navigations only — asset GETs must not hit respondWith", () => {
@@ -64,10 +111,10 @@ describe("update wiring", () => {
     expect(sw).toContain('cache: "no-store"');
     expect(sw).toContain('req.mode === "navigate"');
     expect(sw).toContain("if (!navigate) return");
+    expect(sw).toContain("only while idle");
     const fetchFrom = sw.indexOf('self.addEventListener("fetch"');
     if (fetchFrom < 0) throw new Error("fetch listener missing");
     const fetchBody = sw.slice(fetchFrom);
-    // Blanket respondWith on every GET was the choppy path.
     expect(fetchBody).not.toMatch(/respondWith\(fetch\(req, init\)/);
   });
 
@@ -99,5 +146,13 @@ describe("update wiring", () => {
     const pwaAt = main.indexOf("void bootKindlingPwa()");
     if (startAt < 0 || pwaAt < 0) throw new Error("startGame / bootKindlingPwa missing");
     expect(startAt).toBeLessThan(pwaAt);
+  });
+
+  it("wires setPwaIdle from title and shift-ended HUD", () => {
+    const title = read("src/scenes/TitleScene.ts");
+    const hud = read("src/scenes/HudScene.ts");
+    expect(title).toContain("setPwaIdle(true)");
+    expect(title).toContain("setPwaIdle(false)");
+    expect(hud).toContain("setPwaIdle(snap.shiftEnded)");
   });
 });

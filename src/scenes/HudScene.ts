@@ -20,6 +20,8 @@ import { cityMinimapGeometry, fitCityPanel, minimapProjection, type WorldRect } 
 import { COUNTER_SIGN } from "../maps/shopT0";
 import { GAME_HEIGHT, GAME_WIDTH, NPC_INTERACT_COOLDOWN_MS, SCORE_DELIVERY_LATE, SCORE_DELIVERY_ON_TIME, SCORE_FAIL, SCORE_INSTORE, SCORE_PICKUP } from "../sim/constants";
 import { getSim, startSession } from "../session";
+import { setPwaIdle } from "../pwaUpdate";
+import { applyCanvasDisplayScale } from "../shell";
 import type { SimSnapshot } from "../sim/gameSim";
 import type { ShiftResults } from "../sim/shiftResults";
 import { tutorialHints } from "../sim/tutorialHints";
@@ -28,6 +30,7 @@ import { END_SHIFT_CAPTION, END_SHIFT_LABEL, RESULTS_NEW_DAY, RESULTS_TITLE } fr
 import { addSignText, setSignAccent } from "../ui/signText";
 import { addUiText } from "../ui/text";
 import { settingsGeom, type SettingsGeom } from "../ui/settingsGeom";
+import { applyRenderBudgetToGame, tickRenderBudget } from "../ui/renderBudget";
 import {
   Color,
   HUD_TYPE_FIT,
@@ -709,8 +712,8 @@ export class HudScene extends Phaser.Scene {
 
   update(_time: number, _delta: number): void {
     const sim = getSim();
-    const snap = sim.snapshot();
-    if (!snap.autoDriving) {
+    const pre = sim.snapshot();
+    if (!pre.autoDriving) {
       const { dx, dy } = this.readInput();
       sim.setPlayerInput(dx, dy);
     } else {
@@ -720,7 +723,13 @@ export class HudScene extends Phaser.Scene {
     // on a low-FPS phone that puts the whole sim in slow motion. rawDelta is wall time.
     const raw = this.game.loop.rawDelta;
     sim.tick(Math.min(Math.max(0, raw), MAX_SIM_STEP_MS));
-    this.paintHud(sim.snapshot());
+    const snap = sim.snapshot();
+    if (tickRenderBudget(this.game.loop.actualFps)) {
+      applyRenderBudgetToGame(this.game);
+      applyCanvasDisplayScale(this.game);
+    }
+    setPwaIdle(snap.shiftEnded);
+    this.paintHud(snap);
   }
 
   private layoutHud(): void {

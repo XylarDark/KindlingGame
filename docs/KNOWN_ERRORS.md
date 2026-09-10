@@ -302,6 +302,22 @@ the thing it described.
 - **Fix:** detect this class by code point rather than by pasted glyph. Reading the file in Node and printing `codePointAt` for anything above 126 shows `U+00E2 U+20AC U+201D` plainly, and the repo has a purpose-built tool that does it properly.
 - **Prevention:** a corrupted-text search cannot be written in corrupted text. Assert the pattern works before trusting a clean result — grep for a string you know is present, or use a tool whose patterns live in a file rather than on the command line. Also note what a green suite does *not* cover: this damage sat in comments, one test title and one assertion message, so all 500 tests passed with it in place.
 
+### Full-resolution DayNight PostFX looked like a "slow game" after wall-clock sim
+
+- **Date:** 2026-09-09
+- **Symptom:** after HudScene switched to `rawDelta` (so sim stayed real-time on low FPS), phones felt hitchy rather than smoothly slow. Captures showed ~20 `actualFps` with or without a service worker.
+- **Cause:** always rendering **1920×1080** WebGL plus a fullscreen **DayNight PostFX** (highp, up to 8 lights, fresh `Float32Array`s every upload). Drive also painted lighting twice per frame (`update` + `PRE_RENDER`). Wall-clock sim unmasked the GPU fill-rate cost that smoothed deltas had previously hidden as slow-mo.
+- **Fix:** `RenderBudget` tiers (scale backbuffer + camera zoom; detach PostFX on mid/low for phones — lane A/B showed PostFX dominates fill-rate; high tier keeps full DayNight), reuse typed uniform buffers, paint Drive lighting once in `PRE_RENDER`, skip shop sky rebuilds when the sky key is unchanged. Demotion requires two consecutive ~1s samples so a hitch does not drop quality.
+- **Prevention:** do not treat "sim clock matches wall" as proof of smoothness — measure `actualFps` with PostFX on/off. Do not re-enable `smoothStep` as a smoothness fix. Do not attach DayNight to Hud/Title cameras.
+
+### SW comment claimed the page posted skipWaiting; nothing did until idle activate
+
+- **Date:** 2026-09-09
+- **Symptom:** installed phones could keep an old controlling worker (including earlier asset-hopping fetch handlers) forever after a deploy, because nothing ever posted `kindling-skip-waiting` despite `public/sw.js` saying the page would.
+- **Cause:** boot deliberately avoided activate+reload so mid-shift play would not hitch; the comment was never updated when that path was removed.
+- **Fix:** idle-only activate — `setPwaIdle` from Title / shift-ended Hud posts `SKIP_WAITING_MESSAGE` and reloads once (sessionStorage guard). Never from resume mid-shop/drive. Align the SW file comment with that rule.
+- **Prevention:** source-scanning tests that forbid boot/resume `skipWaiting` must still allow the named idle helper; comments that claim a handshake must have a caller.
+
 ---
 
 ## Related

@@ -11,6 +11,7 @@
     "open": "npx tsx scripts/open-game.ts",
     "shot": "npx tsx scripts/agent-shot.ts",
     "shot:cleanup": "npx tsx scripts/agent-shot.ts --cleanup",
+    "emu:pwa": "npx tsx scripts/emu-pwa-check.ts",
     "typecheck": "tsc --noEmit",
     "verify": "node scripts/verify.mjs",
     "preflight": "node scripts/preflight.mjs",
