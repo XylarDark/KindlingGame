@@ -28,9 +28,10 @@ import { installTypekit } from "../ui/typekit";
  * Wall-clock cap for the whole warm path. Phaser delayedCall is game-time and
  * freezes during sync Drive create, so it cannot guard orphaned showLoading.
  */
-const WARM_BOOT_TIMEOUT_MS = 8000;
-/** Shop PostFX sample hours — compile noon + night grades under the gate. */
-const WARM_SHOP_HOURS = [12, 20.5] as const;
+const WARM_BOOT_TIMEOUT_MS = 9000;
+/** Shop/Drive/Door PostFX sample hours — noon + dusk + night under the gate. */
+const WARM_SHOP_HOURS = [12, 16, 20.5] as const;
+const WARM_SCENE_HOURS = [12, 20.5] as const;
 const WARM_DRIVE_FOCUS = { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 };
 
 export class BootScene extends Phaser.Scene {
@@ -132,13 +133,18 @@ export class BootScene extends Phaser.Scene {
       Promise.all([
         document.fonts.load("400 13px Inter"),
         document.fonts.load("600 15px Inter"),
+        document.fonts.load("600 19px Inter"),
         document.fonts.load("600 20px Inter"),
+        document.fonts.load("600 25px Inter"),
         document.fonts.load("700 13px Inter"),
         document.fonts.load("700 15px Inter"),
         document.fonts.load("700 20px Inter"),
         document.fonts.load("700 24px Inter"),
+        document.fonts.load("700 31px Inter"),
         document.fonts.load("700 36px Inter"),
+        document.fonts.load("700 44px Inter"),
         document.fonts.load("700 48px Inter"),
+        document.fonts.load("700 51px Inter"),
       ]),
       this.wallSleep(1500),
     ]);
@@ -152,7 +158,8 @@ export class BootScene extends Phaser.Scene {
     for (const key of keys) {
       stamps.push(this.add.image(-64, -64, key).setAlpha(0).setVisible(true));
     }
-    await this.waitFrames(1);
+    // Two frames so GPU upload lands on slow phones (one frame was often a no-op).
+    await this.waitFrames(2);
     for (const img of stamps) img.destroy();
   }
 
@@ -248,18 +255,16 @@ export class BootScene extends Phaser.Scene {
     const cam = scene?.cameras?.main;
     if (cam) {
       attachDayNight(cam);
-      const nightMs = (20.5 - 9) * MS_PER_GAME_HOUR;
-      const sky = skyAt(nightMs);
-      const view =
-        key === "drive"
-          ? { x: 0, y: 0, width: GAME_WIDTH, height: GAME_HEIGHT }
-          : { x: 0, y: 0, width: GAME_WIDTH, height: GAME_HEIGHT };
-      const grade =
-        key === "drive"
-          ? driveGrade(sky, WARM_DRIVE_FOCUS, [])
-          : doorGrade(sky, DOORSTEP_PORCH);
-      applyDayNight(dayNightFrom(cam), grade, view);
-      await this.waitFrames(2);
+      const view = { x: 0, y: 0, width: GAME_WIDTH, height: GAME_HEIGHT };
+      for (const hour of WARM_SCENE_HOURS) {
+        if (this.warmAborted || performance.now() >= deadline) return;
+        const sky = skyAt((hour - 9) * MS_PER_GAME_HOUR);
+        const grade =
+          key === "drive" ? driveGrade(sky, WARM_DRIVE_FOCUS, []) : doorGrade(sky, DOORSTEP_PORCH);
+        applyDayNight(dayNightFrom(cam), grade, view);
+        await this.waitFrames(1);
+      }
+      await this.waitFrames(1);
     }
     if (this.warmAborted || performance.now() >= deadline) return;
     if (this.scene.isActive(key) && !this.scene.isSleeping(key)) {

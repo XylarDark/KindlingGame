@@ -146,7 +146,8 @@ export class ShopScene extends Phaser.Scene {
   private skuById = new Map<string, Sku>();
   private lastTabletKey = "";
   private lastReceiptKey = "";
-  private onPreRenderLighting = (): void => this.syncLighting(getSim().snapshot().gameMs);
+  private lastTvKey = "";
+  private onPreRenderLighting = (): void => this.syncLighting(getSim().gameMs());
 
   constructor() {
     super("shop");
@@ -161,7 +162,7 @@ export class ShopScene extends Phaser.Scene {
     paintShopDayNight(this.sky, startMs);
     paintWindowGlow(this.windowGlow, startMs);
     this.lighting = attachDayNight(this.cameras.main);
-    this.syncLighting(getSim().snapshot().gameMs);
+    this.syncLighting(getSim().gameMs());
     this.events.on(Phaser.Scenes.Events.PRE_RENDER, this.onPreRenderLighting);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.events.off(Phaser.Scenes.Events.PRE_RENDER, this.onPreRenderLighting);
@@ -328,22 +329,25 @@ export class ShopScene extends Phaser.Scene {
     // The prompt is printed on the bag's own panel, so it flashes with the sprite
     // instead of needing a chip held at full alpha above it.
     const packNext = next?.kind === "bagRack";
-    this.bagRack.setTexture(packNext ? "tex-bag-pack" : "tex-bag-bags");
+    const bagTex = packNext ? "tex-bag-pack" : "tex-bag-bags";
+    if (this.bagRack.texture.key !== bagTex) this.bagRack.setTexture(bagTex);
     this.bagRack.setAlpha(packNext ? tabletPulse : 1);
     this.bagRack.setTint(packNext ? Color.flash : 0xffffff);
 
-    this.tvs.forEach((tv, i) => {
-      const skuId = this.jarSkus[i]!;
-      const sku = this.skuById.get(skuId);
-      const wanted = skuId === snap.highlightSkuId;
-      tv.setFillStyle(sku?.color ?? 0x122018, wanted ? pulse : 0.35);
-      if (wanted) tv.setStrokeStyle(3, Color.lime, 0.95);
-      else tv.setStrokeStyle(0);
-    });
-    this.tvLabels.forEach((label) => {
-      label.setColor(Color.creamHex);
-      label.setAlpha(1);
-    });
+    // Quantize pulse so TV fills redraw ~8 bands/cycle instead of every frame.
+    const tvPulseBand = snap.highlightSkuId ? Math.round(pulse * 8) : -1;
+    const tvKey = `${snap.highlightSkuId ?? ""}:${tvPulseBand}`;
+    if (tvKey !== this.lastTvKey) {
+      this.lastTvKey = tvKey;
+      this.tvs.forEach((tv, i) => {
+        const skuId = this.jarSkus[i]!;
+        const sku = this.skuById.get(skuId);
+        const wanted = skuId === snap.highlightSkuId;
+        tv.setFillStyle(sku?.color ?? 0x122018, wanted ? pulse : 0.35);
+        if (wanted) tv.setStrokeStyle(3, Color.lime, 0.95);
+        else tv.setStrokeStyle(0);
+      });
+    }
 
     this.syncTablet(snap, tabletPulse, next?.kind === "tablet");
     this.syncTargetCallout(snap);

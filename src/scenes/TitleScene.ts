@@ -1,11 +1,11 @@
 import Phaser from "phaser";
-import { doorGrade, driveGrade } from "../art/dayNightGrade";
+import { doorGrade, driveGrade, shopGrade } from "../art/dayNightGrade";
 import { DOORSTEP_PORCH } from "../art/doorstep";
-import { applyDayNight, attachDayNight, dayNightFrom } from "../art/dayNightPipeline";
+import { applyDayNight, attachDayNight, dayNightFrom, detachDayNight } from "../art/dayNightPipeline";
 import { MS_PER_GAME_HOUR } from "../sim/constants";
 import { skyAt } from "../sim/dayNight";
 import { startSessionMusic, unlockAudio } from "../audio/music";
-import { COUNTER_SIGN } from "../maps/shopT0";
+import { COUNTER_SIGN, ceilingPots } from "../maps/shopT0";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import { beginPlay, shouldShowHowTo } from "../session";
 import { takeBootWarmPending } from "../ui/bootWarm";
@@ -49,6 +49,7 @@ const HOWTO_LIFT = introN(44);
 const PAUSE_MARGIN = 48;
 
 const WARM_DRIVE_FOCUS = { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 };
+const WARM_SCENE_HOURS = [12, 20.5] as const;
 
 export class TitleScene extends Phaser.Scene {
   private started = false;
@@ -366,6 +367,9 @@ export class TitleScene extends Phaser.Scene {
     if (keys.length === 0) return;
     showLoading({ mode: "boot", stage: keys[0] === "drive" ? "Map" : "Door" });
     try {
+      // Shop may have been paused mid-warm — recompile shop grades before play.
+      showLoading({ mode: "boot", stage: "Shaders" });
+      await this.warmShopPostFx();
       for (const key of keys) {
         showLoading({ mode: "boot", stage: key === "drive" ? "Map" : "Door" });
         await this.warmAndSleepScene(key);
@@ -373,6 +377,27 @@ export class TitleScene extends Phaser.Scene {
     } finally {
       hideLoading();
     }
+  }
+
+  /** Mirror Boot shop-camera compile so deferred warm is hitch-free on first fetch. */
+  private async warmShopPostFx(): Promise<void> {
+    const shop = this.scene.get("shop");
+    const cam = shop?.cameras?.main;
+    if (!cam) return;
+    const keepAttached = getRenderBudget().postFx;
+    attachDayNight(cam);
+    for (const hour of WARM_SCENE_HOURS) {
+      const gameMs = (hour - 9) * MS_PER_GAME_HOUR;
+      applyDayNight(dayNightFrom(cam), shopGrade(skyAt(gameMs), ceilingPots()), {
+        x: 0,
+        y: 0,
+        width: GAME_WIDTH,
+        height: GAME_HEIGHT,
+      });
+      await this.waitFrames(1);
+    }
+    await this.waitFrames(1);
+    if (!keepAttached) detachDayNight(cam);
   }
 
   private async warmAndSleepScene(key: "drive" | "door"): Promise<void> {
@@ -398,13 +423,16 @@ export class TitleScene extends Phaser.Scene {
     const cam = scene?.cameras?.main;
     if (cam) {
       attachDayNight(cam);
-      const nightMs = (20.5 - 9) * MS_PER_GAME_HOUR;
-      const sky = skyAt(nightMs);
       const view = { x: 0, y: 0, width: GAME_WIDTH, height: GAME_HEIGHT };
-      const grade =
-        key === "drive" ? driveGrade(sky, WARM_DRIVE_FOCUS, []) : doorGrade(sky, DOORSTEP_PORCH);
-      applyDayNight(dayNightFrom(cam), grade, view);
-      await this.waitFrames(2);
+      for (const hour of WARM_SCENE_HOURS) {
+        if (performance.now() >= deadline) return;
+        const sky = skyAt((hour - 9) * MS_PER_GAME_HOUR);
+        const grade =
+          key === "drive" ? driveGrade(sky, WARM_DRIVE_FOCUS, []) : doorGrade(sky, DOORSTEP_PORCH);
+        applyDayNight(dayNightFrom(cam), grade, view);
+        await this.waitFrames(1);
+      }
+      await this.waitFrames(1);
     }
     if (performance.now() >= deadline) return;
     if (this.scene.isActive(key) && !this.scene.isSleeping(key)) {

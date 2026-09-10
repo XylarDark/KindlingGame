@@ -33,4 +33,9 @@ describe("ShopScene session perf guards", () => {
     expect(src).toContain("Phaser.Scenes.Events.SHUTDOWN");
     expect(src).toContain("events.off(Phaser.Scenes.Events.PRE_RENDER, this.onPreRenderLighting)");
   });
+
+  it("dirty-guards bag rack texture and TV pulse redraws", () => {
+    expect(src).toContain("lastTvKey");
+    expect(src).toContain("if (this.bagRack.texture.key !== bagTex)");
+  });
 });

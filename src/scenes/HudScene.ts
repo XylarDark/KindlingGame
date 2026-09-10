@@ -319,6 +319,10 @@ export class HudScene extends Phaser.Scene {
   private lastToast = "";
   private lastPhoneLine = "";
   private lastPhoneAccentKey = "";
+  private lastIdTextKey = "";
+  private lastPadLabel = "";
+  private lastPadFlash: boolean | null = null;
+  private lastPhoneMapKey = "";
 
   constructor() {
     super("hud");
@@ -730,8 +734,8 @@ export class HudScene extends Phaser.Scene {
 
   update(_time: number, _delta: number): void {
     const sim = getSim();
-    const pre = sim.snapshot();
-    if (!pre.autoDriving) {
+    // Avoid a full snapshot before tick — input only needs the auto-drive bit.
+    if (!sim.isAutoDriving()) {
       const { dx, dy } = this.readInput();
       sim.setPlayerInput(dx, dy);
     } else {
@@ -784,6 +788,7 @@ export class HudScene extends Phaser.Scene {
     // Toast stays clear of the cog column.
     this.toastText.setPosition(GAME_WIDTH / 2 - 40, bottom);
     this.padCenter = { x: 196 + inset.left, y: GAME_HEIGHT - 220 - inset.bottom };
+    this.lastPadFlash = null;
     this.drawPad();
     this.padKnob.setPosition(this.padCenter.x, this.padCenter.y);
     this.padLabel.setPosition(this.padCenter.x, this.padCenter.y - 128);
@@ -904,6 +909,7 @@ export class HudScene extends Phaser.Scene {
     } else {
       this.lastPhoneLine = "";
       this.lastPhoneAccentKey = "";
+      this.lastPhoneMapKey = "";
       this.phoneMap.clear();
     }
 
@@ -942,18 +948,24 @@ export class HudScene extends Phaser.Scene {
     this.idHint.setAlpha(1);
     if (drop.idCard) {
       const card = drop.idCard;
-      this.idName.setText(card.name.toUpperCase());
-      this.idDob.setText(`${card.dob}   ·   ${card.ageOk ? "19+" : "UNDER 19"}`);
-      this.idNumber.setText(card.idNumber);
-      this.idExpiry.setText(card.expires);
-      this.idHint.setText(card.ageOk ? "Tap the card to confirm 19+" : "UNDER 19 — tap to deny and leave");
-      this.idBg.setStrokeStyle(6, card.ageOk ? ID_OK_INK : ID_DENY_INK);
+      const idTextKey = `${card.name}|${card.dob}|${card.ageOk ? 1 : 0}|${card.idNumber}|${card.expires}`;
+      if (idTextKey !== this.lastIdTextKey) {
+        this.lastIdTextKey = idTextKey;
+        this.idName.setText(card.name.toUpperCase());
+        this.idDob.setText(`${card.dob}   ·   ${card.ageOk ? "19+" : "UNDER 19"}`);
+        this.idNumber.setText(card.idNumber);
+        this.idExpiry.setText(card.expires);
+        this.idHint.setText(card.ageOk ? "Tap the card to confirm 19+" : "UNDER 19 — tap to deny and leave");
+        this.idBg.setStrokeStyle(6, card.ageOk ? ID_OK_INK : ID_DENY_INK);
+      }
       // The photo is the same pool index the doorstep sprite is drawn from.
       const face = customerPortraitKey(drop.customerLook ?? 0);
       if (this.idPhoto.texture.key !== face) {
         this.idPhoto.setTexture(face).setDisplaySize(ID_PHOTO_W, ID_PHOTO_H);
       }
       this.paintIdCard(card, card.idNumber);
+    } else {
+      this.lastIdTextKey = "";
     }
 
     if (drop.photoTaken && !this.sawPhoto) {
@@ -993,11 +1005,21 @@ export class HudScene extends Phaser.Scene {
     this.padKnob.setVisible(showPad);
     this.padLabel.setVisible(showPad);
     if (showPad) {
-      this.padLabel.setText(snap.run?.nextStopId ? "Auto · nudge pad" : "Auto · nudge to shop");
-      this.drawPad(!!flashNext && flashNext.kind === "gpsPin");
+      const padLine = snap.run?.nextStopId ? "Auto · nudge pad" : "Auto · nudge to shop";
+      if (padLine !== this.lastPadLabel) {
+        this.lastPadLabel = padLine;
+        this.padLabel.setText(padLine);
+      }
+      const padFlash = !!flashNext && flashNext.kind === "gpsPin";
+      if (padFlash !== this.lastPadFlash) {
+        this.lastPadFlash = padFlash;
+        this.drawPad(padFlash);
+      }
       if (this.pointerId === null) this.padKnob.setPosition(this.padCenter.x, this.padCenter.y);
-    } else if (this.pointerId !== null) {
-      this.pointerId = null;
+    } else {
+      this.lastPadLabel = "";
+      this.lastPadFlash = null;
+      if (this.pointerId !== null) this.pointerId = null;
     }
     this.syncDriveScene(snap);
     this.syncDoorScene(snap);
@@ -1738,6 +1760,11 @@ export class HudScene extends Phaser.Scene {
 
   /** The moving part: route, destination lot, and the van with its heading. */
   private paintPhoneMap(snap: SimSnapshot): void {
+    const stopId = snap.run?.nextStopId ?? snap.dropoff.houseId ?? "";
+    // Quantize van so the overlay redraws on meaningful motion, not every frame.
+    const mapKey = `${stopId}:${Math.round(snap.vehicle.x / 8)}:${Math.round(snap.vehicle.y / 8)}:${Math.round(snap.vehicle.heading * 8)}:${snap.dropoff.phase}`;
+    if (mapKey === this.lastPhoneMapKey) return;
+    this.lastPhoneMapKey = mapKey;
     const g = this.phoneMap;
     g.clear();
     const p = minimapProjection(PHONE_MAP);
@@ -1758,7 +1785,6 @@ export class HudScene extends Phaser.Scene {
 
     // Destination lot, tinted apart from the other thirteen. The old map pinned the
     // parking stall, which is not the building the player is looking for.
-    const stopId = snap.run?.nextStopId ?? snap.dropoff.houseId;
     const house = stopId ? houseById(stopId) : null;
     if (house) {
       const box = p.rect(lotWorldRect(house.house, house.lotW, house.lotH));

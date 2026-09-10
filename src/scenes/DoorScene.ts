@@ -71,6 +71,7 @@ export class DoorScene extends Phaser.Scene {
   private lastSkyKey = "";
   private lastBagHanded: boolean | null = null;
   private lastHouseTitle = "";
+  private lastPrompt = "";
   private lighting?: DayNightPipeline;
   private lastGradeKey = "";
   private lastGradeMs = -1e9;
@@ -260,15 +261,18 @@ export class DoorScene extends Phaser.Scene {
     armHit(this.bag, canBag, BAG_HIT_PAD);
 
     const who = drop.customerName ?? "the customer";
-    this.prompt.setText(
-      nextAsk
-        ? `Tap ${who} to ask for ID.`
-        : nextHand
-          ? `Tap the bag to hand it to ${who}.`
-          : nextPhoto
-            ? `Tap the bag in their hands to take the photo.`
-            : drop.hint || "They're at the door.",
-    );
+    const promptLine = nextAsk
+      ? `Tap ${who} to ask for ID.`
+      : nextHand
+        ? `Tap the bag to hand it to ${who}.`
+        : nextPhoto
+          ? `Tap the bag in their hands to take the photo.`
+          : drop.hint || "They're at the door.";
+    // setText refits typekit — only pay when the instruction changes.
+    if (promptLine !== this.lastPrompt) {
+      this.lastPrompt = promptLine;
+      this.prompt.setText(promptLine);
+    }
     this.prompt.setAlpha(1);
     this.placePrompt();
   }
