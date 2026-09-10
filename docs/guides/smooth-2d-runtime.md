@@ -133,6 +133,16 @@ Under `#loading-gate`: flush textures a full frame; register city + people atlas
 
 ---
 
+## RawDelta readiness
+
+Wall-clock sim (`game.loop.rawDelta`, `fps.smoothStep: false`) is **one optional tool**, not the product goal. Success is an installed phone PWA that feels **responsive and smooth** — snappy input, no mid-session stalls, honest frame budget — measured with overlay telemetry, not “sim clock matches wall” alone.
+
+**Product rule:** smoothed Phaser delta stays the committed clock until every gate in the plan passes. Phase 5 only then re-evaluates rawDelta with A/B and a fallback flag.
+
+**Canonical plan:** [plans/2026-09-10-responsive-smooth-product.md](../plans/2026-09-10-responsive-smooth-product.md) (Phases 0–5: stalls → frame budget → telemetry → input → rawDelta decision). Stub alias: [plans/2026-09-10-rawdelta-readiness.md](../plans/2026-09-10-rawdelta-readiness.md).
+
+---
+
 ## Related
 
 - `src/ui/renderBudget.ts` — tiers, `postFxScale`, camera sync
@@ -144,6 +154,7 @@ Under `#loading-gate`: flush textures a full frame; register city + people atlas
 - `src/art/peopleAtlas.ts` — standing + portrait atlases
 - `src/config.ts` / `src/main.ts` — `smoothStep: true`, `autoMobilePipeline`, coarse 30fps limit
 - `src/ui/renderBudget.ts` — `sessionTierLocked` on coarse (mid 0.85 for session)
+- [plans/2026-09-10-responsive-smooth-product.md](../plans/2026-09-10-responsive-smooth-product.md) — responsive + smooth product plan (rawDelta = Phase 5)
 - [plans/2026-09-10-density-first-budget.md](../plans/2026-09-10-density-first-budget.md) — current phone scale doctrine
 - [plans/2026-09-10-drawing-board-perf.md](../plans/2026-09-10-drawing-board-perf.md) — prior ranked execution plan
 - [KNOWN_ERRORS.md](../KNOWN_ERRORS.md) — DayNight / wall-clock hitch history
