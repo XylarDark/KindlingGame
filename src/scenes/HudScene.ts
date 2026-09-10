@@ -749,7 +749,7 @@ export class HudScene extends Phaser.Scene {
     sim.tick(Math.min(Math.max(0, raw), MAX_SIM_STEP_MS));
     const snap = sim.snapshot();
     this.syncRenderStress(snap);
-    if (tickRenderBudget(this.game.loop.actualFps)) {
+    if (tickRenderBudget(this.game.loop.actualFps, performance.now(), raw)) {
       applyRenderBudgetToGame(this.game);
       applyCanvasDisplayScale(this.game);
     }

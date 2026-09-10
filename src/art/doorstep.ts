@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import type { SkySample } from "../sim/dayNight";
+import type { PhoneFxQuality } from "../ui/renderBudget";
 import { Pal } from "./palette";
 import { paintSky } from "./skyPaint";
 
@@ -111,7 +112,12 @@ export function paintDoorstepStatic(g: Phaser.GameObjects.Graphics, houseIndex: 
 }
 
 /** Lamp halos + window glow — redraw only when sky sample changes. */
-export function paintDoorstepNightFx(g: Phaser.GameObjects.Graphics, houseIndex: number, sky: SkySample): void {
+export function paintDoorstepNightFx(
+  g: Phaser.GameObjects.Graphics,
+  houseIndex: number,
+  sky: SkySample,
+  quality: PhoneFxQuality = "full",
+): void {
   const facade = doorFacade(houseIndex);
   const skyH = DOORSTEP_SKY_H;
   const houseW = facade.style === "town" || facade.style === "twoStory" ? 840 : facade.style === "ranch" ? 1040 : 920;
@@ -123,8 +129,8 @@ export function paintDoorstepNightFx(g: Phaser.GameObjects.Graphics, houseIndex:
   const dx = hx + Math.floor((houseW - doorW) / 2);
   const dy = hy + houseH - doorH;
 
-  paintPorchLampGlow(g, dx, doorW, sky);
-  paintWindowGlowOverlay(g, hx, hy, houseW, facade, sky.windowGlow);
+  paintPorchLampGlow(g, dx, doorW, sky, quality);
+  paintWindowGlowOverlay(g, hx, hy, houseW, facade, sky.windowGlow, quality);
 }
 
 /** Full doorstep (tests + legacy) — sky + static + night FX in one pass. */
@@ -192,10 +198,26 @@ function paintPorchStatic(
   g.fillRect(dx - 60, FLOOR_Y - 80 - 52, 16, 16);
 }
 
-function paintPorchLampGlow(g: Phaser.GameObjects.Graphics, dx: number, doorW: number, sky: SkySample): void {
+function paintPorchLampGlow(
+  g: Phaser.GameObjects.Graphics,
+  dx: number,
+  doorW: number,
+  sky: SkySample,
+  quality: PhoneFxQuality,
+): void {
   if (sky.lampAlpha <= 0.08) return;
   const lampX = dx + doorW / 2;
   const lampY = FLOOR_Y - 80 - 300;
+  if (quality === "minimal") {
+    g.fillStyle(0xffe0a8, 0.1 + 0.25 * sky.lampAlpha);
+    g.fillCircle(lampX, lampY + 44, 36 + 16 * sky.lampAlpha);
+    return;
+  }
+  if (quality === "lite") {
+    g.fillStyle(0xffe0a8, 0.1 + 0.3 * sky.lampAlpha);
+    g.fillCircle(lampX, lampY + 46, 52 + 24 * sky.lampAlpha);
+    return;
+  }
   g.fillStyle(0xffe0a8, 0.12 + 0.38 * sky.lampAlpha);
   g.fillCircle(lampX, lampY + 48, 70 + 40 * sky.lampAlpha);
   g.fillStyle(0xfff0c8, 0.2 + 0.45 * sky.lampAlpha);
@@ -209,8 +231,9 @@ function paintWindowGlowOverlay(
   houseW: number,
   facade: DoorFacade,
   glow: number,
+  quality: PhoneFxQuality,
 ): void {
-  if (glow <= 0.2) return;
+  if (quality === "minimal" || glow <= 0.2) return;
   const windows: { x: number; y: number }[] = [
     { x: hx + 80, y: hy + 180 },
     { x: hx + houseW - 80 - 160, y: hy + 180 },
@@ -220,10 +243,11 @@ function paintWindowGlowOverlay(
   } else {
     windows.push({ x: hx + 280, y: hy + 200 }, { x: hx + houseW - 280 - 160, y: hy + 200 });
   }
+  const paneAlpha = quality === "lite" ? 0.15 + 0.4 * glow : 0.2 + 0.55 * glow;
   for (const w of windows) {
-    g.fillStyle(Pal.gold, 0.2 + 0.55 * glow);
+    g.fillStyle(Pal.gold, paneAlpha);
     g.fillRect(w.x + 20, w.y + 20, 50, 40);
-    if (glow > 0.25) {
+    if (quality === "full" && glow > 0.25) {
       g.fillStyle(0xffe8b0, 0.18 + 0.35 * glow);
       g.fillRect(w.x + 8, w.y + 8, 144, 104);
     }

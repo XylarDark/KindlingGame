@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { applyCrewTexture, applyPersonTexture } from "../art/peopleAtlas";
 import { doorGrade } from "../art/dayNightGrade";
 import { applyDayNight, attachDayNight, dayNightFrom, shouldApplyGrade, type DayNightPipeline } from "../art/dayNightPipeline";
-import { getRenderBudget, syncSceneRenderCamera } from "../ui/renderBudget";
+import { getRenderBudget, phoneFxQuality, syncSceneRenderCamera } from "../ui/renderBudget";
 import {
   paintDoorstepNightFx,
   paintDoorstepSky,
@@ -79,6 +79,7 @@ export class DoorScene extends Phaser.Scene {
   private insetTop = 0;
   private lastHouse = "";
   private lastSkyKey = "";
+  private lastFxQuality = phoneFxQuality();
   private lastBagHanded: boolean | null = null;
   private lastHouseTitle = "";
   private lastPrompt = "";
@@ -101,7 +102,7 @@ export class DoorScene extends Phaser.Scene {
     this.nightFx = this.add.graphics().setDepth(1);
     const startSky = skyAt(0);
     paintDoorstepSky(this.skyLayer, startSky);
-    paintDoorstepNightFx(this.nightFx, 0, startSky);
+    paintDoorstepNightFx(this.nightFx, 0, startSky, phoneFxQuality());
 
     this.houseLabel = addSignText(this, DOORSTEP_DOOR_X, 56, "", {
       size: doorTitlePx(),
@@ -211,12 +212,17 @@ export class DoorScene extends Phaser.Scene {
       this.facadeBake = this.bakeDoorFacade(houseIndex);
       this.lastSkyKey = "";
     }
+    const fxQ = phoneFxQuality();
+    if (fxQ !== this.lastFxQuality) {
+      this.lastFxQuality = fxQ;
+      this.lastSkyKey = "";
+    }
     if (skyKey !== this.lastSkyKey) {
       this.lastSkyKey = skyKey;
       this.skyLayer.clear();
       paintDoorstepSky(this.skyLayer, sky);
       this.nightFx.clear();
-      paintDoorstepNightFx(this.nightFx, houseIndex, sky);
+      paintDoorstepNightFx(this.nightFx, houseIndex, sky, fxQ);
     }
     const destOrder = snap.orders.find((o) => o.destinationId === drop.houseId && o.status === "onRun");
     const sla = destOrder ? formatSlaClock(destOrder.slaRemainingMs) : "";
