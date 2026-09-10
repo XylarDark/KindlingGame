@@ -66,6 +66,8 @@ const HUD_SIGN_GAP = 28;
 /** Corner fallback keeps clear of the ceiling band on the road and at doors. */
 const HUD_CORNER_TOP = 76;
 const HUD_SCORE_GAP = 16;
+/** Reused score flash labels — avoids per-flash addSignText PRE_RENDER listener churn. */
+const SCORE_POP_POOL = 3;
 
 /**
  * No chip behind the readouts, so the ink outline is what separates them from
@@ -307,6 +309,8 @@ export class HudScene extends Phaser.Scene {
   private lastScoreFlashId = 0;
   private lastSfxId = 0;
   private scorePopLayer!: Phaser.GameObjects.Container;
+  private scorePopPool: Phaser.GameObjects.Text[] = [];
+  private scorePopFree: Phaser.GameObjects.Text[] = [];
   private readoutsInShop = true;
   private readoutCorner = { left: 28, right: GAME_WIDTH - 28, top: HUD_CORNER_TOP };
   /** Last shiftEnded passed to setPwaIdle — edge only, not every frame. */
@@ -355,6 +359,7 @@ export class HudScene extends Phaser.Scene {
       .setOrigin(1, 0.5)
       .setDepth(20);
     this.scorePopLayer = this.add.container(0, 0).setDepth(30);
+    this.warmScorePopPool();
 
     this.clockText = addUiText(this, 0, 0, "", {
       size: scaleChromePx(HUD_READOUT_PX),
@@ -1553,21 +1558,54 @@ export class HudScene extends Phaser.Scene {
     playUiSfx(this.game, cue.kind);
   }
 
-  private spawnScorePop(delta: number): void {
+  private warmScorePopPool(): void {
+    for (let i = 0; i < SCORE_POP_POOL; i++) {
+      const label = addSignText(this, 0, 0, "", {
+        size: Type.heading,
+        fontStyle: "700",
+        padding: { x: 10, y: 4 },
+        maxWidth: 160,
+        maxHeight: 40,
+      })
+        .setOrigin(0, 0.5)
+        .setVisible(false)
+        .setAlpha(0);
+      this.scorePopPool.push(label);
+      this.scorePopFree.push(label);
+      this.scorePopLayer.add(label);
+    }
+  }
+
+  private acquireScorePop(delta: number): Phaser.GameObjects.Text {
+    let label = this.scorePopFree.pop();
+    if (!label) {
+      // All slots animating — recycle the oldest rather than grow PRE_RENDER listeners.
+      label = this.scorePopPool[0]!;
+      this.tweens.killTweensOf(label);
+      const idx = this.scorePopFree.indexOf(label);
+      if (idx >= 0) this.scorePopFree.splice(idx, 1);
+    }
     const positive = delta >= 0;
-    // Ink on white like every other box; the sign of the delta moves to the frame, which
-    // is the one place a colour still means something under this scheme.
-    const label = addSignText(this, 0, 0, positive ? `+${delta}` : String(delta), {
-      size: Type.heading,
-      fontStyle: "700",
-      accent: positive ? Color.leafBright : Color.danger,
-      padding: { x: 10, y: 4 },
-      maxWidth: 160,
-      maxHeight: 40,
-    }).setOrigin(this.readoutsInShop ? 1 : 0, 0.5);
+    label
+      .setOrigin(this.readoutsInShop ? 1 : 0, 0.5)
+      .setVisible(true)
+      .setAlpha(1)
+      .setY(0);
+    label.setText(positive ? `+${delta}` : String(delta));
+    setSignAccent(label, positive ? Color.leafBright : Color.danger);
+    return label;
+  }
+
+  private releaseScorePop(label: Phaser.GameObjects.Text): void {
+    this.tweens.killTweensOf(label);
+    label.setVisible(false).setAlpha(0).setText("");
+    if (!this.scorePopFree.includes(label)) this.scorePopFree.push(label);
+  }
+
+  private spawnScorePop(delta: number): void {
+    const label = this.acquireScorePop(delta);
     // Pop rises outboard of the score so it never crosses the sign or the caption.
     this.placeReadouts();
-    this.scorePopLayer.add(label);
     this.tweens.add({
       targets: this.scoreText,
       scale: { from: 1.18, to: 1 },
@@ -1580,7 +1618,7 @@ export class HudScene extends Phaser.Scene {
       alpha: { from: 1, to: 0 },
       duration: 900,
       ease: "Cubic.easeOut",
-      onComplete: () => label.destroy(),
+      onComplete: () => this.releaseScorePop(label),
     });
   }
 

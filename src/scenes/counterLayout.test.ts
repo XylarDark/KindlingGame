@@ -66,7 +66,7 @@ const SCORE_GAP = number(hud, /const HUD_SCORE_GAP = (\d+);/, "HUD_SCORE_GAP");
 const scoreBlock = between(hud, "this.scoreText = addUiText(", "})", "score value style");
 const captionBlock = between(hud, 'this.scoreCaption = addUiText(this, 0, 0, "SCORE"', "})", "SCORE caption style");
 const clockBlock = between(hud, "this.clockText = addUiText(", "})", "clock style");
-const popBlock = between(hud, "private spawnScorePop(", "\n  }", "spawnScorePop");
+const popBlock = between(hud, "private warmScorePopPool(", "\n  }", "warmScorePopPool");
 const placeReadouts = between(hud, "private placeReadouts(", "\n  }", "placeReadouts");
 const ordersBlock = between(shop, "this.tabletLabel = addUiText(", ".setOrigin(0.5)", "ORDERS style");
 
@@ -80,7 +80,8 @@ const captionBox = boxOf(captionBlock, "SCORE caption");
 const clockBox = boxOf(clockBlock, "clock");
 const popBox = boxOf(popBlock, "score pop");
 const POP_LIFT = number(placeReadouts, /scorePopLayer\.setPosition\(signLeft, COUNTER_SIGN\.y - (\d+)\)/, "pop lift");
-const POP_RISE = number(popBlock, /y: \{ from: 0, to: -(\d+) \}/, "pop rise");
+const popTween = between(hud, "private spawnScorePop(", "\n  }", "spawnScorePop");
+const POP_RISE = number(popTween, /y: \{ from: 0, to: -(\d+) \}/, "pop rise");
 const ORDERS_INSET = number(shop, /const TABLET_LABEL_INSET = (\d+);/, "TABLET_LABEL_INSET");
 
 const tab = tabletLayout();

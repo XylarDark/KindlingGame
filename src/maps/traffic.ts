@@ -138,6 +138,12 @@ export const TRAFFIC_DENSITY = 0.75;
 /** Shared ambient loop budget (routes stay dense; cars are thinned by TRAFFIC_DENSITY). */
 export const TRAFFIC_LOOP_MAX = 6;
 
+/**
+ * Hard cap on DriveScene traffic sprites — matches max cars after density filter
+ * (6 loops × 2 cars × 0.75 density ≈ 9; 12 leaves headroom for loop growth).
+ */
+export const TRAFFIC_VISUAL_MAX = 12;
+
 let cachedLoops: TrafficLoop[] | null = null;
 
 /** Shared city loops so DriveScene and the sim use the same cars. */
