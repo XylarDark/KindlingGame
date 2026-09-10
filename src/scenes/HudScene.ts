@@ -48,8 +48,7 @@ import { designHudInset, HUD_TOUCH_MIN_DESIGN, readCssSafeArea, VIEWFIT_EVENT } 
 const HUD_READOUT_PX = 40;
 /**
  * Cap one sim step so a long background pause does not jump the shift clock.
- * Must stay ≥ ~1s: capture/phone Chrome often runs well under 15 fps, and a tighter
- * cap (e.g. 100ms) re-introduces slow-motion whenever rawDelta exceeds the cap.
+ * Smoothed delta already softens hitch frames; this only bounds tab-away gaps.
  */
 const MAX_SIM_STEP_MS = 1_000;
 /**
@@ -735,7 +734,7 @@ export class HudScene extends Phaser.Scene {
     drawSignature(this.idSignature, card.name, photoX + 12, sigTop + 26, ID_PHOTO_W - 24);
   }
 
-  update(_time: number, _delta: number): void {
+  update(_time: number, delta: number): void {
     const sim = getSim();
     // Avoid a full snapshot before tick — input only needs the auto-drive bit.
     if (!sim.isAutoDriving()) {
@@ -744,10 +743,8 @@ export class HudScene extends Phaser.Scene {
     } else {
       sim.setPlayerInput(0, 0);
     }
-    // Phaser's smoothed `delta` caps to ~16.7ms when !inFocus / post-blur cooldown —
-    // on a low-FPS phone that puts the whole sim in slow motion. rawDelta is wall time.
-    const raw = this.game.loop.rawDelta;
-    sim.tick(Math.min(Math.max(0, raw), MAX_SIM_STEP_MS));
+    // Product: smoothed delta (fps.smoothStep) — hitch frames ease instead of stalling.
+    sim.tick(Math.min(Math.max(0, delta), MAX_SIM_STEP_MS));
     const snap = sim.snapshot();
     tickRenderBudget(this.game.loop.actualFps, performance.now());
     // Title / shift-ended only — calling every frame was a pointless hop (diag #11).

@@ -48,7 +48,7 @@ function startGame(): void {
     ...gameConfig,
     fps: {
       ...(typeof gameConfig.fps === "object" && gameConfig.fps ? gameConfig.fps : {}),
-      smoothStep: false,
+      smoothStep: true,
       target: coarse ? 30 : 60,
       limit: coarse ? 30 : 0,
     },
