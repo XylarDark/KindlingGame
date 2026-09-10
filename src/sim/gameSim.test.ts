@@ -469,6 +469,65 @@ describe("GameSim order loops", () => {
     expect(sim.orderById(order.id)?.status).toBe("completed");
   });
 
+  it("edge-triggered press/release blocks held touch through CHECK ID into bag/photo", () => {
+    const sim = GameSim.create({ seed: 4, autoSpawn: false });
+    const order = fillTicket(sim, "delivery", { destinationId: "house-1", ageOk: true });
+    sim.hitTheRoad();
+    startDoor(sim, "house-1");
+    stepDropoff(sim); // ask
+    sim.pressDropoffConfirm(); // check ID — finger still down
+    sim.tick(16);
+    expect(sim.snapshot().dropoff.actionLabel).toBe("HAND BAG");
+    for (let i = 0; i < 30; i++) {
+      sim.pressDropoffConfirm();
+      sim.tick(50);
+    }
+    expect(sim.snapshot().dropoff.actionLabel).toBe("HAND BAG");
+    expect(sim.orderById(order.id)?.status).toBe("onRun");
+    sim.releaseDropoffConfirm();
+    sim.tick(NPC_INTERACT_COOLDOWN_MS + 16);
+    sim.pressDropoffConfirm();
+    sim.releaseDropoffConfirm();
+    sim.tick(16);
+    expect(sim.snapshot().dropoff.actionLabel).toBe("PHOTO");
+    sim.pressDropoffConfirm();
+    sim.releaseDropoffConfirm();
+    sim.tick(NPC_INTERACT_COOLDOWN_MS + 16);
+    sim.pressDropoffConfirm();
+    sim.releaseDropoffConfirm();
+    sim.tick(16);
+    expect(sim.orderById(order.id)?.status).toBe("completed");
+    expect(sim.snapshot().dropoff.phase).toBe("none");
+  });
+
+  it("rapid double-confirm during lock advances at most one step after release", () => {
+    const sim = GameSim.create({ seed: 4, autoSpawn: false });
+    fillTicket(sim, "delivery", { destinationId: "house-1", ageOk: true });
+    sim.hitTheRoad();
+    startDoor(sim, "house-1");
+    stepDropoff(sim);
+    sim.pressDropoffConfirm();
+    sim.releaseDropoffConfirm();
+    sim.tick(NPC_INTERACT_COOLDOWN_MS + 16);
+    sim.pressDropoffConfirm();
+    sim.releaseDropoffConfirm();
+    sim.tick(16);
+    expect(sim.snapshot().dropoff.actionLabel).toBe("HAND BAG");
+    sim.pressDropoffConfirm();
+    for (let i = 0; i < 8; i++) {
+      sim.pressDropoffConfirm();
+      sim.queueInteract();
+      sim.tick(16);
+    }
+    expect(sim.snapshot().dropoff.actionLabel).toBe("HAND BAG");
+    sim.releaseDropoffConfirm();
+    sim.tick(NPC_INTERACT_COOLDOWN_MS + 16);
+    sim.pressDropoffConfirm();
+    sim.releaseDropoffConfirm();
+    sim.tick(16);
+    expect(sim.snapshot().dropoff.actionLabel).toBe("PHOTO");
+  });
+
   it("denies an underage stop, fails the order, and returns to the map", () => {
     const sim = GameSim.create({ seed: 4, autoSpawn: false });
     const order = fillTicket(sim, "delivery", { destinationId: "house-1", ageOk: false });

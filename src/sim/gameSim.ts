@@ -32,6 +32,12 @@ import {
   VEHICLE_SPEED,
 } from "./constants";
 import { customerLookIndex } from "../art/people";
+import {
+  dropoffGateAccepts,
+  latchDropoffGate,
+  tickDropoffGate,
+  type DropoffConfirmGate,
+} from "./dropoffConfirm";
 import { ageForSeed, emptyDropoff, idCardFor, type DropoffPhase, type DropoffView } from "./dropoff";
 import { destLabel, isOpen, needsFetch, tabletQueue, type Order, type OrderType } from "./orders";
 import {
@@ -280,10 +286,10 @@ export class GameSim {
   private keyLeadFacing = 1;
   private fetchSkuId: string | null = null;
   private backroomLeftMs = 0;
-  /** Blocks a second door/curb interact from the same tap (ASK ID → deny/next, etc.). */
-  private dropoffInteractReadyAt = 0;
-  /** After a doorstep advance, absorb held/repeat presses until a quiet frame. */
-  private dropoffAwaitRelease = false;
+  /** Per-step edge gate: cooldown + release before the next doorstep confirm. */
+  private dropoffGate: DropoffConfirmGate | null = null;
+  /** True while E/SPACE or a door pointer is held — one edge per press/tap. */
+  private dropoffConfirmHeld = false;
 
   constructor(options: SimOptions = {}) {
     const seed = options.seed ?? 1;
@@ -399,8 +405,8 @@ export class GameSim {
     this.coverLostAt = 0;
     this.queuedInteract = false;
     this.input = { dx: 0, dy: 0 };
-    this.dropoffInteractReadyAt = 0;
-    this.dropoffAwaitRelease = false;
+    this.dropoffGate = null;
+    this.dropoffConfirmHeld = false;
     this.lastAutoSpawn = 0;
     this.nextOrderId = 1;
     this.nextDeliveryHouse = 0;
@@ -492,6 +498,22 @@ export class GameSim {
 
   queueInteract(): void {
     this.queuedInteract = true;
+  }
+
+  /**
+   * Edge-triggered confirm for driver curb/door steps. Keyboard and pointer paths
+   * must pair `pressDropoffConfirm` with `releaseDropoffConfirm` so a held key or
+   * touch cannot click through ASK → CHECK → bag → photo.
+   */
+  pressDropoffConfirm(): void {
+    if (this.dropoffConfirmHeld) return;
+    this.dropoffConfirmHeld = true;
+    if (this.driverDropoffGated() && !this.dropoffConfirmAccepts()) return;
+    this.queueInteract();
+  }
+
+  releaseDropoffConfirm(): void {
+    this.dropoffConfirmHeld = false;
   }
 
   interact(): void {
@@ -640,16 +662,17 @@ export class GameSim {
     this.moveCustomers(dtMs);
     this.tickKeyLead(dtMs);
     this.tickCall();
+    if (this.driverDropoffGated()) {
+      const gateTick = tickDropoffGate(this.dropoffGate, this.clock.gameMs, {
+        queuedInteract: this.queuedInteract,
+        confirmHeld: this.dropoffConfirmHeld,
+      });
+      this.dropoffGate = gateTick.gate;
+      if (gateTick.swallowQueued) this.queuedInteract = false;
+    }
     if (this.queuedInteract) {
       this.queuedInteract = false;
-      // Held key-repeat / double-fire: absorb until a frame with no press after a step.
-      if (this.playerRole === "driver" && this.dropoffAwaitRelease) {
-        /* keep latched while presses keep arriving */
-      } else {
-        this.interact();
-      }
-    } else if (this.dropoffAwaitRelease) {
-      this.dropoffAwaitRelease = false;
+      this.interact();
     }
     if (this.playerRole === "driver") this.tickCounterCover(dtMs);
     this.tickTimers();
@@ -1562,12 +1585,7 @@ export class GameSim {
   private continueDropoff(): void {
     const d = this.dropoff;
     if (!d) return;
-    // Drop taps during the lock — re-queuing auto-skipped bag/photo after ID click-through.
-    if (this.clock.gameMs < this.dropoffInteractReadyAt) {
-      this.dropoffAwaitRelease = true;
-      return;
-    }
-    if (this.dropoffAwaitRelease) return;
+    if (!this.dropoffConfirmAccepts()) return;
 
     if (d.phase === "atCurb") {
       d.phase = "calling";
@@ -1640,8 +1658,15 @@ export class GameSim {
   }
 
   private armDropoffInteract(ms = Math.min(220, NPC_INTERACT_COOLDOWN_MS)): void {
-    this.dropoffInteractReadyAt = this.clock.gameMs + ms;
-    this.dropoffAwaitRelease = true;
+    this.dropoffGate = latchDropoffGate(this.clock.gameMs, ms);
+  }
+
+  private driverDropoffGated(): boolean {
+    return this.playerRole === "driver" && !!this.dropoff;
+  }
+
+  private dropoffConfirmAccepts(): boolean {
+    return dropoffGateAccepts(this.dropoffGate, this.clock.gameMs);
   }
 
   private beginCurb(stopId: string): void {
@@ -1664,7 +1689,8 @@ export class GameSim {
 
   private clearDropoff(): void {
     this.dropoff = null;
-    this.dropoffAwaitRelease = false;
+    this.dropoffGate = null;
+    this.dropoffConfirmHeld = false;
   }
 
   private syncCurb(): void {
@@ -1732,8 +1758,7 @@ export class GameSim {
       canAct = true;
       hint = `Tap the bag in their hands to take the photo.`;
     }
-    const interactArmed =
-      this.clock.gameMs >= this.dropoffInteractReadyAt && !this.dropoffAwaitRelease;
+    const interactArmed = this.dropoffConfirmAccepts();
     if (!interactArmed) canAct = false;
     return {
       phase: d.phase,

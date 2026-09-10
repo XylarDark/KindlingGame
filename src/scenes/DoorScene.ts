@@ -110,14 +110,19 @@ export class DoorScene extends Phaser.Scene {
       .setDepth(6);
     enableWideHit(this.customer, PERSON_HIT_PAD);
     enableWideHit(this.bag, BAG_HIT_PAD);
-    this.customer.on("pointerdown", (p: Phaser.Input.Pointer) => {
+    const onDoorConfirmDown = (p: Phaser.Input.Pointer): void => {
       p.event.stopPropagation();
-      getSim().queueInteract();
-    });
-    this.bag.on("pointerdown", (p: Phaser.Input.Pointer) => {
-      p.event.stopPropagation();
-      getSim().queueInteract();
-    });
+      getSim().pressDropoffConfirm();
+    };
+    const onDoorConfirmUp = (): void => {
+      getSim().releaseDropoffConfirm();
+    };
+    this.customer.on("pointerdown", onDoorConfirmDown);
+    this.customer.on("pointerup", onDoorConfirmUp);
+    this.customer.on("pointerupoutside", onDoorConfirmUp);
+    this.bag.on("pointerdown", onDoorConfirmDown);
+    this.bag.on("pointerup", onDoorConfirmUp);
+    this.bag.on("pointerupoutside", onDoorConfirmUp);
 
     // Anchored over the customer's head rather than parked at a fixed y — the
     // instruction names them, so it should be pointing at them.
