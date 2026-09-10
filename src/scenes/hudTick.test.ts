@@ -18,6 +18,16 @@ describe("HudScene wall-clock sim tick", () => {
     const config = read("../config.ts");
     expect(config).toContain("smoothStep: false");
   });
+
+  it("limits coarse phones to ~30fps target for sustained smoothness", () => {
+    const main = read("../main.ts");
+    expect(main).toContain("limit: coarse ? 30 : 0");
+    expect(main).toContain("target: coarse ? 30 : 60");
+    const config = read("../config.ts");
+    expect(config).toContain("autoMobilePipeline: true");
+    expect(config).toContain("pixelArt: true");
+    expect(config).toContain("antialias: false");
+  });
 });
 
 describe("HudScene paint dirty guards", () => {

@@ -29,7 +29,7 @@ Keep new findings in that shape: one file per pass, prefix by kind, name the sli
 
 | Directory | Purpose | Notes |
 |-----------|---------|-------|
-| **guides/** | How-to docs for local tooling humans run by hand | [`android-emulator.md`](guides/android-emulator.md) — AVD + Chrome for PWA/SW install checks (not FPS) |
+| **guides/** | How-to docs for local tooling humans run by hand | [`android-emulator.md`](guides/android-emulator.md) — AVD + Chrome for PWA/SW install checks (not FPS); [`smooth-2d-runtime.md`](guides/smooth-2d-runtime.md) — frame budget, adaptive renderScale, PostFX, Drive static bake |
 | **operational/** | What automation cannot do reliably, and the manual step that covers it | [`automation-gaps.md`](operational/automation-gaps.md), per [automation-standards.mdc](../.cursor/rules/automation-standards.mdc) |
 | **promo/** | Curated stills, committed deliberately | **Authored work** — capture scripts must not bulk-overwrite these. See [18-content-and-data-pipelines.mdc](../.cursor/rules/18-content-and-data-pipelines.mdc) |
 | **qa-shots/** | Screenshot scratch from capture runs | **Gitignored.** Anything worth keeping gets curated into `promo/` |

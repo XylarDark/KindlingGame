@@ -37,6 +37,7 @@ describe("chunked city wiring guards", () => {
     expect(drive).toContain("yieldToRenderer");
     expect(drive).toContain("markCityBuildComplete");
     expect(drive).toContain("if (!this.cityBuildReady) return");
+    expect(drive).toContain("bakeStaticCityMap");
     expect(drive).not.toContain("private drawCity(): void");
   });
 

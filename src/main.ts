@@ -40,7 +40,17 @@ function applyBudget(game: Phaser.Game): void {
 function startGame(): void {
   const coarse = globalThis.matchMedia?.("(pointer: coarse)")?.matches ?? false;
   initRenderBudget(coarse);
-  const game = new Phaser.Game(gameConfig);
+  // Prefer sustained smoothness on phones over chasing 60Hz fill-rate.
+  const config: Phaser.Types.Core.GameConfig = {
+    ...gameConfig,
+    fps: {
+      ...(typeof gameConfig.fps === "object" && gameConfig.fps ? gameConfig.fps : {}),
+      smoothStep: false,
+      target: coarse ? 30 : 60,
+      limit: coarse ? 30 : 0,
+    },
+  };
+  const game = new Phaser.Game(config);
   installMobileShell(game);
   installInstallCoach();
   onRenderBudgetChange(() => applyBudget(game));
