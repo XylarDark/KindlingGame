@@ -3,7 +3,7 @@ import { customerTextureKey } from "../art/people";
 import { drawReceiptRail } from "../art/receiptRail";
 import { shopGrade } from "../art/dayNightGrade";
 import { applyDayNight, attachDayNight, dayNightFrom, type DayNightPipeline } from "../art/dayNightPipeline";
-import { syncSceneRenderCamera } from "../ui/renderBudget";
+import { getRenderBudget } from "../ui/renderBudget";
 import { drawShopCounter, drawShopInterior, paintShopDayNight, paintWindowGlow } from "../art/shopInterior";
 import {
   BAG_PANEL,
@@ -138,7 +138,6 @@ export class ShopScene extends Phaser.Scene {
 
   create(): void {
     this.input.setTopOnly(false);
-    syncSceneRenderCamera(this);
     drawShopInterior(this);
     this.sky = this.add.graphics().setDepth(0.5);
     this.windowGlow = this.add.graphics().setDepth(3).setBlendMode(Phaser.BlendModes.ADD);
@@ -252,6 +251,7 @@ export class ShopScene extends Phaser.Scene {
   }
 
   private syncLighting(gameMs: number): void {
+    if (!getRenderBudget().postFx) return;
     const pipe = this.lighting ?? dayNightFrom(this.cameras.main);
     this.lighting = pipe;
     const playing = this.sys.isActive();

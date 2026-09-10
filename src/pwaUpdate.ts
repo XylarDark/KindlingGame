@@ -5,6 +5,7 @@
  * (title / shift ended) — never mid-shop or mid-drive.
  */
 import { SKIP_WAITING_MESSAGE } from "./pwaMessages";
+import { showLoading } from "./ui/loadingGate";
 
 export function serviceWorkerUrl(baseUrl: string): string {
   const base = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
@@ -122,6 +123,8 @@ export function tryActivateWaitingWhenIdle(
   }
   debug("idle activate: skipWaiting + reload");
   session?.setItem(IDLE_RELOAD_GUARD, "1");
+  // Show before the blank between skipWaiting and next paint.
+  showLoading({ mode: "update" });
   reg.waiting.postMessage(SKIP_WAITING_MESSAGE);
   reload();
   return true;

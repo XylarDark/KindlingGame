@@ -36,8 +36,17 @@ Chrome intent URL). Then:
    `navigator.serviceWorker.controller` is set and the worker is **navigate-only**
    (no blanket asset `respondWith`).
 7. After a deploy that leaves a **waiting** worker: leave the game on the title
-   screen or end a shift (idle). The page should post `kindling-skip-waiting`
-   and reload **once** onto the new controller. Mid-shop / mid-drive must not.
+   screen or end a shift (idle). The page should show **Updating…**, post
+   `kindling-skip-waiting`, and reload **once** onto the new controller.
+   Mid-shop / mid-drive must not.
+
+## Optimal play path (installed mobile)
+
+Installed **standalone** PWA is the preferred play surface: no browser chrome,
+navigate-only SW (no asset hop), idle activate with a visible Updating gate, and
+the install coach can own BIP after ~30s engagement. Browser-tab play must still
+be correct (desktop letterbox via contain; phone height-fill). Cold boot shows
+**Loading Kindling…** while fonts/art/shaders warm, then Title.
 
 ## Manual adb notes
 

@@ -64,14 +64,44 @@ export interface ContainedStage {
   railBottom: number;
 }
 
+/** How the 16:9 stage sits in the viewport. */
+export type StageFitMode = "height-fill" | "contain";
+
 /**
- * Fit a 16:9 stage that always fills the viewport height.
- * Leftover width becomes side rails; taller-than-16:9 viewports crop the sides
- * instead of letterboxing, so there is never an empty top/bottom bar.
+ * Place a 16:9 stage in the viewport.
+ *
+ * - `height-fill` (phones): stage always fills viewport height. Leftover width
+ *   becomes side rails; taller-than-16:9 viewports crop the sides — no top bar.
+ * - `contain` (desktop / IDE panes): stage fits entirely inside the viewport
+ *   (letterbox and/or pillarbox). Never crops — Cursor browser panes are often
+ *   taller than 16:9 and height-fill looked permanently zoomed-in.
  */
-export function containStage(view: ViewSize, aspect = GAME_ASPECT): ContainedStage {
+export function containStage(
+  view: ViewSize,
+  aspect = GAME_ASPECT,
+  mode: StageFitMode = "height-fill",
+): ContainedStage {
   const vw = Math.max(view.width, 1);
   const vh = Math.max(view.height, 1);
+
+  if (mode === "contain") {
+    let stageW = vw;
+    let stageH = stageW / aspect;
+    if (stageH > vh) {
+      stageH = vh;
+      stageW = stageH * aspect;
+    }
+    const left = (vw - stageW) / 2;
+    const top = (vh - stageH) / 2;
+    return {
+      stage: { width: stageW, height: stageH, left, top },
+      railLeft: Math.max(0, left),
+      railRight: Math.max(0, vw - left - stageW),
+      railTop: Math.max(0, top),
+      railBottom: Math.max(0, vh - top - stageH),
+    };
+  }
+
   const stageH = vh;
   const stageW = stageH * aspect;
   const left = (vw - stageW) / 2;

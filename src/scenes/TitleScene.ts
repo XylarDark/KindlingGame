@@ -8,7 +8,6 @@ import { addHudButton, addPanel, HUD_BUTTON_MIN_H } from "../ui/chrome";
 import { HOWTO_HINT, HOWTO_STEPS, PAUSE_HINT, WELCOME_HINT, WELCOME_TITLE } from "../ui/copy";
 import { setPwaIdle } from "../pwaUpdate";
 import { presentInstallCoach } from "../ui/installCoach";
-import { syncSceneRenderCamera } from "../ui/renderBudget";
 import { SIGN_FRAME_W, signPlaqueRings } from "../ui/signPlaque";
 import { addSignText } from "../ui/signText";
 import { addUiText } from "../ui/text";
@@ -57,7 +56,6 @@ export class TitleScene extends Phaser.Scene {
     this.input.setTopOnly(true);
     // Title is idle for PWA — waiting workers may activate + reload here only.
     setPwaIdle(true);
-    syncSceneRenderCamera(this);
 
     // Mobile / early play: coach install for a chrome-free session (no-op if standalone
     // or already dismissed). HTML overlay sits above the Phaser canvas.

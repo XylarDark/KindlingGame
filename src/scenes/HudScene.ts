@@ -30,7 +30,7 @@ import { END_SHIFT_CAPTION, END_SHIFT_LABEL, RESULTS_NEW_DAY, RESULTS_TITLE } fr
 import { addSignText, setSignAccent } from "../ui/signText";
 import { addUiText } from "../ui/text";
 import { settingsGeom, type SettingsGeom } from "../ui/settingsGeom";
-import { applyRenderBudgetToGame, syncSceneRenderCamera, tickRenderBudget } from "../ui/renderBudget";
+import { applyRenderBudgetToGame, tickRenderBudget } from "../ui/renderBudget";
 import {
   Color,
   HUD_TYPE_FIT,
@@ -316,7 +316,6 @@ export class HudScene extends Phaser.Scene {
 
   create(): void {
     this.input.setTopOnly(false);
-    syncSceneRenderCamera(this);
 
     // Readouts sit over bright shop walls AND dark night streets, so contrast comes
     // from an ink outline on the glyphs rather than a chip behind them.

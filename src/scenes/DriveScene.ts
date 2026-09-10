@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { customerTextureKey } from "../art/people";
 import { driveGrade } from "../art/dayNightGrade";
 import { applyDayNight, attachDayNight, dayNightFrom, type DayNightPipeline } from "../art/dayNightPipeline";
-import { syncSceneRenderCamera } from "../ui/renderBudget";
+import { getRenderBudget } from "../ui/renderBudget";
 import {
   CITY,
   MAP_PX_H,
@@ -69,7 +69,6 @@ export class DriveScene extends Phaser.Scene {
   create(): void {
     this.cameras.main.setBounds(0, 0, MAP_PX_W, MAP_PX_H);
     this.cameras.main.setBackgroundColor(skyAt(0).mapGrass);
-    syncSceneRenderCamera(this);
     this.lighting = attachDayNight(this.cameras.main);
     this.drawCity();
     this.nightGlow = this.add.graphics().setDepth(2);
@@ -285,16 +284,18 @@ export class DriveScene extends Phaser.Scene {
   private paintDayNight(snap: SimSnapshot): void {
     const sky = skyAt(snap.gameMs);
     this.cameras.main.setBackgroundColor(sky.mapGrass);
-    const focus = snap.dropoff.driverOnFoot && snap.dropoff.driver ? snap.dropoff.driver : snap.vehicle;
-    const view = this.cameras.main.worldView;
-    const pipe = this.lighting ?? dayNightFrom(this.cameras.main);
-    this.lighting = pipe;
-    applyDayNight(pipe, driveGrade(sky, focus, this.streetLamps), {
-      x: view.x,
-      y: view.y,
-      width: view.width || this.scale.width,
-      height: view.height || this.scale.height,
-    });
+    if (getRenderBudget().postFx) {
+      const focus = snap.dropoff.driverOnFoot && snap.dropoff.driver ? snap.dropoff.driver : snap.vehicle;
+      const view = this.cameras.main.worldView;
+      const pipe = this.lighting ?? dayNightFrom(this.cameras.main);
+      this.lighting = pipe;
+      applyDayNight(pipe, driveGrade(sky, focus, this.streetLamps), {
+        x: view.x,
+        y: view.y,
+        width: view.width || this.scale.width,
+        height: view.height || this.scale.height,
+      });
+    }
     this.paintNightGlow(sky);
   }
 

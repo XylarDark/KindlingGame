@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { customerTextureKey } from "../art/people";
 import { doorGrade } from "../art/dayNightGrade";
 import { applyDayNight, attachDayNight, dayNightFrom, type DayNightPipeline } from "../art/dayNightPipeline";
-import { syncSceneRenderCamera } from "../ui/renderBudget";
+import { getRenderBudget } from "../ui/renderBudget";
 import { paintDoorstep, DOORSTEP_DOOR_X, DOORSTEP_FLOOR_Y, DOORSTEP_PORCH } from "../art/doorstep";
 import { itemHitSize } from "../input/hitRect";
 import { BAG_SCALE, PEOPLE_SCALE, PERSON_DISPLAY_H } from "../maps/shopT0";
@@ -78,7 +78,6 @@ export class DoorScene extends Phaser.Scene {
 
   create(): void {
     this.input.setTopOnly(true);
-    syncSceneRenderCamera(this);
     this.lighting = attachDayNight(this.cameras.main);
     this.backdrop = this.add.graphics().setDepth(0);
     paintDoorstep(this.backdrop, 0, skyAt(0));
@@ -180,15 +179,17 @@ export class DoorScene extends Phaser.Scene {
       const n = Number(houseKey.replace("house-", "")) || 1;
       paintDoorstep(this.backdrop, n - 1, sky);
     }
-    const view = this.cameras.main.worldView;
-    const pipe = this.lighting ?? dayNightFrom(this.cameras.main);
-    this.lighting = pipe;
-    applyDayNight(pipe, doorGrade(sky, DOORSTEP_PORCH), {
-      x: view.x,
-      y: view.y,
-      width: view.width || this.scale.width,
-      height: view.height || this.scale.height,
-    });
+    if (getRenderBudget().postFx) {
+      const view = this.cameras.main.worldView;
+      const pipe = this.lighting ?? dayNightFrom(this.cameras.main);
+      this.lighting = pipe;
+      applyDayNight(pipe, doorGrade(sky, DOORSTEP_PORCH), {
+        x: view.x,
+        y: view.y,
+        width: view.width || this.scale.width,
+        height: view.height || this.scale.height,
+      });
+    }
     const destOrder = snap.orders.find((o) => o.destinationId === drop.houseId && o.status === "onRun");
     const sla = destOrder ? formatSlaClock(destOrder.slaRemainingMs) : "";
     const title = drop.houseId

@@ -2,6 +2,7 @@ import { Color } from "./ui/theme";
 import { GAME_HEIGHT, GAME_WIDTH } from "./sim/constants";
 import {
   containStage,
+  GAME_ASPECT,
   notifyViewfit,
   phaserDisplayScale,
   RAIL_MIN_CSS_PX,
@@ -52,10 +53,8 @@ export function applyCanvasDisplayScale(game: Phaser.Game): void {
   const w = game.scale.canvasBounds?.width || canvas.clientWidth;
   const h = game.scale.canvasBounds?.height || canvas.clientHeight;
   if (w <= 0 || h <= 0) return;
-  // Live backbuffer size when RenderBudget scales below design 1920×1080.
-  const gw = game.scale.gameSize?.width || game.scale.width || GAME_WIDTH;
-  const gh = game.scale.gameSize?.height || game.scale.height || GAME_HEIGHT;
-  const scale = phaserDisplayScale({ width: w, height: h }, gw, gh);
+  // Design space is always 1920×1080 — CSS alone fits the canvas.
+  const scale = phaserDisplayScale({ width: w, height: h }, GAME_WIDTH, GAME_HEIGHT);
   game.scale.displayScale.set(scale.x, scale.y);
 }
 
@@ -85,9 +84,9 @@ function layoutRails(
 }
 
 /**
- * Keep a uniform 16:9 playfield that always fills viewport height. Leftover
- * width becomes Kindling side rails; taller viewports crop the sides — never a
- * top/bottom letterbox.
+ * Layout the 16:9 playfield.
+ * Phones (coarse): height-fill with side rails / side crop — no top letterbox.
+ * Desktop / IDE panes (fine): classic contain so the full stage stays visible.
  */
 export function installMobileShell(game: Phaser.Game): void {
   const shell = document.getElementById("kindling-shell");
@@ -114,7 +113,7 @@ export function installMobileShell(game: Phaser.Game): void {
     const theme = document.querySelector('meta[name="theme-color"]');
     if (theme) theme.setAttribute("content", Color.skyTopHex);
 
-    const packed = containStage({ width, height });
+    const packed = containStage({ width, height }, GAME_ASPECT, coarse() ? "height-fill" : "contain");
     // Publish contain scale before viewfit so type floors / mobile ramp see it.
     setStageContainScale(stageContainScale(packed.stage));
     setStageFrame(packed.stage);

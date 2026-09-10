@@ -61,6 +61,18 @@ describe("displayScale NONE + CSS contain", () => {
     expect(tall.stage.left).toBeLessThan(0);
   });
 
+  it("contain mode fits the full 16:9 inside tall IDE / desktop panes", () => {
+    // Cursor browser-like pane: taller than 16:9 — height-fill would set left < 0.
+    const tall = containStage({ width: 1268, height: 971 }, GAME_ASPECT, "contain");
+    expect(tall.stage.left).toBeGreaterThanOrEqual(0);
+    expect(tall.stage.top).toBeGreaterThanOrEqual(0);
+    expect(tall.stage.width).toBeLessThanOrEqual(1268 + 0.01);
+    expect(tall.stage.height).toBeLessThanOrEqual(971 + 0.01);
+    expect(tall.stage.width / tall.stage.height).toBeCloseTo(GAME_ASPECT, 5);
+    expect(tall.railTop + tall.stage.height + tall.railBottom).toBeCloseTo(971, 0);
+    expect(tall.stage.left + tall.stage.width).toBeLessThanOrEqual(1268 + 0.01);
+  });
+
   it("keeps railTop and railBottom at zero on every popular landscape size", () => {
     for (const view of POPULAR_MOBILE_LANDSCAPE) {
       const packed = containStage(view);

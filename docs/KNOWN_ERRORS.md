@@ -307,16 +307,24 @@ the thing it described.
 - **Date:** 2026-09-09
 - **Symptom:** after HudScene switched to `rawDelta` (so sim stayed real-time on low FPS), phones felt hitchy rather than smoothly slow. Captures showed ~20 `actualFps` with or without a service worker.
 - **Cause:** always rendering **1920×1080** WebGL plus a fullscreen **DayNight PostFX** (highp, up to 8 lights, fresh `Float32Array`s every upload). Drive also painted lighting twice per frame (`update` + `PRE_RENDER`). Wall-clock sim unmasked the GPU fill-rate cost that smoothed deltas had previously hidden as slow-mo.
-- **Fix:** `RenderBudget` tiers resize the WebGL backbuffer (mid ~0.75, low ~0.6) **and** set matching camera zoom on every scene — including late launches via `syncSceneRenderCamera` from each `create` and again after Boot launches shop/hud/title. DayNight PostFX is off on mid/low. Reuse typed uniform buffers; paint Drive lighting once in `PRE_RENDER`; skip shop sky rebuilds when the sky key is unchanged. Demotion requires two consecutive ~1s samples.
-- **Prevention:** do not treat "sim clock matches wall" as proof of smoothness — measure `actualFps` with PostFX on/off. Do not re-enable `smoothStep` as a smoothness fix. Do not attach DayNight to Hud/Title cameras. Never resize the Phaser game size without re-zooming **every** later scene create (READY alone is too early).
+- **Fix (superseded 2026-09-09 evening):** first response resized the backbuffer + camera zoom; that raced with scene create and looked permanently zoomed-in on desktop. **Current fix:** design/WebGL size stays **1920×1080**, camera zoom **1**; CSS shell alone fits (phone height-fill, desktop contain). `RenderBudget` is **effects-only** (PostFX / lights / upload Hz). Skip grade construction when PostFX is off. Boot warms DayNight + textures behind `#loading-gate`. Idle SW activate shows “Updating…” before reload.
+- **Prevention:** do not treat "sim clock matches wall" as proof of smoothness — measure `actualFps` with PostFX on/off. Do not re-enable `smoothStep` as a smoothness fix. Do not attach DayNight to Hud/Title cameras. **Never** `game.scale.resize` or `camera.setZoom` for performance — display fit is CSS-only; budget is effects-only. First-use shader compile belongs in Boot warm-up, not the first shop frame.
+
+### Canvas resize + zoom for mid/low budget looked permanently zoomed-in
+
+- **Date:** 2026-09-09
+- **Symptom:** Cursor / tall desktop panes showed a cropped shop (`#game-root` with negative `left`); phones recovered mid-session as FPS rose and tiers promoted.
+- **Cause:** height-fill CSS on non-phone panes side-cropped; RenderBudget also shrank the WebGL buffer and zoomed cameras after READY, racing late scene creates.
+- **Fix:** coarse → height-fill; fine → contain. Effects-only budget; freeze canvas at 1920×1080 zoom 1.
+- **Prevention:** source-guard that `applyRenderBudgetToGame` does not call non-1 zoom; viewFit tests assert tall IDE panes keep `stage.left >= 0` in contain mode.
 
 ### Install coach vanished after dismiss while BIP was still pending
 
 - **Date:** 2026-09-09
 - **Symptom:** phone Chrome in a normal tab never offered Install; motion stayed choppy at full 1920×1080 after resolution scaling had been withdrawn.
 - **Cause:** (1) Chrome often fires `beforeinstallprompt` only after ~30s engagement and a tap. We `preventDefault`'d BIP then called `presentInstallCoach()` without `force`, so an earlier "Not now" / TTL dismiss permanently hid Install and the browser UI was already suppressed. (2) Auto-show gated only on `(pointer: coarse)`, which some Android builds do not report. (3) Backbuffer scale had been disabled after a zoom bug, leaving phones on full-res fill-rate.
-- **Fix:** BIP handler uses `presentInstallCoach({ force: true })`; audience includes `any-pointer: coarse`, `maxTouchPoints > 1`, and Android/iOS UA; restore resolution scale with per-scene zoom sync.
-- **Prevention:** if you `preventDefault` BIP, you own the install UI — never let dismiss TTL swallow a later prompt event. Source-guard the BIP `force: true` call.
+- **Fix:** BIP handler uses `presentInstallCoach({ force: true })`; audience includes `any-pointer: coarse`, `maxTouchPoints > 1`, and Android/iOS UA; **effects-only** RenderBudget (canvas stays 1920×1080); **desktop / IDE panes use `containStage(..., "contain")`** so tall Cursor browser views letterbox instead of side-cropping (`left: -229` style zoom).
+- **Prevention:** if you `preventDefault` BIP, you own the install UI — never let dismiss TTL swallow a later prompt event. Source-guard the BIP `force: true` call. Never let low IDE-browser FPS shrink the design canvas. Height-fill side crop is for coarse/phone only.
 
 ### SW comment claimed the page posted skipWaiting; nothing did until idle activate
 

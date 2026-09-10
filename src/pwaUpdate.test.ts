@@ -118,6 +118,12 @@ describe("update wiring", () => {
     expect(fetchBody).not.toMatch(/respondWith\(fetch\(req, init\)/);
   });
 
+  it("idle activate shows Updating before skipWaiting + reload", () => {
+    const src = read("src/pwaUpdate.ts");
+    expect(src).toContain('showLoading({ mode: "update" })');
+    expect(src).toContain("tryActivateWaitingWhenIdle");
+  });
+
   it("does not skipWaiting on install — that would swap the worker mid-shift", () => {
     const sw = read("public/sw.js");
     const installFrom = sw.indexOf('self.addEventListener("install"');

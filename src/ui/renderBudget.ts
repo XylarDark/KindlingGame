@@ -5,7 +5,10 @@ export type RenderTier = "high" | "mid" | "low";
 
 export type RenderBudget = {
   tier: RenderTier;
-  /** WebGL backbuffer scale vs design 1920×1080 (camera zoom matches). */
+  /**
+   * Always 1 — design/WebGL size stays 1920×1080. Kept for harness/docs;
+   * never resize or zoom from this field.
+   */
   renderScale: number;
   postFx: boolean;
   maxLights: number;
@@ -14,9 +17,9 @@ export type RenderBudget = {
 };
 
 const HIGH: RenderBudget = { tier: "high", renderScale: 1, postFx: true, maxLights: 8, uploadMinMs: 0 };
-/** Mid: fewer pixels; PostFX off — lights still read via Graphics glow. */
-const MID: RenderBudget = { tier: "mid", renderScale: 0.75, postFx: false, maxLights: 0, uploadMinMs: 100 };
-const LOW: RenderBudget = { tier: "low", renderScale: 0.6, postFx: false, maxLights: 0, uploadMinMs: 200 };
+/** Mid: PostFX off — lights still read via Graphics glow. Canvas stays full design size. */
+const MID: RenderBudget = { tier: "mid", renderScale: 1, postFx: false, maxLights: 0, uploadMinMs: 100 };
+const LOW: RenderBudget = { tier: "low", renderScale: 1, postFx: false, maxLights: 0, uploadMinMs: 200 };
 
 /** Promote above this; demote below the lower band (hysteresis). */
 const PROMOTE_FPS = 48;
@@ -25,7 +28,6 @@ const DEMOTE_TO_LOW_FPS = 30;
 
 let current: RenderBudget = HIGH;
 let lastEvalAt = 0;
-let appliedScale = 1;
 let demoteStrikes = 0;
 let autoEnabled = true;
 let listeners: Array<(b: RenderBudget) => void> = [];
@@ -33,7 +35,6 @@ let listeners: Array<(b: RenderBudget) => void> = [];
 export function resetRenderBudgetForTests(): void {
   current = HIGH;
   lastEvalAt = 0;
-  appliedScale = 1;
   demoteStrikes = 0;
   autoEnabled = true;
   listeners = [];
@@ -133,39 +134,13 @@ export function tickRenderBudget(actualFps: number, nowMs = performance.now()): 
 }
 
 /**
- * Match one scene's camera to the live render scale.
- * Call from every scene `create` — READY can fire before shop/hud exist.
+ * Ensure the WebGL backbuffer is design 1920×1080 (effects budget never shrinks it).
+ * DayNight attach/detach is handled by main's syncDayNightCameras on budget change.
  */
-export function syncSceneRenderCamera(
-  scene: Phaser.Scene,
-  scale: number = getRenderBudget().renderScale,
-): void {
-  const cam = scene.cameras?.main;
-  if (!cam) return;
-  cam.setZoom(scale);
-  // Drive follows the van in map space — do not yank it to design centre.
-  if (scene.sys.settings.key !== "drive") {
-    cam.centerOn(GAME_WIDTH / 2, GAME_HEIGHT / 2);
-  }
-}
-
-/**
- * Resize the WebGL backbuffer and zoom every registered scene so design 1920×1080
- * still fills the stage. CSS shell stretches the canvas; fewer GPU pixels on mid/low.
- */
-export function applyRenderScale(game: Phaser.Game, scale: number): void {
-  if (Math.abs(scale - appliedScale) >= 0.01) {
-    appliedScale = scale;
-    const w = Math.max(320, Math.round(GAME_WIDTH * scale));
-    const h = Math.max(180, Math.round(GAME_HEIGHT * scale));
-    game.scale.resize(w, h);
-  }
-  // Always re-zoom: scenes may have launched since the last resize.
-  for (const scene of game.scene.getScenes(false)) {
-    syncSceneRenderCamera(scene, scale);
-  }
-}
-
 export function applyRenderBudgetToGame(game: Phaser.Game): void {
-  applyRenderScale(game, current.renderScale);
+  const w = game.scale.gameSize?.width ?? game.scale.width;
+  const h = game.scale.gameSize?.height ?? game.scale.height;
+  if (w !== GAME_WIDTH || h !== GAME_HEIGHT) {
+    game.scale.resize(GAME_WIDTH, GAME_HEIGHT);
+  }
 }
