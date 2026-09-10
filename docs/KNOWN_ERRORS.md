@@ -307,24 +307,24 @@ the thing it described.
 - **Date:** 2026-09-09
 - **Symptom:** after HudScene switched to `rawDelta` (so sim stayed real-time on low FPS), phones felt hitchy rather than smoothly slow. Captures showed ~20 `actualFps` with or without a service worker.
 - **Cause:** always rendering **1920×1080** WebGL plus a fullscreen **DayNight PostFX** (highp, up to 8 lights, fresh `Float32Array`s every upload). Drive also painted lighting twice per frame (`update` + `PRE_RENDER`). Wall-clock sim unmasked the GPU fill-rate cost that smoothed deltas had previously hidden as slow-mo.
-- **Fix (superseded 2026-09-09 evening):** first response resized the backbuffer + camera zoom; that raced with scene create and looked permanently zoomed-in on desktop. **Current fix:** design/WebGL size stays **1920×1080**, camera zoom **1**; CSS shell alone fits (phone height-fill, desktop contain). `RenderBudget` is **effects-only** (PostFX / lights / upload Hz). Skip grade construction when PostFX is off. Boot warms DayNight + textures behind `#loading-gate`. Idle SW activate shows “Updating…” before reload.
-- **Prevention:** do not treat "sim clock matches wall" as proof of smoothness — measure `actualFps` with PostFX on/off. Do not re-enable `smoothStep` as a smoothness fix. Do not attach DayNight to Hud/Title cameras. **Never** `game.scale.resize` or `camera.setZoom` for performance — display fit is CSS-only; budget is effects-only. First-use shader compile belongs in Boot warm-up, not the first shop frame.
+- **Fix (history):** first response resized the backbuffer + camera zoom; that raced with scene create and looked permanently zoomed-in on desktop. Mid-period **effects-only** freeze kept design/WebGL at **1920×1080** zoom **1** while PostFX/lights/upload Hz adapted. **Current (2026-09-10 doctrine):** adaptive `renderScale` again (high 1.0 / mid 0.7 / low 0.5) with `scale.resize` + matching camera zoom; layout/sim stay in GAME_* coords; CSS shell still presents 16:9. Phones seed mid (PostFX off). Per-scene `syncSceneRenderCamera` on create + `applyCanvasDisplayScale` using live `gameSize` avoid the READY race. Boot warms DayNight + textures behind `#loading-gate`. Idle SW activate shows “Updating…” before reload.
+- **Prevention:** do not treat "sim clock matches wall" as proof of smoothness — measure `actualFps` with PostFX on/off and at each `renderScale`. Do not re-enable `smoothStep` as a smoothness fix. Do not attach DayNight to Hud/Title cameras. When resizing for budget, always re-zoom every scene (including late `create`) and map pointers via live backbuffer size — never leave CSS fit assuming a frozen 1920×1080 buffer. First-use shader compile belongs in Boot warm-up, not the first shop frame.
 
 ### Canvas resize + zoom for mid/low budget looked permanently zoomed-in
 
 - **Date:** 2026-09-09
 - **Symptom:** Cursor / tall desktop panes showed a cropped shop (`#game-root` with negative `left`); phones recovered mid-session as FPS rose and tiers promoted.
 - **Cause:** height-fill CSS on non-phone panes side-cropped; RenderBudget also shrank the WebGL buffer and zoomed cameras after READY, racing late scene creates.
-- **Fix:** coarse → height-fill; fine → contain. Effects-only budget; freeze canvas at 1920×1080 zoom 1.
-- **Prevention:** source-guard that `applyRenderBudgetToGame` does not call non-1 zoom; viewFit tests assert tall IDE panes keep `stage.left >= 0` in contain mode.
+- **Fix:** coarse → height-fill; fine → contain (stops IDE side-crop). Adaptive budget uses resize+zoom with per-scene sync; display fit remains CSS 16:9.
+- **Prevention:** every scene `create` must call `syncSceneRenderCamera`; viewFit tests assert tall IDE panes keep `stage.left >= 0` in contain mode. Do not apply height-fill on fine-pointer / desktop panes.
 
 ### Install coach vanished after dismiss while BIP was still pending
 
 - **Date:** 2026-09-09
 - **Symptom:** phone Chrome in a normal tab never offered Install; motion stayed choppy at full 1920×1080 after resolution scaling had been withdrawn.
 - **Cause:** (1) Chrome often fires `beforeinstallprompt` only after ~30s engagement and a tap. We `preventDefault`'d BIP then called `presentInstallCoach()` without `force`, so an earlier "Not now" / TTL dismiss permanently hid Install and the browser UI was already suppressed. (2) Auto-show gated only on `(pointer: coarse)`, which some Android builds do not report. (3) Backbuffer scale had been disabled after a zoom bug, leaving phones on full-res fill-rate.
-- **Fix:** BIP handler uses `presentInstallCoach({ force: true })`; audience includes `any-pointer: coarse`, `maxTouchPoints > 1`, and Android/iOS UA; **effects-only** RenderBudget (canvas stays 1920×1080); **desktop / IDE panes use `containStage(..., "contain")`** so tall Cursor browser views letterbox instead of side-cropping (`left: -229` style zoom).
-- **Prevention:** if you `preventDefault` BIP, you own the install UI — never let dismiss TTL swallow a later prompt event. Source-guard the BIP `force: true` call. Never let low IDE-browser FPS shrink the design canvas. Height-fill side crop is for coarse/phone only.
+- **Fix:** BIP handler uses `presentInstallCoach({ force: true })`; audience includes `any-pointer: coarse`, `maxTouchPoints > 1`, and Android/iOS UA; adaptive RenderBudget (phones seed mid @ 0.7×, PostFX off); **desktop / IDE panes use `containStage(..., "contain")`** so tall Cursor browser views letterbox instead of side-cropping (`left: -229` style zoom).
+- **Prevention:** if you `preventDefault` BIP, you own the install UI — never let dismiss TTL swallow a later prompt event. Source-guard the BIP `force: true` call. Design layout stays 1920×1080 even when the WebGL buffer shrinks — do not let IDE-pane FPS change GAME_* layout. Height-fill side crop is for coarse/phone only.
 
 ### SW comment claimed the page posted skipWaiting; nothing did until idle activate
 

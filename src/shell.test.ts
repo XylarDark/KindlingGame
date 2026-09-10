@@ -50,7 +50,7 @@ describe("isStandaloneDisplay", () => {
 });
 
 describe("applyCanvasDisplayScale", () => {
-  it("maps CSS canvas size onto Phaser displayScale in 1920×1080 space", () => {
+  it("maps CSS canvas size onto Phaser displayScale using the live backbuffer", () => {
     const displayScale = {
       x: 1,
       y: 1,
@@ -59,11 +59,14 @@ describe("applyCanvasDisplayScale", () => {
         this.y = y;
       },
     };
-    // Contained 16:9 stage for an 844×390 phone (~693×390).
+    // Contained 16:9 stage for an 844×390 phone (~693×390); full design buffer.
     const game = {
       canvas: { clientWidth: 693, clientHeight: 390 },
       scale: {
         canvasBounds: { width: 693, height: 390 },
+        gameSize: { width: GAME_WIDTH, height: GAME_HEIGHT },
+        width: GAME_WIDTH,
+        height: GAME_HEIGHT,
         displayScale,
         updateBounds() {},
       },
@@ -72,5 +75,32 @@ describe("applyCanvasDisplayScale", () => {
     expect(displayScale.x).toBeCloseTo(GAME_WIDTH / 693);
     expect(displayScale.y).toBeCloseTo(GAME_HEIGHT / 390);
     expect(displayScale.x).toBeCloseTo(displayScale.y, 1);
+  });
+
+  it("uses a shrunk RenderBudget backbuffer for pointer mapping", () => {
+    const displayScale = {
+      x: 1,
+      y: 1,
+      set(x: number, y: number) {
+        this.x = x;
+        this.y = y;
+      },
+    };
+    const bw = Math.round(GAME_WIDTH * 0.7);
+    const bh = Math.round(GAME_HEIGHT * 0.7);
+    const game = {
+      canvas: { clientWidth: 693, clientHeight: 390 },
+      scale: {
+        canvasBounds: { width: 693, height: 390 },
+        gameSize: { width: bw, height: bh },
+        width: bw,
+        height: bh,
+        displayScale,
+        updateBounds() {},
+      },
+    };
+    applyCanvasDisplayScale(game as never);
+    expect(displayScale.x).toBeCloseTo(bw / 693);
+    expect(displayScale.y).toBeCloseTo(bh / 390);
   });
 });

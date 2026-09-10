@@ -17,7 +17,7 @@ import { HOWTO_HINT, HOWTO_STEPS, PAUSE_HINT, WELCOME_HINT, WELCOME_TITLE } from
 import { setPwaIdle } from "../pwaUpdate";
 import { presentInstallCoach } from "../ui/installCoach";
 import { hideLoading, showLoading } from "../ui/loadingGate";
-import { getRenderBudget } from "../ui/renderBudget";
+import { getRenderBudget, syncSceneRenderCamera } from "../ui/renderBudget";
 import { SIGN_FRAME_W, signPlaqueRings } from "../ui/signPlaque";
 import { addSignText } from "../ui/signText";
 import { addUiText } from "../ui/text";
@@ -71,6 +71,7 @@ export class TitleScene extends Phaser.Scene {
     this.input.setTopOnly(true);
     // Title is idle for PWA — waiting workers may activate + reload here only.
     setPwaIdle(true);
+    syncSceneRenderCamera(this);
 
     // If Boot aborted before drive/door sleep, finish under the gate (never orphan showLoading).
     this.deferredWarm = this.finishDeferredWarm();
