@@ -20,7 +20,7 @@ Cite: KNOWN_ERRORS — *Full-resolution DayNight PostFX looked like a "slow game
 | **Atlases** (batch small tiles) | **Done** | City tiles (`atlas-city-tiles`); people standing (`atlas-people-standing`) + portraits (`atlas-people-faces`) after `generateTextures`. |
 | **Pooling** | **Done** | Shop customer visuals; Hud score pops; traffic sprite cap. |
 | **Cull** | **Done** | Drive camera cull on; traffic `TRAFFIC_CULL_PAD`; night-glow camera pad cull. |
-| **Overdraw** | **Partial** | Lot glow stroke-only; night glow coarser bands + view cull; skip hidden shop caption plaque. Door/shop translucent FX still reviewable. |
+| **Overdraw** | **Partial** | Phone tiers: `phoneFxQuality()` lite/minimal cuts Drive lamp-pool + window fills, Door porch/window halos, lot glow off on low; traffic cap 10/8. Shop window spill already cleared. Residual: shop `paintOutside` sky bands at night. |
 | **FPS / thermal** | **Done** | Coarse: `fps.target`+`limit` **30**; prefer sustained smoothness over chasing 60. |
 | **No alloc** (hot paths) | **Done** | DayNight reuses Float32 buffers; `skyVisualDirtyKey` throttles shop/door sky Graphics clears; avoid per-frame `lights.slice`. |
 | **Warm** | **Done** | `#loading-gate`: textures, DayNight, launch Drive/Door ≥2 frames, city build+bake complete before sleep. |
@@ -49,7 +49,7 @@ Design layout stays **1920×1080** (`GAME_*`). CSS shell presents 16:9. Only the
 1. **Prefer sharp pixels + cheap FX** over soft full-frame scale. Mid **0.85** and low **0.65** keep phone art readable; cut fill-rate via PostFX off, static bakes, atlases, and overdraw — not by shrinking to **0.45 / 0.32** (superseded — that was a blunt hammer that killed the look).
 2. **Always** pair `scale.resize` with `syncSceneRenderCamera` on every scene `create` (READY can race late scenes).
 3. Pointer / CSS fit must use **live** `gameSize`, not a frozen 1920×1080 assumption (`applyCanvasDisplayScale`).
-4. Coarse + Drive/Door: demote earlier; **never linger on high** (fullscreen DayNight) even if FPS briefly looks fine. Coarse seeds mid and never auto-promotes to high.
+4. Coarse + Drive/Door: demote earlier (mid→low @ ~36fps heavy / ~32fps shop; one-strike + rawDelta hitch ≥48ms); **never linger on high** (fullscreen DayNight) even if FPS briefly looks fine. Coarse seeds mid and never auto-promotes to high.
 5. Honest **30fps** on coarse phones beats blurry almost-60 — `fps.target` + `limit` 30 unchanged.
 6. Measuring “sim clock matches wall” is **not** proof of smoothness — measure `actualFps` / p95 `rawDelta` at each tier with PostFX on/off.
 

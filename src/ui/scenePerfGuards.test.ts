@@ -37,11 +37,22 @@ describe("scene perf guards", () => {
     expect(drive).not.toContain(".sort(");
   });
 
-  it("Drive caps traffic sprite pool growth", () => {
+  it("Drive caps traffic sprite pool growth via render tier", () => {
     const drive = read("src/scenes/DriveScene.ts");
-    expect(drive).toContain("TRAFFIC_VISUAL_MAX");
+    expect(drive).toContain("trafficVisualMax");
     const update = drive.slice(drive.indexOf("update(): void"), drive.indexOf("private paintDayNight"));
-    expect(update).toContain("TRAFFIC_VISUAL_MAX");
+    expect(update).toContain("trafficVisualMax");
+  });
+
+  it("Drive and Door simplify translucent FX on phone tiers", () => {
+    const drive = read("src/scenes/DriveScene.ts");
+    const door = read("src/scenes/DoorScene.ts");
+    const doorstep = read("src/art/doorstep.ts");
+    expect(drive).toContain("phoneFxQuality");
+    expect(door).toContain("phoneFxQuality");
+    expect(doorstep).toContain("PhoneFxQuality");
+    const glow = drive.slice(drive.indexOf("private paintNightGlow"), drive.indexOf("private returnToShop"));
+    expect(glow).toContain('"minimal"');
   });
 
   it("Hud reuses a capped score pop pool instead of destroy-per-flash", () => {

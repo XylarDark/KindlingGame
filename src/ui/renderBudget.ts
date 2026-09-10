@@ -65,6 +65,16 @@ const SEVERE_DEMOTE_FPS = 24;
 const HEAVY_DEMOTE_TO_MID_FPS = 48;
 const HEAVY_DEMOTE_TO_LOW_FPS = 34;
 const HEAVY_SEVERE_DEMOTE_FPS = 28;
+/** Coarse @ density-first scales — drop mid→low sooner (30fps target leaves little headroom). */
+const COARSE_DEMOTE_TO_LOW_FPS = 32;
+const COARSE_HEAVY_DEMOTE_TO_LOW_FPS = 36;
+const COARSE_SEVERE_DEMOTE_FPS = 26;
+const COARSE_HEAVY_SEVERE_DEMOTE_FPS = 30;
+/** One rawDelta spike this long ≈ missed frame budget — demote on coarse without waiting for strike #2. */
+const HITCH_DEMOTE_RAW_DELTA_MS = 48;
+
+/** Translucent night/lamp/window Graphics quality when PostFX is off (phones). */
+export type PhoneFxQuality = "full" | "lite" | "minimal";
 
 export type RenderStressContext = "shop" | "drive" | "door" | null;
 
@@ -138,7 +148,13 @@ export function pickRenderTier(opts: {
   // Coarse + Drive/Door: never linger on high (fullscreen DayNight) even if FPS looks fine.
   if (coarsePointer && heavy && prev === "high") return "mid";
   const demoteMid = heavy ? HEAVY_DEMOTE_TO_MID_FPS : DEMOTE_TO_MID_FPS;
-  const demoteLow = heavy ? HEAVY_DEMOTE_TO_LOW_FPS : DEMOTE_TO_LOW_FPS;
+  const demoteLow = coarsePointer
+    ? heavy
+      ? COARSE_HEAVY_DEMOTE_TO_LOW_FPS
+      : COARSE_DEMOTE_TO_LOW_FPS
+    : heavy
+      ? HEAVY_DEMOTE_TO_LOW_FPS
+      : DEMOTE_TO_LOW_FPS;
   // Coarse devices start at mid unless FPS already healthy on high.
   if (prev === "high") {
     if (actualFps > 0 && actualFps < demoteMid) return coarsePointer ? "low" : "mid";
@@ -168,11 +184,29 @@ export function initRenderBudget(coarsePointer: boolean): RenderBudget {
   return current;
 }
 
+/** Phone Graphics FX tier — full only when desktop PostFX carries grade. */
+export function phoneFxQuality(): PhoneFxQuality {
+  if (current.postFx) return "full";
+  if (current.tier === "low") return "minimal";
+  return "lite";
+}
+
+/** Live traffic sprite cap — fewer movers on phone tiers. */
+export function trafficVisualMax(): number {
+  if (current.tier === "low") return 8;
+  if (current.tier === "mid") return 10;
+  return 12;
+}
+
 /**
  * Re-evaluate ~1/s from Phaser's rolling FPS. Returns true when the tier changed.
- * Demotion needs two consecutive strikes so a single hitch does not drop quality.
+ * Demotion needs two consecutive strikes on desktop; coarse uses one (plus hitch rawDelta).
  */
-export function tickRenderBudget(actualFps: number, nowMs = performance.now()): boolean {
+export function tickRenderBudget(
+  actualFps: number,
+  nowMs = performance.now(),
+  rawDeltaMs?: number,
+): boolean {
   if (!autoEnabled) return false;
   if (nowMs - lastEvalAt < 1000) return false;
   lastEvalAt = nowMs;
@@ -193,9 +227,17 @@ export function tickRenderBudget(actualFps: number, nowMs = performance.now()): 
   const rank = { high: 2, mid: 1, low: 0 } as const;
   if (rank[next] < rank[current.tier]) {
     demoteStrikes += 1;
-    const severeFps = heavyScene() ? HEAVY_SEVERE_DEMOTE_FPS : SEVERE_DEMOTE_FPS;
+    const severeFps = coarse
+      ? heavyScene()
+        ? COARSE_HEAVY_SEVERE_DEMOTE_FPS
+        : COARSE_SEVERE_DEMOTE_FPS
+      : heavyScene()
+        ? HEAVY_SEVERE_DEMOTE_FPS
+        : SEVERE_DEMOTE_FPS;
     const severe = actualFps > 0 && actualFps < severeFps;
-    if (!severe && demoteStrikes < 2) return false;
+    const hitch = coarse && rawDeltaMs != null && rawDeltaMs >= HITCH_DEMOTE_RAW_DELTA_MS;
+    const strikesNeeded = coarse ? 1 : 2;
+    if (!severe && !hitch && demoteStrikes < strikesNeeded) return false;
   } else {
     demoteStrikes = 0;
   }

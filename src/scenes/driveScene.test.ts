@@ -24,7 +24,8 @@ describe("DriveScene grade throttle and dirty guards", () => {
     expect(src).toContain("lastPinWho");
     expect(src).toContain("if (who !== this.lastPinWho)");
     expect(src).toContain("lastLotGlowKey");
-    expect(src).toContain("if (stopId !== this.lastLotGlowKey)");
+    expect(src).toContain("lastLotFxQuality");
+    expect(src).toContain("stopId !== this.lastLotGlowKey");
   });
 
   it("skips paintDayNight when inactive and dirty-guards van banner + shop caption", () => {

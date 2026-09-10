@@ -1,14 +1,17 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import {
   applyRenderBudgetToGame,
   applyRenderScale,
   forceRenderBudget,
   getRenderBudget,
   initRenderBudget,
+  phoneFxQuality,
   pickRenderTier,
   resetRenderBudgetForTests,
+  setRenderStressContext,
   syncSceneRenderCamera,
   tickRenderBudget,
+  trafficVisualMax,
 } from "./renderBudget";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 
@@ -34,6 +37,13 @@ describe("pickRenderTier", () => {
     expect(pickRenderTier({ coarsePointer: false, actualFps: 28, prev: "mid" })).toBe("low");
     expect(pickRenderTier({ coarsePointer: false, actualFps: 42, prev: "low" })).toBe("mid");
     expect(pickRenderTier({ coarsePointer: false, actualFps: 50, prev: "mid" })).toBe("high");
+  });
+
+  it("demotes coarse mid→low sooner on drive/door than desktop", () => {
+    expect(pickRenderTier({ coarsePointer: true, actualFps: 35, prev: "mid", heavyScene: true })).toBe("low");
+    expect(pickRenderTier({ coarsePointer: false, actualFps: 35, prev: "mid", heavyScene: true })).toBe("mid");
+    expect(pickRenderTier({ coarsePointer: true, actualFps: 31, prev: "mid", heavyScene: false })).toBe("low");
+    expect(pickRenderTier({ coarsePointer: false, actualFps: 31, prev: "mid", heavyScene: false })).toBe("mid");
   });
 });
 
@@ -106,6 +116,35 @@ describe("init / tickRenderBudget", () => {
     initRenderBudget(false);
     expect(tickRenderBudget(22, 2_000)).toBe(true);
     expect(getRenderBudget().tier).toBe("mid");
+  });
+
+  it("demotes coarse mid→low on one strike (no second-sample wait)", () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query.includes("coarse"),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+    initRenderBudget(true);
+    setRenderStressContext("drive");
+    expect(tickRenderBudget(35, 2_000)).toBe(true);
+    expect(getRenderBudget().tier).toBe("low");
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("maps phone FX quality and traffic caps to tier", () => {
+    forceRenderBudget("high");
+    expect(phoneFxQuality()).toBe("full");
+    expect(trafficVisualMax()).toBe(12);
+    forceRenderBudget("mid");
+    expect(phoneFxQuality()).toBe("lite");
+    expect(trafficVisualMax()).toBe(10);
+    forceRenderBudget("low");
+    expect(phoneFxQuality()).toBe("minimal");
+    expect(trafficVisualMax()).toBe(8);
   });
 });
 

@@ -32,7 +32,7 @@ Preserve: dropoff gate, install coach BIP, Drive/Shop/Door bake, people atlases 
 - Drive/Door/Shop `paint*DayNight` early-return when `postFx` is false; Graphics glow paths remain for night mood.
 - Coarse + heavy scenes force off high even when FPS looks fine (`pickRenderTier`).
 
-**Residual (optional follow-up):** Drive lot glow and shop/door translucent FX overdraw — review on device if mid @ 0.85 still misses 30fps sustained; cut only without look regression.
+**Residual (optional follow-up):** See [coarse-overdraw-cuts](2026-09-10-coarse-overdraw-cuts.md) — shop `paintOutside` night bands; Drive lite window rects if device still misses 30fps.
 
 ## Success gate
 
