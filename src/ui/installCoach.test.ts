@@ -6,6 +6,7 @@ import {
   INSTALL_COACH_DISMISS_TTL_MS,
   INSTALL_COACH_DISMISSED_KEY,
   clearInstallCoachDismissed,
+  clearLegacyInstallCoachLocalDismiss,
   detectInstallPlatform,
   dismissInstallCoach,
   getDeferredInstallPrompt,
@@ -40,8 +41,8 @@ function memoryStore(init: Record<string, string> = {}): Storage {
   };
 }
 
-describe("install coach dismiss persistence", () => {
-  it("persists a dismiss timestamp and expires after the TTL", () => {
+describe("install coach session dismiss", () => {
+  it("persists a dismiss timestamp in the provided store and expires after the TTL", () => {
     const store = memoryStore();
     const now = 1_700_000_000_000;
     expect(isInstallCoachDismissed(store, now)).toBe(false);
@@ -53,10 +54,19 @@ describe("install coach dismiss persistence", () => {
     expect(isInstallCoachDismissed(store, now)).toBe(false);
   });
 
-  it("clears legacy dismiss flag so the coach can auto-show again", () => {
+  it("clears legacy pre-timestamp dismiss flag so the coach can auto-show again", () => {
     const store = memoryStore({ [INSTALL_COACH_DISMISSED_KEY]: "1" });
     expect(isInstallCoachDismissed(store)).toBe(false);
     expect(store.getItem(INSTALL_COACH_DISMISSED_KEY)).toBeNull();
+  });
+
+  it("clears legacy localStorage dismiss without touching session dismiss", () => {
+    const local = memoryStore({ [INSTALL_COACH_DISMISSED_KEY]: String(Date.now()) });
+    const session = memoryStore({ [INSTALL_COACH_DISMISSED_KEY]: String(Date.now()) });
+    clearLegacyInstallCoachLocalDismiss(local);
+    expect(local.getItem(INSTALL_COACH_DISMISSED_KEY)).toBeNull();
+    expect(session.getItem(INSTALL_COACH_DISMISSED_KEY)).not.toBeNull();
+    expect(isInstallCoachDismissed(session)).toBe(true);
   });
 });
 
@@ -79,7 +89,7 @@ describe("shouldShowInstallCoach", () => {
     ).toBe(false);
   });
 
-  it("skips after dismiss unless forced from Settings", () => {
+  it("skips after session dismiss unless forced from Settings / BIP", () => {
     expect(
       shouldShowInstallCoach({
         standalone: false,
@@ -134,6 +144,17 @@ describe("isInstallCoachAudience", () => {
     expect(isInstallCoachAudience({ coarsePointer: false, maxTouchPoints: 2, platform: "other" })).toBe(
       true,
     );
+  });
+
+  it("treats a deferred install prompt as audience (desktop Chrome BIP)", () => {
+    expect(
+      isInstallCoachAudience({
+        coarsePointer: false,
+        platform: "other",
+        maxTouchPoints: 0,
+        canPrompt: true,
+      }),
+    ).toBe(true);
   });
 });
 
@@ -209,5 +230,12 @@ describe("wiring", () => {
     const src = read("./installCoach.ts");
     expect(src).toContain('addEventListener("beforeinstallprompt"');
     expect(src).toContain("presentInstallCoach({ force: true })");
+  });
+
+  it("dismisses via sessionStorage and clears legacy localStorage on install", () => {
+    const src = read("./installCoach.ts");
+    expect(src).toContain("sessionStorage");
+    expect(src).toContain("clearLegacyInstallCoachLocalDismiss");
+    expect(src).toMatch(/defaultSessionStorage/);
   });
 });
