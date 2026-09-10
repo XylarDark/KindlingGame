@@ -74,6 +74,7 @@ export class DoorScene extends Phaser.Scene {
   private lighting?: DayNightPipeline;
   private lastGradeKey = "";
   private lastGradeMs = -1e9;
+  private onPreRenderDayNight = (): void => this.paintDoorDayNight(getSim().snapshot());
 
   constructor() {
     super("door");
@@ -140,6 +141,11 @@ export class DoorScene extends Phaser.Scene {
       .setOrigin(0.5, 1)
       .setDepth(8);
 
+    this.paintDoorDayNight(getSim().snapshot());
+    this.events.on(Phaser.Scenes.Events.PRE_RENDER, this.onPreRenderDayNight);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.events.off(Phaser.Scenes.Events.PRE_RENDER, this.onPreRenderDayNight);
+    });
     this.layoutDoorHud();
     const relayout = (): void => this.layoutDoorHud();
     this.scale.on(Phaser.Scale.Events.RESIZE, relayout);
@@ -186,30 +192,6 @@ export class DoorScene extends Phaser.Scene {
       this.lastBagHanded = null;
       const n = Number(houseKey.replace("house-", "")) || 1;
       paintDoorstep(this.backdrop, n - 1, sky);
-    }
-    if (getRenderBudget().postFx) {
-      // Door lights are static; rebuild on sky change or Shop-style ~80ms cadence.
-      const gradeKey = `${sky.mapOverlay}:${sky.mapOverlayAlpha.toFixed(3)}:${sky.lampAlpha.toFixed(2)}:${sky.windowGlow.toFixed(2)}`;
-      const now = performance.now();
-      if (
-        shouldApplyGrade({
-          nowMs: now,
-          lastMs: this.lastGradeMs,
-          dirty: gradeKey !== this.lastGradeKey,
-        })
-      ) {
-        this.lastGradeKey = gradeKey;
-        this.lastGradeMs = now;
-        const view = this.cameras.main.worldView;
-        const pipe = this.lighting ?? dayNightFrom(this.cameras.main);
-        this.lighting = pipe;
-        applyDayNight(pipe, doorGrade(sky, DOORSTEP_PORCH), {
-          x: view.x,
-          y: view.y,
-          width: view.width || this.scale.width,
-          height: view.height || this.scale.height,
-        });
-      }
     }
     const destOrder = snap.orders.find((o) => o.destinationId === drop.houseId && o.status === "onRun");
     const sla = destOrder ? formatSlaClock(destOrder.slaRemainingMs) : "";
@@ -289,6 +271,34 @@ export class DoorScene extends Phaser.Scene {
     );
     this.prompt.setAlpha(1);
     this.placePrompt();
+  }
+
+  private paintDoorDayNight(snap: SimSnapshot): void {
+    if (!this.sys.isActive()) return;
+    if (!getRenderBudget().postFx) return;
+    const sky = skyAt(snap.gameMs);
+    const gradeKey = `${sky.mapOverlay}:${sky.mapOverlayAlpha.toFixed(3)}:${sky.lampAlpha.toFixed(2)}:${sky.windowGlow.toFixed(2)}`;
+    const now = performance.now();
+    if (
+      !shouldApplyGrade({
+        nowMs: now,
+        lastMs: this.lastGradeMs,
+        dirty: gradeKey !== this.lastGradeKey,
+      })
+    ) {
+      return;
+    }
+    this.lastGradeKey = gradeKey;
+    this.lastGradeMs = now;
+    const view = this.cameras.main.worldView;
+    const pipe = this.lighting ?? dayNightFrom(this.cameras.main);
+    this.lighting = pipe;
+    applyDayNight(pipe, doorGrade(sky, DOORSTEP_PORCH), {
+      x: view.x,
+      y: view.y,
+      width: view.width || this.scale.width,
+      height: view.height || this.scale.height,
+    });
   }
 }
 

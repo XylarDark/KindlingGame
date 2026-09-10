@@ -103,9 +103,10 @@ describe("title start wiring", () => {
     const here = dirname(fileURLToPath(import.meta.url));
     const src = readFileSync(join(here, "../scenes/TitleScene.ts"), "utf8").replace(/\r\n/g, "\n");
     expect(src).toContain('from "../ui/displayPrefs"');
-    const beginAt = src.indexOf("private begin(");
+    const beginAt = src.indexOf("private async begin(");
     expect(beginAt).toBeGreaterThan(-1);
-    const begin = src.slice(beginAt, src.indexOf("\n  }\n}", beginAt) + 4);
+    const beginEnd = src.indexOf("\n  private advance", beginAt);
+    const begin = src.slice(beginAt, beginEnd > beginAt ? beginEnd : beginAt + 800);
     expect(begin).toContain("maybeEnterFullscreenOnStart()");
     expect(begin.indexOf("maybeEnterFullscreenOnStart()")).toBeLessThan(begin.indexOf("beginPlay()"));
   });

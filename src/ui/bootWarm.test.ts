@@ -35,12 +35,15 @@ describe("boot warm wiring", () => {
     expect(warm).toContain("if (!keepAttached) detachDayNight(cam)");
   });
 
-  it("marks degraded warm and Title finishes under the gate with finally hideLoading", () => {
+  it("warms shop PostFX and marks degraded warm; Title finishes under the gate", () => {
     const boot = read("src/scenes/BootScene.ts");
+    expect(boot).toContain("warmShopPostFx");
     expect(boot).toContain("setBootWarmPending");
     expect(boot).toContain("warm degraded");
     expect(boot).toContain("warmDriveOk");
     expect(boot).toContain("warmDoorOk");
+    const warmSleep = boot.slice(boot.indexOf("private async warmAndSleepScene"), boot.indexOf("private async waitFrames"));
+    expect(warmSleep).not.toContain("Promise.race");
     const title = read("src/scenes/TitleScene.ts");
     expect(title).toContain("finishDeferredWarm");
     expect(title).toContain("takeBootWarmPending");

@@ -18,6 +18,12 @@ describe("pickRenderTier", () => {
     expect(pickRenderTier({ coarsePointer: true, actualFps: 35, prev: "high" })).toBe("low");
   });
 
+  it("demotes high sooner on drive/door than in shop", () => {
+    expect(pickRenderTier({ coarsePointer: false, actualFps: 46, prev: "high", heavyScene: false })).toBe("high");
+    expect(pickRenderTier({ coarsePointer: false, actualFps: 46, prev: "high", heavyScene: true })).toBe("mid");
+    expect(pickRenderTier({ coarsePointer: false, actualFps: 50, prev: "mid", heavyScene: true })).toBe("mid");
+  });
+
   it("uses hysteresis between mid and low", () => {
     expect(pickRenderTier({ coarsePointer: false, actualFps: 28, prev: "mid" })).toBe("low");
     expect(pickRenderTier({ coarsePointer: false, actualFps: 42, prev: "low" })).toBe("mid");

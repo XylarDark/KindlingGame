@@ -135,6 +135,31 @@ export function shopGrade(sky: SkySample, potXs: number[]): GradeFrame {
   };
 }
 
+/**
+ * O(n·k) partial nearest pick — avoids sorting the full street-lamp set every grade rebuild.
+ */
+export function nearestLamps<T extends { x: number; y: number }>(
+  origin: { x: number; y: number },
+  lamps: T[],
+  max: number,
+): T[] {
+  if (max <= 0 || lamps.length === 0) return [];
+  if (lamps.length <= max) return lamps.slice();
+  const best: Array<{ item: T; d: number }> = [];
+  for (const lamp of lamps) {
+    const d = (lamp.x - origin.x) ** 2 + (lamp.y - origin.y) ** 2;
+    if (best.length < max) {
+      best.push({ item: lamp, d });
+      if (best.length === max) best.sort((a, b) => b.d - a.d);
+      continue;
+    }
+    if (d >= best[0]!.d) continue;
+    best[0] = { item: lamp, d };
+    best.sort((a, b) => b.d - a.d);
+  }
+  return best.map((b) => b.item);
+}
+
 export function driveGrade(
   sky: SkySample,
   focus?: { x: number; y: number },
@@ -153,11 +178,8 @@ export function driveGrade(
   }
   if (sky.lampAlpha > DAY_NIGHT_TUNE.lampMin && lamps.length > 0) {
     const origin = focus ?? lamps[0]!;
-    const nearest = lamps
-      .map((lamp) => ({ lamp, d: (lamp.x - origin.x) ** 2 + (lamp.y - origin.y) ** 2 }))
-      .sort((a, b) => a.d - b.d);
-    for (const { lamp } of nearest) {
-      if (lights.length >= MAX_LIGHTS) break;
+    const slots = Math.max(0, MAX_LIGHTS - lights.length);
+    for (const lamp of nearestLamps(origin, lamps, slots)) {
       lights.push({
         kind: "lamp",
         x: lamp.x,

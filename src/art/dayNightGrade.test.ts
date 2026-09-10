@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { GAME_HEIGHT, GAME_WIDTH, MS_PER_GAME_HOUR } from "../sim/constants";
 import { skyAt } from "../sim/dayNight";
 import { CEILING_POT_LEFT, CEILING_POT_RIGHT, COUNTER_FRONT, COUNTER_TOP, ceilingPots } from "../maps/shopT0";
-import { DAY_NIGHT_TUNE, doorGrade, driveGrade, shopGrade, worldToUv } from "./dayNightGrade";
+import { DAY_NIGHT_TUNE, doorGrade, driveGrade, nearestLamps, shopGrade, worldToUv } from "./dayNightGrade";
 
 function atHour(hour: number): number {
   return (hour - 9) * MS_PER_GAME_HOUR;
@@ -87,6 +87,20 @@ describe("shopGrade", () => {
     expect(night.gradeStrength).toBeLessThan(drive.gradeStrength);
     expect(night.ambientMul).toBeGreaterThan(DAY_NIGHT_TUNE.ambientFloor - 0.001);
     expect(night.ambientMul).toBeLessThan(0.7);
+  });
+});
+
+describe("nearestLamps", () => {
+  it("returns the k nearest lamps without sorting the full set", () => {
+    const lamps = [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 200, y: 0 },
+      { x: 300, y: 0 },
+    ];
+    const near = nearestLamps({ x: 95, y: 0 }, lamps, 2);
+    expect(near).toHaveLength(2);
+    expect(near.map((l) => l.x).sort((a, b) => a - b)).toEqual([0, 100]);
   });
 });
 

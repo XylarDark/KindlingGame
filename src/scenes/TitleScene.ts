@@ -1,10 +1,15 @@
 import Phaser from "phaser";
-import { attachDayNight } from "../art/dayNightPipeline";
+import { doorGrade, driveGrade } from "../art/dayNightGrade";
+import { DOORSTEP_PORCH } from "../art/doorstep";
+import { applyDayNight, attachDayNight, dayNightFrom } from "../art/dayNightPipeline";
+import { MS_PER_GAME_HOUR } from "../sim/constants";
+import { skyAt } from "../sim/dayNight";
 import { startSessionMusic, unlockAudio } from "../audio/music";
 import { COUNTER_SIGN } from "../maps/shopT0";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import { beginPlay, shouldShowHowTo } from "../session";
 import { takeBootWarmPending } from "../ui/bootWarm";
+import { markSceneWarm, sceneWarmTimeout } from "../ui/sceneWarm";
 import { maybeEnterFullscreenOnStart } from "../ui/displayPrefs";
 import { addHudButton, addPanel, HUD_BUTTON_MIN_H } from "../ui/chrome";
 import { HOWTO_HINT, HOWTO_STEPS, PAUSE_HINT, WELCOME_HINT, WELCOME_TITLE } from "../ui/copy";
@@ -42,12 +47,16 @@ const HOWTO_LIFT = introN(44);
 /** Gap from the design edge to the pause plaque's frame, before safe insets. */
 const PAUSE_MARGIN = 48;
 
+const WARM_DRIVE_FOCUS = { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 };
+
 export class TitleScene extends Phaser.Scene {
   private started = false;
   private phase: "welcome" | "howto" | "paused" = "paused";
   private welcomeLayer: Phaser.GameObjects.GameObject[] = [];
   private pauseHint?: Phaser.GameObjects.Text;
   private pausePlaque?: Phaser.GameObjects.Graphics;
+  /** Blocks begin() until deferred drive/door warm finishes — no mid-shift launch. */
+  private deferredWarm: Promise<void> | null = null;
 
   constructor() {
     super("title");
@@ -62,7 +71,7 @@ export class TitleScene extends Phaser.Scene {
     setPwaIdle(true);
 
     // If Boot aborted before drive/door sleep, finish under the gate (never orphan showLoading).
-    void this.finishDeferredWarm();
+    this.deferredWarm = this.finishDeferredWarm();
 
     // Mobile / early play: coach install for a chrome-free session (no-op if standalone
     // or already dismissed). HTML overlay sits above the Phaser canvas.
@@ -355,35 +364,45 @@ export class TitleScene extends Phaser.Scene {
     if (pending.door) keys.push("door");
     if (keys.length === 0) return;
     showLoading({ mode: "boot", stage: keys[0] === "drive" ? "Map" : "Door" });
-    const deadline = performance.now() + 5000;
     try {
       for (const key of keys) {
-        if (performance.now() >= deadline) break;
         showLoading({ mode: "boot", stage: key === "drive" ? "Map" : "Door" });
-        await this.warmAndSleepScene(key, deadline);
+        await this.warmAndSleepScene(key);
       }
     } finally {
       hideLoading();
     }
   }
 
-  private async warmAndSleepScene(key: "drive" | "door", deadline: number): Promise<void> {
-    if (this.scene.isSleeping(key)) return;
+  private async warmAndSleepScene(key: "drive" | "door"): Promise<void> {
+    const deadline = performance.now() + sceneWarmTimeout(key);
+    if (this.scene.isSleeping(key)) {
+      markSceneWarm(key);
+      return;
+    }
     if (!this.scene.isActive(key)) this.scene.launch(key);
-    const readyDeadline = Math.min(deadline, performance.now() + 2500);
-    while (performance.now() < readyDeadline) {
+    while (performance.now() < deadline) {
       if (this.scene.isActive(key) || this.scene.isSleeping(key)) break;
       await this.waitFrames(1);
     }
     if (performance.now() >= deadline) return;
     const scene = this.scene.get(key);
-    if (scene?.cameras?.main && getRenderBudget().postFx) {
-      attachDayNight(scene.cameras.main);
+    const cam = scene?.cameras?.main;
+    if (cam) {
+      attachDayNight(cam);
+      const nightMs = (20.5 - 9) * MS_PER_GAME_HOUR;
+      const sky = skyAt(nightMs);
+      const view = { x: 0, y: 0, width: GAME_WIDTH, height: GAME_HEIGHT };
+      const grade =
+        key === "drive" ? driveGrade(sky, WARM_DRIVE_FOCUS, []) : doorGrade(sky, DOORSTEP_PORCH);
+      applyDayNight(dayNightFrom(cam), grade, view);
+      await this.waitFrames(2);
     }
-    await this.waitFrames(2);
+    if (performance.now() >= deadline) return;
     if (this.scene.isActive(key) && !this.scene.isSleeping(key)) {
       this.scene.sleep(key);
     }
+    if (this.scene.isSleeping(key)) markSceneWarm(key);
   }
 
   private async waitFrames(count: number): Promise<void> {
@@ -402,6 +421,10 @@ export class TitleScene extends Phaser.Scene {
   }
 
   private advance(): void {
+    void this.advanceAsync();
+  }
+
+  private async advanceAsync(): Promise<void> {
     if (this.started) return;
     if (this.phase === "welcome") {
       this.clearWelcome();
@@ -409,10 +432,12 @@ export class TitleScene extends Phaser.Scene {
       this.drawHowTo();
       return;
     }
-    this.begin();
+    await this.begin();
   }
 
-  private begin(): void {
+  private async begin(): Promise<void> {
+    if (this.started) return;
+    if (this.deferredWarm) await this.deferredWarm;
     if (this.started) return;
     this.started = true;
     setPwaIdle(false);

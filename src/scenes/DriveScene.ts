@@ -31,6 +31,11 @@ import { addMark, fitTypeToWidth, overlayStroke } from "../ui/typekit";
 
 const HOUSE_TEX = ["tex-house", "tex-house-alt", "tex-house-3", "tex-house-4", "tex-house-5", "tex-house-6"];
 
+/** Drive grade rebuild cadence — slower than shop; scrolling camera already moves view UVs. */
+const DRIVE_GRADE_MIN_MS = 120;
+/** Focus quantize grid — coarser than 32px cuts lamp-pool rebuilds while driving. */
+const DRIVE_FOCUS_GRID = 64;
+
 /**
  * The road's share of the "what to do next" family, 25% over the shared ramp.
  * Local constants, because `Type` feeds every screen in the game.
@@ -319,13 +324,14 @@ export class DriveScene extends Phaser.Scene {
     if (getRenderBudget().postFx) {
       const focus = snap.dropoff.driverOnFoot && snap.dropoff.driver ? snap.dropoff.driver : snap.vehicle;
       // Coarse focus + sky key: view UVs refresh in the pipeline via syncViewFromCamera.
-      const gradeKey = `${sky.mapOverlay}:${sky.mapOverlayAlpha.toFixed(3)}:${sky.lampAlpha.toFixed(2)}:${Math.round(focus.x / 32)}:${Math.round(focus.y / 32)}`;
+      const gradeKey = `${sky.mapOverlay}:${sky.mapOverlayAlpha.toFixed(3)}:${sky.lampAlpha.toFixed(2)}:${Math.round(focus.x / DRIVE_FOCUS_GRID)}:${Math.round(focus.y / DRIVE_FOCUS_GRID)}`;
       const now = performance.now();
       if (
         shouldApplyGrade({
           nowMs: now,
           lastMs: this.lastGradeMs,
           dirty: gradeKey !== this.lastGradeKey,
+          minMs: DRIVE_GRADE_MIN_MS,
         })
       ) {
         this.lastGradeKey = gradeKey;
@@ -346,6 +352,8 @@ export class DriveScene extends Phaser.Scene {
 
   private paintNightGlow(sky: ReturnType<typeof skyAt>): void {
     if (!this.nightGlow) return;
+    // PostFX carries lamps/windows — skip redundant Graphics fill when the pipeline is on.
+    if (getRenderBudget().postFx) return;
     const key = `${sky.windowGlow.toFixed(2)}:${sky.lampAlpha.toFixed(2)}`;
     if (key === this.lastGlowKey) return;
     this.lastGlowKey = key;
