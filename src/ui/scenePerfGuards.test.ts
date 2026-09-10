@@ -36,4 +36,21 @@ describe("scene perf guards", () => {
     expect(drive).toContain("nearestLamps");
     expect(drive).not.toContain(".sort(");
   });
+
+  it("Drive caps traffic sprite pool growth", () => {
+    const drive = read("src/scenes/DriveScene.ts");
+    expect(drive).toContain("TRAFFIC_VISUAL_MAX");
+    const update = drive.slice(drive.indexOf("update(): void"), drive.indexOf("private paintDayNight"));
+    expect(update).toContain("TRAFFIC_VISUAL_MAX");
+  });
+
+  it("Hud reuses a capped score pop pool instead of destroy-per-flash", () => {
+    const hud = read("src/scenes/HudScene.ts");
+    expect(hud).toContain("SCORE_POP_POOL");
+    expect(hud).toContain("warmScorePopPool");
+    expect(hud).toContain("acquireScorePop");
+    expect(hud).toContain("releaseScorePop");
+    const pop = hud.slice(hud.indexOf("private spawnScorePop"), hud.indexOf("private syncResults"));
+    expect(pop).not.toContain("label.destroy()");
+  });
 });

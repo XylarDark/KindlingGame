@@ -40,6 +40,13 @@ describe("DriveScene grade throttle and dirty guards", () => {
     expect(src).toContain("onPreRenderDayNight");
     expect(src).toContain("events.off(Phaser.Scenes.Events.PRE_RENDER, this.onPreRenderDayNight)");
   });
+
+  it("builds the city map in chunked rows under warm", () => {
+    expect(src).toContain("buildCityChunked");
+    expect(src).toContain("drawCityTileRows");
+    expect(src).toContain("yieldToRenderer");
+    expect(src).toContain("cityBuildReady");
+  });
 });
 
 describe("DoorScene grade throttle", () => {

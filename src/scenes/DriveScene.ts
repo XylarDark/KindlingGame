@@ -14,7 +14,7 @@ import {
   tileToWorld,
 } from "../maps/cityT0";
 import { cityAccessPaths, cityProps, cityStreetLamps, paintAccessPaths, paintHouseStreetSeams, type CityLamp } from "../maps/cityDecor";
-import { cityTrafficLoops, trafficCars, type TrafficLoop } from "../maps/traffic";
+import { cityTrafficLoops, TRAFFIC_VISUAL_MAX, trafficCars, type TrafficLoop } from "../maps/traffic";
 import { enableItemHit } from "../input/hit";
 import { PEOPLE_SCALE } from "../maps/shopT0";
 import { getSim } from "../session";
@@ -24,6 +24,7 @@ import { lerpAngle } from "../sim/driveRoute";
 import type { SimSnapshot } from "../sim/gameSim";
 import { tutorialHints } from "../sim/tutorialHints";
 import { formatSlaClock, isSlaUrgent } from "../ui/copy";
+import { CITY_BUILD_ROWS_PER_CHUNK, markCityBuildComplete } from "../ui/cityBuild";
 import { addSignText, setSignAccent } from "../ui/signText";
 import { Color, MSG_TYPE_FIT, Type, scaleMsgBox, scaleMsgPad, scaleMsgPx } from "../ui/theme";
 import { addUiText } from "../ui/text";
@@ -73,6 +74,7 @@ export class DriveScene extends Phaser.Scene {
   private trafficLoops: TrafficLoop[] = [];
   private trafficSprites: Phaser.GameObjects.Image[] = [];
   private trafficAngles = new Map<string, number>();
+  private cityBuildReady = false;
 
   constructor() {
     super("drive");
@@ -82,7 +84,7 @@ export class DriveScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, 0, MAP_PX_W, MAP_PX_H);
     this.cameras.main.setBackgroundColor(skyAt(0).mapGrass);
     this.lighting = attachDayNight(this.cameras.main);
-    this.drawCity();
+    void this.buildCityChunked();
     this.nightGlow = this.add.graphics().setDepth(2);
     this.glow = this.add.graphics().setDepth(3);
     this.paintDayNight(getSim().snapshot());
@@ -162,6 +164,7 @@ export class DriveScene extends Phaser.Scene {
   }
 
   update(): void {
+    if (!this.cityBuildReady) return;
     const snap = getSim().snapshot();
     this.vehicle.setPosition(snap.vehicle.x, snap.vehicle.y);
     this.vehicle.setAlpha(snap.dropoff.driverOnFoot ? 0.7 : 1);
@@ -176,7 +179,7 @@ export class DriveScene extends Phaser.Scene {
     });
     const turnT = 1 - Math.exp(-(this.game.loop.delta / 1000) * 6);
     const seen = new Set<string>();
-    while (this.trafficSprites.length < traffic.length) {
+    while (this.trafficSprites.length < traffic.length && this.trafficSprites.length < TRAFFIC_VISUAL_MAX) {
       this.trafficSprites.push(this.add.image(0, 0, "tex-car").setDepth(5).setDisplaySize(120, 72).setAlpha(0.92));
     }
     this.trafficSprites.forEach((sprite, i) => {
@@ -386,17 +389,38 @@ export class DriveScene extends Phaser.Scene {
     this.scene.bringToTop("hud");
   }
 
-  private drawCity(): void {
-    const kinds = CITY.kinds;
-    const houseTiles = new Set(CITY.houses.flatMap((h) => lotTileKeys(h.house, h.lotW, h.lotH)));
-    const shopTiles = new Set(lotTileKeys(CITY.shopLot.origin, CITY.shopLot.w, CITY.shopLot.h));
+  /**
+   * Incremental map build — yields between row batches so boot warm can respect
+   * wall-clock deadlines on slow phones instead of blocking in one sync create().
+   */
+  private async buildCityChunked(): Promise<void> {
+    const ctx = this.prepareCityDrawContext();
+    const rowCount = CITY.kinds.length;
+    for (let startRow = 0; startRow < rowCount; startRow += CITY_BUILD_ROWS_PER_CHUNK) {
+      const endRow = Math.min(startRow + CITY_BUILD_ROWS_PER_CHUNK, rowCount);
+      this.drawCityTileRows(ctx, startRow, endRow);
+      await this.yieldToRenderer();
+    }
+    this.drawCityOverlays(ctx);
+    markCityBuildComplete();
+    this.cityBuildReady = true;
+  }
 
-    for (let r = 0; r < kinds.length; r++) {
+  private prepareCityDrawContext(): CityDrawContext {
+    return {
+      houseTiles: new Set(CITY.houses.flatMap((h) => lotTileKeys(h.house, h.lotW, h.lotH))),
+      shopTiles: new Set(lotTileKeys(CITY.shopLot.origin, CITY.shopLot.w, CITY.shopLot.h)),
+    };
+  }
+
+  private drawCityTileRows(ctx: CityDrawContext, startRow: number, endRow: number): void {
+    const kinds = CITY.kinds;
+    for (let r = startRow; r < endRow; r++) {
       for (let c = 0; c < kinds[r]!.length; c++) {
         const kind = kinds[r]![c]!;
         const x = c * TILE + TILE / 2;
         const y = r * TILE + TILE / 2;
-        if (houseTiles.has(`${c},${r}`) || (kind === "shop" && shopTiles.has(`${c},${r}`))) {
+        if (ctx.houseTiles.has(`${c},${r}`) || (kind === "shop" && ctx.shopTiles.has(`${c},${r}`))) {
           const grass = ["tex-wall", "tex-wall-2", "tex-wall-3"][(c * 3 + r * 5) % 3]!;
           this.add.image(x, y, grass).setDisplaySize(TILE, TILE).setDepth(0);
           continue;
@@ -416,7 +440,9 @@ export class DriveScene extends Phaser.Scene {
         this.add.image(x, y, key).setDisplaySize(TILE, TILE).setDepth(0);
       }
     }
+  }
 
+  private drawCityOverlays(_ctx: CityDrawContext): void {
     CITY.houses.forEach((house, i) => {
       const home = lotCenter(house.house, house.lotW, house.lotH);
       const tex = HOUSE_TEX[i % HOUSE_TEX.length]!;
@@ -486,7 +512,26 @@ export class DriveScene extends Phaser.Scene {
       else img.setDisplaySize(TILE, TILE);
     }
   }
+
+  /** Yield one frame — wall-clock fallback when Phaser time freezes during sync work. */
+  private yieldToRenderer(): Promise<void> {
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (): void => {
+        if (done) return;
+        done = true;
+        resolve();
+      };
+      this.game.events.once(Phaser.Core.Events.POST_RENDER, finish);
+      globalThis.setTimeout(finish, 80);
+    });
+  }
 }
+
+type CityDrawContext = {
+  houseTiles: Set<string>;
+  shopTiles: Set<string>;
+};
 
 function lotTileKeys(origin: { c: number; r: number }, w: number, h: number): string[] {
   const keys: string[] = [];

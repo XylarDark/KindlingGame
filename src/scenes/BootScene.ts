@@ -18,6 +18,7 @@ import { startSession } from "../session";
 import { applyCanvasDisplayScale } from "../shell";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import { clearBootWarmPending, setBootWarmPending } from "../ui/bootWarm";
+import { isCityBuildComplete, resetCityBuildFlags } from "../ui/cityBuild";
 import { markSceneWarm, resetSceneWarmFlags, sceneWarmTimeout } from "../ui/sceneWarm";
 import { hideLoading, showLoading } from "../ui/loadingGate";
 import { applyRenderBudgetToGame, getRenderBudget } from "../ui/renderBudget";
@@ -60,6 +61,7 @@ export class BootScene extends Phaser.Scene {
     this.warmDoorOk = false;
     clearBootWarmPending();
     resetSceneWarmFlags();
+    resetCityBuildFlags();
     const abortTimer = globalThis.setTimeout(() => {
       this.warmAborted = true;
     }, WARM_BOOT_TIMEOUT_MS);
@@ -235,6 +237,13 @@ export class BootScene extends Phaser.Scene {
       await this.waitFrames(1);
     }
     if (this.warmAborted || performance.now() >= deadline) return;
+    if (key === "drive") {
+      while (!this.warmAborted && performance.now() < deadline) {
+        if (isCityBuildComplete()) break;
+        await this.waitFrames(1);
+      }
+      if (this.warmAborted || performance.now() >= deadline) return;
+    }
     const scene = this.scene.get(key);
     const cam = scene?.cameras?.main;
     if (cam) {

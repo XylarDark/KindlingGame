@@ -9,6 +9,7 @@ import { COUNTER_SIGN } from "../maps/shopT0";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import { beginPlay, shouldShowHowTo } from "../session";
 import { takeBootWarmPending } from "../ui/bootWarm";
+import { isCityBuildComplete } from "../ui/cityBuild";
 import { markSceneWarm, sceneWarmTimeout } from "../ui/sceneWarm";
 import { maybeEnterFullscreenOnStart } from "../ui/displayPrefs";
 import { addHudButton, addPanel, HUD_BUTTON_MIN_H } from "../ui/chrome";
@@ -386,6 +387,13 @@ export class TitleScene extends Phaser.Scene {
       await this.waitFrames(1);
     }
     if (performance.now() >= deadline) return;
+    if (key === "drive") {
+      while (performance.now() < deadline) {
+        if (isCityBuildComplete()) break;
+        await this.waitFrames(1);
+      }
+      if (performance.now() >= deadline) return;
+    }
     const scene = this.scene.get(key);
     const cam = scene?.cameras?.main;
     if (cam) {
