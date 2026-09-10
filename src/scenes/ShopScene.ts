@@ -92,6 +92,16 @@ const msgNoticePx = (): string => scaleMsgPx(13);
 const msgNoticePad = (): { x: number; y: number } => scaleMsgPad({ x: 10, y: 5 });
 const feedbackH = (): number => scaleMsgBox(48);
 
+/** Concurrent walk-ins the pool covers without mid-frame allocate (slots grow unbounded; 4 is typical peak). */
+const CUSTOMER_VISUAL_POOL = 4;
+
+type CustomerVisual = {
+  sprite: Phaser.GameObjects.Image;
+  bubble: Phaser.GameObjects.Text;
+  feedback: Phaser.GameObjects.Text;
+  orderId: string | null;
+};
+
 /**
  * Hang a chip in the air above a model's head, measuring off what it rendered rather than
  * off a guessed centre offset. A box grows downward from its middle as its copy wraps, so
@@ -112,9 +122,8 @@ export class ShopScene extends Phaser.Scene {
   private queueBadge!: Phaser.GameObjects.Text;
   private keyLeadBubble!: Phaser.GameObjects.Text;
   private driverBubble!: Phaser.GameObjects.Text;
-  private customers = new Map<string, Phaser.GameObjects.Image>();
-  private bubbles = new Map<string, Phaser.GameObjects.Text>();
-  private feedbackChips = new Map<string, Phaser.GameObjects.Text>();
+  private customerPool: CustomerVisual[] = [];
+  private customers = new Map<string, CustomerVisual>();
   private targetCallout!: Phaser.GameObjects.Text;
   private readyBag!: Phaser.GameObjects.Image;
   private readyCount!: Phaser.GameObjects.Text;
@@ -148,6 +157,7 @@ export class ShopScene extends Phaser.Scene {
     this.syncLighting(getSim().snapshot().gameMs);
     this.events.on(Phaser.Scenes.Events.PRE_RENDER, () => this.syncLighting(getSim().snapshot().gameMs));
     this.makeHotspots();
+    this.warmCustomerPool();
 
     this.bagRack = this.add.image(BAG_STACK.x, BAG_STACK.y, "tex-bag-bags").setOrigin(0.5, 1).setDepth(8);
     enableItemHit(this.bagRack);
@@ -469,17 +479,80 @@ export class ShopScene extends Phaser.Scene {
     count.setColor(urgent ? Color.dangerHex : Color.inkHex);
   }
 
+  private warmCustomerPool(): void {
+    for (let i = 0; i < CUSTOMER_VISUAL_POOL; i++) {
+      this.customerPool.push(this.makeCustomerVisual());
+    }
+  }
+
+  private makeCustomerVisual(): CustomerVisual {
+    const sprite = this.add
+      .image(-400, CUSTOMER_SPOT.y, customerTextureKey(0))
+      .setOrigin(0.5, 1)
+      .setScale(PEOPLE_SCALE)
+      .setDepth(5)
+      .setVisible(false)
+      .setActive(false);
+    enableItemHit(sprite);
+    sprite.on("pointerdown", () => {
+      const id = (sprite.getData("orderId") as string | undefined) ?? null;
+      if (id) getSim().shopClick({ type: "customer", orderId: id });
+    });
+    wireHover(sprite);
+    const bubble = addSignText(this, -400, CUSTOMER_SPOT.y - PERSON_DISPLAY_H, "", {
+      size: msgPx(),
+      padding: msgPad(),
+      align: "center",
+      fontStyle: "600",
+      ...MSG_TYPE_FIT,
+      maxWidth: CUSTOMER_SPEECH_MAX_W,
+      maxHeight: CUSTOMER_SPEECH_H,
+    })
+      .setOrigin(0.5)
+      .setDepth(7)
+      .setVisible(false);
+    const feedback = addSignText(this, -400, CUSTOMER_SPOT.y - PERSON_DISPLAY_H, "", {
+      size: msgNoticePx(),
+      padding: msgNoticePad(),
+      align: "center",
+      fontStyle: "600",
+      accent: Color.danger,
+      ...MSG_TYPE_FIT,
+      maxWidth: CUSTOMER_SPEECH_MAX_W,
+      maxHeight: feedbackH(),
+    })
+      .setOrigin(0.5)
+      .setDepth(7)
+      .setVisible(false);
+    return { sprite, bubble, feedback, orderId: null };
+  }
+
+  private acquireCustomerVisual(orderId: string, look: number): CustomerVisual {
+    const free = this.customerPool.find((v) => v.orderId == null) ?? this.makeCustomerVisual();
+    if (!this.customerPool.includes(free)) this.customerPool.push(free);
+    free.orderId = orderId;
+    free.sprite.setData("orderId", orderId);
+    free.sprite.setTexture(customerTextureKey(look));
+    free.sprite.setVisible(true).setActive(true);
+    this.customers.set(orderId, free);
+    return free;
+  }
+
+  private releaseCustomerVisual(orderId: string): void {
+    const visual = this.customers.get(orderId);
+    if (!visual) return;
+    this.customers.delete(orderId);
+    visual.orderId = null;
+    visual.sprite.setData("orderId", null);
+    visual.sprite.setVisible(false).setActive(false).clearTint().setAlpha(1);
+    visual.bubble.setVisible(false).setText("");
+    visual.feedback.setVisible(false).setText("");
+  }
+
   private syncCustomers(list: CustomerView[], pulse: number, focusId: string | null): void {
     const seen = new Set(list.map((c) => c.orderId));
-    for (const [id, sprite] of this.customers) {
-      if (!seen.has(id)) {
-        sprite.destroy();
-        this.customers.delete(id);
-        this.bubbles.get(id)?.destroy();
-        this.bubbles.delete(id);
-        this.feedbackChips.get(id)?.destroy();
-        this.feedbackChips.delete(id);
-      }
+    for (const id of [...this.customers.keys()]) {
+      if (!seen.has(id)) this.releaseCustomerVisual(id);
     }
 
     // Place only settled speakers so walking-in chips do not jump every frame (R5).
@@ -492,73 +565,34 @@ export class ShopScene extends Phaser.Scene {
     const layoutById = new Map(layouts.map((box) => [box.orderId, box]));
 
     for (const customer of list) {
-      let sprite = this.customers.get(customer.orderId);
-      if (!sprite) {
-        // One appearance per order, derived from the customer's identity — the same
-        // person always walks in looking the same way.
-        sprite = this.add
-          .image(customer.x, CUSTOMER_SPOT.y, customerTextureKey(customer.look))
-          .setOrigin(0.5, 1)
-          .setScale(PEOPLE_SCALE)
-          .setDepth(5);
-        enableItemHit(sprite);
-        sprite.on("pointerdown", () => getSim().shopClick({ type: "customer", orderId: customer.orderId }));
-        wireHover(sprite);
-        this.customers.set(customer.orderId, sprite);
-        const bubble = addSignText(this, customer.x, CUSTOMER_SPOT.y - PERSON_DISPLAY_H, "", {
-          size: msgPx(),
-          padding: msgPad(),
-          align: "center",
-          fontStyle: "600",
-          ...MSG_TYPE_FIT,
-      maxWidth: CUSTOMER_SPEECH_MAX_W,
-          maxHeight: CUSTOMER_SPEECH_H,
-        })
-          .setOrigin(0.5)
-          .setDepth(7);
-        this.bubbles.set(customer.orderId, bubble);
-        const feedback = addSignText(this, customer.x, CUSTOMER_SPOT.y - PERSON_DISPLAY_H, "", {
-          size: msgNoticePx(),
-          padding: msgNoticePad(),
-          align: "center",
-          fontStyle: "600",
-          accent: Color.danger,
-          ...MSG_TYPE_FIT,
-      maxWidth: CUSTOMER_SPEECH_MAX_W,
-          maxHeight: feedbackH(),
-        })
-          .setOrigin(0.5)
-          .setDepth(7)
-          .setVisible(false);
-        this.feedbackChips.set(customer.orderId, feedback);
+      let visual = this.customers.get(customer.orderId);
+      if (!visual) {
+        visual = this.acquireCustomerVisual(customer.orderId, customer.look);
+      } else if (visual.sprite.texture.key !== customerTextureKey(customer.look)) {
+        visual.sprite.setTexture(customerTextureKey(customer.look));
       }
+      const { sprite, bubble, feedback } = visual;
       const focus = customer.orderId === focusId;
       sprite.setPosition(customer.x, CUSTOMER_SPOT.y);
       sprite.setAlpha(focus ? pulse : 1);
       sprite.setTint(focus ? Color.flash : 0xffffff);
-      const bubble = this.bubbles.get(customer.orderId);
-      const feedback = this.feedbackChips.get(customer.orderId);
       const layout = layoutById.get(customer.orderId);
-      if (bubble) {
-        if (layout && customer.bubble) {
-          bubble.setText(customer.bubble).setAlpha(1).setVisible(true);
-          // Refit before measuring — side room is the layout's width budget.
-          fitTypeToBox(bubble, layout.w, CUSTOMER_SPEECH_H);
-          bubble.setPosition(layout.x, layout.y);
-        } else {
-          bubble.setVisible(false);
-        }
-        setSignAccent(bubble, focus ? Color.lime : undefined);
+      if (layout && customer.bubble) {
+        bubble.setText(customer.bubble).setAlpha(1).setVisible(true);
+        // Refit before measuring — side room is the layout's width budget.
+        fitTypeToBox(bubble, layout.w, CUSTOMER_SPEECH_H);
+        bubble.setPosition(layout.x, layout.y);
+      } else {
+        bubble.setVisible(false);
       }
-      if (feedback) {
-        const note = customer.feedback;
-        if (layout && note) {
-          feedback.setText(note).setVisible(true);
-          fitTypeToBox(feedback, layout.w, feedbackH());
-          feedback.setPosition(layout.x, layout.y + layout.h / 2 + CUSTOMER_SPEECH_GAP + feedback.height / 2);
-        } else {
-          feedback.setVisible(false);
-        }
+      setSignAccent(bubble, focus ? Color.lime : undefined);
+      const note = customer.feedback;
+      if (layout && note) {
+        feedback.setText(note).setVisible(true);
+        fitTypeToBox(feedback, layout.w, feedbackH());
+        feedback.setPosition(layout.x, layout.y + layout.h / 2 + CUSTOMER_SPEECH_GAP + feedback.height / 2);
+      } else {
+        feedback.setVisible(false);
       }
     }
   }

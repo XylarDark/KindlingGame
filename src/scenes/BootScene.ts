@@ -9,8 +9,11 @@ import { hideLoading, showLoading } from "../ui/loadingGate";
 import { applyRenderBudgetToGame, getRenderBudget } from "../ui/renderBudget";
 import { installTypekit } from "../ui/typekit";
 
-/** Cap so a stuck shader compile never blanks forever. */
-const WARM_BOOT_TIMEOUT_MS = 2000;
+/**
+ * Cap so a stuck compile / create never blanks forever. Drive city draw can take
+ * a beat on cold phones — longer than the old shader-only warm.
+ */
+const WARM_BOOT_TIMEOUT_MS = 4000;
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -32,23 +35,40 @@ export class BootScene extends Phaser.Scene {
   private async bootReady(): Promise<void> {
     const started = performance.now();
     try {
-      await this.waitForFonts();
-      showLoading({ mode: "boot", stage: "Art" });
-      generateTextures(this);
-      showLoading({ mode: "boot", stage: "Shaders" });
-      await this.warmGpu();
+      await Promise.race([
+        this.runBootWarm(),
+        new Promise<void>((resolve) => this.time.delayedCall(WARM_BOOT_TIMEOUT_MS, resolve)),
+      ]);
     } finally {
       const warmBootMs = Math.round(performance.now() - started);
       console.debug("boot: warmBootMs", { warmBootMs });
       hideLoading();
     }
+    this.scene.start("title");
+    applyRenderBudgetToGame(this.game);
+    applyCanvasDisplayScale(this.game);
+  }
+
+  private async runBootWarm(): Promise<void> {
+    await this.waitForFonts();
+    showLoading({ mode: "boot", stage: "Art" });
+    generateTextures(this);
+    await this.flushTextures();
+
     startSession();
     this.scene.launch("shop");
     this.scene.launch("hud");
-    this.scene.start("title");
-    // READY may have already run — re-apply scale now that scenes exist.
-    applyRenderBudgetToGame(this.game);
-    applyCanvasDisplayScale(this.game);
+    await this.waitUntilSceneReady("shop");
+    await this.waitUntilSceneReady("hud");
+
+    showLoading({ mode: "boot", stage: "Shaders" });
+    await this.warmBootPipeline();
+
+    showLoading({ mode: "boot", stage: "Map" });
+    await this.warmAndSleepScene("drive");
+
+    showLoading({ mode: "boot", stage: "Door" });
+    await this.warmAndSleepScene("door");
   }
 
   private async waitForFonts(): Promise<void> {
@@ -69,19 +89,18 @@ export class BootScene extends Phaser.Scene {
     ]);
   }
 
-  /**
-   * Touch textures and compile DayNight once off the critical play path.
-   * Race against a timeout so a stuck compile cannot hang Title forever.
-   */
-  private async warmGpu(): Promise<void> {
-    await Promise.race([
-      this.runWarmGpu(),
-      new Promise<void>((resolve) => this.time.delayedCall(WARM_BOOT_TIMEOUT_MS, resolve)),
-    ]);
+  /** Stamp every texture for one full frame so GPU upload actually lands. */
+  private async flushTextures(): Promise<void> {
+    const keys = this.textures.getTextureKeys().filter((k) => k !== "__DEFAULT" && k !== "__MISSING");
+    const stamps: Phaser.GameObjects.Image[] = [];
+    for (const key of keys) {
+      stamps.push(this.add.image(-64, -64, key).setAlpha(0).setVisible(true));
+    }
+    await this.waitFrames(1);
+    for (const img of stamps) img.destroy();
   }
 
-  private async runWarmGpu(): Promise<void> {
-    this.touchTextures();
+  private async warmBootPipeline(): Promise<void> {
     if (!getRenderBudget().postFx) return;
     const cam = this.cameras.main;
     const pipe = attachDayNight(cam);
@@ -106,18 +125,41 @@ export class BootScene extends Phaser.Scene {
         { x: 0, y: 0, width: GAME_WIDTH, height: GAME_HEIGHT },
       );
     }
-    // One frame so WebGL compiles the fragment shader before shop/drive.
-    await new Promise<void>((resolve) => {
-      this.game.events.once(Phaser.Core.Events.POST_STEP, () => resolve());
-      this.time.delayedCall(100, resolve);
-    });
+    await this.waitFrames(2);
   }
 
-  private touchTextures(): void {
-    const keys = this.textures.getTextureKeys().filter((k) => k !== "__DEFAULT" && k !== "__MISSING");
-    for (const key of keys) {
-      const img = this.add.image(-64, -64, key).setAlpha(0).setVisible(true);
-      img.destroy();
+  /**
+   * First-create drive/door under the loading gate so mid-shift only wakes them.
+   * Must actually render (≥2 frames) so PostFX bootFX and city textures flush.
+   */
+  private async warmAndSleepScene(key: "drive" | "door"): Promise<void> {
+    if (this.scene.isSleeping(key)) this.scene.wake(key);
+    else if (!this.scene.isActive(key)) this.scene.launch(key);
+    await this.waitUntilSceneReady(key);
+    const scene = this.scene.get(key);
+    if (scene?.cameras?.main && getRenderBudget().postFx) {
+      attachDayNight(scene.cameras.main);
+    }
+    await this.waitFrames(2);
+    if (this.scene.isActive(key) && !this.scene.isSleeping(key)) {
+      this.scene.sleep(key);
+    }
+  }
+
+  private async waitUntilSceneReady(key: string): Promise<void> {
+    const deadline = performance.now() + 2500;
+    while (performance.now() < deadline) {
+      if (this.scene.isActive(key) || this.scene.isSleeping(key)) return;
+      await this.waitFrames(1);
+    }
+  }
+
+  private async waitFrames(count: number): Promise<void> {
+    for (let i = 0; i < count; i++) {
+      await new Promise<void>((resolve) => {
+        this.game.events.once(Phaser.Core.Events.POST_RENDER, () => resolve());
+        this.time.delayedCall(80, resolve);
+      });
     }
   }
 }

@@ -334,6 +334,14 @@ the thing it described.
 - **Fix:** idle-only activate — `setPwaIdle` from Title / shift-ended Hud posts `SKIP_WAITING_MESSAGE` and reloads once (sessionStorage guard). Never from resume mid-shop/drive. Align the SW file comment with that rule.
 - **Prevention:** source-scanning tests that forbid boot/resume `skipWaiting` must still allow the named idle helper; comments that claim a handshake must have a caller.
 
+### Mid-shift hitch on first doorstep and shop walk-in
+
+- **Date:** 2026-09-10
+- **Symptom:** playthrough felt slow until the customer ID screen, then smoother; customer walking into the shop was choppy.
+- **Cause:** `DriveScene` / `DoorScene` first-created mid-delivery (`launch` not `wake`), paying city draw + door DayNight `bootFX` on the critical path. Shop walk-in allocated `Image` + two `addSignText` plaques on first sight. Boot warm only touched the boot camera and same-frame texture stamps (often no GPU upload). A longer blank loading screen alone does not fix this.
+- **Fix:** under `#loading-gate`, flush textures for a full frame; launch shop/hud; warm DayNight; `launch` drive then door, render ≥2 frames each, then `sleep` so Hud prefers wake. Shop pre-allocates a customer visual pool. Door dirty-guards `houseLabel` setText/fitTypeToWidth.
+- **Prevention:** never first-create drive/door mid-shift; warm must **draw** PostFX/scenes under the loading gate. Pool walk-in display objects at shop create. Do not treat “Loading…” idle wait as a hitch fix without real warm draws.
+
 ---
 
 ## Related

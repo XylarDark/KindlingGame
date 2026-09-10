@@ -70,6 +70,7 @@ export class DoorScene extends Phaser.Scene {
   private lastHouse = "";
   private lastSkyKey = "";
   private lastBagHanded: boolean | null = null;
+  private lastHouseTitle = "";
   private lighting?: DayNightPipeline;
 
   constructor() {
@@ -195,11 +196,14 @@ export class DoorScene extends Phaser.Scene {
     const title = drop.houseId
       ? `${drop.customerName ?? "Customer"}  ·  ${houseLabel(drop.houseId)}${sla ? `  ·  ${sla}` : ""}${runNote(snap)}`
       : "";
-    this.houseLabel.setText(title);
+    if (title !== this.lastHouseTitle) {
+      this.lastHouseTitle = title;
+      this.houseLabel.setText(title);
+      fitTypeToWidth(this.houseLabel, 1200);
+    }
     // The clock in this title is the urgent part, and it stays ink on white like every
     // other box; the frame is what reddens when the SLA is running out.
     setSignAccent(this.houseLabel, destOrder && isSlaUrgent(destOrder.slaRemainingMs) ? Color.danger : undefined);
-    fitTypeToWidth(this.houseLabel, 1200);
 
     const flash = doorFlashPhase(snap.gameMs);
     const pulse = 0.7 + 0.3 * flash;

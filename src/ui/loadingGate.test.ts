@@ -11,8 +11,33 @@ describe("loading gate wiring", () => {
     const src = read("src/scenes/BootScene.ts");
     expect(src).toContain('showLoading({ mode: "boot"');
     expect(src).toContain("hideLoading()");
-    expect(src).toContain("warmGpu");
+    expect(src).toContain("flushTextures");
+    expect(src).toContain("warmAndSleepScene");
     expect(src).toContain("WARM_BOOT_TIMEOUT_MS");
+  });
+
+  it("BootScene pre-warms drive and door under the loading gate then sleeps them", () => {
+    const src = read("src/scenes/BootScene.ts");
+    expect(src).toContain('showLoading({ mode: "boot", stage: "Map" })');
+    expect(src).toContain('showLoading({ mode: "boot", stage: "Door" })');
+    expect(src).toContain('warmAndSleepScene("drive")');
+    expect(src).toContain('warmAndSleepScene("door")');
+    expect(src).toContain("this.scene.sleep(key)");
+  });
+
+  it("ShopScene pre-allocates a customer visual pool instead of mid-walk create", () => {
+    const src = read("src/scenes/ShopScene.ts");
+    expect(src).toContain("warmCustomerPool");
+    expect(src).toContain("acquireCustomerVisual");
+    expect(src).toContain("releaseCustomerVisual");
+    expect(src).toContain("CUSTOMER_VISUAL_POOL");
+  });
+
+  it("DoorScene dirty-guards houseLabel setText and fitTypeToWidth", () => {
+    const src = read("src/scenes/DoorScene.ts");
+    expect(src).toContain("lastHouseTitle");
+    expect(src).toContain("if (title !== this.lastHouseTitle)");
+    expect(src).toContain("fitTypeToWidth(this.houseLabel, 1200)");
   });
 
   it("idle activate shows Updating before skipWaiting + reload", () => {

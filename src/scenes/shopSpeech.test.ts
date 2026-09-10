@@ -58,7 +58,7 @@ describe("speech stays off the models it belongs to", () => {
   it("stacks customer-specific feedback under the ask, not as a centre banner", () => {
     const sync = between(src, "private syncCustomers(", "private makeHotspots(", "syncCustomers");
     expect(sync, "reads feedback field").toMatch(/customer\.feedback/);
-    expect(sync, "feedback chip map").toMatch(/feedbackChips/);
+    expect(sync, "feedback chip on visual").toMatch(/feedback\.setText\(note\)/);
   });
 });
 
