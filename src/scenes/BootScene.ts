@@ -14,6 +14,7 @@ import { MS_PER_GAME_HOUR } from "../sim/constants";
 import { skyAt } from "../sim/dayNight";
 import { installMusicUnlock, preloadMusic } from "../audio/music";
 import { registerCityTileAtlas } from "../art/cityTileAtlas";
+import { registerPeopleAtlases } from "../art/peopleAtlas";
 import { generateTextures } from "../pixelArt";
 import { startSession } from "../session";
 import { applyCanvasDisplayScale } from "../shell";
@@ -104,6 +105,7 @@ export class BootScene extends Phaser.Scene {
     this.showBootStage("Art");
     generateTextures(this);
     registerCityTileAtlas(this);
+    registerPeopleAtlases(this);
     await this.flushTextures();
     if (this.warmAborted) return;
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MS_PER_GAME_HOUR } from "./constants";
-import { skyAt } from "./dayNight";
+import { skyAt, skyVisualDirtyKey } from "./dayNight";
 
 describe("skyAt", () => {
   it("is bright in the morning and dark at night", () => {
@@ -14,5 +14,14 @@ describe("skyAt", () => {
     expect(night.sunAlpha).toBeLessThan(0.2);
     expect(night.starAlpha).toBeGreaterThan(0.5);
     expect(night.mapOverlayAlpha).toBeGreaterThan(morning.mapOverlayAlpha);
+  });
+});
+
+describe("skyVisualDirtyKey", () => {
+  it("changes when zenith or night glow inputs change", () => {
+    const a = skyVisualDirtyKey(skyAt(0));
+    const b = skyVisualDirtyKey(skyAt(13 * MS_PER_GAME_HOUR));
+    expect(a).not.toBe(b);
+    expect(skyVisualDirtyKey(skyAt(0))).toBe(a);
   });
 });

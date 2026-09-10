@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { cityTileImageKey } from "../art/cityTileAtlas";
-import { customerTextureKey } from "../art/people";
+import { applyPersonTexture, personImageKey } from "../art/peopleAtlas";
 import { driveGrade } from "../art/dayNightGrade";
 import { applyDayNight, attachDayNight, dayNightFrom, shouldApplyGrade, type DayNightPipeline } from "../art/dayNightPipeline";
 import { getRenderBudget, syncSceneRenderCamera } from "../ui/renderBudget";
@@ -159,8 +159,9 @@ export class DriveScene extends Phaser.Scene {
       .setVisible(false);
     this.vehicle = this.add.image(0, 0, "tex-vehicle").setDepth(6).setDisplaySize(168, 104);
     this.walker = this.add.image(0, 0, "tex-driver").setOrigin(0.5, 1).setScale(PEOPLE_SCALE).setDepth(7).setVisible(false);
+    const custTex = personImageKey("tex-customer-0");
     this.customer = this.add
-      .image(0, 0, customerTextureKey(0))
+      .image(0, 0, custTex.key, custTex.frame)
       .setOrigin(0.5, 1)
       .setScale(PEOPLE_SCALE)
       .setDepth(6)
@@ -308,8 +309,7 @@ export class DriveScene extends Phaser.Scene {
     }
 
     if (snap.dropoff.customer) {
-      const face = customerTextureKey(snap.dropoff.customerLook ?? 0);
-      if (this.customer.texture.key !== face) this.customer.setTexture(face);
+      applyPersonTexture(this.customer, snap.dropoff.customerLook ?? 0);
       this.customer.setVisible(true).setPosition(snap.dropoff.customer.x, snap.dropoff.customer.y + 10);
     } else {
       this.customer.setVisible(false);

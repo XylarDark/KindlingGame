@@ -96,7 +96,6 @@ describe("scene perf guards", () => {
     const update = drive.slice(drive.indexOf("update(): void"), drive.indexOf("private paintDayNight"));
     expect(update).toContain("if (sprite.texture.key !== car.key) sprite.setTexture(car.key)");
   });
-});
 
   it("Shop bakes static interior into RenderTextures", () => {
     const shop = read("src/scenes/ShopScene.ts");
@@ -105,13 +104,23 @@ describe("scene perf guards", () => {
     expect(shop).toContain("drawShopInterior(this)");
   });
 
-  it("Boot registers city tile atlas after generateTextures", () => {
+  it("Door bakes static facade into a RenderTexture", () => {
+    const door = read("src/scenes/DoorScene.ts");
+    expect(door).toContain("bakeDoorFacade");
+    expect(door).toContain("paintDoorstepStatic");
+    expect(door).toContain("skyVisualDirtyKey");
+  });
+
+  it("Boot registers atlases after generateTextures", () => {
     const boot = read("src/scenes/BootScene.ts");
     expect(boot).toContain("registerCityTileAtlas");
+    expect(boot).toContain("registerPeopleAtlases");
     const art = boot.indexOf("generateTextures(this)");
-    const atlas = boot.indexOf("registerCityTileAtlas(this)");
+    const cityAtlas = boot.indexOf("registerCityTileAtlas(this)");
+    const peopleAtlas = boot.indexOf("registerPeopleAtlases(this)");
     expect(art).toBeGreaterThan(-1);
-    expect(atlas).toBeGreaterThan(art);
+    expect(cityAtlas).toBeGreaterThan(art);
+    expect(peopleAtlas).toBeGreaterThan(cityAtlas);
   });
 
   it("Drive uses cityTileImageKey for ground tiles", () => {
@@ -119,4 +128,4 @@ describe("scene perf guards", () => {
     expect(drive).toContain("cityTileImageKey");
     expect(drive).toContain("strokeRect");
   });
-
+});

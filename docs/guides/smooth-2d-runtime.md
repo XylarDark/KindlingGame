@@ -16,16 +16,16 @@ Cite: KNOWN_ERRORS — *Full-resolution DayNight PostFX looked like a "slow game
 | **Resolution** (adaptive backbuffer + camera zoom; GAME_* layout) | **Done** | high **1.0** / mid **0.45** / low **0.32**; `syncSceneRenderCamera` every scene `create`. |
 | **PostFX** (attach only shop/drive/door; mid/low off) | **Done** | DayNight never on Hud/Title; coarse never lingers on high in Drive/Door. |
 | **Half-res FX** (`postFxScale` 0.5 via Phaser `halfFrame`) | **Done** | Desktop high: downsample → DayNight → blit up. Coarse stays mid/low (PostFX off). |
-| **Static bake** (non-movers → RenderTexture) | **Done** | Drive city ≤2048px cells; Shop interior + counter RTs; movers/interactive live. |
-| **Atlases** (batch small tiles) | **Partial** | City grass/road/parking packed (`atlas-city-tiles`) after `generateTextures`. People multi-frame atlas still **Next**. |
+| **Static bake** (non-movers → RenderTexture) | **Done** | Drive city ≤2048px cells; Shop interior + counter RTs; **Door facade/yard RT**; movers/interactive live. |
+| **Atlases** (batch small tiles) | **Done** | City tiles (`atlas-city-tiles`); people standing (`atlas-people-standing`) + portraits (`atlas-people-faces`) after `generateTextures`. |
 | **Pooling** | **Done** | Shop customer visuals; Hud score pops; traffic sprite cap. |
 | **Cull** | **Done** | Drive camera cull on; traffic `TRAFFIC_CULL_PAD`; night-glow camera pad cull. |
 | **Overdraw** | **Partial** | Lot glow stroke-only; night glow coarser bands + view cull; skip hidden shop caption plaque. Door/shop translucent FX still reviewable. |
 | **FPS / thermal** | **Done** | Coarse: `fps.target`+`limit` **30**; prefer sustained smoothness over chasing 60. |
-| **No alloc** (hot paths) | **Partial** | DayNight reuses Float32 buffers / in-place grade; avoid per-frame `lights.slice`. Remaining: watch Text/typekit and sky Graphics clears. |
+| **No alloc** (hot paths) | **Done** | DayNight reuses Float32 buffers; `skyVisualDirtyKey` throttles shop/door sky Graphics clears; avoid per-frame `lights.slice`. |
 | **Warm** | **Done** | `#loading-gate`: textures, DayNight, launch Drive/Door ≥2 frames, city build+bake complete before sleep. |
 | **Mobile pipeline** | **Done** | `autoMobilePipeline` in config; coarse seed mid. |
-| **Texture format** | **Next** | Canvas-baked RGBA sheets today; ASTC/ETC compressed packs for installable builds not yet. |
+| **Texture format** | **Next** | Canvas-baked RGBA8888 at boot; atlases batch binds. ASTC/ETC asset packs need an offline pipeline — not in `generateTextures` today. |
 | **No smoothed time** | **Done** | `fps.smoothStep: false`; sim from `game.loop.rawDelta` (capped) — see KNOWN_ERRORS wall-clock entry. |
 
 ---
@@ -90,6 +90,10 @@ After chunked row placement + overlays, `DriveScene.bakeStaticCityMap()` stamps 
 
 Mirror Drive lightly: after create/warm art, bake non-moving interior Graphics/Text into **background (depth 0)** and **midground (depth 7)** RenderTextures. Keep customers / keylead / driver / bags / interactive tablet / sky / windowGlow / receipts live.
 
+### Door
+
+Facade + yard bake into one full-screen **RenderTexture (depth 0.5)** per house style. **Sky bands** and **night FX** (window/lamp glow) stay live Graphics, repainted only when `skyVisualDirtyKey` changes — same cadence as the shop window.
+
 **Rule:** if it does not move or animate, it should not remain a per-instance draw after bake. If it moves, keep it a sprite and let camera + modest view padding cull it (`TRAFFIC_CULL_PAD`).
 
 Preserve: dropoff gate, wall-clock `rawDelta`, chunked warm build, `#loading-gate`, `syncSceneRenderCamera`, install coach.
@@ -98,7 +102,7 @@ Preserve: dropoff gate, wall-clock `rawDelta`, chunked warm build, `#loading-gat
 
 ## Warm / preload
 
-Under `#loading-gate`: flush textures a full frame; register city tile atlas; launch shop/hud; warm DayNight; `launch` drive then door for ≥2 rendered frames each; wait for `isCityBuildComplete()` (includes bake) before sleep. Mid-shift must **wake**, not first-create, Drive/Door.
+Under `#loading-gate`: flush textures a full frame; register city + people atlases; launch shop/hud; warm DayNight; `launch` drive then door for ≥2 rendered frames each; wait for `isCityBuildComplete()` (includes bake) before sleep. Mid-shift must **wake**, not first-create, Drive/Door.
 
 ---
 
@@ -132,7 +136,9 @@ Under `#loading-gate`: flush textures a full frame; register city tile atlas; la
 - `src/art/dayNightPipeline.ts` — halfFrame PostFX path
 - `src/scenes/DriveScene.ts` — chunked build + `bakeStaticCityMap`
 - `src/scenes/ShopScene.ts` — `bakeStaticShop`
+- `src/scenes/DoorScene.ts` — `bakeDoorFacade` + sky cadence
 - `src/art/cityTileAtlas.ts` — grass/road/parking atlas
+- `src/art/peopleAtlas.ts` — standing + portrait atlases
 - `src/config.ts` / `src/main.ts` — `smoothStep: false`, `autoMobilePipeline`, coarse 30fps limit
 - [plans/2026-09-10-drawing-board-perf.md](../plans/2026-09-10-drawing-board-perf.md) — ranked execution plan
 - [KNOWN_ERRORS.md](../KNOWN_ERRORS.md) — DayNight / wall-clock hitch history

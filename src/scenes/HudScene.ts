@@ -3,7 +3,7 @@ import { getMusicPrefs, setMusicEnabled, setMusicVolume, syncMusicToClock } from
 import { loadDisplayPrefs, saveDisplayPrefs } from "../ui/displayPrefs";
 import { openInstallCoachFromSettings } from "../ui/installCoach";
 import { playCameraClick, playUiSfx } from "../audio/sfx";
-import { customerPortraitKey } from "../art/people";
+import { applyPortraitTexture, portraitImageKey } from "../art/peopleAtlas";
 import { PORTRAIT_H, PORTRAIT_W } from "../art/peopleSize";
 import {
   PHONE_APP_CELLS,
@@ -572,8 +572,9 @@ export class HudScene extends Phaser.Scene {
       maxHeight: ID_HEADER_H - 16,
     }).setOrigin(1, 0.5);
 
+    const photoTex = portraitImageKey("tex-face-0");
     this.idPhoto = this.add
-      .image(photoX, photoTop + ID_PHOTO_H / 2, customerPortraitKey(0))
+      .image(photoX, photoTop + ID_PHOTO_H / 2, photoTex.key, photoTex.frame)
       .setDisplaySize(ID_PHOTO_W, ID_PHOTO_H);
 
     this.idName = addUiText(this, ID_FIELD_X, 0, "", {
@@ -960,10 +961,8 @@ export class HudScene extends Phaser.Scene {
         this.idBg.setStrokeStyle(6, card.ageOk ? ID_OK_INK : ID_DENY_INK);
       }
       // The photo is the same pool index the doorstep sprite is drawn from.
-      const face = customerPortraitKey(drop.customerLook ?? 0);
-      if (this.idPhoto.texture.key !== face) {
-        this.idPhoto.setTexture(face).setDisplaySize(ID_PHOTO_W, ID_PHOTO_H);
-      }
+      applyPortraitTexture(this.idPhoto, drop.customerLook ?? 0);
+      this.idPhoto.setDisplaySize(ID_PHOTO_W, ID_PHOTO_H);
       this.paintIdCard(card, card.idNumber);
     } else {
       this.lastIdTextKey = "";
