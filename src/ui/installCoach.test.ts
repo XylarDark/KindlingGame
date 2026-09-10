@@ -14,6 +14,8 @@ import {
   isInstallCoachAudience,
   isInstallCoachDismissed,
   noteDeferredInstallPrompt,
+  planInstallPrimaryAction,
+  shouldDismissAfterInstallChoice,
   shouldShowInstallCoach,
 } from "./installCoach";
 
@@ -202,6 +204,33 @@ describe("deferred install prompt", () => {
   });
 });
 
+describe("install primary action plans", () => {
+  it("accepted hides — only outcome accepted dismisses the coach", () => {
+    expect(shouldDismissAfterInstallChoice("accepted")).toBe(true);
+    expect(shouldDismissAfterInstallChoice("dismissed")).toBe(false);
+    expect(shouldDismissAfterInstallChoice(undefined)).toBe(false);
+  });
+
+  it("dismissed keeps/reprompts — cancel keeps coach and falls back to manual", () => {
+    const bip = { prompt: async () => undefined };
+    expect(planInstallPrimaryAction({ deferred: bip, primaryLabel: "Install" })).toBe("prompt");
+    // After native sheet cancel we clear deferred and refresh to manual instructions.
+    expect(planInstallPrimaryAction({ deferred: null, primaryLabel: "Install" })).toBe("manual");
+    expect(shouldDismissAfterInstallChoice("dismissed")).toBe(false);
+  });
+
+  it("no prompt → manual copy when Install is shown without a deferred BIP", () => {
+    expect(planInstallPrimaryAction({ deferred: null, primaryLabel: "Install" })).toBe("manual");
+    const copy = installCoachCopy({ platform: "android", canPrompt: false });
+    expect(copy.primary).toBe("Got it");
+    expect(copy.body).toMatch(/Home Screen|Install app/i);
+  });
+
+  it("Got it acknowledges and dismisses when already on manual copy", () => {
+    expect(planInstallPrimaryAction({ deferred: null, primaryLabel: "Got it" })).toBe("acknowledge");
+  });
+});
+
 describe("wiring", () => {
   const here = dirname(fileURLToPath(import.meta.url));
   const read = (rel: string): string => readFileSync(join(here, rel), "utf8").replace(/\r\n/g, "\n");
@@ -237,5 +266,29 @@ describe("wiring", () => {
     expect(src).toContain("sessionStorage");
     expect(src).toContain("clearLegacyInstallCoachLocalDismiss");
     expect(src).toMatch(/defaultSessionStorage/);
+  });
+
+  it("calls bip.prompt() synchronously inside the click path (user gesture)", () => {
+    const src = read("./installCoach.ts");
+    // Must not defer prompt() behind an async helper invoked with void.
+    expect(src).not.toMatch(/void\s+runPrimaryAction\s*\(/);
+    expect(src).toContain("onPrimaryClick(actionBtn)");
+    const fnStart = src.indexOf("function onPrimaryClick");
+    expect(fnStart).toBeGreaterThanOrEqual(0);
+    const clickPath = src.slice(fnStart, src.indexOf("export function presentInstallCoach"));
+    // Sync turn: assign bip.prompt() before entering the async IIFE that awaits.
+    const promptAt = clickPath.indexOf("promptSettled = bip.prompt()");
+    const asyncIifeAt = clickPath.indexOf("void (async () =>");
+    expect(promptAt).toBeGreaterThanOrEqual(0);
+    expect(asyncIifeAt).toBeGreaterThan(promptAt);
+    expect(clickPath.slice(asyncIifeAt)).toContain("await promptSettled");
+    expect(clickPath).toContain("shouldDismissAfterInstallChoice");
+    expect(clickPath).toContain("showManualInstallInstructions");
+  });
+
+  it("keeps #install-coach above the Phaser canvas", () => {
+    const html = read("../../index.html");
+    const block = html.slice(html.indexOf("#install-coach {"), html.indexOf("#install-coach[hidden]"));
+    expect(block).toMatch(/z-index:\s*10000/);
   });
 });
