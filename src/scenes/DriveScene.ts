@@ -18,6 +18,7 @@ import { cityAccessPaths, cityProps, cityStreetLamps, paintAccessPaths, paintHou
 import { cityTrafficLoops, trafficCars, type TrafficLoop } from "../maps/traffic";
 import { enableItemHit } from "../input/hit";
 import { PEOPLE_SCALE } from "../maps/shopT0";
+import { getClockAlpha, getClockMode, getSimInterpolator } from "../sim/kindlingClock";
 import { getSim } from "../session";
 import { HANDOFF_RADIUS } from "../sim/constants";
 import { skyAt } from "../sim/dayNight";
@@ -181,18 +182,27 @@ export class DriveScene extends Phaser.Scene {
   update(): void {
     if (!this.cityBuildReady) return;
     const snap = getSim().snapshot();
-    this.vehicle.setPosition(snap.vehicle.x, snap.vehicle.y);
-    this.vehicle.setAlpha(snap.dropoff.driverOnFoot ? 0.7 : 1);
-    this.vehicle.setRotation(snap.vehicle.heading + Math.PI);
-    this.lastX = snap.vehicle.x;
-    this.lastY = snap.vehicle.y;
+    const useInterp = getClockMode() === "fixedRaw";
+    const alpha = getClockAlpha();
+    const mover = useInterp ? getSimInterpolator().lerp(alpha) : null;
+    const vehicle = mover?.vehicle ?? snap.vehicle;
+    const driverOnFoot = mover?.driverOnFoot ?? snap.dropoff.driverOnFoot;
+    const driver = mover?.driver ?? snap.dropoff.driver;
+    const renderGameMs = useInterp && mover ? mover.gameMs : snap.gameMs;
 
-    const traffic = trafficCars(snap.gameMs, this.trafficLoops, {
-      x: snap.vehicle.x,
-      y: snap.vehicle.y,
-      heading: snap.vehicle.heading,
+    this.vehicle.setPosition(vehicle.x, vehicle.y);
+    this.vehicle.setAlpha(driverOnFoot ? 0.7 : 1);
+    this.vehicle.setRotation(vehicle.heading + Math.PI);
+    this.lastX = vehicle.x;
+    this.lastY = vehicle.y;
+
+    const traffic = trafficCars(renderGameMs, this.trafficLoops, {
+      x: vehicle.x,
+      y: vehicle.y,
+      heading: vehicle.heading,
     });
-    const turnT = 1 - Math.exp(-(this.game.loop.delta / 1000) * 6);
+    const frameMs = useInterp ? this.game.loop.rawDelta : this.game.loop.delta;
+    const turnT = 1 - Math.exp(-(frameMs / 1000) * 6);
     const seen = new Set<string>();
     while (this.trafficSprites.length < traffic.length && this.trafficSprites.length < TRAFFIC_SPRITE_CAP) {
       this.trafficSprites.push(this.add.image(0, 0, "tex-car").setDepth(5).setDisplaySize(120, 72).setAlpha(0.92));
@@ -224,12 +234,12 @@ export class DriveScene extends Phaser.Scene {
 
     const driving = snap.playerRole === "driver" && snap.dropoff.phase !== "atDoor";
 
-    if (snap.dropoff.driverOnFoot && snap.dropoff.driver) {
-      this.walker.setVisible(true).setPosition(snap.dropoff.driver.x, snap.dropoff.driver.y + 18);
-      this.cameras.main.centerOn(snap.dropoff.driver.x, snap.dropoff.driver.y);
+    if (driverOnFoot && driver) {
+      this.walker.setVisible(true).setPosition(driver.x, driver.y + 18);
+      this.cameras.main.centerOn(driver.x, driver.y);
     } else {
       this.walker.setVisible(false);
-      this.cameras.main.centerOn(snap.vehicle.x, snap.vehicle.y);
+      this.cameras.main.centerOn(vehicle.x, vehicle.y);
     }
 
     // Day/night paints once in PRE_RENDER — avoid a second PostFX upload here.
