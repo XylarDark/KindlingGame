@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { customerTextureKey } from "../art/people";
 import { doorGrade } from "../art/dayNightGrade";
 import { applyDayNight, attachDayNight, dayNightFrom, type DayNightPipeline } from "../art/dayNightPipeline";
+import { syncSceneRenderCamera } from "../ui/renderBudget";
 import { paintDoorstep, DOORSTEP_DOOR_X, DOORSTEP_FLOOR_Y, DOORSTEP_PORCH } from "../art/doorstep";
 import { itemHitSize } from "../input/hitRect";
 import { BAG_SCALE, PEOPLE_SCALE, PERSON_DISPLAY_H } from "../maps/shopT0";
@@ -77,6 +78,7 @@ export class DoorScene extends Phaser.Scene {
 
   create(): void {
     this.input.setTopOnly(true);
+    syncSceneRenderCamera(this);
     this.lighting = attachDayNight(this.cameras.main);
     this.backdrop = this.add.graphics().setDepth(0);
     paintDoorstep(this.backdrop, 0, skyAt(0));

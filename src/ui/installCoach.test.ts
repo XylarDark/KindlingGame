@@ -10,6 +10,7 @@ import {
   dismissInstallCoach,
   getDeferredInstallPrompt,
   installCoachCopy,
+  isInstallCoachAudience,
   isInstallCoachDismissed,
   noteDeferredInstallPrompt,
   shouldShowInstallCoach,
@@ -96,7 +97,7 @@ describe("shouldShowInstallCoach", () => {
     ).toBe(true);
   });
 
-  it("auto-shows only on coarse (touch) pointers", () => {
+  it("auto-shows on coarse pointers or phone audiences", () => {
     expect(
       shouldShowInstallCoach({
         standalone: false,
@@ -109,8 +110,30 @@ describe("shouldShowInstallCoach", () => {
         standalone: false,
         dismissed: false,
         coarsePointer: false,
+        audience: true,
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowInstallCoach({
+        standalone: false,
+        dismissed: false,
+        coarsePointer: false,
+        audience: false,
       }),
     ).toBe(false);
+  });
+});
+
+describe("isInstallCoachAudience", () => {
+  it("treats Android / iOS UA as an install audience without coarse pointer", () => {
+    expect(isInstallCoachAudience({ coarsePointer: false, platform: "android" })).toBe(true);
+    expect(isInstallCoachAudience({ coarsePointer: false, platform: "ios" })).toBe(true);
+    expect(isInstallCoachAudience({ coarsePointer: false, platform: "other", maxTouchPoints: 0 })).toBe(
+      false,
+    );
+    expect(isInstallCoachAudience({ coarsePointer: false, maxTouchPoints: 2, platform: "other" })).toBe(
+      true,
+    );
   });
 });
 
@@ -182,9 +205,9 @@ describe("wiring", () => {
     expect(src).not.toContain("void bootKindlingPwa().then");
   });
 
-  it("re-presents the coach when beforeinstallprompt arrives", () => {
+  it("force-presents the coach when beforeinstallprompt arrives", () => {
     const src = read("./installCoach.ts");
     expect(src).toContain('addEventListener("beforeinstallprompt"');
-    expect(src).toContain("presentInstallCoach()");
+    expect(src).toContain("presentInstallCoach({ force: true })");
   });
 });

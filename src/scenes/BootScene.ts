@@ -3,6 +3,8 @@ import { registerDayNightPipeline } from "../art/dayNightPipeline";
 import { installMusicUnlock, preloadMusic } from "../audio/music";
 import { generateTextures } from "../pixelArt";
 import { startSession } from "../session";
+import { applyCanvasDisplayScale } from "../shell";
+import { applyRenderBudgetToGame } from "../ui/renderBudget";
 import { installTypekit } from "../ui/typekit";
 
 export class BootScene extends Phaser.Scene {
@@ -24,6 +26,9 @@ export class BootScene extends Phaser.Scene {
       this.scene.launch("shop");
       this.scene.launch("hud");
       this.scene.start("title");
+      // READY may have already run — re-apply scale now that scenes exist.
+      applyRenderBudgetToGame(this.game);
+      applyCanvasDisplayScale(this.game);
     });
   }
 

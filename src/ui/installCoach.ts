@@ -23,7 +23,7 @@ export type InstallCoachCopy = {
 };
 
 export type InstallCoachShowOpts = {
-  /** Settings re-open: show even after dismiss. */
+  /** Settings / BIP: show even after dismiss. */
   force?: boolean;
   standalone?: boolean;
   dismissed?: boolean;
@@ -48,6 +48,23 @@ export function detectInstallPlatform(
   if (platform === "MacIntel" && maxTouchPoints > 1) return "ios";
   if (/Android/i.test(ua)) return "android";
   return "other";
+}
+
+/**
+ * Phones that should see the install coach. Prefer pointer media queries, then
+ * touch points, then UA — some Android Chrome builds report a fine primary pointer.
+ */
+export function isInstallCoachAudience(opts: {
+  coarsePointer?: boolean;
+  anyCoarsePointer?: boolean;
+  maxTouchPoints?: number;
+  platform?: InstallPlatform;
+} = {}): boolean {
+  if (opts.coarsePointer) return true;
+  if (opts.anyCoarsePointer) return true;
+  if ((opts.maxTouchPoints ?? 0) > 1) return true;
+  const platform = opts.platform ?? detectInstallPlatform();
+  return platform === "ios" || platform === "android";
 }
 
 /**
@@ -90,19 +107,20 @@ export function clearInstallCoachDismissed(storage: StorageLike = defaultStorage
 }
 
 /**
- * Auto-show on title for touch browsers that are not installed; Settings can force.
- * Never show when already standalone / display-mode fullscreen.
+ * Auto-show on title for touch / phone browsers that are not installed.
+ * Settings and beforeinstallprompt can force (BIP must not be swallowed after dismiss).
  */
 export function shouldShowInstallCoach(opts: {
   standalone: boolean;
   dismissed: boolean;
   force?: boolean;
   coarsePointer: boolean;
+  audience?: boolean;
 }): boolean {
   if (opts.standalone) return false;
   if (opts.force) return true;
   if (opts.dismissed) return false;
-  return opts.coarsePointer;
+  return opts.audience ?? opts.coarsePointer;
 }
 
 export function installCoachCopy(opts: {
@@ -168,6 +186,10 @@ function readCoarse(): boolean {
   return globalThis.matchMedia?.("(pointer: coarse)")?.matches ?? false;
 }
 
+function readAnyCoarse(): boolean {
+  return globalThis.matchMedia?.("(any-pointer: coarse)")?.matches ?? false;
+}
+
 function ensureCoachDom(): HTMLElement {
   if (coachEl && coachEl.isConnected) return coachEl;
   let el = document.getElementById("install-coach");
@@ -216,7 +238,7 @@ async function runPrimaryAction(): Promise<void> {
 /**
  * Wire DOM + beforeinstallprompt once. Safe to call repeatedly.
  * Does not auto-present — TitleScene / Settings call {@link presentInstallCoach}.
- * When BIP arrives later, re-present so the primary button can become Install.
+ * When BIP arrives later, force-present so Install is not lost after an early dismiss.
  */
 export function installInstallCoach(): void {
   if (typeof document === "undefined") return;
@@ -228,8 +250,9 @@ export function installInstallCoach(): void {
     const bip = event as unknown as BeforeInstallPromptLike;
     bip.preventDefault?.();
     noteDeferredInstallPrompt(bip);
-    // Refresh copy / visibility if the title coach already ran without a prompt.
-    presentInstallCoach();
+    // Chrome may fire BIP only after ~30s engagement — after the title coach was
+    // dismissed. Force so preventDefault does not silently kill installability.
+    presentInstallCoach({ force: true });
   }) as EventListener);
 
   const el = ensureCoachDom();
@@ -254,11 +277,19 @@ export function presentInstallCoach(opts: InstallCoachShowOpts = {}): boolean {
   const standalone = opts.standalone ?? readStandalone();
   const dismissed = opts.dismissed ?? isInstallCoachDismissed();
   const coarsePointer = opts.coarsePointer ?? readCoarse();
+  const platform = opts.platform ?? detectInstallPlatform();
+  const audience = isInstallCoachAudience({
+    coarsePointer,
+    anyCoarsePointer: readAnyCoarse(),
+    maxTouchPoints: typeof navigator !== "undefined" ? navigator.maxTouchPoints : 0,
+    platform,
+  });
   const show = shouldShowInstallCoach({
     standalone,
     dismissed,
     force: opts.force === true,
     coarsePointer,
+    audience,
   });
 
   const el = ensureCoachDom();
@@ -267,7 +298,6 @@ export function presentInstallCoach(opts: InstallCoachShowOpts = {}): boolean {
     return false;
   }
 
-  const platform = opts.platform ?? detectInstallPlatform();
   const canPrompt = opts.canPrompt ?? deferredPrompt !== null;
   const copy = installCoachCopy({ platform, canPrompt });
   el.querySelector("[data-coach-title]")!.textContent = copy.title;

@@ -14,7 +14,7 @@ export type RenderBudget = {
 };
 
 const HIGH: RenderBudget = { tier: "high", renderScale: 1, postFx: true, maxLights: 8, uploadMinMs: 0 };
-/** Mid: fewer pixels; PostFX off — lights still read via Graphics glow. Lane evidence: PostFX dominates. */
+/** Mid: fewer pixels; PostFX off — lights still read via Graphics glow. */
 const MID: RenderBudget = { tier: "mid", renderScale: 0.75, postFx: false, maxLights: 0, uploadMinMs: 100 };
 const LOW: RenderBudget = { tier: "low", renderScale: 0.6, postFx: false, maxLights: 0, uploadMinMs: 200 };
 
@@ -133,29 +133,36 @@ export function tickRenderBudget(actualFps: number, nowMs = performance.now()): 
 }
 
 /**
- * Keep the design canvas at 1920×1080 with camera zoom 1.
- *
- * An earlier approach resized the WebGL backbuffer and matched camera zoom, but
- * READY fires before shop/hud launch — new cameras stayed at zoom 1 on a smaller
- * game size and phones looked permanently zoomed-in. Fill-rate wins come from
- * PostFX policy (`postFx` / `maxLights`), not resolution scaling.
+ * Match one scene's camera to the live render scale.
+ * Call from every scene `create` — READY can fire before shop/hud exist.
  */
-export function applyRenderScale(game: Phaser.Game, _scale: number): void {
-  const fullW = GAME_WIDTH;
-  const fullH = GAME_HEIGHT;
-  const gw = game.scale.gameSize?.width || game.scale.width || fullW;
-  const gh = game.scale.gameSize?.height || game.scale.height || fullH;
-  if (Math.abs(gw - fullW) >= 1 || Math.abs(gh - fullH) >= 1 || Math.abs(appliedScale - 1) >= 0.01) {
-    appliedScale = 1;
-    game.scale.resize(fullW, fullH);
+export function syncSceneRenderCamera(
+  scene: Phaser.Scene,
+  scale: number = getRenderBudget().renderScale,
+): void {
+  const cam = scene.cameras?.main;
+  if (!cam) return;
+  cam.setZoom(scale);
+  // Drive follows the van in map space — do not yank it to design centre.
+  if (scene.sys.settings.key !== "drive") {
+    cam.centerOn(GAME_WIDTH / 2, GAME_HEIGHT / 2);
   }
-  for (const scene of game.scene.getScenes(true)) {
-    const cam = scene.cameras?.main;
-    if (!cam) continue;
-    if (Math.abs(cam.zoom - 1) >= 0.01) cam.setZoom(1);
-    if (scene.sys.settings.key !== "drive") {
-      cam.centerOn(GAME_WIDTH / 2, GAME_HEIGHT / 2);
-    }
+}
+
+/**
+ * Resize the WebGL backbuffer and zoom every registered scene so design 1920×1080
+ * still fills the stage. CSS shell stretches the canvas; fewer GPU pixels on mid/low.
+ */
+export function applyRenderScale(game: Phaser.Game, scale: number): void {
+  if (Math.abs(scale - appliedScale) >= 0.01) {
+    appliedScale = scale;
+    const w = Math.max(320, Math.round(GAME_WIDTH * scale));
+    const h = Math.max(180, Math.round(GAME_HEIGHT * scale));
+    game.scale.resize(w, h);
+  }
+  // Always re-zoom: scenes may have launched since the last resize.
+  for (const scene of game.scene.getScenes(false)) {
+    syncSceneRenderCamera(scene, scale);
   }
 }
 
