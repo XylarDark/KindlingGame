@@ -1,10 +1,17 @@
 import Phaser from "phaser";
-import { attachDayNight, registerDayNightPipeline } from "../art/dayNightPipeline";
+import {
+  attachDayNight,
+  DAY_NIGHT_PIPELINE,
+  dayNightFrom,
+  detachDayNight,
+  registerDayNightPipeline,
+} from "../art/dayNightPipeline";
 import { installMusicUnlock, preloadMusic } from "../audio/music";
 import { generateTextures } from "../pixelArt";
 import { startSession } from "../session";
 import { applyCanvasDisplayScale } from "../shell";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
+import { clearBootWarmPending, setBootWarmPending } from "../ui/bootWarm";
 import { hideLoading, showLoading } from "../ui/loadingGate";
 import { applyRenderBudgetToGame, getRenderBudget } from "../ui/renderBudget";
 import { installTypekit } from "../ui/typekit";
@@ -19,6 +26,8 @@ const WARM_SCENE_TIMEOUT_MS = 2500;
 
 export class BootScene extends Phaser.Scene {
   private warmAborted = false;
+  private warmDriveOk = false;
+  private warmDoorOk = false;
 
   constructor() {
     super("boot");
@@ -39,6 +48,9 @@ export class BootScene extends Phaser.Scene {
   private async bootReady(): Promise<void> {
     const started = performance.now();
     this.warmAborted = false;
+    this.warmDriveOk = false;
+    this.warmDoorOk = false;
+    clearBootWarmPending();
     const abortTimer = globalThis.setTimeout(() => {
       this.warmAborted = true;
     }, WARM_BOOT_TIMEOUT_MS);
@@ -48,7 +60,18 @@ export class BootScene extends Phaser.Scene {
       globalThis.clearTimeout(abortTimer);
       this.warmAborted = true;
       const warmBootMs = Math.round(performance.now() - started);
-      console.debug("boot: warmBootMs", { warmBootMs });
+      const degraded = !this.warmDriveOk || !this.warmDoorOk;
+      if (degraded) {
+        setBootWarmPending({ drive: !this.warmDriveOk, door: !this.warmDoorOk });
+        console.debug("boot: warm degraded", {
+          warmBootMs,
+          drive: this.warmDriveOk,
+          door: this.warmDoorOk,
+        });
+      } else {
+        clearBootWarmPending();
+        console.debug("boot: warmBootMs", { warmBootMs });
+      }
       hideLoading();
     }
     this.scene.start("title");
@@ -120,9 +143,17 @@ export class BootScene extends Phaser.Scene {
   }
 
   private async warmBootPipeline(): Promise<void> {
-    if (this.warmAborted || !getRenderBudget().postFx) return;
+    if (this.warmAborted) return;
     const cam = this.cameras.main;
-    const pipe = attachDayNight(cam);
+    const keepAttached = getRenderBudget().postFx;
+    // Mid tier keeps PostFX off at play, but still compile once so mid→high promote is hitch-free.
+    registerDayNightPipeline(this.game);
+    if (this.game.renderer.type !== Phaser.WEBGL) return;
+    let pipe = dayNightFrom(cam);
+    if (!pipe) {
+      cam.setPostPipeline(DAY_NIGHT_PIPELINE);
+      pipe = dayNightFrom(cam);
+    }
     if (pipe) {
       pipe.setGrade(
         {
@@ -145,6 +176,7 @@ export class BootScene extends Phaser.Scene {
       );
     }
     await this.waitFrames(2);
+    if (!keepAttached) detachDayNight(cam);
   }
 
   /**
@@ -170,6 +202,10 @@ export class BootScene extends Phaser.Scene {
     if (this.warmAborted) return;
     if (this.scene.isActive(key) && !this.scene.isSleeping(key)) {
       this.scene.sleep(key);
+    }
+    if (this.scene.isSleeping(key)) {
+      if (key === "drive") this.warmDriveOk = true;
+      else this.warmDoorOk = true;
     }
   }
 

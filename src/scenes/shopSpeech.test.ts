@@ -113,3 +113,13 @@ describe("side speech collision layout", () => {
     expect(CUSTOMER_SPEECH_MIN_W).toBeGreaterThanOrEqual(100);
   });
 });
+
+describe("shop hot-path dirty guards", () => {
+  it("indexes catalog once for TV fills and dirty-guards tablet Graphics", () => {
+    expect(src).toContain("skuById");
+    expect(src).toContain("this.skuById.get(skuId)");
+    expect(src).not.toMatch(/catalog\.find\(\(s\) => s\.id === this\.jarSkus/);
+    expect(src).toContain("lastTabletKey");
+    expect(src).toContain("if (tabletKey !== this.lastTabletKey)");
+  });
+});
