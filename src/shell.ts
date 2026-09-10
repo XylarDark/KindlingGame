@@ -44,7 +44,7 @@ export function tryLockLandscape(orientation: Pick<ScreenOrientation, "lock"> | 
   return true;
 }
 
-/** Keep Phaser pointer mapping aligned after CSS sizes the canvas. */
+/** Keep Phaser pointer mapping in 1920×1080 after CSS sizes the canvas. */
 export function applyCanvasDisplayScale(game: Phaser.Game): void {
   const canvas = game.canvas;
   if (!canvas) return;
@@ -52,10 +52,7 @@ export function applyCanvasDisplayScale(game: Phaser.Game): void {
   const w = game.scale.canvasBounds?.width || canvas.clientWidth;
   const h = game.scale.canvasBounds?.height || canvas.clientHeight;
   if (w <= 0 || h <= 0) return;
-  // Prefer the live backbuffer size so RenderBudget scale still maps pointers.
-  const gw = game.scale.gameSize?.width || game.scale.width || GAME_WIDTH;
-  const gh = game.scale.gameSize?.height || game.scale.height || GAME_HEIGHT;
-  const scale = phaserDisplayScale({ width: w, height: h }, gw, gh);
+  const scale = phaserDisplayScale({ width: w, height: h }, GAME_WIDTH, GAME_HEIGHT);
   game.scale.displayScale.set(scale.x, scale.y);
 }
 

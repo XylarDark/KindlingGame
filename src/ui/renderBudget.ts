@@ -133,21 +133,26 @@ export function tickRenderBudget(actualFps: number, nowMs = performance.now()): 
 }
 
 /**
- * Resize the WebGL backbuffer while keeping design-space layout via camera zoom.
- * CSS shell still stretches the canvas to the stage.
+ * Keep the design canvas at 1920×1080 with camera zoom 1.
+ *
+ * An earlier approach resized the WebGL backbuffer and matched camera zoom, but
+ * READY fires before shop/hud launch — new cameras stayed at zoom 1 on a smaller
+ * game size and phones looked permanently zoomed-in. Fill-rate wins come from
+ * PostFX policy (`postFx` / `maxLights`), not resolution scaling.
  */
-export function applyRenderScale(game: Phaser.Game, scale: number): void {
-  if (Math.abs(scale - appliedScale) >= 0.01) {
-    appliedScale = scale;
-    const w = Math.max(320, Math.round(GAME_WIDTH * scale));
-    const h = Math.max(180, Math.round(GAME_HEIGHT * scale));
-    game.scale.resize(w, h);
+export function applyRenderScale(game: Phaser.Game, _scale: number): void {
+  const fullW = GAME_WIDTH;
+  const fullH = GAME_HEIGHT;
+  const gw = game.scale.gameSize?.width || game.scale.width || fullW;
+  const gh = game.scale.gameSize?.height || game.scale.height || fullH;
+  if (Math.abs(gw - fullW) >= 1 || Math.abs(gh - fullH) >= 1 || Math.abs(appliedScale - 1) >= 0.01) {
+    appliedScale = 1;
+    game.scale.resize(fullW, fullH);
   }
   for (const scene of game.scene.getScenes(true)) {
     const cam = scene.cameras?.main;
     if (!cam) continue;
-    cam.setZoom(scale);
-    // Drive follows the van in map space — do not yank it to design centre.
+    if (Math.abs(cam.zoom - 1) >= 0.01) cam.setZoom(1);
     if (scene.sys.settings.key !== "drive") {
       cam.centerOn(GAME_WIDTH / 2, GAME_HEIGHT / 2);
     }

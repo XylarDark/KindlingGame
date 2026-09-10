@@ -53,10 +53,10 @@ describe("init / tickRenderBudget", () => {
 describe("applyRenderScale", () => {
   beforeEach(() => resetRenderBudgetForTests());
 
-  it("resizes the backbuffer and zooms design-space cameras", () => {
+  it("keeps the design backbuffer at 1920×1080 and resets camera zoom to 1", () => {
     const resizeCalls: Array<[number, number]> = [];
     const shopCam = {
-      zoom: 1,
+      zoom: 0.75,
       centered: false,
       setZoom(z: number) {
         this.zoom = z;
@@ -66,7 +66,7 @@ describe("applyRenderScale", () => {
       },
     };
     const driveCam = {
-      zoom: 1,
+      zoom: 0.6,
       centered: false,
       setZoom(z: number) {
         this.zoom = z;
@@ -77,6 +77,12 @@ describe("applyRenderScale", () => {
     };
     const game = {
       scale: {
+        width: Math.round(GAME_WIDTH * 0.75),
+        height: Math.round(GAME_HEIGHT * 0.75),
+        gameSize: {
+          width: Math.round(GAME_WIDTH * 0.75),
+          height: Math.round(GAME_HEIGHT * 0.75),
+        },
         resize: (w: number, h: number) => resizeCalls.push([w, h]),
       },
       scene: {
@@ -87,10 +93,10 @@ describe("applyRenderScale", () => {
       },
     };
     applyRenderScale(game as unknown as Phaser.Game, 0.75);
-    expect(resizeCalls[0]).toEqual([Math.round(GAME_WIDTH * 0.75), Math.round(GAME_HEIGHT * 0.75)]);
-    expect(shopCam.zoom).toBe(0.75);
+    expect(resizeCalls[0]).toEqual([GAME_WIDTH, GAME_HEIGHT]);
+    expect(shopCam.zoom).toBe(1);
     expect(shopCam.centered).toBe(true);
-    expect(driveCam.zoom).toBe(0.75);
+    expect(driveCam.zoom).toBe(1);
     expect(driveCam.centered).toBe(false);
   });
 });
