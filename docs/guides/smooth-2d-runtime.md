@@ -1,6 +1,6 @@
 # Smooth 2D / WebGL runtime (Kindling)
 
-**Purpose:** how Kindling keeps Drive/Door/Shop feeling smooth on phones — smoothed delta for motion feel, frame budget, adaptive `renderScale`, PostFX policy, static-vs-dynamic draw split, atlases, warm/preload, measurement, and what **not** to do.
+**Purpose:** how Kindling keeps Drive/Door/Shop feeling smooth on phones — fixed-step wall-clock sim + render interpolation (default), frame budget, adaptive `renderScale`, PostFX policy, static-vs-dynamic draw split, atlases, warm/preload, measurement, and what **not** to do.
 
 **Read with:** [KNOWN_ERRORS.md](../KNOWN_ERRORS.md) entry *Full-resolution DayNight PostFX looked like a "slow game" after wall-clock sim*.
 
@@ -8,11 +8,11 @@
 
 ## Industry checklist (Done / Partial / Next)
 
-Cite: KNOWN_ERRORS — *Full-resolution DayNight PostFX looked like a "slow game" after wall-clock sim* (wall-clock `rawDelta` unmasked GPU fill-rate; product restored smoothed delta 2026-09-10; adaptive scale + PostFX off on phones; session tier lock at mid 0.85).
+Cite: KNOWN_ERRORS — *Full-resolution DayNight PostFX looked like a "slow game" after wall-clock sim* (wall-clock unmasked GPU fill-rate; PR #32 fixed-step + interpolation makes rawDelta viable; adaptive scale + PostFX off on phones; session tier lock at mid 0.85).
 
 | Technique | Status | Kindling notes |
 |-----------|--------|----------------|
-| **Measure** (`actualFps` / p95 `rawDelta`, PostFX on/off, each tier) | **Done** | Do not treat “sim clock matches wall” as smoothness. Dev: `kindlingRenderBudget.force` + `apply()`. |
+| **Measure** (`actualFps` / p95 frame ms, PostFX on/off, each tier) | **Done** | `?meter=1` feel overlay; dev: `kindlingRenderBudget.force` + `apply()`. Do not treat “sim clock matches wall” as smoothness. |
 | **Resolution** (adaptive backbuffer + camera zoom; GAME_* layout) | **Done** | high **1.0** / mid **0.85** / low **0.65** (density-first); `syncSceneRenderCamera` every scene `create`. |
 | **PostFX** (attach only shop/drive/door; mid/low off) | **Done** | DayNight never on Hud/Title; coarse never lingers on high in Drive/Door. |
 | **Half-res FX** (`postFxScale` 0.5 via Phaser `halfFrame`) | **Done** | Desktop high: downsample → DayNight → blit up. Coarse stays mid/low (PostFX off). |
@@ -26,7 +26,7 @@ Cite: KNOWN_ERRORS — *Full-resolution DayNight PostFX looked like a "slow game
 | **Warm** | **Done** | `#loading-gate`: textures, DayNight, launch Drive/Door ≥2 frames, city build+bake complete before sleep. |
 | **Mobile pipeline** | **Done** | `autoMobilePipeline` in config; coarse seed mid. |
 | **Texture format** | **Next** | Canvas-baked RGBA8888 at boot; atlases batch binds. ASTC/ETC asset packs need an offline pipeline — not in `generateTextures` today. |
-| **Smoothed delta** | **Done** | `fps.smoothStep: true`; sim from scene `delta` (capped) — product feel over wall-clock sim; see KNOWN_ERRORS. |
+| **Fixed-step + rawDelta** | **Done** | Default `fixedRaw`: 60 Hz steps from `rawDelta` via `kindlingClock`; Drive interpolation; `smoothStep: false`. Fallback: `?clock=smooth`. |
 
 ---
 
@@ -38,7 +38,7 @@ Cite: KNOWN_ERRORS — *Full-resolution DayNight PostFX looked like a "slow game
 | Seed RenderBudget tier | `high` | `mid` (never auto-promote to `high` on coarse) |
 | `renderScale` | 1.0 | **0.85** mid / **0.65** low |
 | DayNight PostFX | on (≤8 lights), **`postFxScale` 0.5** | **off** on mid/low — Graphics glow still paints |
-| Sim clock | Phaser smoothed `delta` (capped) | same — `fps.smoothStep: true` |
+| Sim clock | `fixedRaw`: 60 Hz fixed steps from `rawDelta` | same; render may cap at 30 fps |
 
 Design layout stays **1920×1080** (`GAME_*`). CSS shell presents 16:9. Only the WebGL backbuffer + camera zoom shrink (and PostFX may run on a halfFrame).
 
@@ -49,12 +49,10 @@ Design layout stays **1920×1080** (`GAME_*`). CSS shell presents 16:9. Only the
 1. **Prefer sharp pixels + cheap FX** over soft full-frame scale. Mid **0.85** and low **0.65** keep phone art readable; cut fill-rate via PostFX off, static bakes, atlases, and overdraw — not by shrinking to **0.45 / 0.32** (superseded — that was a blunt hammer that killed the look).
 2. **Always** pair `scale.resize` with `syncSceneRenderCamera` on every scene `create` (READY can race late scenes).
 3. Pointer / CSS fit must use **live** `gameSize`, not a frozen 1920×1080 assumption (`applyCanvasDisplayScale`).
-4. Coarse + Drive/Door: demote earlier (mid→low @ ~36fps heavy / ~32fps shop; one-strike + rawDelta hitch ≥48ms); **never linger on high** (fullscreen DayNight) even if FPS briefly looks fine. Coarse seeds mid and never auto-promotes to high.
+4. **Coarse phones:** tier locked at boot **mid 0.85** for the session — no mid-session `scale.resize` (PR #29). Desktop may still demote with hysteresis.
 5. Honest **30fps** on coarse phones beats blurry almost-60 — `fps.target` + `limit` 30 unchanged.
-6. Measuring “sim clock matches wall” is **not** proof of smoothness — measure `actualFps` / p95 frame time at each tier with PostFX on/off. Product uses smoothed delta so hitch frames ease rather than stall.
-7. **Coarse phones:** render tier locked at boot **mid 0.85** for the session — no mid-session `scale.resize` (triggers typekit refit lag after clicks; PR #29).
-
-Source of truth: `src/ui/renderBudget.ts`.
+6. Measuring “sim clock matches wall” is **not** proof of smoothness — measure `actualFps` / p95 frame time at each tier with PostFX on/off and `?meter=1`.
+Source of truth: `src/ui/renderBudget.ts`, `src/sim/kindlingClock.ts`.
 
 ---
 
@@ -98,7 +96,7 @@ Facade + yard bake into one full-screen **RenderTexture (depth 0.5)** per house 
 
 **Rule:** if it does not move or animate, it should not remain a per-instance draw after bake. If it moves, keep it a sprite and let camera + modest view padding cull it (`TRAFFIC_CULL_PAD`).
 
-Preserve: dropoff gate, smoothed delta, session tier lock on coarse, chunked warm build, `#loading-gate`, `syncSceneRenderCamera`, install coach.
+Preserve: dropoff gate, `fixedRaw` clock (or `?clock=smooth` fallback), session tier lock on coarse, chunked warm build, `#loading-gate`, `syncSceneRenderCamera`, install coach.
 
 ---
 
@@ -110,10 +108,11 @@ Under `#loading-gate`: flush textures a full frame; register city + people atlas
 
 ## How to measure
 
-1. Phone Chrome (or AVD): note `game.loop.actualFps` and p95 `rawDelta` on Drive with PostFX forced on vs off and at mid/low scales.
-2. Dev harness: `kindlingRenderBudget.force('mid'|'low'|'high')` then `apply()`.
-3. Compare draw cost mentally: after bake, Drive display list should be **movers + a handful of RT cells + glow**, not a thousand tiles; Shop should be **two RTs + interactive/live**.
-4. Do **not** use “clock matches wall” alone — smoothed delta trades wall accuracy for consistent motion feel (KNOWN_ERRORS).
+1. **`?meter=1`** on phone PWA: fps, Δ ms, p95-ish rolling, fixed-step backlog, tier, `resize×`.
+2. Phone Chrome (or AVD): compare Drive/Shop/Door with PostFX forced on vs off at mid/low scales.
+3. Dev harness: `kindlingRenderBudget.force('mid'|'low'|'high')` then `apply()`; `kindlingClock.stats()` for clock telemetry.
+4. A/B: default `fixedRaw` vs `?clock=smooth` on the same device session.
+5. Do **not** use “clock matches wall” alone (KNOWN_ERRORS).
 
 ---
 
@@ -121,7 +120,7 @@ Under `#loading-gate`: flush textures a full frame; register city + people atlas
 
 | Don’t | Why |
 |-------|-----|
-| Switch back to `rawDelta` for “accuracy” without phone feel check | Unmasks GPU hitch as stutter on phone PWA — product chose smoothed delta (2026-09-10) |
+| Bare rawDelta flip without fixed-step + interpolation | Variable dt stutters; use `kindlingClock` `fixedRaw` or `?clock=smooth` fallback |
 | Mid-session `scale.resize` on coarse phones | Triggers typekit refit on every Text — felt like click lag (PR #29 lock) |
 | Fix “choppy” by locking 1920×1080 forever | Fill-rate is the cost; demotion tiers exist on purpose |
 | Soft-scale phones to 0.45 / 0.32 | Superseded — kills pixel sharpness; use 0.85 / 0.65 + FX cuts instead |
@@ -135,11 +134,17 @@ Under `#loading-gate`: flush textures a full frame; register city + people atlas
 
 ## RawDelta readiness
 
-Wall-clock sim (`game.loop.rawDelta`, `fps.smoothStep: false`) is **one optional tool**, not the product goal. Success is an installed phone PWA that feels **responsive and smooth** — snappy input, no mid-session stalls, honest frame budget — measured with overlay telemetry, not “sim clock matches wall” alone.
+Wall-clock sim is **not** the product goal by itself. Success is an installed phone PWA that feels **responsive and smooth** — snappy input, no mid-session stalls, honest frame budget — measured with overlay telemetry, not “sim clock matches wall” alone.
 
-**Product rule:** smoothed Phaser delta stays the committed clock until every gate in the plan passes. Phase 5 only then re-evaluates rawDelta with A/B and a fallback flag.
+**Ship default (PR #32):** `kindlingClock` mode **`fixedRaw`** — accumulator from `game.loop.rawDelta`, **60 Hz** fixed sim steps (`FIXED_STEP_MS = 1000/60`), max **5 steps/frame**, Drive render interpolation between ticks, `fps.smoothStep: false`.
 
-**Canonical plan:** [plans/2026-09-10-responsive-smooth-product.md](../plans/2026-09-10-responsive-smooth-product.md) (Phases 0–5: stalls → frame budget → telemetry → input → rawDelta decision). Stub alias: [plans/2026-09-10-rawdelta-readiness.md](../plans/2026-09-10-rawdelta-readiness.md).
+**Fallback:** `?clock=smooth` or `localStorage kindlingClock.mode=smooth` — PR #30 smoothed-delta feel without rebuild.
+
+**Diagnose:** `?meter=1` — on-screen fps, last frame ms, p95-ish rolling, fixed-step backlog, clock mode, tier, `resize×`.
+
+**Not interpolated yet:** Shop/Door movers (static bakes), Drive customer doorstep sprite, pin/chip text — snap to sim ticks.
+
+**Canonical plan:** [plans/2026-09-10-responsive-smooth-product.md](../plans/2026-09-10-responsive-smooth-product.md). Stub: [plans/2026-09-10-rawdelta-readiness.md](../plans/2026-09-10-rawdelta-readiness.md).
 
 ---
 
@@ -152,7 +157,10 @@ Wall-clock sim (`game.loop.rawDelta`, `fps.smoothStep: false`) is **one optional
 - `src/scenes/DoorScene.ts` — `bakeDoorFacade` + sky cadence
 - `src/art/cityTileAtlas.ts` — grass/road/parking atlas
 - `src/art/peopleAtlas.ts` — standing + portrait atlases
-- `src/config.ts` / `src/main.ts` — `smoothStep: true`, `autoMobilePipeline`, coarse 30fps limit
+- `src/sim/kindlingClock.ts` — fixed-step accumulator, `fixedRaw` \| `smooth` modes
+- `src/sim/simInterpolator.ts` — Drive mover lerp
+- `src/ui/feelMeter.ts` — `?meter=1` overlay
+- `src/config.ts` / `src/main.ts` — `wantsSmoothStep(clockMode)`, `autoMobilePipeline`, coarse 30fps limit
 - `src/ui/renderBudget.ts` — `sessionTierLocked` on coarse (mid 0.85 for session)
 - [plans/2026-09-10-responsive-smooth-product.md](../plans/2026-09-10-responsive-smooth-product.md) — responsive + smooth product plan (rawDelta = Phase 5)
 - [plans/2026-09-10-density-first-budget.md](../plans/2026-09-10-density-first-budget.md) — current phone scale doctrine
