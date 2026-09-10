@@ -27,11 +27,18 @@ const DEMOTE_TO_MID_FPS = 42;
 const DEMOTE_TO_LOW_FPS = 30;
 /** One-strike demote when FPS collapses — avoids staying on PostFX during a death spiral. */
 const SEVERE_DEMOTE_FPS = 24;
+/** Drive/Door scroll + fullscreen PostFX — demote earlier than shop. */
+const HEAVY_DEMOTE_TO_MID_FPS = 48;
+const HEAVY_DEMOTE_TO_LOW_FPS = 34;
+const HEAVY_SEVERE_DEMOTE_FPS = 28;
+
+export type RenderStressContext = "shop" | "drive" | "door" | null;
 
 let current: RenderBudget = HIGH;
 let lastEvalAt = 0;
 let demoteStrikes = 0;
 let autoEnabled = true;
+let stressContext: RenderStressContext = null;
 let listeners: Array<(b: RenderBudget) => void> = [];
 
 export function resetRenderBudgetForTests(): void {
@@ -39,7 +46,21 @@ export function resetRenderBudgetForTests(): void {
   lastEvalAt = 0;
   demoteStrikes = 0;
   autoEnabled = true;
+  stressContext = null;
   listeners = [];
+}
+
+/** Active scene weight for demotion thresholds (Drive/Door demote before shop). */
+export function setRenderStressContext(ctx: RenderStressContext): void {
+  stressContext = ctx;
+}
+
+export function getRenderStressContext(): RenderStressContext {
+  return stressContext;
+}
+
+function heavyScene(): boolean {
+  return stressContext === "drive" || stressContext === "door";
 }
 
 /** When false, tickRenderBudget is a no-op (DEV / capture harness). */
@@ -74,21 +95,25 @@ export function pickRenderTier(opts: {
   coarsePointer: boolean;
   actualFps: number;
   prev: RenderTier;
+  heavyScene?: boolean;
 }): RenderTier {
   const { coarsePointer, actualFps, prev } = opts;
+  const heavy = opts.heavyScene ?? false;
+  const demoteMid = heavy ? HEAVY_DEMOTE_TO_MID_FPS : DEMOTE_TO_MID_FPS;
+  const demoteLow = heavy ? HEAVY_DEMOTE_TO_LOW_FPS : DEMOTE_TO_LOW_FPS;
   // Coarse devices start at mid unless FPS already healthy on high.
   if (prev === "high") {
-    if (actualFps > 0 && actualFps < DEMOTE_TO_MID_FPS) return coarsePointer ? "low" : "mid";
+    if (actualFps > 0 && actualFps < demoteMid) return coarsePointer ? "low" : "mid";
     if (coarsePointer && actualFps > 0 && actualFps < PROMOTE_FPS) return "mid";
     return "high";
   }
   if (prev === "mid") {
-    if (actualFps > 0 && actualFps < DEMOTE_TO_LOW_FPS) return "low";
-    if (actualFps >= PROMOTE_FPS && !coarsePointer) return "high";
+    if (actualFps > 0 && actualFps < demoteLow) return "low";
+    if (actualFps >= PROMOTE_FPS && !coarsePointer && !heavy) return "high";
     return "mid";
   }
   // low
-  if (actualFps >= DEMOTE_TO_MID_FPS) return coarsePointer ? "mid" : "mid";
+  if (actualFps >= demoteMid) return coarsePointer ? "mid" : "mid";
   return "low";
 }
 
@@ -117,7 +142,12 @@ export function tickRenderBudget(actualFps: number, nowMs = performance.now()): 
     typeof globalThis.matchMedia === "function"
       ? (globalThis.matchMedia("(pointer: coarse)")?.matches ?? false)
       : false;
-  const next = pickRenderTier({ coarsePointer: coarse, actualFps, prev: current.tier });
+  const next = pickRenderTier({
+    coarsePointer: coarse,
+    actualFps,
+    prev: current.tier,
+    heavyScene: heavyScene(),
+  });
   if (next === current.tier) {
     demoteStrikes = 0;
     return false;
@@ -125,7 +155,8 @@ export function tickRenderBudget(actualFps: number, nowMs = performance.now()): 
   const rank = { high: 2, mid: 1, low: 0 } as const;
   if (rank[next] < rank[current.tier]) {
     demoteStrikes += 1;
-    const severe = actualFps > 0 && actualFps < SEVERE_DEMOTE_FPS;
+    const severeFps = heavyScene() ? HEAVY_SEVERE_DEMOTE_FPS : SEVERE_DEMOTE_FPS;
+    const severe = actualFps > 0 && actualFps < severeFps;
     if (!severe && demoteStrikes < 2) return false;
   } else {
     demoteStrikes = 0;

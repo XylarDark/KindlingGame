@@ -36,7 +36,8 @@ describe("loading gate wiring", () => {
     expect(src).toContain('warmAndSleepScene("drive")');
     expect(src).toContain('warmAndSleepScene("door")');
     expect(src).toContain("this.scene.sleep(key)");
-    expect(src).toContain("WARM_SCENE_TIMEOUT_MS");
+    expect(src).toContain("sceneWarmTimeout");
+    expect(src).toContain("warmShopPostFx");
   });
 
   it("loading gate captures pointers while visible", () => {

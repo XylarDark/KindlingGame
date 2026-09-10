@@ -13,6 +13,8 @@ describe("DriveScene grade throttle and dirty guards", () => {
     expect(src).toContain("shouldApplyGrade");
     expect(src).toContain("lastGradeKey");
     expect(src).toContain("lastGradeMs");
+    expect(src).toContain("DRIVE_GRADE_MIN_MS");
+    expect(src).toContain("DRIVE_FOCUS_GRID");
     const paint = src.slice(src.indexOf("private paintDayNight"), src.indexOf("private paintNightGlow"));
     expect(paint).toContain("shouldApplyGrade");
     expect(paint).toContain("applyDayNight");
@@ -41,14 +43,15 @@ describe("DriveScene grade throttle and dirty guards", () => {
 });
 
 describe("DoorScene grade throttle", () => {
-  it("gates applyDayNight like Shop (~80ms / dirty sky)", () => {
+  it("gates applyDayNight in PRE_RENDER like Drive (~80ms / dirty sky)", () => {
     const src = read("DoorScene.ts");
     expect(src).toContain("shouldApplyGrade");
     expect(src).toContain("lastGradeKey");
-    const from = src.indexOf("if (getRenderBudget().postFx)");
-    const to = src.indexOf("const destOrder", from);
-    const block = src.slice(from, to);
+    expect(src).toContain("paintDoorDayNight");
+    expect(src).toContain("onPreRenderDayNight");
+    const block = src.slice(src.indexOf("private paintDoorDayNight"), src.indexOf("function doorFlashPhase"));
     expect(block).toContain("shouldApplyGrade");
     expect(block).toContain("applyDayNight");
+    expect(block).toContain("if (!this.sys.isActive()) return");
   });
 });

@@ -1,17 +1,24 @@
 import Phaser from "phaser";
+import { doorGrade, driveGrade, shopGrade } from "../art/dayNightGrade";
+import { DOORSTEP_PORCH } from "../art/doorstep";
 import {
+  applyDayNight,
   attachDayNight,
   DAY_NIGHT_PIPELINE,
   dayNightFrom,
   detachDayNight,
   registerDayNightPipeline,
 } from "../art/dayNightPipeline";
+import { ceilingPots } from "../maps/shopT0";
+import { MS_PER_GAME_HOUR } from "../sim/constants";
+import { skyAt } from "../sim/dayNight";
 import { installMusicUnlock, preloadMusic } from "../audio/music";
 import { generateTextures } from "../pixelArt";
 import { startSession } from "../session";
 import { applyCanvasDisplayScale } from "../shell";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import { clearBootWarmPending, setBootWarmPending } from "../ui/bootWarm";
+import { markSceneWarm, resetSceneWarmFlags, sceneWarmTimeout } from "../ui/sceneWarm";
 import { hideLoading, showLoading } from "../ui/loadingGate";
 import { applyRenderBudgetToGame, getRenderBudget } from "../ui/renderBudget";
 import { installTypekit } from "../ui/typekit";
@@ -21,8 +28,9 @@ import { installTypekit } from "../ui/typekit";
  * freezes during sync Drive create, so it cannot guard orphaned showLoading.
  */
 const WARM_BOOT_TIMEOUT_MS = 8000;
-/** Per-scene create+render budget; mid-shift still launches if we skip. */
-const WARM_SCENE_TIMEOUT_MS = 2500;
+/** Shop PostFX sample hours — compile noon + night grades under the gate. */
+const WARM_SHOP_HOURS = [12, 20.5] as const;
+const WARM_DRIVE_FOCUS = { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 };
 
 export class BootScene extends Phaser.Scene {
   private warmAborted = false;
@@ -51,6 +59,7 @@ export class BootScene extends Phaser.Scene {
     this.warmDriveOk = false;
     this.warmDoorOk = false;
     clearBootWarmPending();
+    resetSceneWarmFlags();
     const abortTimer = globalThis.setTimeout(() => {
       this.warmAborted = true;
     }, WARM_BOOT_TIMEOUT_MS);
@@ -102,6 +111,9 @@ export class BootScene extends Phaser.Scene {
 
     this.showBootStage("Shaders");
     await this.warmBootPipeline();
+    if (this.warmAborted) return;
+
+    await this.warmShopPostFx();
     if (this.warmAborted) return;
 
     this.showBootStage("Map");
@@ -180,30 +192,72 @@ export class BootScene extends Phaser.Scene {
   }
 
   /**
+   * Compile shop-camera PostFX before first fetch — boot pipeline alone uses the boot camera.
+   */
+  private async warmShopPostFx(): Promise<void> {
+    if (this.warmAborted) return;
+    const shop = this.scene.get("shop");
+    const cam = shop?.cameras?.main;
+    if (!cam) return;
+    const keepAttached = getRenderBudget().postFx;
+    attachDayNight(cam);
+    for (const hour of WARM_SHOP_HOURS) {
+      if (this.warmAborted) return;
+      const gameMs = (hour - 9) * MS_PER_GAME_HOUR;
+      applyDayNight(dayNightFrom(cam), shopGrade(skyAt(gameMs), ceilingPots()), {
+        x: 0,
+        y: 0,
+        width: GAME_WIDTH,
+        height: GAME_HEIGHT,
+      });
+      await this.waitFrames(1);
+    }
+    await this.waitFrames(1);
+    if (!keepAttached) detachDayNight(cam);
+  }
+
+  /**
    * First-create drive/door under the loading gate so mid-shift only wakes them.
-   * Wall-clock capped so a slow phone cannot stick the gate on Map/Door forever.
+   * Deadline-checked in-body — never Promise.race a path that can orphan showLoading.
    */
   private async warmAndSleepScene(key: "drive" | "door"): Promise<void> {
     if (this.warmAborted) return;
-    await Promise.race([this.warmAndSleepSceneBody(key), this.wallSleep(WARM_SCENE_TIMEOUT_MS)]);
-  }
-
-  private async warmAndSleepSceneBody(key: "drive" | "door"): Promise<void> {
-    if (this.warmAborted) return;
-    if (this.scene.isSleeping(key)) this.scene.wake(key);
-    else if (!this.scene.isActive(key)) this.scene.launch(key);
-    await this.waitUntilSceneReady(key);
-    if (this.warmAborted) return;
-    const scene = this.scene.get(key);
-    if (scene?.cameras?.main && getRenderBudget().postFx) {
-      attachDayNight(scene.cameras.main);
+    const deadline = performance.now() + sceneWarmTimeout(key);
+    if (this.scene.isSleeping(key)) {
+      markSceneWarm(key);
+      if (key === "drive") this.warmDriveOk = true;
+      else this.warmDoorOk = true;
+      return;
     }
-    await this.waitFrames(2);
-    if (this.warmAborted) return;
+    if (!this.scene.isActive(key)) this.scene.launch(key);
+    while (!this.warmAborted && performance.now() < deadline) {
+      if (this.scene.isActive(key) || this.scene.isSleeping(key)) break;
+      await this.waitFrames(1);
+    }
+    if (this.warmAborted || performance.now() >= deadline) return;
+    const scene = this.scene.get(key);
+    const cam = scene?.cameras?.main;
+    if (cam) {
+      attachDayNight(cam);
+      const nightMs = (20.5 - 9) * MS_PER_GAME_HOUR;
+      const sky = skyAt(nightMs);
+      const view =
+        key === "drive"
+          ? { x: 0, y: 0, width: GAME_WIDTH, height: GAME_HEIGHT }
+          : { x: 0, y: 0, width: GAME_WIDTH, height: GAME_HEIGHT };
+      const grade =
+        key === "drive"
+          ? driveGrade(sky, WARM_DRIVE_FOCUS, [])
+          : doorGrade(sky, DOORSTEP_PORCH);
+      applyDayNight(dayNightFrom(cam), grade, view);
+      await this.waitFrames(2);
+    }
+    if (this.warmAborted || performance.now() >= deadline) return;
     if (this.scene.isActive(key) && !this.scene.isSleeping(key)) {
       this.scene.sleep(key);
     }
     if (this.scene.isSleeping(key)) {
+      markSceneWarm(key);
       if (key === "drive") this.warmDriveOk = true;
       else this.warmDoorOk = true;
     }

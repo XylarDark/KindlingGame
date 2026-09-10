@@ -30,7 +30,7 @@ import { END_SHIFT_CAPTION, END_SHIFT_LABEL, RESULTS_NEW_DAY, RESULTS_TITLE } fr
 import { addSignText, setSignAccent } from "../ui/signText";
 import { addUiText } from "../ui/text";
 import { settingsGeom, type SettingsGeom } from "../ui/settingsGeom";
-import { applyRenderBudgetToGame, tickRenderBudget } from "../ui/renderBudget";
+import { applyRenderBudgetToGame, setRenderStressContext, tickRenderBudget } from "../ui/renderBudget";
 import {
   Color,
   HUD_TYPE_FIT,
@@ -737,6 +737,7 @@ export class HudScene extends Phaser.Scene {
     const raw = this.game.loop.rawDelta;
     sim.tick(Math.min(Math.max(0, raw), MAX_SIM_STEP_MS));
     const snap = sim.snapshot();
+    this.syncRenderStress(snap);
     if (tickRenderBudget(this.game.loop.actualFps)) {
       applyRenderBudgetToGame(this.game);
       applyCanvasDisplayScale(this.game);
@@ -1021,6 +1022,19 @@ export class HudScene extends Phaser.Scene {
       refitType(this.coverText);
     }
     this.coverText.setPosition(this.readoutCorner.left, this.readoutCorner.top + 40);
+  }
+
+  /** Drive/Door PostFX is heavier than shop — demote earlier while those scenes are live. */
+  private syncRenderStress(snap: SimSnapshot): void {
+    if (snap.playerRole !== "driver") {
+      setRenderStressContext("shop");
+      return;
+    }
+    if (snap.dropoff.phase === "atDoor") {
+      setRenderStressContext("door");
+      return;
+    }
+    setRenderStressContext("drive");
   }
 
   private syncDriveScene(snap: SimSnapshot): void {
