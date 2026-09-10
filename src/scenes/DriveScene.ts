@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { customerTextureKey } from "../art/people";
 import { driveGrade } from "../art/dayNightGrade";
-import { applyDayNight, attachDayNight, dayNightFrom, type DayNightPipeline } from "../art/dayNightPipeline";
+import { applyDayNight, attachDayNight, dayNightFrom, shouldApplyGrade, type DayNightPipeline } from "../art/dayNightPipeline";
 import { getRenderBudget } from "../ui/renderBudget";
 import {
   CITY,
@@ -58,6 +58,10 @@ export class DriveScene extends Phaser.Scene {
   private streetLamps: CityLamp[] = [];
   private nightGlow!: Phaser.GameObjects.Graphics;
   private lastGlowKey = "";
+  private lastGradeKey = "";
+  private lastGradeMs = -1e9;
+  private lastPinWho = "";
+  private lastLotGlowKey = "";
   private trafficLoops: TrafficLoop[] = [];
   private trafficSprites: Phaser.GameObjects.Image[] = [];
   private trafficAngles = new Map<string, number>();
@@ -191,11 +195,9 @@ export class DriveScene extends Phaser.Scene {
     }
 
     // Day/night paints once in PRE_RENDER — avoid a second PostFX upload here.
-    this.glow.clear();
     const next = tutorialHints(snap)[0];
     const stopId = snap.run?.nextStopId;
     const destOrder = snap.orders.find((o) => o.destinationId === stopId && o.status === "onRun");
-    let pinWorld: { x: number; y: number } | null = null;
     if (stopId) {
       const house = CITY.houses.find((h) => h.id === stopId);
       if (house) {
@@ -204,10 +206,15 @@ export class DriveScene extends Phaser.Scene {
         const home = lotCenter(house.house, house.lotW, house.lotH);
         const hw = house.lotW * TILE;
         const hh = house.lotH * TILE;
-        this.glow.fillStyle(Color.neon, 0.2);
-        this.glow.fillRect(home.x - hw / 2 - 8, home.y - hh / 2 - 8, hw + 16, hh + 16);
-        this.glow.lineStyle(5, Color.lime, 0.95);
-        this.glow.strokeRect(home.x - hw / 2 - 8, home.y - hh / 2 - 8, hw + 16, hh + 16);
+        // Lot glow only when the stop changes — clear+fill every frame was pure CPU.
+        if (stopId !== this.lastLotGlowKey) {
+          this.lastLotGlowKey = stopId;
+          this.glow.clear();
+          this.glow.fillStyle(Color.neon, 0.2);
+          this.glow.fillRect(home.x - hw / 2 - 8, home.y - hh / 2 - 8, hw + 16, hh + 16);
+          this.glow.lineStyle(5, Color.lime, 0.95);
+          this.glow.strokeRect(home.x - hw / 2 - 8, home.y - hh / 2 - 8, hw + 16, hh + 16);
+        }
         this.pinBase.x = x;
         this.pinBase.y = y - 6;
         this.pin.setPosition(this.pinBase.x, this.pinBase.y - this.pinBob).setVisible(true);
@@ -216,7 +223,12 @@ export class DriveScene extends Phaser.Scene {
         const who = destOrder
           ? `${houseTitle(stopId)}\n${destOrder.customerName}${clock ? `\n${clock}` : ""}`
           : houseTitle(stopId);
-        this.pinLabel.setVisible(true).setPosition(x, this.pinBase.y - this.pinBob - 12).setText(who);
+        this.pinLabel.setVisible(true).setPosition(x, this.pinBase.y - this.pinBob - 12);
+        // SLA clock changes ~1/s; dirty-guard avoids typekit work every frame.
+        if (who !== this.lastPinWho) {
+          this.lastPinWho = who;
+          this.pinLabel.setText(who);
+        }
         // Ink on white in every state, LATE included: the urgency is carried by the
         // frame, so the stop name never drops to danger-red on a coloured chip.
         const urgent = !!destOrder && isSlaUrgent(destOrder.slaRemainingMs);
@@ -235,6 +247,11 @@ export class DriveScene extends Phaser.Scene {
         }
       }
     } else {
+      if (this.lastLotGlowKey !== "") {
+        this.lastLotGlowKey = "";
+        this.glow.clear();
+      }
+      this.lastPinWho = "";
       this.pin.setVisible(false);
       this.pinPulse.setVisible(false);
       this.pinLabel.setVisible(false);
@@ -286,15 +303,28 @@ export class DriveScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(sky.mapGrass);
     if (getRenderBudget().postFx) {
       const focus = snap.dropoff.driverOnFoot && snap.dropoff.driver ? snap.dropoff.driver : snap.vehicle;
-      const view = this.cameras.main.worldView;
-      const pipe = this.lighting ?? dayNightFrom(this.cameras.main);
-      this.lighting = pipe;
-      applyDayNight(pipe, driveGrade(sky, focus, this.streetLamps), {
-        x: view.x,
-        y: view.y,
-        width: view.width || this.scale.width,
-        height: view.height || this.scale.height,
-      });
+      // Coarse focus + sky key: view UVs refresh in the pipeline via syncViewFromCamera.
+      const gradeKey = `${sky.mapOverlay}:${sky.mapOverlayAlpha.toFixed(3)}:${sky.lampAlpha.toFixed(2)}:${Math.round(focus.x / 32)}:${Math.round(focus.y / 32)}`;
+      const now = performance.now();
+      if (
+        shouldApplyGrade({
+          nowMs: now,
+          lastMs: this.lastGradeMs,
+          dirty: gradeKey !== this.lastGradeKey,
+        })
+      ) {
+        this.lastGradeKey = gradeKey;
+        this.lastGradeMs = now;
+        const view = this.cameras.main.worldView;
+        const pipe = this.lighting ?? dayNightFrom(this.cameras.main);
+        this.lighting = pipe;
+        applyDayNight(pipe, driveGrade(sky, focus, this.streetLamps), {
+          x: view.x,
+          y: view.y,
+          width: view.width || this.scale.width,
+          height: view.height || this.scale.height,
+        });
+      }
     }
     this.paintNightGlow(sky);
   }

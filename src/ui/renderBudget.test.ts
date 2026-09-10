@@ -35,6 +35,13 @@ describe("init / tickRenderBudget", () => {
     expect(getRenderBudget().renderScale).toBe(1);
   });
 
+  it("high tier keeps PostFX on with ~16ms uniform upload throttle", () => {
+    expect(initRenderBudget(false).tier).toBe("high");
+    expect(getRenderBudget().postFx).toBe(true);
+    expect(getRenderBudget().uploadMinMs).toBe(16);
+    expect(getRenderBudget().maxLights).toBe(8);
+  });
+
   it("low tier turns PostFX off without shrinking the canvas", () => {
     initRenderBudget(false);
     // Demotion is sticky: two consecutive low samples per step.

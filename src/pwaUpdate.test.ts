@@ -154,11 +154,13 @@ describe("update wiring", () => {
     expect(startAt).toBeLessThan(pwaAt);
   });
 
-  it("wires setPwaIdle from title and shift-ended HUD", () => {
+  it("wires setPwaIdle from title and shift-ended HUD edge", () => {
     const title = read("src/scenes/TitleScene.ts");
     const hud = read("src/scenes/HudScene.ts");
     expect(title).toContain("setPwaIdle(true)");
     expect(title).toContain("setPwaIdle(false)");
+    expect(hud).toContain("pwaIdleShiftEnded");
+    expect(hud).toContain("if (snap.shiftEnded !== this.pwaIdleShiftEnded)");
     expect(hud).toContain("setPwaIdle(snap.shiftEnded)");
   });
 });

@@ -309,6 +309,12 @@ export class HudScene extends Phaser.Scene {
   private scorePopLayer!: Phaser.GameObjects.Container;
   private readoutsInShop = true;
   private readoutCorner = { left: 28, right: GAME_WIDTH - 28, top: HUD_CORNER_TOP };
+  /** Last shiftEnded passed to setPwaIdle — edge only, not every frame. */
+  private pwaIdleShiftEnded = false;
+  private lastClockLabel = "";
+  private lastToast = "";
+  private lastPhoneLine = "";
+  private lastPhoneAccentKey = "";
 
   constructor() {
     super("hud");
@@ -728,7 +734,11 @@ export class HudScene extends Phaser.Scene {
       applyRenderBudgetToGame(this.game);
       applyCanvasDisplayScale(this.game);
     }
-    setPwaIdle(snap.shiftEnded);
+    // Title / shift-ended only — calling every frame was a pointless hop (diag #11).
+    if (snap.shiftEnded !== this.pwaIdleShiftEnded) {
+      this.pwaIdleShiftEnded = snap.shiftEnded;
+      setPwaIdle(snap.shiftEnded);
+    }
     this.paintHud(snap);
   }
 
@@ -815,8 +825,11 @@ export class HudScene extends Phaser.Scene {
   private paintHud(snap: SimSnapshot): void {
     const scoreLabel = String(snap.score);
     const scoreResized = scoreLabel !== this.scoreText.text;
-    this.scoreText.setText(scoreLabel);
-    this.clockText.setText(snap.clockLabel);
+    if (scoreResized) this.scoreText.setText(scoreLabel);
+    if (snap.clockLabel !== this.lastClockLabel) {
+      this.lastClockLabel = snap.clockLabel;
+      this.clockText.setText(snap.clockLabel);
+    }
     const inShop = snap.playerRole !== "driver";
     const modeChanged = inShop !== this.readoutsInShop;
     this.readoutsInShop = inShop;
@@ -857,18 +870,27 @@ export class HudScene extends Phaser.Scene {
     const callName = drop.customerName ?? "customer";
     const phoneLine =
       drop.phase === "calling" ? `Calling…\n${callName}` : `Tap to call\n${callName}`;
-    this.phoneStatus.setText(phoneLine);
     if (showPhone) {
       this.phone.setAlpha(1);
       this.phoneBody.setAlpha(drop.phase === "calling" ? 0.92 : 1);
       // The phone's tutorial cue is the status plaque's frame going lime, not a ring
       // around the chassis: the ring was removed, the cue was not.
       const cue = flashPhone && drop.phase !== "calling";
-      setSignAccent(this.phoneStatus, cue ? Color.lime : drop.phase === "calling" ? Color.leafBright : undefined);
-      this.phoneStatus.setPadding(10, 6, 10, 6);
-      refitType(this.phoneStatus);
+      const accentKey = cue ? "lime" : drop.phase === "calling" ? "leaf" : "none";
+      if (phoneLine !== this.lastPhoneLine) {
+        this.lastPhoneLine = phoneLine;
+        this.phoneStatus.setText(phoneLine);
+        this.phoneStatus.setPadding(10, 6, 10, 6);
+        refitType(this.phoneStatus);
+      }
+      if (accentKey !== this.lastPhoneAccentKey) {
+        this.lastPhoneAccentKey = accentKey;
+        setSignAccent(this.phoneStatus, cue ? Color.lime : drop.phase === "calling" ? Color.leafBright : undefined);
+      }
       this.paintPhoneMap(snap);
     } else {
+      this.lastPhoneLine = "";
+      this.lastPhoneAccentKey = "";
       this.phoneMap.clear();
     }
 
@@ -929,7 +951,10 @@ export class HudScene extends Phaser.Scene {
     }
     if (!drop.photoTaken) this.sawPhoto = false;
 
-    this.toastText.setText(snap.toast);
+    if ((snap.toast ?? "") !== this.lastToast) {
+      this.lastToast = snap.toast ?? "";
+      this.toastText.setText(snap.toast);
+    }
     const driving = snap.playerRole === "driver" && !atDoor;
     // Drive prompts float over the van; ID/phone keep their own UI.
     const driveBanner = driving && !!snap.toast;

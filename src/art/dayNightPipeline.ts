@@ -68,6 +68,8 @@ export class DayNightPipeline extends Phaser.Renderer.WebGL.Pipelines.PostFXPipe
   private readonly intensityBuf = new Float32Array(MAX_LIGHTS);
   private readonly scaleBuf = new Float32Array(MAX_LIGHTS * 2);
   private lastUploadMs = 0;
+  /** Phaser loop frame id — guards double upload when onPreRender+onDraw both fire. */
+  private lastUploadFrame = -1;
 
   constructor(game: Phaser.Game) {
     super({
@@ -77,16 +79,28 @@ export class DayNightPipeline extends Phaser.Renderer.WebGL.Pipelines.PostFXPipe
     });
   }
 
+  /**
+   * Copy grade into the reused frame (no object spread / lights.slice alloc).
+   * View is also synced from the camera in onDraw before upload.
+   */
   setGrade(frame: GradeFrame, view: ViewRect): void {
     const budget = getRenderBudget();
-    const lights = budget.maxLights <= 0 ? [] : frame.lights.slice(0, budget.maxLights);
-    this.frame = { ...frame, lights };
+    const max = budget.maxLights;
+    const count = max <= 0 ? 0 : Math.min(max, frame.lights.length);
+    const dest = this.frame;
+    dest.tint = frame.tint;
+    dest.gradeStrength = frame.gradeStrength;
+    dest.ambient = frame.ambient;
+    dest.ambientMul = frame.ambientMul;
+    const lights = dest.lights;
+    lights.length = count;
+    for (let i = 0; i < count; i++) lights[i] = frame.lights[i]!;
     this.viewRect = view;
   }
 
   onPreRender(): void {
+    // View only — uniforms upload once in onDraw (diagnostic rank #2).
     this.syncViewFromCamera();
-    this.uploadThrottled();
   }
 
   onDraw(renderTarget: Phaser.Renderer.WebGL.RenderTarget): void {
@@ -105,7 +119,11 @@ export class DayNightPipeline extends Phaser.Renderer.WebGL.Pipelines.PostFXPipe
   private uploadThrottled(): void {
     const minMs = getRenderBudget().uploadMinMs;
     const now = performance.now();
+    const frame = this.game.loop.frame;
+    // Once per Phaser frame even when uploadMinMs is 0.
+    if (frame === this.lastUploadFrame) return;
     if (minMs > 0 && now - this.lastUploadMs < minMs) return;
+    this.lastUploadFrame = frame;
     this.lastUploadMs = now;
     this.upload();
   }
@@ -192,3 +210,4 @@ export function applyDayNight(
 }
 
 export { DAY_NIGHT_TUNE };
+export { GRADE_APPLY_MIN_MS, shouldApplyGrade } from "./dayNightGradeGate";

@@ -101,4 +101,14 @@ describe("loading gate wiring", () => {
     expect(src).toContain("export function hideLoading");
     expect(src).toContain('aria-busy');
   });
+
+  it("BootScene compiles DayNight on mid budget and Title can finish degraded warm under gate", () => {
+    const boot = read("src/scenes/BootScene.ts");
+    expect(boot).toContain("keepAttached");
+    expect(boot).toContain("setBootWarmPending");
+    const title = read("src/scenes/TitleScene.ts");
+    expect(title).toContain("finishDeferredWarm");
+    expect(title).toContain("hideLoading()");
+  });
+
 });

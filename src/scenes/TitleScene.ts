@@ -1,13 +1,17 @@
 import Phaser from "phaser";
+import { attachDayNight } from "../art/dayNightPipeline";
 import { startSessionMusic, unlockAudio } from "../audio/music";
 import { COUNTER_SIGN } from "../maps/shopT0";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import { beginPlay, shouldShowHowTo } from "../session";
+import { takeBootWarmPending } from "../ui/bootWarm";
 import { maybeEnterFullscreenOnStart } from "../ui/displayPrefs";
 import { addHudButton, addPanel, HUD_BUTTON_MIN_H } from "../ui/chrome";
 import { HOWTO_HINT, HOWTO_STEPS, PAUSE_HINT, WELCOME_HINT, WELCOME_TITLE } from "../ui/copy";
 import { setPwaIdle } from "../pwaUpdate";
 import { presentInstallCoach } from "../ui/installCoach";
+import { hideLoading, showLoading } from "../ui/loadingGate";
+import { getRenderBudget } from "../ui/renderBudget";
 import { SIGN_FRAME_W, signPlaqueRings } from "../ui/signPlaque";
 import { addSignText } from "../ui/signText";
 import { addUiText } from "../ui/text";
@@ -56,6 +60,9 @@ export class TitleScene extends Phaser.Scene {
     this.input.setTopOnly(true);
     // Title is idle for PWA — waiting workers may activate + reload here only.
     setPwaIdle(true);
+
+    // If Boot aborted before drive/door sleep, finish under the gate (never orphan showLoading).
+    void this.finishDeferredWarm();
 
     // Mobile / early play: coach install for a chrome-free session (no-op if standalone
     // or already dismissed). HTML overlay sits above the Phaser canvas.
@@ -334,6 +341,64 @@ export class TitleScene extends Phaser.Scene {
     })
       .setOrigin(0.5, 0)
       .setDepth(43);
+  }
+
+  /**
+   * Boot wall-clock abort can leave drive/door cold. Warm them once more under the
+   * loading gate before the player hits the road — gate always cleared in finally.
+   */
+  private async finishDeferredWarm(): Promise<void> {
+    const pending = takeBootWarmPending();
+    if (!pending) return;
+    const keys: Array<"drive" | "door"> = [];
+    if (pending.drive) keys.push("drive");
+    if (pending.door) keys.push("door");
+    if (keys.length === 0) return;
+    showLoading({ mode: "boot", stage: keys[0] === "drive" ? "Map" : "Door" });
+    const deadline = performance.now() + 5000;
+    try {
+      for (const key of keys) {
+        if (performance.now() >= deadline) break;
+        showLoading({ mode: "boot", stage: key === "drive" ? "Map" : "Door" });
+        await this.warmAndSleepScene(key, deadline);
+      }
+    } finally {
+      hideLoading();
+    }
+  }
+
+  private async warmAndSleepScene(key: "drive" | "door", deadline: number): Promise<void> {
+    if (this.scene.isSleeping(key)) return;
+    if (!this.scene.isActive(key)) this.scene.launch(key);
+    const readyDeadline = Math.min(deadline, performance.now() + 2500);
+    while (performance.now() < readyDeadline) {
+      if (this.scene.isActive(key) || this.scene.isSleeping(key)) break;
+      await this.waitFrames(1);
+    }
+    if (performance.now() >= deadline) return;
+    const scene = this.scene.get(key);
+    if (scene?.cameras?.main && getRenderBudget().postFx) {
+      attachDayNight(scene.cameras.main);
+    }
+    await this.waitFrames(2);
+    if (this.scene.isActive(key) && !this.scene.isSleeping(key)) {
+      this.scene.sleep(key);
+    }
+  }
+
+  private async waitFrames(count: number): Promise<void> {
+    for (let i = 0; i < count; i++) {
+      await new Promise<void>((resolve) => {
+        let done = false;
+        const finish = (): void => {
+          if (done) return;
+          done = true;
+          resolve();
+        };
+        this.game.events.once(Phaser.Core.Events.POST_RENDER, finish);
+        globalThis.setTimeout(finish, 80);
+      });
+    }
   }
 
   private advance(): void {

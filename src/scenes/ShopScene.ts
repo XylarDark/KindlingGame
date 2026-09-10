@@ -39,6 +39,7 @@ import { enableItemHit } from "../input/hit";
 import { getSim } from "../session";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import { skyAt } from "../sim/dayNight";
+import type { Sku } from "../sim/catalog";
 import type { CustomerView, SimSnapshot } from "../sim/gameSim";
 import { nextShopHint } from "../sim/tutorialHints";
 import { driverReadyCopy } from "../ui/copy";
@@ -140,6 +141,9 @@ export class ShopScene extends Phaser.Scene {
   private lighting?: DayNightPipeline;
   private lastLightMs = -1;
   private lastSkyKey = "";
+  /** Catalog id → sku for TV fills (avoids catalog.find per TV per frame). */
+  private skuById = new Map<string, Sku>();
+  private lastTabletKey = "";
 
   constructor() {
     super("shop");
@@ -322,8 +326,9 @@ export class ShopScene extends Phaser.Scene {
     this.bagRack.setTint(packNext ? Color.flash : 0xffffff);
 
     this.tvs.forEach((tv, i) => {
-      const sku = getSim().catalog.find((s) => s.id === this.jarSkus[i]);
-      const wanted = this.jarSkus[i] === snap.highlightSkuId;
+      const skuId = this.jarSkus[i]!;
+      const sku = this.skuById.get(skuId);
+      const wanted = skuId === snap.highlightSkuId;
       tv.setFillStyle(sku?.color ?? 0x122018, wanted ? pulse : 0.35);
       if (wanted) tv.setStrokeStyle(3, Color.lime, 0.95);
       else tv.setStrokeStyle(0);
@@ -345,8 +350,8 @@ export class ShopScene extends Phaser.Scene {
       this.targetCallout.setVisible(false);
       return;
     }
-    const idx = getSim().catalog.findIndex((s) => s.id === cue.skuId);
-    if (idx < 0) {
+    const idx = this.jarSkus.indexOf(cue.skuId);
+    if (idx < 0 || !this.skuById.has(cue.skuId)) {
       this.targetCallout.setVisible(false);
       return;
     }
@@ -366,15 +371,22 @@ export class ShopScene extends Phaser.Scene {
   private syncTablet(snap: SimSnapshot, pulse: number, flash: boolean): void {
     const tab = tabletLayout();
     const hasTicket = !!snap.tabletTicket || snap.tabletQueueCount > 0;
-    this.tabletScreen.clear();
-    this.tabletScreen.fillStyle(Color.screen, 1);
-    this.tabletScreen.fillRect(tab.screenLeft, tab.screenTop, tab.screenW, tab.screenH - tab.homeH);
-    if (flash) {
-      this.tabletScreen.fillStyle(0x3d7a45, pulse);
+    const count = snap.tabletQueueCount;
+    // Quantize pulse so flash redraws ~8 bands/cycle instead of every frame.
+    const pulseBand = flash ? Math.round(pulse * 8) : -1;
+    const tabletKey = `${hasTicket ? 1 : 0}:${pulseBand}:${count}`;
+    if (tabletKey !== this.lastTabletKey) {
+      this.lastTabletKey = tabletKey;
+      this.tabletScreen.clear();
+      this.tabletScreen.fillStyle(Color.screen, 1);
       this.tabletScreen.fillRect(tab.screenLeft, tab.screenTop, tab.screenW, tab.screenH - tab.homeH);
-    } else if (hasTicket) {
-      this.tabletScreen.fillStyle(0x1a3a22, 1);
-      this.tabletScreen.fillRect(tab.screenLeft, tab.screenTop, tab.screenW, tab.screenH - tab.homeH);
+      if (flash) {
+        this.tabletScreen.fillStyle(0x3d7a45, pulse);
+        this.tabletScreen.fillRect(tab.screenLeft, tab.screenTop, tab.screenW, tab.screenH - tab.homeH);
+      } else if (hasTicket) {
+        this.tabletScreen.fillStyle(0x1a3a22, 1);
+        this.tabletScreen.fillRect(tab.screenLeft, tab.screenTop, tab.screenW, tab.screenH - tab.homeH);
+      }
     }
     // The label is constant, and setText re-runs the whole clamp-fit loop — eleven
     // sizes now that it is seeded at the score's step — so it is set once at build time
@@ -382,9 +394,10 @@ export class ShopScene extends Phaser.Scene {
     // screen minus 16, which would have quietly undone TABLET_LABEL_INSET.
     this.tabletLabel.setAlpha(1);
     this.tabletLabel.setColor(Color.creamHex);
-    const count = snap.tabletQueueCount;
     this.queueBadge.setVisible(count > 1);
-    this.queueBadge.setText(String(count));
+    if (this.queueBadge.visible && this.queueBadge.text !== String(count)) {
+      this.queueBadge.setText(String(count));
+    }
   }
 
   /**
@@ -606,6 +619,7 @@ export class ShopScene extends Phaser.Scene {
 
   private makeHotspots(): void {
     const sim = getSim();
+    this.skuById = new Map(sim.catalog.map((s) => [s.id, s]));
     sim.catalog.forEach((sku, i) => {
       const p = strainPos(i);
       const slotH = strainSlotH();

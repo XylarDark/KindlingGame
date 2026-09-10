@@ -16,7 +16,7 @@ export type RenderBudget = {
   uploadMinMs: number;
 };
 
-const HIGH: RenderBudget = { tier: "high", renderScale: 1, postFx: true, maxLights: 8, uploadMinMs: 0 };
+const HIGH: RenderBudget = { tier: "high", renderScale: 1, postFx: true, maxLights: 8, uploadMinMs: 16 };
 /** Mid: PostFX off — lights still read via Graphics glow. Canvas stays full design size. */
 const MID: RenderBudget = { tier: "mid", renderScale: 1, postFx: false, maxLights: 0, uploadMinMs: 100 };
 const LOW: RenderBudget = { tier: "low", renderScale: 1, postFx: false, maxLights: 0, uploadMinMs: 200 };

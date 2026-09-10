@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { customerTextureKey } from "../art/people";
 import { doorGrade } from "../art/dayNightGrade";
-import { applyDayNight, attachDayNight, dayNightFrom, type DayNightPipeline } from "../art/dayNightPipeline";
+import { applyDayNight, attachDayNight, dayNightFrom, shouldApplyGrade, type DayNightPipeline } from "../art/dayNightPipeline";
 import { getRenderBudget } from "../ui/renderBudget";
 import { paintDoorstep, DOORSTEP_DOOR_X, DOORSTEP_FLOOR_Y, DOORSTEP_PORCH } from "../art/doorstep";
 import { itemHitSize } from "../input/hitRect";
@@ -72,6 +72,8 @@ export class DoorScene extends Phaser.Scene {
   private lastBagHanded: boolean | null = null;
   private lastHouseTitle = "";
   private lighting?: DayNightPipeline;
+  private lastGradeKey = "";
+  private lastGradeMs = -1e9;
 
   constructor() {
     super("door");
@@ -181,15 +183,28 @@ export class DoorScene extends Phaser.Scene {
       paintDoorstep(this.backdrop, n - 1, sky);
     }
     if (getRenderBudget().postFx) {
-      const view = this.cameras.main.worldView;
-      const pipe = this.lighting ?? dayNightFrom(this.cameras.main);
-      this.lighting = pipe;
-      applyDayNight(pipe, doorGrade(sky, DOORSTEP_PORCH), {
-        x: view.x,
-        y: view.y,
-        width: view.width || this.scale.width,
-        height: view.height || this.scale.height,
-      });
+      // Door lights are static; rebuild on sky change or Shop-style ~80ms cadence.
+      const gradeKey = `${sky.mapOverlay}:${sky.mapOverlayAlpha.toFixed(3)}:${sky.lampAlpha.toFixed(2)}:${sky.windowGlow.toFixed(2)}`;
+      const now = performance.now();
+      if (
+        shouldApplyGrade({
+          nowMs: now,
+          lastMs: this.lastGradeMs,
+          dirty: gradeKey !== this.lastGradeKey,
+        })
+      ) {
+        this.lastGradeKey = gradeKey;
+        this.lastGradeMs = now;
+        const view = this.cameras.main.worldView;
+        const pipe = this.lighting ?? dayNightFrom(this.cameras.main);
+        this.lighting = pipe;
+        applyDayNight(pipe, doorGrade(sky, DOORSTEP_PORCH), {
+          x: view.x,
+          y: view.y,
+          width: view.width || this.scale.width,
+          height: view.height || this.scale.height,
+        });
+      }
     }
     const destOrder = snap.orders.find((o) => o.destinationId === drop.houseId && o.status === "onRun");
     const sla = destOrder ? formatSlaClock(destOrder.slaRemainingMs) : "";
