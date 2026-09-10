@@ -254,18 +254,92 @@ function hideCoach(): void {
   el.setAttribute("aria-hidden", "true");
 }
 
-async function runPrimaryAction(): Promise<void> {
-  const prompt = deferredPrompt;
-  if (prompt) {
-    try {
-      await prompt.prompt();
-    } catch {
-      /* user dismissed / unavailable */
-    }
-    deferredPrompt = null;
+/**
+ * Decide what the primary button should do. Exported for tests.
+ * - deferred BIP → native prompt (caller must invoke prompt() synchronously)
+ * - label still "Install" but no deferred event → show manual Home Screen steps
+ * - otherwise ("Got it") → acknowledge / dismiss
+ */
+export function planInstallPrimaryAction(opts: {
+  deferred: BeforeInstallPromptLike | null;
+  primaryLabel: string;
+}): "prompt" | "manual" | "acknowledge" {
+  if (opts.deferred) return "prompt";
+  if (opts.primaryLabel.trim() === "Install") return "manual";
+  return "acknowledge";
+}
+
+/** Hide/dismiss the coach only after the user accepts the native install sheet. */
+export function shouldDismissAfterInstallChoice(outcome: string | undefined): boolean {
+  return outcome === "accepted";
+}
+
+function applyCoachCopy(platform: InstallPlatform, canPrompt: boolean): void {
+  const el = ensureCoachDom();
+  const copy = installCoachCopy({ platform, canPrompt });
+  el.querySelector("[data-coach-title]")!.textContent = copy.title;
+  el.querySelector("[data-coach-body]")!.textContent = copy.body;
+  el.querySelector("[data-coach-action]")!.textContent = copy.primary;
+  const dismissBtn = el.querySelector("[data-coach-dismiss]");
+  if (dismissBtn) dismissBtn.textContent = copy.secondary;
+}
+
+/** Keep the coach visible with browser-menu / Add to Home Screen steps. */
+function showManualInstallInstructions(): void {
+  deferredPrompt = null;
+  const platform = detectInstallPlatform();
+  applyCoachCopy(platform, false);
+  const el = ensureCoachDom();
+  el.hidden = false;
+  el.setAttribute("aria-hidden", "false");
+}
+
+/**
+ * Primary click path. When a deferred BIP exists, `prompt()` must run in the
+ * same synchronous turn as the user gesture (Chrome requirement).
+ */
+function onPrimaryClick(actionBtn: Element): void {
+  const primaryLabel = actionBtn.textContent ?? "";
+  const bip = deferredPrompt;
+  const plan = planInstallPrimaryAction({ deferred: bip, primaryLabel });
+
+  if (plan === "acknowledge") {
+    dismissInstallCoach();
+    hideCoach();
+    return;
   }
-  dismissInstallCoach();
-  hideCoach();
+
+  if (plan === "manual" || !bip) {
+    showManualInstallInstructions();
+    return;
+  }
+
+  // Synchronous prompt() — do not await before calling (user-gesture requirement).
+  let promptSettled: Promise<void>;
+  try {
+    promptSettled = bip.prompt();
+  } catch (err) {
+    console.debug("[install-coach] prompt() threw", err);
+    showManualInstallInstructions();
+    return;
+  }
+  deferredPrompt = null;
+
+  void (async () => {
+    try {
+      await promptSettled;
+      const choice = bip.userChoice ? await bip.userChoice : undefined;
+      if (shouldDismissAfterInstallChoice(choice?.outcome)) {
+        dismissInstallCoach();
+        hideCoach();
+        return;
+      }
+      showManualInstallInstructions();
+    } catch (err) {
+      console.debug("[install-coach] install prompt/userChoice failed", err);
+      showManualInstallInstructions();
+    }
+  })();
 }
 
 /**
@@ -293,7 +367,8 @@ export function installInstallCoach(): void {
   const el = ensureCoachDom();
   el.querySelector("[data-coach-action]")?.addEventListener("click", (event) => {
     event.stopPropagation();
-    void runPrimaryAction();
+    const actionBtn = event.currentTarget as Element;
+    onPrimaryClick(actionBtn);
   });
   el.querySelector("[data-coach-dismiss]")?.addEventListener("click", (event) => {
     event.stopPropagation();
@@ -335,12 +410,7 @@ export function presentInstallCoach(opts: InstallCoachShowOpts = {}): boolean {
     return false;
   }
 
-  const copy = installCoachCopy({ platform, canPrompt });
-  el.querySelector("[data-coach-title]")!.textContent = copy.title;
-  el.querySelector("[data-coach-body]")!.textContent = copy.body;
-  el.querySelector("[data-coach-action]")!.textContent = copy.primary;
-  const dismissBtn = el.querySelector("[data-coach-dismiss]");
-  if (dismissBtn) dismissBtn.textContent = copy.secondary;
+  applyCoachCopy(platform, canPrompt);
 
   el.hidden = false;
   el.setAttribute("aria-hidden", "false");
