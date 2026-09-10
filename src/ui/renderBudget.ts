@@ -6,8 +6,14 @@ export type RenderTier = "high" | "mid" | "low";
 export type RenderBudget = {
   tier: RenderTier;
   /**
-   * Always 1 — design/WebGL size stays 1920×1080. Kept for harness/docs;
-   * never resize or zoom from this field.
+   * WebGL backbuffer scale vs design 1920×1080. Camera zoom matches so
+   * layout/sim stay in GAME_* coordinates; CSS shell still presents a 16:9 stage.
+   *
+   * Tier table (2026-09-10 doctrine — prefer sustained phone FPS over fixed 1×):
+   * | tier | renderScale | postFx | maxLights | uploadMinMs | notes |
+   * | high | 1.0         | on     | 8         | 16          | desktop default |
+   * | mid  | 0.7         | off    | 0         | 100         | phone default; Drive/Door prefer this |
+   * | low  | 0.5         | off    | 0         | 200         | heavy stress / coarse demotion |
    */
   renderScale: number;
   postFx: boolean;
@@ -16,10 +22,12 @@ export type RenderBudget = {
   uploadMinMs: number;
 };
 
+/** Desktop high — phones seed/stay mid so they skip fullscreen DayNight by default. */
 const HIGH: RenderBudget = { tier: "high", renderScale: 1, postFx: true, maxLights: 8, uploadMinMs: 16 };
-/** Mid: PostFX off — lights still read via Graphics glow. Canvas stays full design size. */
-const MID: RenderBudget = { tier: "mid", renderScale: 1, postFx: false, maxLights: 0, uploadMinMs: 100 };
-const LOW: RenderBudget = { tier: "low", renderScale: 1, postFx: false, maxLights: 0, uploadMinMs: 200 };
+/** Mid: ~0.7× pixels; PostFX off — lights still read via Graphics glow. */
+const MID: RenderBudget = { tier: "mid", renderScale: 0.7, postFx: false, maxLights: 0, uploadMinMs: 100 };
+/** Low: half-res backbuffer; PostFX off. Soft on small GPUs; UI may look softer. */
+const LOW: RenderBudget = { tier: "low", renderScale: 0.5, postFx: false, maxLights: 0, uploadMinMs: 200 };
 
 /** Promote above this; demote below the lower band (hysteresis). */
 const PROMOTE_FPS = 48;
@@ -36,6 +44,7 @@ export type RenderStressContext = "shop" | "drive" | "door" | null;
 
 let current: RenderBudget = HIGH;
 let lastEvalAt = 0;
+let appliedScale = 1;
 let demoteStrikes = 0;
 let autoEnabled = true;
 let stressContext: RenderStressContext = null;
@@ -44,6 +53,7 @@ let listeners: Array<(b: RenderBudget) => void> = [];
 export function resetRenderBudgetForTests(): void {
   current = HIGH;
   lastEvalAt = 0;
+  appliedScale = 1;
   demoteStrikes = 0;
   autoEnabled = true;
   stressContext = null;
@@ -99,6 +109,8 @@ export function pickRenderTier(opts: {
 }): RenderTier {
   const { coarsePointer, actualFps, prev } = opts;
   const heavy = opts.heavyScene ?? false;
+  // Coarse + Drive/Door: never linger on high (fullscreen DayNight) even if FPS looks fine.
+  if (coarsePointer && heavy && prev === "high") return "mid";
   const demoteMid = heavy ? HEAVY_DEMOTE_TO_MID_FPS : DEMOTE_TO_MID_FPS;
   const demoteLow = heavy ? HEAVY_DEMOTE_TO_LOW_FPS : DEMOTE_TO_LOW_FPS;
   // Coarse devices start at mid unless FPS already healthy on high.
@@ -168,13 +180,40 @@ export function tickRenderBudget(actualFps: number, nowMs = performance.now()): 
 }
 
 /**
- * Ensure the WebGL backbuffer is design 1920×1080 (effects budget never shrinks it).
- * DayNight attach/detach is handled by main's syncDayNightCameras on budget change.
+ * Match one scene's camera to the live render scale.
+ * Call from every scene `create` — READY can fire before shop/hud exist.
+ * Zoom = renderScale with a buffer of design×scale keeps worldView ≈ 1920×1080.
  */
-export function applyRenderBudgetToGame(game: Phaser.Game): void {
-  const w = game.scale.gameSize?.width ?? game.scale.width;
-  const h = game.scale.gameSize?.height ?? game.scale.height;
-  if (w !== GAME_WIDTH || h !== GAME_HEIGHT) {
-    game.scale.resize(GAME_WIDTH, GAME_HEIGHT);
+export function syncSceneRenderCamera(
+  scene: Phaser.Scene,
+  scale: number = getRenderBudget().renderScale,
+): void {
+  const cam = scene.cameras?.main;
+  if (!cam) return;
+  cam.setZoom(scale);
+  // Drive follows the van in map space — do not yank it to design centre.
+  if (scene.sys.settings.key !== "drive") {
+    cam.centerOn(GAME_WIDTH / 2, GAME_HEIGHT / 2);
   }
+}
+
+/**
+ * Resize the WebGL backbuffer and zoom every registered scene so design 1920×1080
+ * still fills the stage. CSS shell stretches the canvas; fewer GPU pixels on mid/low.
+ */
+export function applyRenderScale(game: Phaser.Game, scale: number): void {
+  if (Math.abs(scale - appliedScale) >= 0.01) {
+    appliedScale = scale;
+    const w = Math.max(320, Math.round(GAME_WIDTH * scale));
+    const h = Math.max(180, Math.round(GAME_HEIGHT * scale));
+    game.scale.resize(w, h);
+  }
+  // Always re-zoom: scenes may have launched since the last resize.
+  for (const scene of game.scene.getScenes(false)) {
+    syncSceneRenderCamera(scene, scale);
+  }
+}
+
+export function applyRenderBudgetToGame(game: Phaser.Game): void {
+  applyRenderScale(game, current.renderScale);
 }

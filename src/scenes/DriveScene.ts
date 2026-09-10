@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { customerTextureKey } from "../art/people";
 import { driveGrade } from "../art/dayNightGrade";
 import { applyDayNight, attachDayNight, dayNightFrom, shouldApplyGrade, type DayNightPipeline } from "../art/dayNightPipeline";
-import { getRenderBudget } from "../ui/renderBudget";
+import { getRenderBudget, syncSceneRenderCamera } from "../ui/renderBudget";
 import {
   CITY,
   MAP_PX_H,
@@ -83,6 +83,7 @@ export class DriveScene extends Phaser.Scene {
   create(): void {
     this.cameras.main.setBounds(0, 0, MAP_PX_W, MAP_PX_H);
     this.cameras.main.setBackgroundColor(skyAt(0).mapGrass);
+    syncSceneRenderCamera(this);
     this.lighting = attachDayNight(this.cameras.main);
     void this.buildCityChunked();
     this.nightGlow = this.add.graphics().setDepth(2);

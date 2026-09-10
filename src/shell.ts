@@ -53,8 +53,11 @@ export function applyCanvasDisplayScale(game: Phaser.Game): void {
   const w = game.scale.canvasBounds?.width || canvas.clientWidth;
   const h = game.scale.canvasBounds?.height || canvas.clientHeight;
   if (w <= 0 || h <= 0) return;
-  // Design space is always 1920×1080 — CSS alone fits the canvas.
-  const scale = phaserDisplayScale({ width: w, height: h }, GAME_WIDTH, GAME_HEIGHT);
+  // Live backbuffer size when RenderBudget scales below design 1920×1080.
+  // Pointers map CSS → buffer px; camera zoom maps buffer → design/world coords.
+  const gw = game.scale.gameSize?.width || game.scale.width || GAME_WIDTH;
+  const gh = game.scale.gameSize?.height || game.scale.height || GAME_HEIGHT;
+  const scale = phaserDisplayScale({ width: w, height: h }, gw, gh);
   game.scale.displayScale.set(scale.x, scale.y);
 }
 

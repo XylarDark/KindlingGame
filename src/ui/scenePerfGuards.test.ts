@@ -78,6 +78,19 @@ describe("scene perf guards", () => {
     expect(hud).toContain("lastPhoneMapKey");
   });
 
+  it("every gameplay scene re-syncs camera zoom on create (RenderBudget race fix)", () => {
+    for (const rel of [
+      "src/scenes/ShopScene.ts",
+      "src/scenes/DriveScene.ts",
+      "src/scenes/DoorScene.ts",
+      "src/scenes/HudScene.ts",
+      "src/scenes/TitleScene.ts",
+    ]) {
+      const src = read(rel);
+      expect(src).toContain("syncSceneRenderCamera(this)");
+    }
+  });
+
   it("Drive skips redundant traffic setTexture when key unchanged", () => {
     const drive = read("src/scenes/DriveScene.ts");
     const update = drive.slice(drive.indexOf("update(): void"), drive.indexOf("private paintDayNight"));
