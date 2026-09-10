@@ -97,3 +97,26 @@ describe("scene perf guards", () => {
     expect(update).toContain("if (sprite.texture.key !== car.key) sprite.setTexture(car.key)");
   });
 });
+
+  it("Shop bakes static interior into RenderTextures", () => {
+    const shop = read("src/scenes/ShopScene.ts");
+    expect(shop).toContain("bakeStaticShop");
+    expect(shop).toContain("shopBakeLayers");
+    expect(shop).toContain("drawShopInterior(this)");
+  });
+
+  it("Boot registers city tile atlas after generateTextures", () => {
+    const boot = read("src/scenes/BootScene.ts");
+    expect(boot).toContain("registerCityTileAtlas");
+    const art = boot.indexOf("generateTextures(this)");
+    const atlas = boot.indexOf("registerCityTileAtlas(this)");
+    expect(art).toBeGreaterThan(-1);
+    expect(atlas).toBeGreaterThan(art);
+  });
+
+  it("Drive uses cityTileImageKey for ground tiles", () => {
+    const drive = read("src/scenes/DriveScene.ts");
+    expect(drive).toContain("cityTileImageKey");
+    expect(drive).toContain("strokeRect");
+  });
+

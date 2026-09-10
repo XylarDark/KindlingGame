@@ -34,6 +34,15 @@ describe("DayNight upload-once wiring", () => {
     expect(draw).toContain("bindAndDraw");
   });
 
+  it("runs DayNight on halfFrame when postFxScale < 1", () => {
+    expect(src).toContain("shouldRunHalfResPostFx");
+    expect(src).toContain("halfFrame1");
+    expect(src).toContain("halfFrame2");
+    expect(src).toContain("copyFrame(renderTarget, half)");
+    expect(src).toContain("copyToGame(graded)");
+    expect(src).toContain("postFxScale");
+  });
+
   it("guards double upload with Phaser loop frame id", () => {
     expect(src).toContain("lastUploadFrame");
     expect(src).toContain("this.game.loop.frame");

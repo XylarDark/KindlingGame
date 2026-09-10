@@ -45,19 +45,22 @@ describe("tier → scale / effects mapping", () => {
       tier: "high",
       renderScale: 1,
       postFx: true,
+      postFxScale: 0.5,
       maxLights: 8,
       uploadMinMs: 16,
     });
     expect(forceRenderBudget("mid")).toMatchObject({
       tier: "mid",
-      renderScale: 0.55,
+      renderScale: 0.45,
+      postFxScale: 0.5,
       postFx: false,
       maxLights: 0,
       uploadMinMs: 100,
     });
     expect(forceRenderBudget("low")).toMatchObject({
       tier: "low",
-      renderScale: 0.4,
+      renderScale: 0.32,
+      postFxScale: 0.5,
       postFx: false,
       maxLights: 0,
       uploadMinMs: 200,
@@ -72,7 +75,7 @@ describe("init / tickRenderBudget", () => {
     expect(initRenderBudget(true).tier).toBe("mid");
     expect(getRenderBudget().postFx).toBe(false);
     expect(getRenderBudget().maxLights).toBe(0);
-    expect(getRenderBudget().renderScale).toBeCloseTo(0.55);
+    expect(getRenderBudget().renderScale).toBeCloseTo(0.45);
   });
 
   it("high tier keeps PostFX on with ~16ms uniform upload throttle", () => {
@@ -90,13 +93,13 @@ describe("init / tickRenderBudget", () => {
     expect(getRenderBudget().tier).toBe("high");
     expect(tickRenderBudget(35, 3_100)).toBe(true);
     expect(getRenderBudget().tier).toBe("mid");
-    expect(getRenderBudget().renderScale).toBeCloseTo(0.55);
+    expect(getRenderBudget().renderScale).toBeCloseTo(0.45);
     expect(tickRenderBudget(28, 4_200)).toBe(false);
     expect(getRenderBudget().tier).toBe("mid");
     expect(tickRenderBudget(28, 5_300)).toBe(true);
     expect(getRenderBudget().tier).toBe("low");
     expect(getRenderBudget().postFx).toBe(false);
-    expect(getRenderBudget().renderScale).toBeCloseTo(0.4);
+    expect(getRenderBudget().renderScale).toBeCloseTo(0.32);
   });
 
   it("demotes on one strike when FPS is severely collapsed", () => {
@@ -142,11 +145,11 @@ describe("applyRenderScale / applyRenderBudgetToGame", () => {
         ],
       },
     };
-    applyRenderScale(game as unknown as Phaser.Game, 0.55);
-    expect(resizeCalls[0]).toEqual([Math.round(GAME_WIDTH * 0.55), Math.round(GAME_HEIGHT * 0.55)]);
-    expect(shopCam.zoom).toBe(0.55);
+    applyRenderScale(game as unknown as Phaser.Game, 0.45);
+    expect(resizeCalls[0]).toEqual([Math.round(GAME_WIDTH * 0.45), Math.round(GAME_HEIGHT * 0.45)]);
+    expect(shopCam.zoom).toBe(0.45);
     expect(shopCam.centered).toBe(true);
-    expect(driveCam.zoom).toBe(0.55);
+    expect(driveCam.zoom).toBe(0.45);
     expect(driveCam.centered).toBe(false);
   });
 
@@ -162,7 +165,7 @@ describe("applyRenderScale / applyRenderBudgetToGame", () => {
     };
     forceRenderBudget("low");
     applyRenderBudgetToGame(game as unknown as Phaser.Game);
-    expect(resizeCalls).toEqual([[Math.round(GAME_WIDTH * 0.4), Math.round(GAME_HEIGHT * 0.4)]]);
+    expect(resizeCalls).toEqual([[Math.round(GAME_WIDTH * 0.32), Math.round(GAME_HEIGHT * 0.32)]]);
   });
 
   it("skips resize when scale is unchanged but still re-zooms scenes", () => {
@@ -185,12 +188,12 @@ describe("applyRenderScale / applyRenderBudgetToGame", () => {
     applyRenderScale(game as unknown as Phaser.Game, 1);
     expect(resizeCalls).toEqual([]);
     expect(shopCam.zoom).toBe(1);
-    applyRenderScale(game as unknown as Phaser.Game, 0.4);
-    expect(resizeCalls).toEqual([[Math.round(GAME_WIDTH * 0.4), Math.round(GAME_HEIGHT * 0.4)]]);
+    applyRenderScale(game as unknown as Phaser.Game, 0.32);
+    expect(resizeCalls).toEqual([[Math.round(GAME_WIDTH * 0.32), Math.round(GAME_HEIGHT * 0.32)]]);
     resizeCalls.length = 0;
-    applyRenderScale(game as unknown as Phaser.Game, 0.4);
+    applyRenderScale(game as unknown as Phaser.Game, 0.32);
     expect(resizeCalls).toEqual([]);
-    expect(shopCam.zoom).toBe(0.4);
+    expect(shopCam.zoom).toBe(0.32);
   });
 
   it("syncSceneRenderCamera zooms a late-started scene without resizing", () => {
@@ -207,9 +210,9 @@ describe("applyRenderScale / applyRenderBudgetToGame", () => {
     };
     syncSceneRenderCamera(
       { sys: { settings: { key: "shop" } }, cameras: { main: cam } } as unknown as Phaser.Scene,
-      0.55,
+      0.45,
     );
-    expect(cam.zoom).toBe(0.55);
+    expect(cam.zoom).toBe(0.45);
     expect(cam.centered).toBe(true);
   });
 });

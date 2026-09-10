@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { cityTileImageKey } from "../art/cityTileAtlas";
 import { customerTextureKey } from "../art/people";
 import { driveGrade } from "../art/dayNightGrade";
 import { applyDayNight, attachDayNight, dayNightFrom, shouldApplyGrade, type DayNightPipeline } from "../art/dayNightPipeline";
@@ -245,9 +246,8 @@ export class DriveScene extends Phaser.Scene {
         if (stopId !== this.lastLotGlowKey) {
           this.lastLotGlowKey = stopId;
           this.glow.clear();
-          this.glow.fillStyle(Color.neon, 0.2);
-          this.glow.fillRect(home.x - hw / 2 - 8, home.y - hh / 2 - 8, hw + 16, hh + 16);
-          this.glow.lineStyle(5, Color.lime, 0.95);
+          // Stroke-only lot highlight — translucent fill was full-lot overdraw every stop.
+          this.glow.lineStyle(4, Color.lime, 0.9);
           this.glow.strokeRect(home.x - hw / 2 - 8, home.y - hh / 2 - 8, hw + 16, hh + 16);
         }
         this.pinBase.x = x;
@@ -322,22 +322,27 @@ export class DriveScene extends Phaser.Scene {
     if (this.shopImg.input) this.shopImg.input.enabled = driving;
     this.shopImg.setTint(flashShop && canTapShop ? Color.flash : 0xffffff);
     this.shopCaption.setVisible(driving);
-    this.shopCaption.setAlpha(1);
-    const captionText = snap.run?.nextStopId
-      ? "Kindling"
-      : nearShop
-        ? "Tap Kindling to return"
-        : snap.autoDriving
-          ? "Van heading to Kindling"
-          : "Drive to Kindling";
-    const captionKey = `${captionText}:${nearShop ? 1 : 0}`;
-    if (captionKey !== this.lastShopCaptionKey) {
-      this.lastShopCaptionKey = captionKey;
-      this.shopCaption.setText(captionText);
-      setSignAccent(this.shopCaption, snap.run?.nextStopId ? undefined : nearShop ? Color.lime : undefined);
-    }
-    if (!snap.run?.nextStopId) {
-      this.shopCaption.setAlpha(flashShop && nearShop ? 0.8 + 0.2 * (0.5 + 0.5 * Math.sin(snap.gameMs / 200)) : 1);
+    // Skip plaque setText/accent while hidden (not driving) — typekit work is wasted fill.
+    if (!driving) {
+      this.lastShopCaptionKey = "";
+    } else {
+      this.shopCaption.setAlpha(1);
+      const captionText = snap.run?.nextStopId
+        ? "Kindling"
+        : nearShop
+          ? "Tap Kindling to return"
+          : snap.autoDriving
+            ? "Van heading to Kindling"
+            : "Drive to Kindling";
+      const captionKey = `${captionText}:${nearShop ? 1 : 0}`;
+      if (captionKey !== this.lastShopCaptionKey) {
+        this.lastShopCaptionKey = captionKey;
+        this.shopCaption.setText(captionText);
+        setSignAccent(this.shopCaption, snap.run?.nextStopId ? undefined : nearShop ? Color.lime : undefined);
+      }
+      if (!snap.run?.nextStopId) {
+        this.shopCaption.setAlpha(flashShop && nearShop ? 0.8 + 0.2 * (0.5 + 0.5 * Math.sin(snap.gameMs / 200)) : 1);
+      }
     }
   }
 
@@ -378,24 +383,39 @@ export class DriveScene extends Phaser.Scene {
     if (!this.nightGlow) return;
     // PostFX carries lamps/windows — skip redundant Graphics fill when the pipeline is on.
     if (getRenderBudget().postFx) return;
-    const key = `${sky.windowGlow.toFixed(2)}:${sky.lampAlpha.toFixed(2)}`;
+    // Coarse bands (~0.08 steps) cut translucent redraw cadence; camera cell adds cull dirty.
+    const view = this.cameras.main.worldView;
+    const viewCell = `${Math.round(view.x / 256)}:${Math.round(view.y / 256)}`;
+    const key = `${(sky.windowGlow * 12) | 0}:${(sky.lampAlpha * 12) | 0}:${viewCell}`;
     if (key === this.lastGlowKey) return;
     this.lastGlowKey = key;
     this.nightGlow.clear();
     if (sky.windowGlow < 0.04 && sky.lampAlpha < 0.04) return;
+    const pad = 64;
+    const left = view.x - pad;
+    const right = view.x + view.width + pad;
+    const top = view.y - pad;
+    const bottom = view.y + view.height + pad;
+    const winA = 0.1 + 0.35 * sky.windowGlow;
     for (const house of CITY.houses) {
       const home = lotCenter(house.house, house.lotW, house.lotH);
-      this.nightGlow.fillStyle(0xffd080, 0.12 + 0.4 * sky.windowGlow);
+      if (home.x < left || home.x > right || home.y < top || home.y > bottom) continue;
+      this.nightGlow.fillStyle(0xffd080, winA);
       this.nightGlow.fillRect(home.x - 22, home.y - 16, 18, 14);
       this.nightGlow.fillRect(home.x + 6, home.y - 16, 18, 14);
     }
     const shop = lotCenter(CITY.shopLot.origin, CITY.shopLot.w, CITY.shopLot.h);
-    this.nightGlow.fillStyle(0xffe0a0, 0.1 + 0.35 * sky.windowGlow);
-    this.nightGlow.fillRect(shop.x - 70, shop.y - 18, 36, 20);
-    this.nightGlow.fillRect(shop.x + 8, shop.y - 18, 44, 20);
+    if (shop.x >= left && shop.x <= right && shop.y >= top && shop.y <= bottom) {
+      this.nightGlow.fillStyle(0xffe0a0, 0.08 + 0.3 * sky.windowGlow);
+      this.nightGlow.fillRect(shop.x - 70, shop.y - 18, 36, 20);
+      this.nightGlow.fillRect(shop.x + 8, shop.y - 18, 44, 20);
+    }
+    const lampA = 0.05 + 0.22 * sky.lampAlpha;
+    const lampR = 22 + 12 * sky.lampAlpha;
     for (const lamp of this.streetLamps) {
-      this.nightGlow.fillStyle(0xffc070, 0.06 + 0.28 * sky.lampAlpha);
-      this.nightGlow.fillCircle(lamp.x, lamp.y - 18, 26 + 16 * sky.lampAlpha);
+      if (lamp.x < left || lamp.x > right || lamp.y < top || lamp.y > bottom) continue;
+      this.nightGlow.fillStyle(0xffc070, lampA);
+      this.nightGlow.fillCircle(lamp.x, lamp.y - 18, lampR);
     }
   }
 
@@ -466,7 +486,14 @@ export class DriveScene extends Phaser.Scene {
   }
 
   private trackStaticTile(x: number, y: number, key: string): void {
-    const img = this.add.image(x, y, key).setDisplaySize(TILE, TILE).setDepth(0);
+    const tex = cityTileImageKey(key);
+    const img = (
+      tex.frame
+        ? this.add.image(x, y, tex.key, tex.frame)
+        : this.add.image(x, y, tex.key)
+    )
+      .setDisplaySize(TILE, TILE)
+      .setDepth(0);
     this.staticBakeList.push(img);
   }
 
