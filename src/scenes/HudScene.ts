@@ -402,8 +402,10 @@ export class HudScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true });
     this.phoneHit.on("pointerdown", (p: Phaser.Input.Pointer) => {
       p.event.stopPropagation();
-      getSim().queueInteract();
+      getSim().pressDropoffConfirm();
     });
+    this.phoneHit.on("pointerup", () => getSim().releaseDropoffConfirm());
+    this.phoneHit.on("pointerupoutside", () => getSim().releaseDropoffConfirm());
     this.phone = this.add
       .container(GAME_WIDTH - 160, GAME_HEIGHT - 220, [
         this.phoneBody,
@@ -476,15 +478,18 @@ export class HudScene extends Phaser.Scene {
     this.keys = kb
       ? (kb.addKeys("W,A,S,D,E,UP,DOWN,LEFT,RIGHT,SPACE") as Record<string, Phaser.Input.Keyboard.Key>)
       : {};
-    // Ignore OS key-repeat — holding E/SPACE used to race past HAND BAG / PHOTO after CHECK ID.
-    kb?.on("keydown-E", (event: KeyboardEvent) => {
+    // Edge-triggered confirms — key-repeat and held keys must not skip bag/photo after CHECK ID.
+    const onConfirmDown = (event: KeyboardEvent): void => {
       if (event.repeat) return;
-      getSim().queueInteract();
-    });
-    kb?.on("keydown-SPACE", (event: KeyboardEvent) => {
-      if (event.repeat) return;
-      getSim().queueInteract();
-    });
+      getSim().pressDropoffConfirm();
+    };
+    const onConfirmUp = (): void => {
+      getSim().releaseDropoffConfirm();
+    };
+    kb?.on("keydown-E", onConfirmDown);
+    kb?.on("keydown-SPACE", onConfirmDown);
+    kb?.on("keyup-E", onConfirmUp);
+    kb?.on("keyup-SPACE", onConfirmUp);
 
     this.input.addPointer(2);
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => this.onPointerDown(p));
@@ -525,8 +530,10 @@ export class HudScene extends Phaser.Scene {
     enableItemHit(this.idBg);
     this.idBg.on("pointerdown", (p: Phaser.Input.Pointer) => {
       p.event.stopPropagation();
-      getSim().queueInteract();
+      getSim().pressDropoffConfirm();
     });
+    this.idBg.on("pointerup", () => getSim().releaseDropoffConfirm());
+    this.idBg.on("pointerupoutside", () => getSim().releaseDropoffConfirm());
     // Bands, guilloche lines, photo frame and field rules: redrawn only when the
     // verdict colour changes, so a held card costs nothing per frame.
     this.idFurniture = this.add.graphics();
