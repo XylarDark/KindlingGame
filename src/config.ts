@@ -41,10 +41,9 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   input: {
     activePointers: 3,
   },
-  // Keep Phaser's own step on wall time too — smoothStep caps delta when !inFocus /
-  // after blur, which soft-throttles tweens alongside the sim (Hud uses rawDelta).
+  // Smoothed delta: hitch frames ease instead of stalling (product feel over wall-clock sim).
   fps: {
-    smoothStep: false,
+    smoothStep: true,
     // Desktop target; coarse phones override limit/target to 30 in main.ts.
     target: 60,
   },

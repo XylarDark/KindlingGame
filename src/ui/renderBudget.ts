@@ -9,25 +9,18 @@ export type RenderBudget = {
    * WebGL backbuffer scale vs design 1920×1080. Camera zoom matches so
    * layout/sim stay in GAME_* coordinates; CSS shell still presents a 16:9 stage.
    *
-   * Tier table (2026-09-10 density-first — sharp pixels + cheap FX, not soft full-frame scale):
-   * | tier | renderScale | postFx | postFxScale | maxLights | uploadMinMs | notes |
-   * | high | 1.0         | on     | 0.5         | 8         | 16          | desktop; half-res DayNight |
-   * | mid  | 0.85        | off    | 0.5         | 0         | 100         | phone default; Graphics mood only |
-   * | low  | 0.65        | off    | 0.5         | 0         | 200         | demotion only; still sharp vs 0.45/0.32 |
+   * | tier | renderScale | postFx | notes |
+   * | high | 1.0         | on     | desktop; half-res DayNight |
+   * | mid  | 0.85        | off    | phone default; Graphics mood only |
+   * | low  | 0.65        | off    | desktop demotion only |
    */
   renderScale: number;
   postFx: boolean;
-  /**
-   * When postFx is on, DayNight runs on a Phaser halfFrame RT at this scale
-   * (0.5 = half-res fill-rate) then blits up — GAME_* layout unchanged.
-   */
   postFxScale: number;
   maxLights: number;
-  /** Min ms between DayNight uniform uploads. */
   uploadMinMs: number;
 };
 
-/** Desktop high — phones seed/stay mid so they skip fullscreen DayNight by default. */
 const HIGH: RenderBudget = {
   tier: "high",
   renderScale: 1,
@@ -36,7 +29,6 @@ const HIGH: RenderBudget = {
   maxLights: 8,
   uploadMinMs: 16,
 };
-/** Mid: 0.85× backbuffer — phone default; PostFX off — mood via Graphics sky/lamp/window. */
 const MID: RenderBudget = {
   tier: "mid",
   renderScale: 0.85,
@@ -45,7 +37,6 @@ const MID: RenderBudget = {
   maxLights: 0,
   uploadMinMs: 100,
 };
-/** Low: 0.65× backbuffer; PostFX off. Demotion tier — honest 30fps over blurry almost-60. */
 const LOW: RenderBudget = {
   tier: "low",
   renderScale: 0.65,
@@ -55,35 +46,21 @@ const LOW: RenderBudget = {
   uploadMinMs: 200,
 };
 
-/** Promote above this; demote below the lower band (hysteresis). */
 const PROMOTE_FPS = 48;
 const DEMOTE_TO_MID_FPS = 42;
 const DEMOTE_TO_LOW_FPS = 30;
-/** One-strike demote when FPS collapses — avoids staying on PostFX during a death spiral. */
 const SEVERE_DEMOTE_FPS = 24;
-/** Drive/Door scroll + fullscreen PostFX — demote earlier than shop. */
-const HEAVY_DEMOTE_TO_MID_FPS = 48;
-const HEAVY_DEMOTE_TO_LOW_FPS = 34;
-const HEAVY_SEVERE_DEMOTE_FPS = 28;
-/** Coarse @ density-first scales — drop mid→low sooner (30fps target leaves little headroom). */
-const COARSE_DEMOTE_TO_LOW_FPS = 32;
-const COARSE_HEAVY_DEMOTE_TO_LOW_FPS = 36;
-const COARSE_SEVERE_DEMOTE_FPS = 26;
-const COARSE_HEAVY_SEVERE_DEMOTE_FPS = 30;
-/** One rawDelta spike this long ≈ missed frame budget — demote on coarse without waiting for strike #2. */
-const HITCH_DEMOTE_RAW_DELTA_MS = 48;
-
-/** Translucent night/lamp/window Graphics quality when PostFX is off (phones). */
-export type PhoneFxQuality = "full" | "lite" | "minimal";
-
-export type RenderStressContext = "shop" | "drive" | "door" | null;
+const TIER_PROMOTE_COOLDOWN_MS = 12000;
+const PROMOTE_FROM_LOW_FPS = 54;
 
 let current: RenderBudget = HIGH;
 let lastEvalAt = 0;
 let appliedScale = 1;
 let demoteStrikes = 0;
+let lastDemotionAt = 0;
 let autoEnabled = true;
-let stressContext: RenderStressContext = null;
+/** Phones: tier seeded at boot (mid) — no mid-session resize (scale.resize refits all typekit). */
+let sessionTierLocked = false;
 let listeners: Array<(b: RenderBudget) => void> = [];
 
 export function resetRenderBudgetForTests(): void {
@@ -91,30 +68,20 @@ export function resetRenderBudgetForTests(): void {
   lastEvalAt = 0;
   appliedScale = 1;
   demoteStrikes = 0;
+  lastDemotionAt = 0;
   autoEnabled = true;
-  stressContext = null;
+  sessionTierLocked = false;
   listeners = [];
 }
 
-/** Active scene weight for demotion thresholds (Drive/Door demote before shop). */
-export function setRenderStressContext(ctx: RenderStressContext): void {
-  stressContext = ctx;
+export function isSessionTierLocked(): boolean {
+  return sessionTierLocked;
 }
 
-export function getRenderStressContext(): RenderStressContext {
-  return stressContext;
-}
-
-function heavyScene(): boolean {
-  return stressContext === "drive" || stressContext === "door";
-}
-
-/** When false, tickRenderBudget is a no-op (DEV / capture harness). */
 export function setRenderBudgetAuto(enabled: boolean): void {
   autoEnabled = enabled;
 }
 
-/** Force a tier (and emit). Used by DEV harness and tests. */
 export function forceRenderBudget(tier: RenderTier): RenderBudget {
   current = budgetFor(tier);
   demoteStrikes = 0;
@@ -141,33 +108,19 @@ export function pickRenderTier(opts: {
   coarsePointer: boolean;
   actualFps: number;
   prev: RenderTier;
-  heavyScene?: boolean;
 }): RenderTier {
   const { coarsePointer, actualFps, prev } = opts;
-  const heavy = opts.heavyScene ?? false;
-  // Coarse + Drive/Door: never linger on high (fullscreen DayNight) even if FPS looks fine.
-  if (coarsePointer && heavy && prev === "high") return "mid";
-  const demoteMid = heavy ? HEAVY_DEMOTE_TO_MID_FPS : DEMOTE_TO_MID_FPS;
-  const demoteLow = coarsePointer
-    ? heavy
-      ? COARSE_HEAVY_DEMOTE_TO_LOW_FPS
-      : COARSE_DEMOTE_TO_LOW_FPS
-    : heavy
-      ? HEAVY_DEMOTE_TO_LOW_FPS
-      : DEMOTE_TO_LOW_FPS;
-  // Coarse devices start at mid unless FPS already healthy on high.
   if (prev === "high") {
-    if (actualFps > 0 && actualFps < demoteMid) return coarsePointer ? "low" : "mid";
+    if (actualFps > 0 && actualFps < DEMOTE_TO_MID_FPS) return coarsePointer ? "low" : "mid";
     if (coarsePointer && actualFps > 0 && actualFps < PROMOTE_FPS) return "mid";
     return "high";
   }
   if (prev === "mid") {
-    if (actualFps > 0 && actualFps < demoteLow) return "low";
-    if (actualFps >= PROMOTE_FPS && !coarsePointer && !heavy) return "high";
+    if (actualFps > 0 && actualFps < DEMOTE_TO_LOW_FPS) return "low";
+    if (actualFps >= PROMOTE_FPS && !coarsePointer) return "high";
     return "mid";
   }
-  // low
-  if (actualFps >= demoteMid) return coarsePointer ? "mid" : "mid";
+  if (actualFps >= PROMOTE_FROM_LOW_FPS) return "mid";
   return "low";
 }
 
@@ -177,49 +130,27 @@ function budgetFor(tier: RenderTier): RenderBudget {
   return LOW;
 }
 
-/** Seed tier from pointer (call once at boot). */
+/** Seed tier from pointer once at boot. Coarse stays at mid for the session. */
 export function initRenderBudget(coarsePointer: boolean): RenderBudget {
+  sessionTierLocked = coarsePointer;
   current = budgetFor(coarsePointer ? "mid" : "high");
   emit();
   return current;
 }
 
-/** Phone Graphics FX tier — full only when desktop PostFX carries grade. */
-export function phoneFxQuality(): PhoneFxQuality {
-  if (current.postFx) return "full";
-  if (current.tier === "low") return "minimal";
-  return "lite";
-}
-
-/** Live traffic sprite cap — fewer movers on phone tiers. */
-export function trafficVisualMax(): number {
-  if (current.tier === "low") return 8;
-  if (current.tier === "mid") return 10;
-  return 12;
-}
-
 /**
- * Re-evaluate ~1/s from Phaser's rolling FPS. Returns true when the tier changed.
- * Demotion needs two consecutive strikes on desktop; coarse uses one (plus hitch rawDelta).
+ * Desktop-only adaptive tier (~1/s). Coarse phones skip — mid-session resize
+ * triggers refreshTypekit on every Text and feels like input lag after clicks.
  */
-export function tickRenderBudget(
-  actualFps: number,
-  nowMs = performance.now(),
-  rawDeltaMs?: number,
-): boolean {
-  if (!autoEnabled) return false;
+export function tickRenderBudget(actualFps: number, nowMs = performance.now()): boolean {
+  if (!autoEnabled || sessionTierLocked) return false;
   if (nowMs - lastEvalAt < 1000) return false;
   lastEvalAt = nowMs;
   const coarse =
     typeof globalThis.matchMedia === "function"
       ? (globalThis.matchMedia("(pointer: coarse)")?.matches ?? false)
       : false;
-  const next = pickRenderTier({
-    coarsePointer: coarse,
-    actualFps,
-    prev: current.tier,
-    heavyScene: heavyScene(),
-  });
+  const next = pickRenderTier({ coarsePointer: coarse, actualFps, prev: current.tier });
   if (next === current.tier) {
     demoteStrikes = 0;
     return false;
@@ -227,31 +158,20 @@ export function tickRenderBudget(
   const rank = { high: 2, mid: 1, low: 0 } as const;
   if (rank[next] < rank[current.tier]) {
     demoteStrikes += 1;
-    const severeFps = coarse
-      ? heavyScene()
-        ? COARSE_HEAVY_SEVERE_DEMOTE_FPS
-        : COARSE_SEVERE_DEMOTE_FPS
-      : heavyScene()
-        ? HEAVY_SEVERE_DEMOTE_FPS
-        : SEVERE_DEMOTE_FPS;
-    const severe = actualFps > 0 && actualFps < severeFps;
-    const hitch = coarse && rawDeltaMs != null && rawDeltaMs >= HITCH_DEMOTE_RAW_DELTA_MS;
-    const strikesNeeded = coarse ? 1 : 2;
-    if (!severe && !hitch && demoteStrikes < strikesNeeded) return false;
+    const severe = actualFps > 0 && actualFps < SEVERE_DEMOTE_FPS;
+    if (!severe && demoteStrikes < 2) return false;
   } else {
+    if (nowMs - lastDemotionAt < TIER_PROMOTE_COOLDOWN_MS) return false;
     demoteStrikes = 0;
   }
+  const demoted = rank[next] < rank[current.tier];
   current = budgetFor(next);
   demoteStrikes = 0;
+  if (demoted) lastDemotionAt = nowMs;
   emit();
   return true;
 }
 
-/**
- * Match one scene's camera to the live render scale.
- * Call from every scene `create` — READY can fire before shop/hud exist.
- * Zoom = renderScale with a buffer of design×scale keeps worldView ≈ 1920×1080.
- */
 export function syncSceneRenderCamera(
   scene: Phaser.Scene,
   scale: number = getRenderBudget().renderScale,
@@ -259,16 +179,11 @@ export function syncSceneRenderCamera(
   const cam = scene.cameras?.main;
   if (!cam) return;
   cam.setZoom(scale);
-  // Drive follows the van in map space — do not yank it to design centre.
   if (scene.sys.settings.key !== "drive") {
     cam.centerOn(GAME_WIDTH / 2, GAME_HEIGHT / 2);
   }
 }
 
-/**
- * Resize the WebGL backbuffer and zoom every registered scene so design 1920×1080
- * still fills the stage. CSS shell stretches the canvas; fewer GPU pixels on mid/low.
- */
 export function applyRenderScale(game: Phaser.Game, scale: number): void {
   if (Math.abs(scale - appliedScale) >= 0.01) {
     appliedScale = scale;
@@ -276,7 +191,6 @@ export function applyRenderScale(game: Phaser.Game, scale: number): void {
     const h = Math.max(180, Math.round(GAME_HEIGHT * scale));
     game.scale.resize(w, h);
   }
-  // Always re-zoom: scenes may have launched since the last resize.
   for (const scene of game.scene.getScenes(false)) {
     syncSceneRenderCamera(scene, scale);
   }

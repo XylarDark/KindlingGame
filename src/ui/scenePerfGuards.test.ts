@@ -23,11 +23,11 @@ describe("scene perf guards", () => {
     expect(doorSync).not.toContain("applyDayNight");
   });
 
-  it("Hud sets render stress context for drive and door", () => {
+  it("Hud locks render tier on coarse — tick only on desktop", () => {
     const hud = read("src/scenes/HudScene.ts");
-    expect(hud).toContain("syncRenderStress");
-    expect(hud).toContain('setRenderStressContext("drive")');
-    expect(hud).toContain('setRenderStressContext("door")');
+    expect(hud).toContain("tickRenderBudget");
+    expect(hud).not.toContain("syncRenderStress");
+    expect(hud).not.toContain("applyRenderBudgetToGame");
   });
 
   it("driveGrade avoids full lamp sort", () => {
@@ -37,22 +37,22 @@ describe("scene perf guards", () => {
     expect(drive).not.toContain(".sort(");
   });
 
-  it("Drive caps traffic sprite pool growth via render tier", () => {
+  it("Drive caps traffic sprite pool with a fixed constant", () => {
     const drive = read("src/scenes/DriveScene.ts");
-    expect(drive).toContain("trafficVisualMax");
+    expect(drive).toContain("TRAFFIC_SPRITE_CAP");
     const update = drive.slice(drive.indexOf("update(): void"), drive.indexOf("private paintDayNight"));
-    expect(update).toContain("trafficVisualMax");
+    expect(update).toContain("TRAFFIC_SPRITE_CAP");
   });
 
-  it("Drive and Door simplify translucent FX on phone tiers", () => {
+  it("Drive and Door use fixed phone Graphics FX without tier invalidation", () => {
     const drive = read("src/scenes/DriveScene.ts");
     const door = read("src/scenes/DoorScene.ts");
-    const doorstep = read("src/art/doorstep.ts");
-    expect(drive).toContain("phoneFxQuality");
-    expect(door).toContain("phoneFxQuality");
-    expect(doorstep).toContain("PhoneFxQuality");
+    expect(drive).not.toContain("phoneFxQuality");
+    expect(door).not.toContain("phoneFxQuality");
+    expect(door).not.toContain("lastFxQuality");
     const glow = drive.slice(drive.indexOf("private paintNightGlow"), drive.indexOf("private returnToShop"));
-    expect(glow).toContain('"minimal"');
+    expect(glow).toContain("lastGlowKey");
+    expect(glow).not.toContain("quality");
   });
 
   it("Hud reuses a capped score pop pool instead of destroy-per-flash", () => {

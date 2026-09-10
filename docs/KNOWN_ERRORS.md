@@ -96,13 +96,14 @@ the thing it described.
 - **Fix:** start Phaser immediately; register the SW in the background; never activate/reload on boot or resume.
 - **Prevention:** do not gate `startGame` on service-worker outcomes. Source-guard that `startGame()` precedes `void bootKindlingPwa()` and that `pwaUpdate` has no `activateWaiting` / `location.reload`.
 
-### Phaser smoothed delta put the whole sim in slow motion on phones
+### Phaser smoothed delta put the whole sim in slow motion on phones (wall-clock era)
 
-- **Date:** 2026-09-09
+- **Date:** 2026-09-09 (reverted 2026-09-10 — product override)
 - **Symptom:** clock, walkers, and van all felt slower than real time on phone Chrome — one game minute took longer than one real second, and motion matched.
 - **Cause:** `HudScene` fed Phaser's smoothed `delta` into `GameSim.tick`. With `fps.smoothStep` (default true), `TimeStep.smoothDelta` caps each step to ~16.7 ms whenever `!inFocus` or during post-blur `_coolDown`. Low-FPS phone frames still take ~40–50 ms wall time, so the sim advanced only a fraction of real time.
-- **Fix:** tick from `game.loop.rawDelta` (capped at 1000 ms — tight caps like 100 ms re-slow low-FPS phones) and set `fps.smoothStep: false` in the game config.
-- **Prevention:** never drive the sim from smoothed scene `delta`; source-guard `rawDelta` in HudScene.
+- **Fix (2026-09-09):** tick from `game.loop.rawDelta` (capped at 1000 ms) and set `fps.smoothStep: false` — sim clock matched wall time but phone PWA felt choppy/stalling once GPU fill-rate was unmasked.
+- **Product override (2026-09-10):** restored smoothed scene `delta` + `fps.smoothStep: true` — consistent motion feel matters more than wall-clock sim accuracy on phone PWA right now. Keep session render-tier lock (PR #29) so mid 0.85 does not thrash via mid-session `scale.resize`.
+- **Prevention:** do not flip back to `rawDelta` for “accuracy” without measuring phone feel; wall-clock unmasks hitch but reads worse on Kindling today.
 
 ### Service-worker fetch-on-every-GET made play choppy after PWA updates
 
@@ -308,7 +309,7 @@ the thing it described.
 - **Symptom:** after HudScene switched to `rawDelta` (so sim stayed real-time on low FPS), phones felt hitchy rather than smoothly slow. Captures showed ~20 `actualFps` with or without a service worker.
 - **Cause:** always rendering **1920×1080** WebGL plus a fullscreen **DayNight PostFX** (highp, up to 8 lights, fresh `Float32Array`s every upload). Drive also painted lighting twice per frame (`update` + `PRE_RENDER`). Wall-clock sim unmasked the GPU fill-rate cost that smoothed deltas had previously hidden as slow-mo.
 - **Fix (history):** first response resized the backbuffer + camera zoom; that raced with scene create and looked permanently zoomed-in on desktop. Mid-period **effects-only** freeze kept design/WebGL at **1920×1080** zoom **1** while PostFX/lights/upload Hz adapted. **Current (2026-09-10 density-first):** adaptive `renderScale` (high 1.0 / mid **0.85** / low **0.65**) with `scale.resize` + matching camera zoom; layout/sim stay in GAME_* coords; CSS shell still presents 16:9. Phones seed mid (PostFX off); mood via Graphics only. Soft **0.45 / 0.32** superseded — killed phone pixel sharpness. Per-scene `syncSceneRenderCamera` on create + `applyCanvasDisplayScale` using live `gameSize` avoid the READY race. Boot warms DayNight + textures behind `#loading-gate`. Idle SW activate shows “Updating…” before reload.
-- **Prevention:** do not treat "sim clock matches wall" as proof of smoothness — measure `actualFps` with PostFX on/off and at each `renderScale`. Do not re-enable `smoothStep` as a smoothness fix. Do not attach DayNight to Hud/Title cameras. When resizing for budget, always re-zoom every scene (including late `create`) and map pointers via live backbuffer size — never leave CSS fit assuming a frozen 1920×1080 buffer. First-use shader compile belongs in Boot warm-up, not the first shop frame.
+- **Prevention:** do not treat "sim clock matches wall" as proof of smoothness — measure `actualFps` with PostFX on/off and at each `renderScale`. Product chose smoothed delta (2026-09-10) because wall-clock `rawDelta` unmasked hitch as stutter on phone PWA. Do not attach DayNight to Hud/Title cameras. When resizing for budget, always re-zoom every scene (including late `create`) and map pointers via live backbuffer size — never leave CSS fit assuming a frozen 1920×1080 buffer. First-use shader compile belongs in Boot warm-up, not the first shop frame. Coarse phones: lock render tier at boot mid 0.85 — no mid-session `scale.resize` (PR #29).
 - **Follow-up (2026-09-10):** density-first phone mid/low **0.85 / 0.65** (supersedes 0.55/0.4 and soft 0.45/0.32); Drive bakes static ground/roads/props into ≤2048px `RenderTexture` cells then destroys per-tile Images (movers only as live sprites); coarse FPS `limit` 30; see [guides/smooth-2d-runtime.md](guides/smooth-2d-runtime.md).
 - **Drawing-board (2026-09-10):** soft mid/low **0.45 / 0.32** landed then **superseded** by density-first **0.85 / 0.65**; desktop high DayNight at **postFxScale 0.5** (halfFrame); Shop static bake; city tile atlas; overdraw cuts; **people atlases**; **Door facade bake**; **skyVisualDirtyKey** cadence; ASTC/ETC still deferred (canvas RGBA bake); see guides/smooth-2d-runtime.md and plans/2026-09-10-density-first-budget.md.
 

@@ -21,7 +21,6 @@ import { COUNTER_SIGN } from "../maps/shopT0";
 import { GAME_HEIGHT, GAME_WIDTH, NPC_INTERACT_COOLDOWN_MS, SCORE_DELIVERY_LATE, SCORE_DELIVERY_ON_TIME, SCORE_FAIL, SCORE_INSTORE, SCORE_PICKUP } from "../sim/constants";
 import { getSim, startSession } from "../session";
 import { setPwaIdle } from "../pwaUpdate";
-import { applyCanvasDisplayScale } from "../shell";
 import type { SimSnapshot } from "../sim/gameSim";
 import type { ShiftResults } from "../sim/shiftResults";
 import { tutorialHints } from "../sim/tutorialHints";
@@ -30,7 +29,7 @@ import { END_SHIFT_CAPTION, END_SHIFT_LABEL, RESULTS_NEW_DAY, RESULTS_TITLE } fr
 import { addSignText, setSignAccent } from "../ui/signText";
 import { addUiText } from "../ui/text";
 import { settingsGeom, type SettingsGeom } from "../ui/settingsGeom";
-import { applyRenderBudgetToGame, setRenderStressContext, syncSceneRenderCamera, tickRenderBudget } from "../ui/renderBudget";
+import { syncSceneRenderCamera, tickRenderBudget } from "../ui/renderBudget";
 import {
   Color,
   HUD_TYPE_FIT,
@@ -49,8 +48,7 @@ import { designHudInset, HUD_TOUCH_MIN_DESIGN, readCssSafeArea, VIEWFIT_EVENT } 
 const HUD_READOUT_PX = 40;
 /**
  * Cap one sim step so a long background pause does not jump the shift clock.
- * Must stay ≥ ~1s: capture/phone Chrome often runs well under 15 fps, and a tighter
- * cap (e.g. 100ms) re-introduces slow-motion whenever rawDelta exceeds the cap.
+ * Smoothed delta already softens hitch frames; this only bounds tab-away gaps.
  */
 const MAX_SIM_STEP_MS = 1_000;
 /**
@@ -315,6 +313,8 @@ export class HudScene extends Phaser.Scene {
   private readoutCorner = { left: 28, right: GAME_WIDTH - 28, top: HUD_CORNER_TOP };
   /** Last shiftEnded passed to setPwaIdle — edge only, not every frame. */
   private pwaIdleShiftEnded = false;
+  /** Door/HUD stacking — bringToTop only when this changes (not every frame). */
+  private doorTopMode: "id" | "play" | "hud" = "hud";
   private lastClockLabel = "";
   private lastToast = "";
   private lastPhoneLine = "";
@@ -734,7 +734,7 @@ export class HudScene extends Phaser.Scene {
     drawSignature(this.idSignature, card.name, photoX + 12, sigTop + 26, ID_PHOTO_W - 24);
   }
 
-  update(_time: number, _delta: number): void {
+  update(_time: number, delta: number): void {
     const sim = getSim();
     // Avoid a full snapshot before tick — input only needs the auto-drive bit.
     if (!sim.isAutoDriving()) {
@@ -743,16 +743,10 @@ export class HudScene extends Phaser.Scene {
     } else {
       sim.setPlayerInput(0, 0);
     }
-    // Phaser's smoothed `delta` caps to ~16.7ms when !inFocus / post-blur cooldown —
-    // on a low-FPS phone that puts the whole sim in slow motion. rawDelta is wall time.
-    const raw = this.game.loop.rawDelta;
-    sim.tick(Math.min(Math.max(0, raw), MAX_SIM_STEP_MS));
+    // Product: smoothed delta (fps.smoothStep) — hitch frames ease instead of stalling.
+    sim.tick(Math.min(Math.max(0, delta), MAX_SIM_STEP_MS));
     const snap = sim.snapshot();
-    this.syncRenderStress(snap);
-    if (tickRenderBudget(this.game.loop.actualFps, performance.now(), raw)) {
-      applyRenderBudgetToGame(this.game);
-      applyCanvasDisplayScale(this.game);
-    }
+    tickRenderBudget(this.game.loop.actualFps, performance.now());
     // Title / shift-ended only — calling every frame was a pointless hop (diag #11).
     if (snap.shiftEnded !== this.pwaIdleShiftEnded) {
       this.pwaIdleShiftEnded = snap.shiftEnded;
@@ -1049,19 +1043,6 @@ export class HudScene extends Phaser.Scene {
       refitType(this.coverText);
     }
     this.coverText.setPosition(this.readoutCorner.left, this.readoutCorner.top + 40);
-  }
-
-  /** Drive/Door PostFX is heavier than shop — demote earlier while those scenes are live. */
-  private syncRenderStress(snap: SimSnapshot): void {
-    if (snap.playerRole !== "driver") {
-      setRenderStressContext("shop");
-      return;
-    }
-    if (snap.dropoff.phase === "atDoor") {
-      setRenderStressContext("door");
-      return;
-    }
-    setRenderStressContext("drive");
   }
 
   private syncDriveScene(snap: SimSnapshot): void {
@@ -1822,15 +1803,15 @@ export class HudScene extends Phaser.Scene {
       this.scene.sleep("door");
       if (snap.playerRole === "driver" && this.scene.isSleeping("drive")) this.scene.wake("drive");
     }
-    if (wantDoor) {
-      // ID modal lives on the HUD; bag/customer taps live on the door — flip who is on top.
-      if (showId) {
-        this.scene.bringToTop("door");
-        this.scene.bringToTop();
-      } else {
-        this.scene.bringToTop();
-        this.scene.bringToTop("door");
-      }
+    const topMode: "id" | "play" | "hud" = wantDoor ? (showId ? "id" : "play") : "hud";
+    if (topMode === this.doorTopMode) return;
+    this.doorTopMode = topMode;
+    if (topMode === "id") {
+      this.scene.bringToTop("door");
+      this.scene.bringToTop();
+    } else if (topMode === "play") {
+      this.scene.bringToTop();
+      this.scene.bringToTop("door");
     } else {
       this.scene.bringToTop();
     }

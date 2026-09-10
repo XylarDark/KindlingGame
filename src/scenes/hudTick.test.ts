@@ -6,17 +6,18 @@ import { describe, expect, it } from "vitest";
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (rel: string): string => readFileSync(join(here, rel), "utf8").replace(/\r\n/g, "\n");
 
-describe("HudScene wall-clock sim tick", () => {
-  it("ticks the sim from loop.rawDelta, not Phaser's smoothed delta", () => {
+describe("HudScene smoothed sim tick", () => {
+  it("ticks the sim from Phaser's smoothed scene delta, not rawDelta", () => {
     const src = read("HudScene.ts");
-    expect(src).toContain("this.game.loop.rawDelta");
-    expect(src).toContain("MAX_SIM_STEP_MS");
-    expect(src).not.toMatch(/sim\.tick\(delta\)/);
+    expect(src).toMatch(/sim\.tick\(Math\.min\(Math\.max\(0, delta\), MAX_SIM_STEP_MS\)\)/);
+    expect(src).not.toContain("this.game.loop.rawDelta");
   });
 
-  it("disables Phaser fps.smoothStep so focus/cooldown cannot soft-throttle the loop", () => {
+  it("enables Phaser fps.smoothStep for hitch-frame easing", () => {
     const config = read("../config.ts");
-    expect(config).toContain("smoothStep: false");
+    expect(config).toContain("smoothStep: true");
+    const main = read("../main.ts");
+    expect(main).toContain("smoothStep: true");
   });
 
   it("limits coarse phones to ~30fps target for sustained smoothness", () => {
