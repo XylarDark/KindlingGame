@@ -133,11 +133,15 @@ describe("applyRenderScale / applyRenderBudgetToGame", () => {
     const hudCam = {
       zoom: 1,
       centered: false,
+      scrolled: false,
       setZoom(z: number) {
         this.zoom = z;
       },
       centerOn() {
         this.centered = true;
+      },
+      setScroll() {
+        this.scrolled = true;
       },
     };
     const driveCam = {
@@ -166,6 +170,8 @@ describe("applyRenderScale / applyRenderBudgetToGame", () => {
     expect(resizeCalls[0]).toEqual([Math.round(GAME_WIDTH * 0.85), Math.round(GAME_HEIGHT * 0.85)]);
     expect(shopCam.zoom).toBe(0.85);
     expect(hudCam.zoom).toBe(1);
+    expect(hudCam.scrolled).toBe(true);
+    expect(hudCam.centered).toBe(false);
     expect(driveCam.centered).toBe(false);
   });
 

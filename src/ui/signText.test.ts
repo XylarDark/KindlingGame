@@ -68,6 +68,7 @@ describe("text boxes are all the counter plaque", () => {
   it("exposes setSignPosition for host container moves", () => {
     expect(helper).toContain("export function setSignPosition");
     expect(helper).toContain("export function signContainer");
+    expect(helper).toContain("export function syncSignHit");
   });
 
   it("uses NineSlice panels instead of measured Graphics rings", () => {

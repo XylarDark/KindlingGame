@@ -100,9 +100,15 @@ export class HudPhone {
     this.paintPhoneChrome();
   }
 
-  layout(inset: SafeInset, cogLeft: number, cogTop: number): void {
-    const phoneRight = Math.min(GAME_WIDTH - 16 - inset.right, cogLeft - PHONE_COG_GAP);
-    const phoneBottom = Math.min(GAME_HEIGHT - 16 - inset.bottom, cogTop - PHONE_COG_GAP);
+  layout(
+    inset: SafeInset,
+    cogLeft: number,
+    cogTop: number,
+    viewW: number = GAME_WIDTH,
+    viewH: number = GAME_HEIGHT,
+  ): void {
+    const phoneRight = Math.min(viewW - 16 - inset.right, cogLeft - PHONE_COG_GAP);
+    const phoneBottom = Math.min(viewH - 16 - inset.bottom, cogTop - PHONE_COG_GAP);
     this.phone.setPosition(phoneRight - PHONE_CHASSIS.w * 0.5, phoneBottom - PHONE_CHASSIS.h * 0.5);
   }
 
