@@ -12,6 +12,7 @@ import {
   CUSTOMER_SPEECH_GAP,
   CUSTOMER_SPEECH_H,
   CUSTOMER_SPEECH_MAX_W,
+  customerFeetY,
   customerSlotX,
   customerSpeechShows,
   layoutCustomerSpeech,
@@ -601,7 +602,7 @@ export class ShopScene extends Phaser.Scene {
       .image(-400, CUSTOMER_SPOT.y, stand.key, stand.frame)
       .setOrigin(0.5, 1)
       .setScale(PEOPLE_SCALE)
-      .setDepth(5)
+      .setDepth(8)
       .setVisible(false)
       .setActive(false);
     enableItemHit(sprite);
@@ -620,7 +621,7 @@ export class ShopScene extends Phaser.Scene {
       maxHeight: CUSTOMER_SPEECH_H,
     })
       .setOrigin(0.5)
-      .setDepth(7)
+      .setDepth(10)
       .setVisible(false);
     const feedback = addSignText(this, -400, CUSTOMER_SPOT.y - PERSON_DISPLAY_H, "", {
       size: msgNoticePx(),
@@ -633,7 +634,7 @@ export class ShopScene extends Phaser.Scene {
       maxHeight: feedbackH(),
     })
       .setOrigin(0.5)
-      .setDepth(7)
+      .setDepth(10)
       .setVisible(false);
     return { sprite, bubble, feedback, orderId: null, look: -1, bubbleFitKey: "", feedbackFitKey: "" };
   }
@@ -708,7 +709,7 @@ export class ShopScene extends Phaser.Scene {
       }
       const { sprite, bubble, feedback } = visual;
       const focus = customer.orderId === focusId;
-      sprite.setPosition(customer.x, CUSTOMER_SPOT.y);
+      sprite.setPosition(customer.x, customerFeetY(sprite.displayHeight));
       if (focus) {
         sprite.setAlpha(pulse);
         sprite.setTint(Color.flash);

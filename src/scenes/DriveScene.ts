@@ -27,10 +27,10 @@ import type { SimSnapshot } from "../sim/gameSim";
 import { tutorialHints, type TutorialHint } from "../sim/tutorialHints";
 import { formatSlaClock, isSlaUrgent } from "../ui/copy";
 import { CITY_BUILD_ROWS_PER_CHUNK, markCityBuildComplete } from "../ui/cityBuild";
-import { addSignText, setSignAccent } from "../ui/signText";
+import { addSignText, setSignAccent, syncSignPlaque, type SignTextOptions } from "../ui/signText";
 import { Color, MSG_TYPE_FIT, Type, scaleMsgBox, scaleMsgPad, scaleMsgPx } from "../ui/theme";
 import { addUiText } from "../ui/text";
-import { addMark, fitTypeToWidth, overlayStroke } from "../ui/typekit";
+import { addMark, fitTypeToBox, fitTypeToWidth, overlayStroke } from "../ui/typekit";
 
 const HOUSE_TEX = ["tex-house", "tex-house-alt", "tex-house-3", "tex-house-4", "tex-house-5", "tex-house-6"];
 
@@ -53,6 +53,14 @@ const TRAFFIC_SPRITE_CAP = 12;
  */
 const pinLabelPx = (): string => scaleMsgPx(25);
 const vanBannerPx = (): string => scaleMsgPx(20);
+/** Screen-stable chip sizing — design px, compensated for drive camera zoom in update. */
+const drivePinMaxW = (): number => scaleMsgBox(320);
+const drivePinMaxH = (): number => scaleMsgBox(96);
+const driveVanMaxW = (): number => scaleMsgBox(360);
+const driveVanMaxH = (): number => scaleMsgBox(52);
+const driveSignGap = (): number => scaleMsgBox(14);
+/** Pin bob + pulse share one game-clock phase (~720ms). */
+const PIN_CYCLE_MS = 720;
 
 export class DriveScene extends Phaser.Scene {
   private vehicle!: Phaser.GameObjects.Image;
@@ -60,12 +68,14 @@ export class DriveScene extends Phaser.Scene {
   private glow!: Phaser.GameObjects.Graphics;
   private pin!: Phaser.GameObjects.Image;
   private pinPulse!: Phaser.GameObjects.Ellipse;
+  private pinLabelHost!: Phaser.GameObjects.Container;
   private pinLabel!: Phaser.GameObjects.Text;
-  private pinBob = 0;
   private pinBase = { x: 0, y: 0 };
+  private vanBannerHost!: Phaser.GameObjects.Container;
   private vanBanner!: Phaser.GameObjects.Text;
   private customer!: Phaser.GameObjects.Image;
   private shopImg!: Phaser.GameObjects.Image;
+  private shopCaptionHost!: Phaser.GameObjects.Container;
   private shopCaption!: Phaser.GameObjects.Text;
   private shopCenter = { x: 0, y: 0 };
   private lastX = 0;
@@ -121,51 +131,27 @@ export class DriveScene extends Phaser.Scene {
       .setDepth(5)
       .setDisplaySize(72, 96)
       .setVisible(false);
-    this.tweens.add({
-      targets: this,
-      pinBob: { from: 0, to: 18 },
-      yoyo: true,
-      repeat: -1,
-      duration: 720,
-      ease: "Sine.easeInOut",
-    });
-    this.tweens.add({
-      targets: this.pinPulse,
-      alpha: { from: 0.45, to: 0.18 },
-      scaleX: { from: 1, to: 1.25 },
-      scaleY: { from: 1, to: 1.15 },
-      yoyo: true,
-      repeat: -1,
-      duration: 720,
-      ease: "Sine.easeInOut",
-    });
-    this.pinLabel = addSignText(this, 0, 0, "", {
+    ({ host: this.pinLabelHost, label: this.pinLabel } = this.mountDriveSign(13, {
       size: pinLabelPx(),
       padding: scaleMsgPad({ x: 20, y: 14 }),
       align: "center",
       fontStyle: "700",
       lineSpacing: scaleMsgBox(6),
-      noWrap: true,
+      growBox: true,
       ...MSG_TYPE_FIT,
-      maxWidth: scaleMsgBox(460),
-      maxHeight: scaleMsgBox(150),
-    })
-      .setOrigin(0.5, 1)
-      // Above the van/walker sprites — the stop label must never be clipped.
-      .setDepth(13)
-      .setVisible(false);
-    this.vanBanner = addSignText(this, 0, 0, "", {
+      maxWidth: drivePinMaxW(),
+      maxHeight: drivePinMaxH(),
+    }));
+    ({ host: this.vanBannerHost, label: this.vanBanner } = this.mountDriveSign(12, {
       size: vanBannerPx(),
       padding: scaleMsgPad({ x: 18, y: 10 }),
       align: "center",
       fontStyle: "600",
+      noWrap: true,
       ...MSG_TYPE_FIT,
-      maxWidth: scaleMsgBox(500),
-      maxHeight: scaleMsgBox(70),
-    })
-      .setOrigin(0.5, 1)
-      .setDepth(12)
-      .setVisible(false);
+      maxWidth: driveVanMaxW(),
+      maxHeight: driveVanMaxH(),
+    }));
     this.vehicle = this.add.image(0, 0, "tex-vehicle").setDepth(6).setDisplaySize(168, 104);
     this.walker = this.add.image(0, 0, "tex-driver").setOrigin(0.5, 1).setScale(PEOPLE_SCALE).setDepth(7).setVisible(false);
     const custTex = personImageKey("tex-customer-0");
@@ -255,6 +241,9 @@ export class DriveScene extends Phaser.Scene {
     const next = this.tutorialFlashHint(snap);
     const stopId = snap.run?.nextStopId;
     const destOrder = snap.orders.find((o) => o.destinationId === stopId && o.status === "onRun");
+    const pinActive = !!stopId && this.sys.isActive();
+    const pinPhase = pinActive ? 0.5 + 0.5 * Math.sin((snap.gameMs / PIN_CYCLE_MS) * Math.PI * 2) : 0;
+    const pinBob = pinActive ? 8 + 8 * Math.sin((snap.gameMs / PIN_CYCLE_MS) * Math.PI * 2) : 0;
     if (stopId) {
       const house = CITY.houses.find((h) => h.id === stopId);
       if (house) {
@@ -271,17 +260,27 @@ export class DriveScene extends Phaser.Scene {
         }
         this.pinBase.x = x;
         this.pinBase.y = y - 6;
-        this.pin.setPosition(this.pinBase.x, this.pinBase.y - this.pinBob).setVisible(true);
-        this.pinPulse.setPosition(x, y + 6).setVisible(true);
+        this.pin.setPosition(this.pinBase.x, this.pinBase.y - pinBob).setVisible(true);
+        this.pinPulse
+          .setPosition(x, y + 6)
+          .setVisible(true)
+          .setScale(1 + 0.25 * pinPhase, 1 + 0.15 * pinPhase);
         const clock = destOrder ? formatSlaClock(destOrder.slaRemainingMs) : "";
         const who = destOrder
           ? `${houseTitle(stopId)}\n${destOrder.customerName}${clock ? `\n${clock}` : ""}`
           : houseTitle(stopId);
-        this.pinLabel.setVisible(true).setPosition(x, this.pinBase.y - this.pinBob - 12);
+        const signGap = driveSignGap();
+        this.syncDriveLabelScale(this.pinLabel, this.pinLabelHost);
+        this.pinLabelHost
+          .setVisible(true)
+          .setPosition(x, this.pinBase.y - pinBob - this.pin.displayHeight - signGap);
+        this.pinLabel.setPosition(0, 0).setVisible(true);
         // SLA clock changes ~1/s; dirty-guard avoids typekit work every frame.
         if (who !== this.lastPinWho) {
           this.lastPinWho = who;
+          this.pinLabel.setFixedSize(0, 0);
           this.pinLabel.setText(who);
+          syncSignPlaque(this.pinLabel);
         }
         // Ink on white in every state, LATE included: the urgency is carried by the
         // frame, so the stop name never drops to danger-red on a coloured chip.
@@ -289,16 +288,15 @@ export class DriveScene extends Phaser.Scene {
         setSignAccent(this.pinLabel, urgent ? Color.danger : undefined);
 
         const flashPin = next?.kind === "gpsPin";
-        const pulse = 0.62 + 0.38 * (0.5 + 0.5 * Math.sin(snap.gameMs / 280));
         this.pin.setTint(flashPin ? Color.flash : 0xffffff);
-        this.pin.setAlpha(flashPin ? pulse : 1);
-        this.pinPulse.setFillStyle(flashPin ? Color.lime : Color.amber, flashPin ? 0.25 + 0.35 * pulse : 0.35);
+        this.pin.setAlpha(flashPin ? 0.62 + 0.38 * pinPhase : 1);
+        this.pinPulse.setAlpha(flashPin ? 0.18 + 0.42 * pinPhase : 0.18 + 0.27 * pinPhase);
+        this.pinPulse.setFillStyle(flashPin ? Color.lime : Color.amber, 1);
         if (flashPin) {
           setSignAccent(this.pinLabel, Color.lime);
-          this.pinLabel.setAlpha(0.85 + 0.15 * pulse);
-        } else {
-          this.pinLabel.setAlpha(1);
         }
+        this.pinLabel.setAlpha(1);
+        syncSignPlaque(this.pinLabel);
       }
     } else {
       if (this.lastLotGlowKey !== "") {
@@ -307,7 +305,8 @@ export class DriveScene extends Phaser.Scene {
       }
       this.lastPinWho = "";
       this.pin.setVisible(false);
-      this.pinPulse.setVisible(false);
+      this.pinPulse.setVisible(false).setScale(1).setAlpha(0.35);
+      this.pinLabelHost.setVisible(false);
       this.pinLabel.setVisible(false);
       this.pin.clearTint();
       this.pin.setAlpha(1);
@@ -315,14 +314,20 @@ export class DriveScene extends Phaser.Scene {
 
     // GPS pin + label already carry the stop — van toast stacks on them mid-route.
     if (driving && snap.toast && !stopId) {
-      this.vanBanner.setVisible(true).setPosition(snap.vehicle.x, snap.vehicle.y - 78);
+      this.syncDriveLabelScale(this.vanBanner, this.vanBannerHost);
+      this.vanBannerHost
+        .setVisible(true)
+        .setPosition(vehicle.x, vehicle.y - this.vehicle.displayHeight / 2 - driveSignGap());
+      this.vanBanner.setPosition(0, 0).setVisible(true);
       if (snap.toast !== this.lastVanToast) {
         this.lastVanToast = snap.toast;
         this.vanBanner.setText(snap.toast);
-        fitTypeToWidth(this.vanBanner, 500);
+        fitTypeToBox(this.vanBanner, driveVanMaxW(), driveVanMaxH());
       }
+      syncSignPlaque(this.vanBanner);
     } else {
       this.lastVanToast = "";
+      this.vanBannerHost.setVisible(false);
       this.vanBanner.setVisible(false);
     }
 
@@ -339,11 +344,13 @@ export class DriveScene extends Phaser.Scene {
     const flashShop = next?.kind === "shop";
     if (this.shopImg.input) this.shopImg.input.enabled = driving;
     this.shopImg.setTint(flashShop && canTapShop ? Color.flash : 0xffffff);
+    this.shopCaptionHost.setVisible(driving);
     this.shopCaption.setVisible(driving);
     // Skip plaque setText/accent while hidden (not driving) — typekit work is wasted fill.
     if (!driving) {
       this.lastShopCaptionKey = "";
     } else {
+      this.syncDriveLabelScale(this.shopCaption, this.shopCaptionHost);
       this.shopCaption.setAlpha(1);
       const captionText = snap.run?.nextStopId
         ? "Kindling"
@@ -358,10 +365,31 @@ export class DriveScene extends Phaser.Scene {
         this.shopCaption.setText(captionText);
         setSignAccent(this.shopCaption, snap.run?.nextStopId ? undefined : nearShop ? Color.lime : undefined);
       }
-      if (!snap.run?.nextStopId) {
-        this.shopCaption.setAlpha(flashShop && nearShop ? 0.8 + 0.2 * (0.5 + 0.5 * Math.sin(snap.gameMs / 200)) : 1);
-      }
+      syncSignPlaque(this.shopCaption);
     }
+  }
+
+  /**
+   * World-anchored sign copy rides in a container so the plaque shares local (0,0)
+   * space with its text under a scrolling drive camera.
+   */
+  private mountDriveSign(
+    depth: number,
+    options: SignTextOptions,
+  ): { host: Phaser.GameObjects.Container; label: Phaser.GameObjects.Text } {
+    const host = this.add.container(0, 0).setDepth(depth);
+    const label = addSignText(this, 0, 0, "", options).setOrigin(0.5, 1);
+    host.add(label);
+    syncSignPlaque(label);
+    label.setVisible(false);
+    host.setVisible(false);
+    return { host, label };
+  }
+
+  /** Drive camera zooms with renderScale — inverse scale keeps sign chips screen-stable. */
+  private syncDriveLabelScale(label: Phaser.GameObjects.Text, host: Phaser.GameObjects.Container): void {
+    const inv = 1 / this.cameras.main.zoom;
+    if (Math.abs(host.scaleX - inv) > 0.001) host.setScale(inv);
   }
 
   private tutorialFlashHint(snap: SimSnapshot): TutorialHint | null {
@@ -581,17 +609,16 @@ export class DriveScene extends Phaser.Scene {
       .setDepth(2);
     fitTypeToWidth(mark, CITY.shopLot.w * TILE - 32);
 
-    this.shopCaption = addSignText(this, shop.x, shop.y + CITY.shopLot.h * TILE * 0.42, "Tap Kindling to return", {
+    ({ host: this.shopCaptionHost, label: this.shopCaption } = this.mountDriveSign(8, {
       size: scaleMsgPx(16),
       padding: scaleMsgPad({ x: 12, y: 6 }),
       fontStyle: "700",
       ...MSG_TYPE_FIT,
       maxWidth: CITY.shopLot.w * TILE - 24,
       maxHeight: scaleMsgBox(52),
-    })
-      .setOrigin(0.5, 0)
-      .setDepth(8)
-      .setVisible(false);
+    }));
+    this.shopCaptionHost.setPosition(shop.x, shop.y + CITY.shopLot.h * TILE * 0.42);
+    this.shopCaption.setOrigin(0.5, 0).setPosition(0, 0).setText("Tap Kindling to return");
 
     this.streetLamps = cityStreetLamps();
     for (const lamp of this.streetLamps) {

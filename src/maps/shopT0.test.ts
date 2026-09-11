@@ -19,6 +19,8 @@ import {
   customerSpeechShows,
   customerSpeechWidth,
   PERSON_DISPLAY_H,
+  PERSON_DISPLAY_MAX_H,
+  customerFeetY,
   DOOR,
   DRIVER,
   KEYLEAD,
@@ -119,18 +121,20 @@ describe("customer standing slots", () => {
   });
 
   it("keeps each customer's head fully visible below the counter front", () => {
-    // After side messaging reclaimed the overhead speech band, heads sit just under the
-    // counter lip — not cropped by it, and not pushed down by an unused chip row.
-    const headTop = CUSTOMER_SPOT.y - PERSON_DISPLAY_H;
-    expect(headTop, "the head itself hangs below the counter front").toBeGreaterThan(COUNTER_FRONT);
-    expect(headTop - COUNTER_FRONT, "modest clearance under the lip").toBeGreaterThanOrEqual(8);
-    expect(headTop - COUNTER_FRONT, "not wasting the old speech band").toBeLessThan(40);
+    // Hat frames are taller than the body constant — feetY uses measured displayHeight
+    // so head top lands on CUSTOMER_HEAD_CLEAR, not under the counter face.
+    const headTop = customerFeetY(PERSON_DISPLAY_MAX_H) - PERSON_DISPLAY_MAX_H;
+    expect(headTop, "head top sits on the clear line").toBe(COUNTER_FRONT + 12);
+    expect(PERSON_DISPLAY_MAX_H, "hats are taller than the body-only constant").toBeGreaterThan(
+      PERSON_DISPLAY_H,
+    );
+    expect(CUSTOMER_SPOT.y, "slot feet assume the tallest frame").toBe(customerFeetY(PERSON_DISPLAY_MAX_H));
   });
 
   it("still shows a head and a chest once the queue stands lower", () => {
     // Feet run off the bottom of the frame — they did before the band too — but a
     // customer cropped to a floating head would be a different bug from the one fixed.
-    const visible = GAME_HEIGHT - (CUSTOMER_SPOT.y - PERSON_DISPLAY_H);
+    const visible = GAME_HEIGHT - (CUSTOMER_SPOT.y - PERSON_DISPLAY_MAX_H);
     expect(visible, "head and chest are on screen").toBeGreaterThan(160);
   });
 

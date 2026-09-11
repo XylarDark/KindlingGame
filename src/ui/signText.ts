@@ -81,7 +81,6 @@ class SceneSignPlaquePump {
   }
 
   private onPreRender = (): void => {
-    if (!this.anyDirty) return;
     let stillDirty = false;
     for (const entry of this.entries) {
       if (!entry.dirty) continue;
@@ -107,10 +106,33 @@ class SceneSignPlaquePump {
     }) as typeof text.setPosition;
     const rawSetVisible = text.setVisible.bind(text);
     text.setVisible = ((value: boolean) => {
+      const wasVisible = text.visible;
       const out = rawSetVisible(value);
+      if (wasVisible !== value) {
+        entry.lastPaintKey = "";
+        if (value) syncPlaque(entry);
+      }
       mark();
       return out;
     }) as typeof text.setVisible;
+    const rawSetScale = text.setScale.bind(text);
+    text.setScale = ((x?: number, y?: number) => {
+      const out = rawSetScale(x, y);
+      mark();
+      return out;
+    }) as typeof text.setScale;
+    const rawSetFontSize = text.setFontSize.bind(text);
+    text.setFontSize = ((size: string | number) => {
+      const out = rawSetFontSize(size);
+      mark();
+      return out;
+    }) as typeof text.setFontSize;
+    const rawSetFixedSize = text.setFixedSize.bind(text);
+    text.setFixedSize = ((width: number, height: number) => {
+      const out = rawSetFixedSize(width, height);
+      mark();
+      return out;
+    }) as typeof text.setFixedSize;
     const rawSetAlpha = text.setAlpha.bind(text);
     text.setAlpha = ((value?: number) => {
       const out = rawSetAlpha(value);
@@ -161,11 +183,17 @@ function accentOf(text: Phaser.GameObjects.Text): number {
  * glyphs that actually rendered.
  */
 function fieldOf(text: Phaser.GameObjects.Text): { x: number; y: number; w: number; h: number } {
+  // Remeasure before painting — fitTypeToBox/setFontSize can land between PRE_RENDER passes.
+  text.updateText();
+  const sx = text.parentContainer?.scaleX ?? 1;
+  const sy = text.parentContainer?.scaleY ?? 1;
+  const w = text.width * sx;
+  const h = text.height * sy;
   return {
-    x: text.x - text.width * text.originX,
-    y: text.y - text.height * text.originY,
-    w: text.width,
-    h: text.height,
+    x: text.x - text.width * text.originX * sx,
+    y: text.y - text.height * text.originY * sy,
+    w,
+    h,
   };
 }
 
@@ -210,11 +238,13 @@ function paint(plaque: Phaser.GameObjects.Graphics, text: Phaser.GameObjects.Tex
   // than captured: the plaque only ever needs to be immediately under its own text.
   plaque.setDepth(text.depth - 0.5);
   if (!text.visible) return;
-  // Outermost first, each covering the middle of the last. Only the inner ring takes an
-  // accent: the dark outer edge is what holds the box together against both the bright
-  // shop wall and the night street, so it stays put in every state.
-  const [edge, border, field] = signPlaqueRings(fieldOf(text));
-  for (const ring of [edge!, { ...border!, color: accentOf(text) }, field!]) {
+  const field = fieldOf(text);
+  // Position the Graphics at the field origin and draw rings locally. World-space fillRect
+  // on a scene-root plaque drifts from scrolled/zoomed text — Drive's camera follow showed
+  // the chip floating beside the copy.
+  plaque.setPosition(field.x, field.y);
+  const [edge, border, fieldRing] = signPlaqueRings({ x: 0, y: 0, w: field.w, h: field.h });
+  for (const ring of [edge!, { ...border!, color: accentOf(text) }, fieldRing!]) {
     plaque.fillStyle(ring.color, 1);
     plaque.fillRect(ring.x, ring.y, ring.w, ring.h);
   }
@@ -234,17 +264,18 @@ function syncPlaque(entry: SignPlaqueEntry): void {
     entry.dirty = false;
     return;
   }
+  const field = fieldOf(text);
   const key = [
     text.visible,
     text.alpha,
     accentOf(text),
-    text.x,
-    text.y,
-    text.width,
-    text.height,
-    text.originX,
-    text.originY,
+    field.x,
+    field.y,
+    field.w,
+    field.h,
     text.depth,
+    text.scaleX,
+    text.scaleY,
   ].join(":");
   if (key === entry.lastPaintKey) {
     entry.dirty = false;
@@ -298,4 +329,12 @@ export function setSignAccent(text: Phaser.GameObjects.Text, accent: number = SI
   text.setData(ACCENT, accent);
   const entry = entryFor(text);
   if (entry) pumpFor(text.scene).markDirty(entry);
+}
+
+/** Paint one sign plaque now — for camera-scrolled labels that move every frame. */
+export function syncSignPlaque(text: Phaser.GameObjects.Text): void {
+  const entry = entryFor(text);
+  if (!entry) return;
+  entry.dirty = true;
+  syncPlaque(entry);
 }

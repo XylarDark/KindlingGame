@@ -53,6 +53,28 @@ describe("DriveScene grade throttle and dirty guards", () => {
     expect(src).toContain("Skip plaque setText");
   });
 
+  it("animates the pin from gameMs with no idle tweens", () => {
+    expect(src).not.toContain("this.tweens.add");
+    expect(src).toContain("PIN_CYCLE_MS");
+    expect(src).toContain("Math.sin((snap.gameMs / PIN_CYCLE_MS)");
+    const update = src.slice(src.indexOf("update(): void"), src.indexOf("private syncDriveLabelScale"));
+    expect(update).toContain("pinActive = !!stopId && this.sys.isActive()");
+    expect(update).not.toMatch(/pinLabel\.setAlpha\(0\.85 \+/);
+    expect(update).not.toMatch(/shopCaption\.setAlpha\(flashShop/);
+  });
+
+  it("keeps drive sign copy on plaques with screen-stable scale", () => {
+    expect(src).toContain("addSignText");
+    expect(src).toContain("mountDriveSign");
+    expect(src).toContain("pinLabelHost");
+    expect(src).toContain("syncDriveLabelScale");
+    expect(src).toContain("syncSignPlaque");
+    expect(src).toContain("setFixedSize(0, 0)");
+    expect(src).toContain("fitTypeToBox(this.vanBanner");
+    expect(src).toContain("this.pin.displayHeight");
+    expect(src).toContain("this.vehicle.displayHeight");
+  });
+
   it("bakes static ground/props into RenderTextures and keeps movers live", () => {
     expect(src).toContain("bakeStaticCityMap");
     expect(src).toContain("staticBakeList");
