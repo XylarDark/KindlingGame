@@ -25,10 +25,6 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
     // Phaser 3.90: MobilePipeline on iOS/Android (cheaper default batching).
     autoMobilePipeline: true,
   },
-  physics: {
-    default: "arcade",
-    arcade: { gravity: { x: 0, y: 0 }, debug: false },
-  },
   scale: {
     // Design layout is 1920×1080; RenderBudget may shrink the WebGL buffer via scale.resize
     // + camera zoom. Shell sizes #game-root to a uniform 16:9 stage (CSS contain).

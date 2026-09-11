@@ -152,6 +152,52 @@ describe("scene perf guards", () => {
     expect(update).not.toContain("refitType");
   });
 
+  it("Hud caches tutorial hints and gates scene/music sync", () => {
+    const hud = read("src/scenes/HudScene.ts");
+    expect(hud).toContain("tutorialFlashHint");
+    expect(hud).toContain("lastTutorialHintKey");
+    expect(hud).toContain("syncMusicIfNeeded");
+    expect(hud).toContain("skyVisualDirtyKey");
+    expect(hud).toContain("lastDriveSceneKey");
+    expect(hud).toContain("lastDoorSceneKey");
+    expect(hud).toContain("lastShowPhone");
+    expect(hud).toContain("volumeTrackBounds");
+    const cover = hud.slice(hud.indexOf("private paintCover"), hud.indexOf("private tutorialFlashHint"));
+    expect(cover).not.toContain("setPosition");
+    const layout = hud.slice(hud.indexOf("private layoutHud"), hud.indexOf("private placeReadouts"));
+    expect(layout).toContain("coverText.setPosition");
+  });
+
+  it("Drive PRE_RENDER grades from gameMs and culls traffic before transforms", () => {
+    const drive = read("src/scenes/DriveScene.ts");
+    expect(drive).toContain("paintDayNightAt(getSim().gameMs())");
+    expect(drive).toContain("dayNightFocus");
+    const update = drive.slice(drive.indexOf("update(): void"), drive.indexOf("private tutorialFlashHint"));
+    expect(update).toMatch(/if \(!onScreen\)[\s\S]*setVisible\(false\)[\s\S]*return[\s\S]*setTexture/);
+    expect(drive).toContain("rolePhase()");
+  });
+
+  it("gameSim dirty-guards customer bubbles and exposes rolePhase", () => {
+    const sim = read("src/sim/gameSim.ts");
+    expect(sim).toContain("customerBubbleInputsKey");
+    expect(sim).toContain("customerBubbleView");
+    expect(sim).toContain("keyLeadCalloutInputsKey");
+    expect(sim).toContain("rolePhase()");
+  });
+
+  it("arcade physics removed when unused", () => {
+    const config = read("src/config.ts");
+    expect(config).not.toContain("physics:");
+  });
+
+  it("camera shutter noise buffer is prewarmed once", () => {
+    const sfx = read("src/audio/sfx.ts");
+    expect(sfx).toContain("prewarmCameraSfx");
+    expect(sfx).toContain("shutterNoiseBuffer");
+    const click = sfx.slice(sfx.indexOf("export function playCameraClick"), sfx.indexOf("export function playUiSfx"));
+    expect(click).not.toContain("createBuffer(");
+  });
+
   it("tick patches snap cache in place instead of touch() at entry", () => {
     const sim = read("src/sim/gameSim.ts").replace(/\r\n/g, "\n");
     const tickStart = sim.indexOf("tick(dtMs: number): void {");

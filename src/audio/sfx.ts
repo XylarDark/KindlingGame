@@ -10,6 +10,30 @@ function audioCtx(game: Phaser.Game): AudioContext | undefined {
   return ctx;
 }
 
+const SHUTTER_NOISE_DUR = 0.05;
+let cameraNoiseBuffer: AudioBuffer | null = null;
+let cameraNoiseSampleRate = 0;
+
+function shutterNoiseBuffer(ctx: AudioContext): AudioBuffer {
+  if (cameraNoiseBuffer && cameraNoiseSampleRate === ctx.sampleRate) return cameraNoiseBuffer;
+  const buffer = ctx.createBuffer(
+    1,
+    Math.max(1, Math.floor(ctx.sampleRate * SHUTTER_NOISE_DUR)),
+    ctx.sampleRate,
+  );
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+  cameraNoiseSampleRate = ctx.sampleRate;
+  cameraNoiseBuffer = buffer;
+  return buffer;
+}
+
+/** Allocate the delivery-photo noise buffer once — not on every shutter click. */
+export function prewarmCameraSfx(game: Phaser.Game): void {
+  const ctx = audioCtx(game);
+  if (ctx) shutterNoiseBuffer(ctx);
+}
+
 function blip(
   ctx: AudioContext,
   opts: { freq: number; endFreq?: number; dur?: number; gain?: number; type?: OscillatorType },
@@ -50,19 +74,15 @@ export function playCameraClick(game: Phaser.Game): void {
   osc.start(now);
   osc.stop(now + 0.1);
 
-  const noiseDur = 0.05;
-  const buffer = ctx.createBuffer(1, Math.max(1, Math.floor(ctx.sampleRate * noiseDur)), ctx.sampleRate);
-  const data = buffer.getChannelData(0);
-  for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
   const noise = ctx.createBufferSource();
-  noise.buffer = buffer;
+  noise.buffer = shutterNoiseBuffer(ctx);
   const noiseGain = ctx.createGain();
   noiseGain.gain.setValueAtTime(0.22, now);
-  noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + noiseDur);
+  noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + SHUTTER_NOISE_DUR);
   noise.connect(noiseGain);
   noiseGain.connect(ctx.destination);
   noise.start(now);
-  noise.stop(now + noiseDur);
+  noise.stop(now + SHUTTER_NOISE_DUR);
 }
 
 /** Soft UI blips for pack / sell / deny / ticket / wrong-TV. */

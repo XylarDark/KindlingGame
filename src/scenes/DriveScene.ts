@@ -24,7 +24,7 @@ import { HANDOFF_RADIUS } from "../sim/constants";
 import { skyAt } from "../sim/dayNight";
 import { lerpAngle } from "../sim/driveRoute";
 import type { SimSnapshot } from "../sim/gameSim";
-import { tutorialHints } from "../sim/tutorialHints";
+import { tutorialHints, type TutorialHint } from "../sim/tutorialHints";
 import { formatSlaClock, isSlaUrgent } from "../ui/copy";
 import { CITY_BUILD_ROWS_PER_CHUNK, markCityBuildComplete } from "../ui/cityBuild";
 import { addSignText, setSignAccent } from "../ui/signText";
@@ -80,9 +80,13 @@ export class DriveScene extends Phaser.Scene {
   private lastLotGlowKey = "";
   private lastVanToast = "";
   private lastShopCaptionKey = "";
+  private lastTutorialHintKey = "";
+  private cachedTutorialHint: TutorialHint | null = null;
+  /** Grade focus from update — PRE_RENDER reads gameMs() only, not a full snapshot. */
+  private dayNightFocus = { x: 0, y: 0 };
   private onPreRenderDayNight = (): void => {
     if (!this.sys.isActive()) return;
-    this.paintDayNight(getSim().snapshot());
+    this.paintDayNightAt(getSim().gameMs());
   };
   private trafficLoops: TrafficLoop[] = [];
   private trafficSprites: Phaser.GameObjects.Image[] = [];
@@ -105,7 +109,7 @@ export class DriveScene extends Phaser.Scene {
     void this.buildCityChunked();
     this.nightGlow = this.add.graphics().setDepth(2);
     this.glow = this.add.graphics().setDepth(3);
-    this.paintDayNight(getSim().snapshot());
+    this.paintDayNightAt(getSim().gameMs());
     this.events.on(Phaser.Scenes.Events.PRE_RENDER, this.onPreRenderDayNight);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.events.off(Phaser.Scenes.Events.PRE_RENDER, this.onPreRenderDayNight);
@@ -210,9 +214,20 @@ export class DriveScene extends Phaser.Scene {
     while (this.trafficSprites.length < traffic.length && this.trafficSprites.length < TRAFFIC_SPRITE_CAP) {
       this.trafficSprites.push(this.add.image(0, 0, "tex-car").setDepth(5).setDisplaySize(120, 72).setAlpha(0.92));
     }
+    const view = this.cameras.main.worldView;
+    const pad = TRAFFIC_CULL_PAD;
     this.trafficSprites.forEach((sprite, i) => {
       const car = traffic[i];
       if (!car) {
+        sprite.setVisible(false);
+        return;
+      }
+      const onScreen =
+        car.x >= view.x - pad &&
+        car.x <= view.x + view.width + pad &&
+        car.y >= view.y - pad &&
+        car.y <= view.y + view.height + pad;
+      if (!onScreen) {
         sprite.setVisible(false);
         return;
       }
@@ -222,14 +237,7 @@ export class DriveScene extends Phaser.Scene {
       this.trafficAngles.set(car.id, angle);
       if (sprite.texture.key !== car.key) sprite.setTexture(car.key);
       sprite.setPosition(car.x, car.y).setRotation(angle + Math.PI);
-      const view = this.cameras.main.worldView;
-      const pad = TRAFFIC_CULL_PAD;
-      const onScreen =
-        car.x >= view.x - pad &&
-        car.x <= view.x + view.width + pad &&
-        car.y >= view.y - pad &&
-        car.y <= view.y + view.height + pad;
-      sprite.setVisible(onScreen);
+      sprite.setVisible(true);
     });
     for (const id of this.trafficAngles.keys()) {
       if (!seen.has(id)) this.trafficAngles.delete(id);
@@ -245,8 +253,11 @@ export class DriveScene extends Phaser.Scene {
       this.cameras.main.centerOn(vehicle.x, vehicle.y);
     }
 
+    this.dayNightFocus =
+      driverOnFoot && driver ? { x: driver.x, y: driver.y } : { x: vehicle.x, y: vehicle.y };
+
     // Day/night paints once in PRE_RENDER — avoid a second PostFX upload here.
-    const next = tutorialHints(snap)[0];
+    const next = this.tutorialFlashHint(snap);
     const stopId = snap.run?.nextStopId;
     const destOrder = snap.orders.find((o) => o.destinationId === stopId && o.status === "onRun");
     if (stopId) {
@@ -358,12 +369,21 @@ export class DriveScene extends Phaser.Scene {
     }
   }
 
-  private paintDayNight(snap: SimSnapshot): void {
+  private tutorialFlashHint(snap: SimSnapshot): TutorialHint | null {
+    const key = `${snap.selectedOrderId ?? ""}:${snap.playerRole}:${snap.dropoff.phase}:${snap.handSkuId ?? ""}:${snap.tabletTicket?.id ?? ""}`;
+    if (key !== this.lastTutorialHintKey) {
+      this.lastTutorialHintKey = key;
+      this.cachedTutorialHint = tutorialHints(snap)[0] ?? null;
+    }
+    return this.cachedTutorialHint;
+  }
+
+  private paintDayNightAt(gameMs: number): void {
     if (!this.sys.isActive()) return;
-    const sky = skyAt(snap.gameMs);
+    const sky = skyAt(gameMs);
     this.cameras.main.setBackgroundColor(sky.mapGrass);
     if (getRenderBudget().postFx) {
-      const focus = snap.dropoff.driverOnFoot && snap.dropoff.driver ? snap.dropoff.driver : snap.vehicle;
+      const focus = this.dayNightFocus;
       // Coarse focus + sky key: view UVs refresh in the pipeline via syncViewFromCamera.
       const gradeKey = `${sky.mapOverlay}:${sky.mapOverlayAlpha.toFixed(3)}:${sky.lampAlpha.toFixed(2)}:${Math.round(focus.x / DRIVE_FOCUS_GRID)}:${Math.round(focus.y / DRIVE_FOCUS_GRID)}`;
       const now = performance.now();
@@ -437,8 +457,9 @@ export class DriveScene extends Phaser.Scene {
 
   private returnToShop(): void {
     const sim = getSim();
-    if (sim.snapshot().playerRole !== "driver") return;
-    if (sim.snapshot().dropoff.phase === "atDoor") return;
+    const { role, dropoffPhase } = sim.rolePhase();
+    if (role !== "driver") return;
+    if (dropoffPhase === "atDoor") return;
     if (!sim.backToShop()) return;
     this.scene.sleep("drive");
     this.scene.sleep("door");

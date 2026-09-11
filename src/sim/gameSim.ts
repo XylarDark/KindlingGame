@@ -294,6 +294,10 @@ export class GameSim {
   private dropoffConfirmHeld = false;
   /** Reused across same-frame Shop/Drive/Door/Hud readers until the next mutation. */
   private snapCache: SimSnapshot | null = null;
+  private customerBubbleKeys = new Map<string, string>();
+  private customerBubbleCache = new Map<string, string>();
+  private keyLeadCalloutKey = "";
+  private keyLeadCalloutCache: string | null = null;
 
   constructor(options: SimOptions = {}) {
     const seed = options.seed ?? 1;
@@ -434,6 +438,10 @@ export class GameSim {
     this.ordersNotice = "New day — watch ORDERS.";
     this.targetCallout = null;
     this.customerFeedback.clear();
+    this.customerBubbleKeys.clear();
+    this.customerBubbleCache.clear();
+    this.keyLeadCalloutKey = "";
+    this.keyLeadCalloutCache = null;
   }
 
   /** Drop cached view — any mutation that can change what snapshot() returns. */
@@ -444,6 +452,11 @@ export class GameSim {
   /** Game clock without allocating a full SimSnapshot (PostFX / sky paths). */
   gameMs(): number {
     return this.clock.gameMs;
+  }
+
+  /** Role and dropoff phase without building a SimSnapshot — hot scene paths only. */
+  rolePhase(): { role: PlayerRole; dropoffPhase: DropoffPhase | null } {
+    return { role: this.playerRole, dropoffPhase: this.dropoff?.phase ?? null };
   }
 
   /** Cheap auto-drive probe for Hud input — avoids a full snapshot before tick. */
@@ -483,7 +496,7 @@ export class GameSim {
         x: c.x,
         kind: c.kind,
         slot: c.slot,
-        bubble: this.customerBubble(c),
+        bubble: this.customerBubbleView(c),
         feedback: this.customerFeedback.get(c.orderId) ?? null,
         look: this.customerLookFor(c.orderId),
       })),
@@ -504,7 +517,7 @@ export class GameSim {
         (this.orders.some((o) => o.status === "inBin") || this.runOrderIds.length > 0),
       tabletTicket: this.toViewOrNull(this.tabletFront()),
       tabletQueueCount: tabletQueue(this.orders).length,
-      keyLeadLine: this.keyLeadCallout(selected),
+      keyLeadLine: this.keyLeadCalloutView(selected),
       driverLine: this.playerRole === "keyLead" ? this.driverLine : null,
       shiftEnded: this.shiftEnded,
       shiftResults: this.shiftEnded
@@ -741,7 +754,12 @@ export class GameSim {
       needsFetch(selected) &&
       this.handSkuId === selected.skuId &&
       this.keyLeadPhase === "idle";
-    c.keyLeadLine = this.keyLeadCallout(selected);
+    const klKey = this.keyLeadCalloutInputsKey(selected);
+    if (klKey !== this.keyLeadCalloutKey) {
+      this.keyLeadCalloutKey = klKey;
+      this.keyLeadCalloutCache = this.keyLeadCallout(selected);
+    }
+    c.keyLeadLine = this.keyLeadCalloutCache;
     c.ordersNotice = this.playerRole === "keyLead" ? this.ordersNotice : null;
     for (const src of this.customers) {
       const dst = c.customers.find((v) => v.orderId === src.orderId);
@@ -750,6 +768,13 @@ export class GameSim {
         return;
       }
       dst.x = src.x;
+      const bubbleKey = this.customerBubbleInputsKey(src);
+      if (bubbleKey !== this.customerBubbleKeys.get(src.orderId)) {
+        this.customerBubbleKeys.set(src.orderId, bubbleKey);
+        const bubble = this.customerBubble(src);
+        this.customerBubbleCache.set(src.orderId, bubble);
+        dst.bubble = bubble;
+      }
     }
     c.vehicle = { ...this.vehicle, heading: this.vehicleHeading };
     c.autoDriving = this.playerRole === "driver" && this.dropoff?.phase !== "atDoor" && !this.driveArrived;
@@ -1205,6 +1230,39 @@ export class GameSim {
   /** The lane-snapped route the van is following, for the phone minimap. */
   routeWorldPath(): readonly WorldPoint[] {
     return this.driveRoute;
+  }
+
+  private customerBubbleInputsKey(customer: CustomerState): string {
+    const order = this.orderById(customer.orderId);
+    if (!order) return "";
+    const atCounter = this.customerAtCounter(customer.orderId);
+    const farFromTarget = Math.abs(customer.x - customer.targetX) > 24;
+    return `${order.status}:${order.skuId}:${customer.kind}:${farFromTarget ? 1 : 0}:${atCounter ? 1 : 0}:${this.handSkuId ?? ""}`;
+  }
+
+  private customerBubbleView(customer: CustomerState): string {
+    const key = this.customerBubbleInputsKey(customer);
+    const prevKey = this.customerBubbleKeys.get(customer.orderId);
+    if (prevKey === key) {
+      const cached = this.customerBubbleCache.get(customer.orderId);
+      if (cached !== undefined) return cached;
+    }
+    this.customerBubbleKeys.set(customer.orderId, key);
+    const bubble = this.customerBubble(customer);
+    this.customerBubbleCache.set(customer.orderId, bubble);
+    return bubble;
+  }
+
+  private keyLeadCalloutInputsKey(selected: Order | undefined): string {
+    return `${this.keyLeadPhase}:${this.fetchSkuId ?? ""}:${this.handSkuId ?? ""}:${selected?.id ?? ""}:${selected?.type ?? ""}:${selected?.skuId ?? ""}`;
+  }
+
+  private keyLeadCalloutView(selected: Order | undefined): string | null {
+    const key = this.keyLeadCalloutInputsKey(selected);
+    if (key === this.keyLeadCalloutKey) return this.keyLeadCalloutCache;
+    this.keyLeadCalloutKey = key;
+    this.keyLeadCalloutCache = this.keyLeadCallout(selected);
+    return this.keyLeadCalloutCache;
   }
 
   private customerBubble(customer: CustomerState): string {

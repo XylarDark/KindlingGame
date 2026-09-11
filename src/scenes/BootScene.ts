@@ -13,6 +13,7 @@ import { ceilingPots } from "../maps/shopT0";
 import { MS_PER_GAME_HOUR } from "../sim/constants";
 import { skyAt } from "../sim/dayNight";
 import { installMusicUnlock, preloadMusic } from "../audio/music";
+import { prewarmCameraSfx } from "../audio/sfx";
 import { registerCityTileAtlas } from "../art/cityTileAtlas";
 import { registerPeopleAtlases } from "../art/peopleAtlas";
 import { generateTextures } from "../pixelArt";
@@ -54,6 +55,7 @@ export class BootScene extends Phaser.Scene {
     installTypekit(this.game);
     registerDayNightPipeline(this.game);
     installMusicUnlock(this.game);
+    prewarmCameraSfx(this.game);
     void this.bootReady();
   }
 

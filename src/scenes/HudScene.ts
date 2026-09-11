@@ -23,7 +23,8 @@ import { getSim, startSession } from "../session";
 import { setPwaIdle } from "../pwaUpdate";
 import type { SimSnapshot } from "../sim/gameSim";
 import type { ShiftResults } from "../sim/shiftResults";
-import { tutorialHints } from "../sim/tutorialHints";
+import { tutorialHints, type TutorialHint } from "../sim/tutorialHints";
+import { skyAt, skyVisualDirtyKey } from "../sim/dayNight";
 import { addHudButton, addPanel } from "../ui/chrome";
 import { END_SHIFT_CAPTION, END_SHIFT_LABEL, RESULTS_NEW_DAY, RESULTS_TITLE } from "../ui/copy";
 import { addSignText, setSignAccent } from "../ui/signText";
@@ -326,6 +327,16 @@ export class HudScene extends Phaser.Scene {
   private lastPadLabel = "";
   private lastPadFlash: boolean | null = null;
   private lastPhoneMapKey = "";
+  /** Tutorial hint cache — rebuild when ticket/role/phase/hand change, not every frame. */
+  private lastTutorialHintKey = "";
+  private cachedTutorialHint: TutorialHint | null = null;
+  private lastShowPhone: boolean | null = null;
+  private lastShowId: boolean | null = null;
+  private lastIdLive: boolean | null = null;
+  private lastDriveSceneKey = "";
+  private lastDoorSceneKey = "";
+  private lastMusicSkyKey = "";
+  private volumeTrackBounds = { left: 0, width: VOL_TRACK_W };
 
   constructor() {
     super("hud");
@@ -775,6 +786,7 @@ export class HudScene extends Phaser.Scene {
     const right = GAME_WIDTH - 28 - inset.right;
     const bottom = GAME_HEIGHT - 40 - inset.bottom;
     this.readoutCorner = { left, right, top: HUD_CORNER_TOP + inset.top };
+    this.coverText.setPosition(left, this.readoutCorner.top + 40);
     this.placeReadouts();
     const cogSize = HUD_TOUCH_MIN_DESIGN;
     const cogX = GAME_WIDTH - 24 - inset.right;
@@ -802,6 +814,8 @@ export class HudScene extends Phaser.Scene {
     this.drawPad();
     this.padKnob.setPosition(this.padCenter.x, this.padCenter.y);
     this.padLabel.setPosition(this.padCenter.x, this.padCenter.y - 128);
+    const volBounds = this.volumeTrack.getBounds();
+    this.volumeTrackBounds = { left: volBounds.left, width: volBounds.width };
   }
 
   /**
@@ -876,10 +890,10 @@ export class HudScene extends Phaser.Scene {
       this.padKnob.setVisible(false);
       this.padLabel.setVisible(false);
       this.syncDoorScene(snap);
-      syncMusicToClock(snap.gameMs);
+      this.syncMusicIfNeeded(snap.gameMs);
       return;
     }
-    const next = tutorialHints(snap)[0];
+    const next = this.tutorialFlashHint(snap);
     const pulse = 0.55 + 0.45 * (0.5 + 0.5 * Math.sin(snap.gameMs / 160));
     const flashNext = this.settingsOpen || this.resultsVisible ? null : next;
 
@@ -889,11 +903,14 @@ export class HudScene extends Phaser.Scene {
     const flashPhone = flashNext?.kind === "phone";
 
     this.phone.setVisible(showPhone);
-    if (showPhone) {
-      if (!this.phoneHit.input) this.phoneHit.setInteractive({ useHandCursor: true });
-      else this.phoneHit.input.enabled = true;
-    } else {
-      this.phoneHit.disableInteractive();
+    if (showPhone !== this.lastShowPhone) {
+      this.lastShowPhone = showPhone;
+      if (showPhone) {
+        if (!this.phoneHit.input) this.phoneHit.setInteractive({ useHandCursor: true });
+        else this.phoneHit.input.enabled = true;
+      } else {
+        this.phoneHit.disableInteractive();
+      }
     }
     const callName = drop.customerName ?? "customer";
     const phoneLine =
@@ -931,19 +948,25 @@ export class HudScene extends Phaser.Scene {
     const idLive = showId && snap.gameMs >= this.idCardArmedAt;
     const flashId = flashNext?.kind === "idCard";
     this.idDim.setVisible(showId);
-    if (showId) {
-      if (!this.idDim.input) this.idDim.setInteractive({ useHandCursor: false });
-      else this.idDim.input.enabled = true;
-    } else {
-      this.idDim.disableInteractive();
+    if (showId !== this.lastShowId) {
+      this.lastShowId = showId;
+      if (showId) {
+        if (!this.idDim.input) this.idDim.setInteractive({ useHandCursor: false });
+        else this.idDim.input.enabled = true;
+      } else {
+        this.idDim.disableInteractive();
+      }
     }
     this.idPanel.setVisible(showId);
     this.idPanel.setAlpha(1);
-    if (idLive) {
-      if (!this.idBg.input) enableItemHit(this.idBg);
-      else this.idBg.input.enabled = true;
-    } else {
-      this.idBg.disableInteractive();
+    if (idLive !== this.lastIdLive) {
+      this.lastIdLive = idLive;
+      if (idLive) {
+        if (!this.idBg.input) enableItemHit(this.idBg);
+        else this.idBg.input.enabled = true;
+      } else {
+        this.idBg.disableInteractive();
+      }
     }
     // Pulse border only — keep ID text fully readable.
     this.idFlashRing.setVisible(idLive && flashId);
@@ -1031,7 +1054,7 @@ export class HudScene extends Phaser.Scene {
     }
     this.syncDriveScene(snap);
     this.syncDoorScene(snap);
-    syncMusicToClock(snap.gameMs);
+    this.syncMusicIfNeeded(snap.gameMs);
   }
 
   /**
@@ -1056,11 +1079,32 @@ export class HudScene extends Phaser.Scene {
       this.coverText.setText(line);
       refitType(this.coverText);
     }
-    this.coverText.setPosition(this.readoutCorner.left, this.readoutCorner.top + 40);
+  }
+
+  private tutorialFlashHint(snap: SimSnapshot): TutorialHint | null {
+    const key = `${snap.selectedOrderId ?? ""}:${snap.playerRole}:${snap.dropoff.phase}:${snap.handSkuId ?? ""}:${snap.tabletTicket?.id ?? ""}`;
+    if (key !== this.lastTutorialHintKey) {
+      this.lastTutorialHintKey = key;
+      this.cachedTutorialHint = tutorialHints(snap)[0] ?? null;
+    }
+    return this.cachedTutorialHint;
+  }
+
+  private syncMusicIfNeeded(gameMs: number): void {
+    const key = skyVisualDirtyKey(skyAt(gameMs));
+    if (key === this.lastMusicSkyKey) return;
+    this.lastMusicSkyKey = key;
+    syncMusicToClock(gameMs);
   }
 
   private syncDriveScene(snap: SimSnapshot): void {
-    if (snap.playerRole !== "driver") return;
+    if (snap.playerRole !== "driver") {
+      this.lastDriveSceneKey = "";
+      return;
+    }
+    const key = snap.dropoff.phase;
+    if (key === this.lastDriveSceneKey) return;
+    this.lastDriveSceneKey = key;
     if (this.scene.isActive("shop") && !this.scene.isSleeping("shop")) this.scene.sleep("shop");
     if (snap.dropoff.phase === "atDoor") return;
     if (this.scene.isSleeping("drive")) this.scene.wake("drive");
@@ -1424,8 +1468,11 @@ export class HudScene extends Phaser.Scene {
     // Map against the track, which is what the fill and knob are drawn from. Reading the
     // hit box here instead would skew every value the moment the hit box stopped being
     // exactly the track's width.
-    const bounds = this.volumeTrack.getBounds();
-    const t = Phaser.Math.Clamp((p.x - bounds.left) / Math.max(1, bounds.width), 0, 1);
+    const t = Phaser.Math.Clamp(
+      (p.x - this.volumeTrackBounds.left) / Math.max(1, this.volumeTrackBounds.width),
+      0,
+      1,
+    );
     setMusicVolume(t, this.game);
     this.refreshMusicControls();
   }
@@ -1438,6 +1485,7 @@ export class HudScene extends Phaser.Scene {
    */
   private resetDayToNine(): void {
     getSim().resetToMorning();
+    this.lastMusicSkyKey = "";
     syncMusicToClock(0);
     this.closeSettings();
     this.hideResults();
@@ -1808,14 +1856,18 @@ export class HudScene extends Phaser.Scene {
   private syncDoorScene(snap: SimSnapshot): void {
     const wantDoor = snap.playerRole === "driver" && snap.dropoff.phase === "atDoor";
     const showId = !!snap.dropoff.idCard && snap.dropoff.idAsked && !snap.dropoff.idChecked;
-    const doorUp = this.scene.isActive("door") && !this.scene.isSleeping("door");
-    if (wantDoor && !doorUp) {
-      this.scene.sleep("drive");
-      if (this.scene.isSleeping("door")) this.scene.wake("door");
-      else this.scene.launch("door");
-    } else if (!wantDoor && doorUp) {
-      this.scene.sleep("door");
-      if (snap.playerRole === "driver" && this.scene.isSleeping("drive")) this.scene.wake("drive");
+    const sceneKey = `${snap.playerRole}:${snap.dropoff.phase}:${wantDoor ? 1 : 0}`;
+    if (sceneKey !== this.lastDoorSceneKey) {
+      this.lastDoorSceneKey = sceneKey;
+      const doorUp = this.scene.isActive("door") && !this.scene.isSleeping("door");
+      if (wantDoor && !doorUp) {
+        this.scene.sleep("drive");
+        if (this.scene.isSleeping("door")) this.scene.wake("door");
+        else this.scene.launch("door");
+      } else if (!wantDoor && doorUp) {
+        this.scene.sleep("door");
+        if (snap.playerRole === "driver" && this.scene.isSleeping("drive")) this.scene.wake("drive");
+      }
     }
     const topMode: "id" | "play" | "hud" = wantDoor ? (showId ? "id" : "play") : "hud";
     if (topMode === this.doorTopMode) return;
