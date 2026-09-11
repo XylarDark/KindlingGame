@@ -1009,6 +1009,27 @@ describe("GameSim order loops", () => {
     expect(sim.snapshot().tabletTicket?.id).toBeUndefined();
   });
 
+  it("same-ticket tablet re-tap is a notice-only no-op — orders and phase unchanged", () => {
+    const sim = GameSim.create({ seed: 1, autoSpawn: false });
+    const order = sim.spawnOrder("pickup");
+    sim.shopClick({ type: "tablet", orderId: order.id });
+    expect(order.status).toBe("queued");
+    const ordersBefore = sim.snapshot().orders.length;
+    sim.shopClick({ type: "tablet", orderId: order.id });
+    sim.shopClick({ type: "tablet", orderId: order.id });
+    expect(sim.snapshot().orders.length).toBe(ordersBefore);
+    expect(order.status).toBe("queued");
+    expect(sim.snapshot().selectedOrderId).toBe(order.id);
+  });
+
+  it("repeated bag-rack no-op keeps snap cache when the notice is already shown", () => {
+    const sim = GameSim.create({ seed: 1, autoSpawn: false });
+    sim.shopClick({ type: "bagRack" });
+    const snap1 = sim.snapshot();
+    sim.shopClick({ type: "bagRack" });
+    expect(sim.snapshot()).toBe(snap1);
+  });
+
   it("starts the next queued ticket after the current bag is sealed", () => {
     const sim = GameSim.create({ seed: 1, autoSpawn: false });
     const first = sim.spawnOrder("pickup");

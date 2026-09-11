@@ -553,7 +553,6 @@ export class GameSim {
 
   shopClick(click: ShopClick): void {
     if (this.shiftEnded) return;
-    this.touch();
     switch (click.type) {
       case "keyLead":
         this.setOrdersNotice("Pick a flashing ticket, then the strain.");
@@ -803,6 +802,7 @@ export class GameSim {
       this.setTargetCallout(this.handSkuId, "Wrong jar");
       return;
     }
+    this.touch();
     this.handSkuId = null;
     this.sealBag(order);
     this.pushSfx("pack");
@@ -867,6 +867,7 @@ export class GameSim {
       this.clearTargetCallout();
       return;
     }
+    this.touch();
     this.fetchSkuId = skuId;
     this.keyLeadPhase = "toBack";
     this.keyLeadFacing = -1;
@@ -924,6 +925,7 @@ export class GameSim {
   }
 
   private sealBag(order: Order): void {
+    this.touch();
     if (order.type === "delivery") {
       order.status = "inBin";
       if (this.playerRole === "driver") {
@@ -956,6 +958,7 @@ export class GameSim {
   }
 
   private beginTicket(order: Order): void {
+    this.touch();
     this.selectedOrderId = order.id;
     this.driverLine = null;
     const sku = skuById(this.catalog, order.skuId);
@@ -972,6 +975,7 @@ export class GameSim {
       this.setOrdersNotice(`Already queued ${order.customerName}.`);
       return;
     }
+    this.touch();
     this.packQueue.push(order.id);
     this.setOrdersNotice(`Queued ${order.customerName}. Finish packing first.`);
   }
@@ -1035,7 +1039,10 @@ export class GameSim {
         this.setCustomerFeedback(orderId, `${order.customerName} is still walking in.`);
         return;
       }
-      this.selectedOrderId = orderId;
+      if (this.selectedOrderId !== orderId) {
+        this.touch();
+        this.selectedOrderId = orderId;
+      }
       this.tryServeWalkIn(order);
       return;
     }
@@ -1075,6 +1082,7 @@ export class GameSim {
       this.pushSfx("wrong");
       return true;
     }
+    this.touch();
     this.handSkuId = null;
     this.complete(target);
     return true;
@@ -1937,6 +1945,7 @@ export class GameSim {
 
   private complete(order: Order): void {
     if (this.shiftEnded) return;
+    this.touch();
     order.status = "completed";
     if (order.type === "delivery") order.late = isDeliveryLate(order, this.clock.gameMs);
     if (this.playerRole === "driver" && order.type !== "delivery") this.coverServed += 1;
@@ -2016,11 +2025,13 @@ export class GameSim {
   }
 
   private pushScoreFlash(delta: number): void {
+    this.touch();
     this.scoreFlashSeq += 1;
     this.scoreFlash = { id: this.scoreFlashSeq, delta };
   }
 
   private pushSfx(kind: SfxKind): void {
+    this.touch();
     this.sfxSeq += 1;
     this.sfxCue = { id: this.sfxSeq, kind };
   }
@@ -2028,24 +2039,35 @@ export class GameSim {
 
   /** Shop cues that name a customer land in their side stack, not the toast chip. */
   private setCustomerFeedback(orderId: string, text: string): void {
+    if (this.customerFeedback.get(orderId) === text) return;
+    this.touch();
     this.customerFeedback.set(orderId, text);
   }
 
   private clearCustomerFeedback(orderId: string): void {
+    if (!this.customerFeedback.has(orderId)) return;
+    this.touch();
     this.customerFeedback.delete(orderId);
   }
 
   /** Wrong-TV / jar cue near the tapped strain; cleared on the next successful fetch. */
   private setTargetCallout(skuId: string, text: string): void {
+    const cur = this.targetCallout;
+    if (cur?.skuId === skuId && cur.text === text) return;
+    this.touch();
     this.targetCallout = { skuId, text };
   }
 
   private clearTargetCallout(): void {
+    if (this.targetCallout == null) return;
+    this.touch();
     this.targetCallout = null;
   }
 
   /** Light ORDERS tablet notice for ticket spawn / pack events during shop play. */
   private setOrdersNotice(text: string): void {
+    if (this.ordersNotice === text) return;
+    this.touch();
     this.ordersNotice = text;
   }
 

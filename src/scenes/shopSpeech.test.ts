@@ -155,4 +155,24 @@ describe("shop hot-path dirty guards", () => {
     expect(src).toContain("lastTabletKey");
     expect(src).toContain("if (tabletKey !== this.lastTabletKey)");
   });
+
+  it("never snapshots on pointerdown — tablet ticket id comes from sync", () => {
+    expect(src).toContain("tabletTicketId");
+    expect(src).toContain("this.tabletTicketId = snap.tabletTicket?.id");
+    const pointerBlocks = src.match(/\.on\("pointerdown"[^)]*\)[^{]*\{[^}]+\}/g) ?? [];
+    expect(pointerBlocks.length).toBeGreaterThan(0);
+    for (const block of pointerBlocks) {
+      expect(block, block).not.toContain("snapshot(");
+    }
+  });
+
+  it("shop hotspot handlers stay dumb — no layout, bake, typekit, or budget on the click stack", () => {
+    const handlers = between(src, "private wireShopTap(", "private makeHotspots(", "wireShopTap callers");
+    expect(handlers).toContain("ackTap");
+    expect(handlers).not.toMatch(/fitTypeToBox|bakeStaticShop|refreshTypekit|applyRenderScale/);
+    const hotspots = between(src, "private makeHotspots(", "\n}\n", "makeHotspots");
+    expect(hotspots).not.toMatch(/fitTypeToBox|bakeStaticShop|refreshTypekit|applyRenderScale/);
+    const customerHit = between(src, "private makeCustomerVisual(", "wireHover(sprite);", "customer pointer");
+    expect(customerHit).not.toMatch(/fitTypeToBox|bakeStaticShop|refreshTypekit|applyRenderScale/);
+  });
 });

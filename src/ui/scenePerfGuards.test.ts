@@ -80,6 +80,14 @@ describe("scene perf guards", () => {
     expect(shop).toContain("getSim().gameMs()");
   });
 
+  it("Shop hotspots ack before sim — wireShopTap, no snapshot on pointerdown", () => {
+    const shop = read("src/scenes/ShopScene.ts");
+    expect(shop).toContain("wireShopTap");
+    expect(shop).toContain("ackTap");
+    expect(shop).toContain("tabletTicketId");
+    expect(shop).not.toMatch(/pointerdown[\s\S]{0,120}snapshot\(/);
+  });
+
   it("Hud skips pre-tick snapshot and dirty-guards ID/pad/phone map", () => {
     const hud = read("src/scenes/HudScene.ts");
     const update = hud.slice(hud.indexOf("update(_time"), hud.indexOf("private layoutHud"));

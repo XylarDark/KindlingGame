@@ -36,6 +36,7 @@ import {
   tabletLayout,
 } from "../maps/shopT0";
 import { enableItemHit } from "../input/hit";
+import { ackTap, releaseTapAck } from "../input/tapAck";
 import { getSim } from "../session";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import { skyAt, skyVisualDirtyKey } from "../sim/dayNight";
@@ -158,6 +159,8 @@ export class ShopScene extends Phaser.Scene {
   /** Catalog id → sku for TV fills (avoids catalog.find per TV per frame). */
   private skuById = new Map<string, Sku>();
   private lastTabletKey = "";
+  /** Front tablet ticket id — cached during sync so pointerdown never snapshots. */
+  private tabletTicketId: string | null = null;
   private lastReceiptKey = "";
   private lastTvKey = "";
   /** Ordered settled ids + quantized x — layoutCustomerSpeech only when this changes. */
@@ -191,7 +194,7 @@ export class ShopScene extends Phaser.Scene {
 
     this.bagRack = this.add.image(BAG_STACK.x, BAG_STACK.y, "tex-bag-bags").setOrigin(0.5, 1).setDepth(8);
     enableItemHit(this.bagRack);
-    this.bagRack.on("pointerdown", () => getSim().shopClick({ type: "bagRack" }));
+    this.wireShopTap(this.bagRack, 1, () => getSim().shopClick({ type: "bagRack" }));
 
     this.keyLead = this.add
       .image(KEYLEAD.x, KEYLEAD.y, "tex-keylead")
@@ -227,9 +230,8 @@ export class ShopScene extends Phaser.Scene {
 
     this.tabletHit = this.add.rectangle(TABLET.x, TABLET.y, TABLET_W, TABLET_H, 0x000000, 0.001).setDepth(12);
     enableItemHit(this.tabletHit);
-    this.tabletHit.on("pointerdown", () => {
-      const ticket = getSim().snapshot().tabletTicket;
-      if (ticket) getSim().shopClick({ type: "tablet", orderId: ticket.id });
+    this.wireShopTap(this.tabletHit, 1, () => {
+      if (this.tabletTicketId) getSim().shopClick({ type: "tablet", orderId: this.tabletTicketId });
     });
     wireHover(this.tabletHit);
 
@@ -275,7 +277,7 @@ export class ShopScene extends Phaser.Scene {
     this.driver = this.add.image(DRIVER.x, DRIVER.y, "tex-driver-sit").setOrigin(0.5, 1).setScale(PEOPLE_SCALE).setDepth(10);
     applyCrewTexture(this.driver, "tex-driver-sit");
     enableItemHit(this.driver);
-    this.driver.on("pointerdown", () => this.departNow());
+    this.wireShopTap(this.driver, PEOPLE_SCALE, () => this.departNow());
     wireHover(this.driver);
 
     this.driverBubble = addSignText(this, DRIVER.x - 24, DRIVER.y - PERSON_DISPLAY_H - 8, "", {
@@ -420,6 +422,7 @@ export class ShopScene extends Phaser.Scene {
   }
 
   private syncTablet(snap: SimSnapshot, pulse: number, flash: boolean): void {
+    this.tabletTicketId = snap.tabletTicket?.id ?? null;
     const tab = tabletLayout();
     const hasTicket = !!snap.tabletTicket || snap.tabletQueueCount > 0;
     const count = snap.tabletQueueCount;
@@ -590,7 +593,7 @@ export class ShopScene extends Phaser.Scene {
       .setVisible(false)
       .setActive(false);
     enableItemHit(sprite);
-    sprite.on("pointerdown", () => {
+    this.wireShopTap(sprite, PEOPLE_SCALE, () => {
       const id = (sprite.getData("orderId") as string | undefined) ?? null;
       if (id) getSim().shopClick({ type: "customer", orderId: id });
     });
@@ -733,6 +736,21 @@ export class ShopScene extends Phaser.Scene {
     }
   }
 
+  /** Same-frame press bump — ack first, sim on pointerdown; restore scale on release. */
+  private wireShopTap(
+    target: Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.Transform,
+    baseScale: number,
+    onTap: () => void,
+  ): void {
+    target.on("pointerdown", () => {
+      ackTap(target);
+      onTap();
+    });
+    const release = (): void => releaseTapAck(target, baseScale, baseScale);
+    target.on("pointerup", release);
+    target.on("pointerupoutside", release);
+  }
+
   private makeHotspots(): void {
     const sim = getSim();
     this.skuById = new Map(sim.catalog.map((s) => [s.id, s]));
@@ -742,7 +760,7 @@ export class ShopScene extends Phaser.Scene {
       const glassW = TV_W - TV_BEZEL * 2;
       const screen = this.add.rectangle(p.x, p.y, glassW - 8, slotH - 4, sku.color, 0.35).setDepth(5);
       enableItemHit(screen);
-      screen.on("pointerdown", () => getSim().shopClick({ type: "strain", skuId: sku.id }));
+      this.wireShopTap(screen, 1, () => getSim().shopClick({ type: "strain", skuId: sku.id }));
       this.tvs.push(screen);
       this.jarSkus.push(sku.id);
       const maxW = glassW - 16;
