@@ -6,13 +6,12 @@ import { loadDisplayPrefs, saveDisplayPrefs } from "../displayPrefs";
 import { openInstallCoachFromSettings } from "../installCoach";
 import { addHudButton, addPanel } from "../chrome";
 import { END_SHIFT_CAPTION, END_SHIFT_LABEL } from "../copy";
-import { enableItemHit, syncItemHit } from "../../input/hit";
-import { addSignText, setSignPosition } from "../signText";
+import { addSignText, setSignPosition, signContainer, syncSignHit, syncSignPlaque } from "../signText";
 import { addUiText } from "../text";
 import { settingsGeom, type SettingsGeom } from "../settingsGeom";
 import { Color, HUD_TYPE_FIT, MENU_TYPE_FIT, scaleChromePx } from "../theme";
 import type { SafeInset } from "../viewFit";
-import { HUD_TOUCH_MIN_DESIGN } from "../viewFit";
+import { hudSceneViewport, HUD_TOUCH_MIN_DESIGN } from "../viewFit";
 import {
   HUD_COG_CAPTION_BOX,
   HUD_COG_CAPTION_PAD,
@@ -49,6 +48,8 @@ export interface HudSettingsDeps {
  */
 export class HudSettings {
   cog!: Phaser.GameObjects.Image;
+  /** Standard rectangle hit — Image + custom hitArea misses Phaser input on shrunk HUD cameras. */
+  cogHit!: Phaser.GameObjects.Rectangle;
   cogCaption!: Phaser.GameObjects.Text;
   settingsDim!: Phaser.GameObjects.Rectangle;
   settingsPanel!: Phaser.GameObjects.Container;
@@ -314,15 +315,17 @@ export class HudSettings {
       .image(cogX, cogY, "tex-cog")
       .setOrigin(1, 1)
       .setDisplaySize(cogSize, cogSize)
-      .setScrollFactor(0)
       .setDepth(42);
-    enableItemHit(this.cog);
     const toggleSettings = (p: Phaser.Input.Pointer): void => {
       p.event.stopPropagation();
       if (this.open) this.close();
       else this.openSettings();
     };
-    this.cog.on("pointerdown", toggleSettings);
+    this.cogHit = this.scene.add
+      .rectangle(cogX - cogSize / 2, cogY - cogSize / 2, cogSize, cogSize, 0x000000, 0.001)
+      .setDepth(43)
+      .setInteractive({ useHandCursor: true });
+    this.cogHit.on("pointerdown", toggleSettings);
     this.cogCaption = addSignText(this.scene, cogX - cogSize / 2, cogY - cogSize - 8, "Settings", {
       size: scaleChromePx(HUD_COG_CAPTION_PX),
       padding: HUD_COG_CAPTION_PAD,
@@ -334,30 +337,49 @@ export class HudSettings {
     })
       .setOrigin(0.5, 1)
       .setDepth(42);
-    enableItemHit(this.cogCaption);
-    this.cogCaption.on("pointerdown", toggleSettings);
+    const captionHost = signContainer(this.cogCaption);
+    // scrollFactor 0 on sign hosts skews input on RenderBudget-shrunk HUD cameras.
+    captionHost.setScrollFactor(1);
+    this.cogCaption.setScrollFactor(1);
+    const captionPlaque = this.cogCaption.getData("signPlaque") as Phaser.GameObjects.NineSlice | undefined;
+    captionPlaque?.setScrollFactor(1);
+    captionHost.on("pointerdown", toggleSettings);
     this.refreshMusicControls();
     this.refreshFullscreenControl();
   }
 
   layout(inset: SafeInset): void {
+    const { width: viewW, height: viewH } = hudSceneViewport(this.scene);
+    this.syncViewportChrome(viewW, viewH);
     const cogSize = HUD_TOUCH_MIN_DESIGN;
-    const cogX = GAME_WIDTH - 24 - inset.right;
-    const cogY = GAME_HEIGHT - 20 - inset.bottom;
+    const cogX = viewW - 24 - inset.right;
+    const cogY = viewH - 20 - inset.bottom;
     this.cog.setPosition(cogX, cogY);
     this.cog.setDisplaySize(cogSize, cogSize);
-    syncItemHit(this.cog);
+    this.cogHit.setPosition(cogX - cogSize / 2, cogY - cogSize / 2);
+    this.cogHit.setSize(cogSize, cogSize);
     const cogCaptionX = Phaser.Math.Clamp(
       cogX - cogSize / 2,
       inset.left + HUD_COG_CAPTION_BOX.w / 2 + 8,
-      GAME_WIDTH - inset.right - HUD_COG_CAPTION_BOX.w / 2 - 8,
+      viewW - inset.right - HUD_COG_CAPTION_BOX.w / 2 - 8,
     );
     const cogCaptionY = Math.max(inset.top + HUD_COG_CAPTION_BOX.h + 8, cogY - cogSize - 8);
     setSignPosition(this.cogCaption, cogCaptionX, cogCaptionY);
+    syncSignPlaque(this.cogCaption);
+    syncSignHit(this.cogCaption);
     const panelTop = Math.max(inset.top, cogY - cogSize - 32 - this.settingsBox.h);
     this.settingsPanel.setPosition(cogX - SETTINGS_W, panelTop);
     const volBounds = this.volumeTrack.getBounds();
     this.volumeTrackBounds = { left: volBounds.left, width: volBounds.width };
+  }
+
+  /** Dim spans the live HUD viewport — resize tracks RenderBudget demotion. */
+  private syncViewportChrome(viewW: number, viewH: number): void {
+    this.settingsDim.setSize(viewW, viewH).setPosition(viewW / 2, viewH / 2);
+    const input = this.settingsDim.input;
+    if (input?.hitArea && typeof (input.hitArea as Phaser.Geom.Rectangle).setTo === "function") {
+      (input.hitArea as Phaser.Geom.Rectangle).setTo(0, 0, viewW, viewH);
+    }
   }
 
   armSettingsDim(on: boolean): void {

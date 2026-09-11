@@ -1,8 +1,28 @@
+import type Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 
 export interface ViewSize {
   width: number;
   height: number;
+}
+
+/** Live HUD camera size — follows RenderBudget `scale.resize`, not design GAME_* constants. */
+export function hudSceneViewport(scene: Phaser.Scene): ViewSize {
+  const cam = scene.cameras?.main;
+  const w = Math.max(320, cam?.width ?? scene.scale.width ?? GAME_WIDTH);
+  const h = Math.max(180, cam?.height ?? scene.scale.height ?? GAME_HEIGHT);
+  return { width: w, height: h };
+}
+
+/** Bottom-right settings cog X in design space for the current HUD viewport. */
+export function settingsCogX(viewW: number, insetRight: number, margin = 24): number {
+  return viewW - margin - insetRight;
+}
+
+/** True when a right-anchored control fits inside the HUD camera worldView at scroll (0,0). */
+export function cogInsideHudViewport(cogRight: number, cogWidth: number, viewW: number): boolean {
+  const cogLeft = cogRight - cogWidth;
+  return cogLeft >= 0 && cogRight <= viewW;
 }
 
 export interface DisplayScale {

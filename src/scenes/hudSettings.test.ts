@@ -69,13 +69,25 @@ describe("settings cog panel", () => {
     expect(close).toContain("this.setCogCaptionShown(true)");
   });
 
-  it("fixes the settings cog to the screen like score and clock readouts", () => {
+  it("uses a rectangle tap target for the cog — Image custom hitArea misses Phaser input on shrunk HUD cameras", () => {
     const create = between(settings, "create(): void {", "\n  }", "settings create");
-    expect(create).toMatch(/this\.cog = this\.scene\.add[\s\S]*\.setScrollFactor\(0\)/);
-    expect(create).toContain("enableItemHit(this.cog)");
-    expect(create).toContain("enableItemHit(this.cogCaption)");
-    expect(create).toContain('"tex-cog"');
+    expect(create).toMatch(/this\.cog = this\.scene\.add[\s\S]*"tex-cog"/);
+    expect(create).toContain("this.cogHit = this.scene.add");
+    expect(create).toContain('this.cogHit.on("pointerdown", toggleSettings)');
+    expect(create).not.toContain("this.cog.on(\"pointerdown\"");
+    expect(create).toContain("signContainer(this.cogCaption)");
+    expect(create).toContain("captionHost.setScrollFactor(1)");
     expect(create).toMatch(/\.setDisplaySize\(cogSize, cogSize\)/);
+  });
+
+  it("anchors settings chrome to the live HUD viewport and syncs caption hit on the plaque host", () => {
+    const layout = between(settings, "layout(inset: SafeInset): void {", "\n  }", "settings layout");
+    expect(layout).toContain("hudSceneViewport(this.scene)");
+    expect(layout).toContain("syncSignPlaque(this.cogCaption)");
+    expect(layout).toContain("syncSignHit(this.cogCaption)");
+    expect(layout).toContain("this.cogHit.setPosition");
+    expect(layout).toMatch(/const cogX = viewW - 24 - inset\.right/);
+    expect(layout).not.toMatch(/const cogX = GAME_WIDTH - 24 - inset\.right/);
   });
 
   it("keeps a hud button's hit area on the box it paints", () => {

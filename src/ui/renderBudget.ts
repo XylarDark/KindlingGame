@@ -185,9 +185,14 @@ export function syncSceneRenderCamera(
 ): void {
   const cam = scene.cameras?.main;
   if (!cam) return;
-  // HUD chrome is screen-space at design coords — zoom would drift score/clock off the counter sign.
-  const zoom = scene.sys.settings.key === "hud" ? 1 : scale;
-  cam.setZoom(zoom);
+  if (scene.sys.settings.key === "hud") {
+    // HUD chrome is laid out in the live backbuffer (0..cam.width). centerOn(GAME_*)
+    // scrolls right/bottom controls off-screen when renderScale shrinks below design.
+    cam.setZoom(1);
+    cam.setScroll(0, 0);
+    return;
+  }
+  cam.setZoom(scale);
   if (scene.sys.settings.key !== "drive") {
     cam.centerOn(GAME_WIDTH / 2, GAME_HEIGHT / 2);
   }

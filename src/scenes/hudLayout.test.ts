@@ -68,9 +68,11 @@ describe("HUD sign attachment guards", () => {
     expect(sign).toContain("export function signHostPosition");
   });
 
-  it("keeps the HUD scene camera at zoom 1 while world scenes use renderScale", () => {
+  it("keeps the HUD scene camera at zoom 1 with scroll pinned to the live backbuffer", () => {
     const sync = between(budget, "export function syncSceneRenderCamera(", "\n}", "syncSceneRenderCamera");
-    expect(sync).toContain('scene.sys.settings.key === "hud" ? 1 : scale');
+    expect(sync).toMatch(
+      /if \(scene\.sys\.settings\.key === "hud"\)[\s\S]*cam\.setScroll\(0, 0\)/,
+    );
   });
 });
 

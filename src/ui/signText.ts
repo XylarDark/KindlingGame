@@ -150,6 +150,29 @@ export function setSignPosition(text: Phaser.GameObjects.Text, x: number, y: num
   else text.setPosition(x, y);
 }
 
+/** Hit-test the plaque host, not inner Text at local glyph offsets. */
+export function syncSignHit(text: Phaser.GameObjects.Text): void {
+  const host = text.getData(SIGN_HOST) as Phaser.GameObjects.Container | undefined;
+  const plaque = text.getData(SIGN_PLAQUE) as Phaser.GameObjects.NineSlice | undefined;
+  if (!host || !plaque) return;
+  const w = plaque.width;
+  const h = plaque.height;
+  const left = plaque.x - w * plaque.originX;
+  const top = plaque.y - h * plaque.originY;
+  if (!host.input) {
+    host.setInteractive({
+      useHandCursor: true,
+      hitArea: new Phaser.Geom.Rectangle(left, top, w, h),
+      hitAreaCallback: Phaser.Geom.Rectangle.Contains,
+    });
+    return;
+  }
+  const area = host.input.hitArea;
+  if (area && typeof (area as Phaser.Geom.Rectangle).setTo === "function") {
+    (area as Phaser.Geom.Rectangle).setTo(left, top, w, h);
+  }
+}
+
 function layoutPlaque(entry: SignPlaqueEntry): void {
   const { text, host, plaque } = entry;
   const copy = String(text.text ?? "");

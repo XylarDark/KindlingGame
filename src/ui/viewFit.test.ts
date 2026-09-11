@@ -24,6 +24,9 @@ import {
   phaserDisplayScale,
   readCssSafeArea,
   stageCropCss,
+  settingsCogX,
+  cogInsideHudViewport,
+  hudSceneViewport,
   VIEWFIT_EVENT,
 } from "./viewFit";
 
@@ -212,6 +215,29 @@ describe("clientToGame pointer mapping", () => {
     const css = displayScale(view);
     expect(phaser.x * css.x).toBeCloseTo(1);
     expect(phaser.y * css.y).toBeCloseTo(1);
+  });
+});
+
+describe("settings cog viewport geometry", () => {
+  it("FAILS if cog X stays at design GAME_WIDTH when the HUD backbuffer is narrower", () => {
+    for (const scale of [0.85, 0.65]) {
+      const viewW = Math.round(GAME_WIDTH * scale);
+      const viewH = Math.round(GAME_HEIGHT * scale);
+      const cogRight = settingsCogX(viewW, 0);
+      expect(cogInsideHudViewport(cogRight, HUD_TOUCH_MIN_DESIGN, viewW)).toBe(true);
+      expect(GAME_WIDTH - 24).toBeGreaterThan(viewW);
+      expect(cogRight).toBeLessThanOrEqual(viewW);
+      expect(viewH).toBeGreaterThan(600);
+    }
+  });
+
+  it("reads the live camera width instead of design GAME_WIDTH", () => {
+    const viewW = Math.round(GAME_WIDTH * 0.85);
+    const scene = {
+      cameras: { main: { width: viewW, height: Math.round(GAME_HEIGHT * 0.85) } },
+      scale: { width: viewW, height: Math.round(GAME_HEIGHT * 0.85) },
+    };
+    expect(hudSceneViewport(scene as never).width).toBe(viewW);
   });
 });
 

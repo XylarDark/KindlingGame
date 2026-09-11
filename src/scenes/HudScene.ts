@@ -28,7 +28,7 @@ import { addUiText } from "../ui/text";
 import { enableItemHit } from "../input/hit";
 import { ackTap, releaseTapAck } from "../input/tapAck";
 import { advanceSimClock } from "../sim/kindlingClock";
-import { syncSceneRenderCamera, tickRenderBudget } from "../ui/renderBudget";
+import { onRenderBudgetChange, syncSceneRenderCamera, tickRenderBudget } from "../ui/renderBudget";
 import { updateFeelMeter } from "../ui/feelMeter";
 import { notePerfRawDelta } from "../ui/perfProbe";
 import { Color, MENU_TYPE_FIT, MSG_TYPE_FIT, scaleMsgBox, scaleMsgPx, Type } from "../ui/theme";
@@ -36,7 +36,7 @@ import { typeRolePx } from "../ui/typeScale";
 import { worldToScreen } from "../ui/worldProject";
 import { PIN_CYCLE_MS } from "./driveConstants";
 import { loadWorldScenes } from "./worldScenes";
-import { designHudInset, HUD_TOUCH_MIN_DESIGN, readCssSafeArea, VIEWFIT_EVENT } from "../ui/viewFit";
+import { designHudInset, hudSceneViewport, HUD_TOUCH_MIN_DESIGN, readCssSafeArea, VIEWFIT_EVENT } from "../ui/viewFit";
 import { HudReadouts } from "../ui/hud/readouts";
 import { HudSettings } from "../ui/hud/settings";
 import { HudPhone } from "../ui/hud/phone";
@@ -216,13 +216,20 @@ export class HudScene extends Phaser.Scene {
 
     this.makeResults();
     this.layoutHud();
-    const relayout = (): void => this.layoutHud();
+    const relayout = (): void => {
+      syncSceneRenderCamera(this);
+      this.layoutHud();
+    };
     this.scale.on(Phaser.Scale.Events.RESIZE, relayout);
     this.game.events.on(VIEWFIT_EVENT, relayout);
+    const offBudget = onRenderBudgetChange(relayout);
     this.events.on(Phaser.Scenes.Events.PAUSE, () => {
       this.toastText.setVisible(false);
     });
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.game.events.off(VIEWFIT_EVENT, relayout));
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.game.events.off(VIEWFIT_EVENT, relayout);
+      offBudget();
+    });
 
     this.paintHud(getSim().snapshot());
   }
@@ -255,18 +262,16 @@ export class HudScene extends Phaser.Scene {
 
   private layoutHud(): void {
     const inset = designHudInset(readCssSafeArea(document.getElementById("game-root")));
-    const bottom = GAME_HEIGHT - 40 - inset.bottom;
+    const { width: viewW, height: viewH } = hudSceneViewport(this);
+    const bottom = viewH - 40 - inset.bottom;
     this.readouts.layoutReadoutColumn(inset);
     this.readouts.placeReadouts();
     this.hudSettings.layout(inset);
-    const cogSize = HUD_TOUCH_MIN_DESIGN;
-    const cogX = GAME_WIDTH - 24 - inset.right;
-    const cogY = GAME_HEIGHT - 20 - inset.bottom;
-    const cogLeft = cogX - cogSize;
-    const cogTop = cogY - cogSize;
-    this.phoneWidget.layout(inset, cogLeft, cogTop);
-    setSignPosition(this.toastText, GAME_WIDTH / 2 - 40, bottom);
-    this.padCenter = { x: 196 + inset.left, y: GAME_HEIGHT - 220 - inset.bottom };
+    const cogLeft = this.hudSettings.cog.x - this.hudSettings.cog.displayWidth;
+    const cogTop = this.hudSettings.cog.y - this.hudSettings.cog.displayHeight;
+    this.phoneWidget.layout(inset, cogLeft, cogTop, viewW, viewH);
+    setSignPosition(this.toastText, viewW / 2 - 40, bottom);
+    this.padCenter = { x: 196 + inset.left, y: viewH - 220 - inset.bottom };
     this.lastPadFlash = null;
     this.drawPad();
     this.padKnob.setPosition(this.padCenter.x, this.padCenter.y);

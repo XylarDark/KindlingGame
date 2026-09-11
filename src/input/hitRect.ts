@@ -23,11 +23,15 @@ export function itemHitRect(width: number, height: number, padScale = HIT_PAD_SC
 export type HitSized = {
   width?: number;
   height?: number;
+  displayWidth?: number;
+  displayHeight?: number;
   frame?: { realWidth?: number; realHeight?: number; width?: number; height?: number };
 };
 
 export function itemHitSize(obj: HitSized): { width: number; height: number } {
-  if (obj.width && obj.height) return { width: obj.width, height: obj.height };
+  const dw = obj.displayWidth ?? obj.width;
+  const dh = obj.displayHeight ?? obj.height;
+  if (dw && dh) return { width: dw, height: dh };
   const frame = obj.frame;
   if (frame) {
     return {
