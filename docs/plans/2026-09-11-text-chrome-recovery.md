@@ -61,3 +61,19 @@ Fix Settings caption so it looks centered in its plaque (shot showed top-heavy).
 ### Note
 
 PR A shipped in #54 (rails, sign ink contract, Settings centering). PR C (ID card header) and PR D (pin sizes / menu boards) remain out of scope here.
+
+---
+
+## PR C — ID card header + field alignment
+
+**Base:** `master` after PR B (#55 `0116531`)
+
+### Done criteria
+
+1. **Header captions clear of seal** — `PROVINCE OF KINDLING` and `IDENTITY CARD · CLASS G` use symmetric `ID_HEADER_CAP_MAX_W` derived from `ID_HEADER_SEAL_D` + gap, not overlapping 60/40 card slices; provincial seal drawn at header centre.
+2. **Form-field rhythm** — NAME / DOB / ID NO. / EXPIRES share `ID_FIELD_X`, top-origin `(0, 0)` labels and values, and `ID_FIELD_ROW_STEP` / `ID_FIELD_VALUE_LEAD` vertical spacing.
+3. **Focused test** — `idCard.test.ts` fails if header reverts to fractional maxWidth or field rows drop the shared left edge.
+
+### Note
+
+PR A = #54, PR B = #55. PR D (pin sizes / menu boards / speech) remains out of scope.
