@@ -201,7 +201,7 @@ export class DriveScene extends Phaser.Scene {
       y: vehicle.y,
       heading: vehicle.heading,
     });
-    const frameMs = useInterp ? this.game.loop.rawDelta : this.game.loop.delta;
+    const frameMs = this.game.loop.delta;
     const turnT = 1 - Math.exp(-(frameMs / 1000) * 6);
     const seen = new Set<string>();
     while (this.trafficSprites.length < traffic.length && this.trafficSprites.length < TRAFFIC_SPRITE_CAP) {

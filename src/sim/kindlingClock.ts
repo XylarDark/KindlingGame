@@ -1,9 +1,13 @@
 /**
  * Gaffer-style fixed timestep for Kindling sim + render interpolation alpha.
  *
- * Fixed step: **1/60 s** (~16.667 ms). Wall-clock accumulator feeds from
- * `game.loop.rawDelta` in `fixedRaw` mode; `smooth` mode ticks once per frame
- * from Phaser's smoothed scene delta (legacy fallback via `?clock=smooth`).
+ * Fixed step: **1/60 s** (~16.667 ms). In `fixedRaw` mode the accumulator
+ * feeds from the scene update `delta` (wall-clock between game steps when
+ * `smoothStep` is off). Do **not** use `game.loop.rawDelta` — with
+ * `fps.limit` Phaser updates `rawDelta` every RAF tick (~16 ms) while the
+ * scene step runs at the limit (~33 ms on coarse 30 fps), halving sim rate.
+ * `smooth` mode ticks once per frame from Phaser's smoothed scene delta
+ * (default product feel; override via `?clock=fixedRaw`).
  */
 import type { SimSnapshot } from "./gameSim";
 import { SimInterpolator } from "./simInterpolator";
@@ -42,7 +46,7 @@ export function resolveClockMode(): ClockMode {
   } catch {
     /* private mode / SSR */
   }
-  return "fixedRaw";
+  return "smooth";
 }
 
 export function getClockMode(): ClockMode {
@@ -108,7 +112,7 @@ export function resetKindlingClockForTests(): void {
 }
 
 export interface AdvanceClockOpts {
-  /** Wall-clock frame delta — rawDelta in fixedRaw, smoothed delta in smooth. */
+  /** Elapsed ms since last game step — scene `delta` in fixedRaw (smoothStep off), smoothed delta in smooth. */
   frameMs: number;
   tick: (dtMs: number) => void;
   snapshot: () => SimSnapshot;

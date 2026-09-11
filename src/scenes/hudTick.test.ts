@@ -7,22 +7,20 @@ const here = dirname(fileURLToPath(import.meta.url));
 const read = (rel: string): string => readFileSync(join(here, rel), "utf8").replace(/\r\n/g, "\n");
 
 describe("HudScene fixed-step wall-clock sim tick", () => {
-  it("advances sim through kindlingClock with rawDelta in fixedRaw mode", () => {
+  it("advances sim through kindlingClock with scene delta (not loop.rawDelta under fps.limit)", () => {
     const src = read("HudScene.ts");
     expect(src).toContain("advanceSimClock");
-    expect(src).toContain("this.game.loop.rawDelta");
-    expect(src).toContain("getClockMode()");
+    expect(src).toContain("const frameMs = delta");
+    expect(src).not.toMatch(/fixedRaw\s*\?\s*rawDelta/);
     expect(src).not.toMatch(/sim\.tick\(Math\.min\(Math\.max\(0, delta\), MAX_SIM_STEP_MS\)\)/);
   });
 
-  it("defaults fixedRaw with smoothStep off; smooth fallback via clock mode", () => {
-    const config = read("../config.ts");
-    expect(config).toContain("smoothStep: false");
+  it("defaults smooth with smoothStep on; fixedRaw opt-in via clock mode", () => {
     const main = read("../main.ts");
     expect(main).toContain("wantsSmoothStep(clockMode)");
     expect(main).toContain("resolveClockMode()");
     const clock = read("../sim/kindlingClock.ts");
-    expect(clock).toContain('return "fixedRaw"');
+    expect(clock).toContain('return "smooth"');
   });
 
   it("limits coarse phones to ~30fps target for sustained smoothness", () => {
