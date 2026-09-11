@@ -36,3 +36,45 @@ describe("title welcome / howto intro scale", () => {
     expect(src).not.toContain("const cardW = 440");
   });
 });
+
+describe("title how-to start flow", () => {
+  it("does not stack setTopOnly above the OPEN THE SHOP button", () => {
+    expect(src).toContain("this.input.setTopOnly(false)");
+    expect(src).not.toContain("this.input.setTopOnly(true)");
+  });
+
+  it("makes the dim visual-only on how-to and routes the button straight to begin()", () => {
+    const howto = src.slice(src.indexOf("private drawHowTo"), src.indexOf("private async finishDeferredWarm"));
+    expect(howto).toContain("OPEN THE SHOP");
+    expect(howto).toContain("void this.begin()");
+    expect(howto).toContain("this.dimOverlay.disableInteractive()");
+    expect(howto).not.toContain("HOWTO_HINT");
+    expect(howto).not.toContain("addSignText");
+  });
+
+  it("does not start the shift from dim tap or any-key on how-to", () => {
+    const advance = src.slice(src.indexOf("private async advanceAsync"), src.indexOf("private async begin"));
+    expect(advance).toContain('if (this.phase === "howto") return');
+    expect(src).toContain('if (this.phase === "howto") return');
+  });
+
+  it("caps deferred warm so begin() cannot hang forever", () => {
+    const begin = src.slice(src.indexOf("private async begin"));
+    expect(begin).toContain("Promise.race");
+    expect(begin).toContain("TITLE_BEGIN_WARM_MS");
+    expect(begin).toContain("beginPlay()");
+    expect(begin).toContain('this.scene.resume("shop")');
+    expect(begin).toContain('this.scene.resume("hud")');
+    expect(begin).toContain("this.scene.stop()");
+  });
+
+  it("passes HTML overlay taps through to the canvas while title is up", () => {
+    expect(src).toContain("setTitleHtmlInputPassThrough(true)");
+    expect(src).toContain("setTitleHtmlInputPassThrough(false)");
+  });
+
+  it("hides HUD chrome under the title overlay", () => {
+    expect(src).toContain('this.scene.setVisible(false, "hud")');
+    expect(src).toContain('this.scene.setVisible(true, "hud")');
+  });
+});

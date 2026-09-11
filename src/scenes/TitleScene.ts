@@ -14,16 +14,15 @@ import { isCityBuildComplete } from "../ui/cityBuild";
 import { markSceneWarm, sceneWarmTimeout } from "../ui/sceneWarm";
 import { maybeEnterFullscreenOnStart } from "../ui/displayPrefs";
 import { addHudButton, addPanel, HUD_BUTTON_MIN_H } from "../ui/chrome";
-import { HOWTO_HINT, HOWTO_STEPS, PAUSE_HINT, WELCOME_HINT, WELCOME_TITLE } from "../ui/copy";
+import { HOWTO_STEPS, PAUSE_HINT, WELCOME_HINT, WELCOME_TITLE } from "../ui/copy";
 import { setPwaIdle } from "../pwaUpdate";
 import { presentInstallCoach } from "../ui/installCoach";
 import { hideLoading, showLoading } from "../ui/loadingGate";
 import { getRenderBudget, syncSceneRenderCamera } from "../ui/renderBudget";
 import { SIGN_FRAME_W, signPlaqueRings } from "../ui/signPlaque";
-import { addSignText } from "../ui/signText";
 import { addUiText } from "../ui/text";
-import { Color, MENU_TYPE_FIT, MSG_TYPE_FIT, scaleMsgBox, scaleMsgPad, Type } from "../ui/theme";
-import { typeRolePx } from "../ui/typeScale";
+import { setTitleHtmlInputPassThrough } from "../ui/titleHtmlInput";
+import { Color, MENU_TYPE_FIT, Type } from "../ui/theme";
 import { fitTypeToWidth } from "../ui/typekit";
 import { designHudInset, readCssSafeArea, VIEWFIT_EVENT } from "../ui/viewFit";
 
@@ -52,6 +51,8 @@ const PAUSE_MARGIN = 48;
 
 const WARM_DRIVE_FOCUS = { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 };
 const WARM_SCENE_HOURS = [12, 20.5] as const;
+/** Wall-clock cap on deferred warm — OPEN THE SHOP must not hang if warm stalls. */
+const TITLE_BEGIN_WARM_MS = 9000;
 
 export class TitleScene extends Phaser.Scene {
   private started = false;
@@ -59,6 +60,7 @@ export class TitleScene extends Phaser.Scene {
   private welcomeLayer: Phaser.GameObjects.GameObject[] = [];
   private pauseHint?: Phaser.GameObjects.Text;
   private pausePlaque?: Phaser.GameObjects.Graphics;
+  private dimOverlay!: Phaser.GameObjects.Rectangle;
   /** Blocks begin() until deferred drive/door warm finishes — no mid-shift launch. */
   private deferredWarm: Promise<void> | null = null;
 
@@ -70,10 +72,12 @@ export class TitleScene extends Phaser.Scene {
     this.scene.bringToTop();
     this.scene.pause("shop");
     this.scene.pause("hud");
-    this.input.setTopOnly(true);
+    this.input.setTopOnly(false);
     // Title is idle for PWA — waiting workers may activate + reload here only.
     setPwaIdle(true);
     syncSceneRenderCamera(this);
+    this.scene.setVisible(false, "hud");
+    setTitleHtmlInputPassThrough(true);
 
     // If Boot aborted before drive/door sleep, finish under the gate (never orphan showLoading).
     this.deferredWarm = this.finishDeferredWarm();
@@ -81,18 +85,20 @@ export class TitleScene extends Phaser.Scene {
     // Mobile / early play: coach install for a chrome-free session (no-op if standalone
     // or already dismissed). HTML overlay sits above the Phaser canvas.
     presentInstallCoach();
+    setTitleHtmlInputPassThrough(true);
 
     const showOverlays = shouldShowHowTo();
     this.phase = showOverlays ? "welcome" : "paused";
 
-    this.add
+    this.dimOverlay = this.add
       .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, Color.ink, showOverlays ? 0.56 : 0.001)
-      .setDepth(40)
-      .setInteractive()
-      .on("pointerdown", () => {
+      .setDepth(40);
+    if (showOverlays || this.phase === "paused") {
+      this.dimOverlay.setInteractive().on("pointerdown", () => {
         unlockAudio(this.game);
         this.advance();
       });
+    }
 
     if (showOverlays) this.drawWelcome();
     else {
@@ -128,8 +134,14 @@ export class TitleScene extends Phaser.Scene {
 
     this.input.keyboard?.on("keydown", (event: KeyboardEvent) => {
       if (event.repeat) return;
+      if (this.phase === "howto") return;
       unlockAudio(this.game);
       this.advance();
+    });
+
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      setTitleHtmlInputPassThrough(false);
+      this.scene.setVisible(true, "hud");
     });
   }
 
@@ -245,9 +257,7 @@ export class TitleScene extends Phaser.Scene {
     const rowW = cardW * 3 + gap * 2;
     const btnH = Math.max(HUD_BUTTON_MIN_H + introN(28), introN(HUD_BUTTON_MIN_H));
     const stackGap = introN(18);
-    const hintGap = introN(12);
-    const hintH = introN(32);
-    const blockH = cardH + stackGap + btnH + hintGap + hintH;
+    const blockH = cardH + stackGap + btnH;
     const startX = Math.floor((GAME_WIDTH - rowW) / 2);
     // Sit the stack above dead centre so the tap hint clears the counter sign.
     const cardY = Math.floor((GAME_HEIGHT - blockH) / 2) - HOWTO_LIFT;
@@ -319,19 +329,32 @@ export class TitleScene extends Phaser.Scene {
         .setDepth(42);
     });
 
-    const play = addHudButton(this, GAME_WIDTH / 2, cardY + cardH + stackGap, "OPEN THE SHOP", () => this.begin(), {
-      originX: 0.5,
-      originY: 0,
-      variant: "primary",
-      minWidth: introN(380),
-      minHeight: btnH,
-      depth: 43,
-      caption: "Begin the 9 AM shift",
-      labelSize: headingSize,
-      captionSize: introPx(13),
-      labelMaxHeight: introN(36),
-      captionMaxHeight: introN(40),
-    });
+    const play = addHudButton(
+      this,
+      GAME_WIDTH / 2,
+      cardY + cardH + stackGap,
+      "OPEN THE SHOP",
+      () => {
+        unlockAudio(this.game);
+        void this.begin();
+      },
+      {
+        originX: 0.5,
+        originY: 0,
+        variant: "primary",
+        minWidth: introN(380),
+        minHeight: btnH,
+        depth: 43,
+        caption: "Begin the 9 AM shift",
+        labelSize: headingSize,
+        captionSize: introPx(13),
+        labelMaxHeight: introN(36),
+        captionMaxHeight: introN(40),
+      },
+    );
+
+    // Dim is visual-only on how-to — only the green plate starts the shift.
+    this.dimOverlay.disableInteractive();
 
     this.tweens.add({
       targets: play,
@@ -341,21 +364,6 @@ export class TitleScene extends Phaser.Scene {
       duration: 1100,
       ease: "Sine.inOut",
     });
-
-    // How-to tap hint: base seed already on scaleMsg*; add the intro scale on top.
-    const hintSeed = 13 * TITLE_INTRO_SCALE;
-    addSignText(this, GAME_WIDTH / 2, play.y + btnH + hintGap, HOWTO_HINT, {
-      size: typeRolePx("hudBody"),
-      typeRole: "hudBody",
-      padding: scaleMsgPad({ x: introN(16), y: introN(7) }),
-      fontStyle: "700",
-      lineSpacing: 0,
-      ...MSG_TYPE_FIT,
-      maxWidth: scaleMsgBox(introN(640)),
-      maxHeight: scaleMsgBox(introN(32)),
-    })
-      .setOrigin(0.5, 0)
-      .setDepth(43);
   }
 
   /**
@@ -473,14 +481,22 @@ export class TitleScene extends Phaser.Scene {
       this.drawHowTo();
       return;
     }
+    if (this.phase === "howto") return;
     await this.begin();
   }
 
   private async begin(): Promise<void> {
     if (this.started) return;
-    if (this.deferredWarm) await this.deferredWarm;
+    if (this.deferredWarm) {
+      await Promise.race([
+        this.deferredWarm,
+        new Promise<void>((resolve) => globalThis.setTimeout(resolve, TITLE_BEGIN_WARM_MS)),
+      ]);
+    }
     if (this.started) return;
     this.started = true;
+    setTitleHtmlInputPassThrough(false);
+    this.scene.setVisible(true, "hud");
     setPwaIdle(false);
     // User-gesture path: prefer fullscreen when the Settings toggle is on. A deny
     // or missing API must not block entering the shift.
