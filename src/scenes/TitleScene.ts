@@ -22,7 +22,8 @@ import { getRenderBudget, syncSceneRenderCamera } from "../ui/renderBudget";
 import { SIGN_FRAME_W, signPlaqueRings } from "../ui/signPlaque";
 import { addSignText } from "../ui/signText";
 import { addUiText } from "../ui/text";
-import { Color, MENU_TYPE_FIT, MSG_TYPE_FIT, scaleMsgBox, scaleMsgPad, typeRolePx, Type } from "../ui/theme";
+import { Color, MENU_TYPE_FIT, MSG_TYPE_FIT, scaleMsgBox, scaleMsgPad, Type } from "../ui/theme";
+import { typeRolePx } from "../ui/typeScale";
 import { fitTypeToWidth } from "../ui/typekit";
 import { designHudInset, readCssSafeArea, VIEWFIT_EVENT } from "../ui/viewFit";
 

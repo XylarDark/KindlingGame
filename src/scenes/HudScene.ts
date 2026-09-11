@@ -57,10 +57,9 @@ import {
   HUD_SCORE_PX,
   HUD_TYPE_FIT,
   MENU_TYPE_FIT,
-  typeClockPx,
-  typeRolePx,
   Type,
 } from "../ui/theme";
+import { typeClockPx, typeRolePx } from "../ui/typeScale";
 import { worldToScreen } from "../ui/worldProject";
 import { PIN_CYCLE_MS } from "./DriveScene";
 import { parseFontPx, retypeSize } from "../ui/typekit";
