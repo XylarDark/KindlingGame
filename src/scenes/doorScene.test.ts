@@ -87,10 +87,12 @@ describe("doorstep tap target flash", () => {
 });
 
 describe("doorstep prompt", () => {
-  it("uses the hudBody type role token, not a per-site scaleMsgPx seed", () => {
+  it("seeds the prompt at 25px through scaleMsgPx, not the generic hudBody role", () => {
     const box = between(src, "this.prompt = addSignText(", ".setOrigin(0.5, 1)", "prompt box");
-    expect(box).toContain('typeRole: "hudBody"');
-    expect(box).toContain('typeRolePx("hudBody")');
+    expect(box).toContain("doorPromptPx()");
+    expect(box).toContain("scaleMsgBox(720)");
+    expect(box).toContain("scaleMsgBox(113)");
+    expect(box).not.toContain('typeRole: "hudBody"');
   });
 
   it("uses setSignCopy so empty prompt copy never paints a plaque", () => {

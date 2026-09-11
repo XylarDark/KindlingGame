@@ -54,9 +54,12 @@ import {
   HUD_SCORE_PX,
   HUD_TYPE_FIT,
   MENU_TYPE_FIT,
+  MSG_TYPE_FIT,
+  scaleChromePx,
+  scaleMsgBox,
+  scaleMsgPx,
   Type,
 } from "../ui/theme";
-import { typeRolePx } from "../ui/typeScale";
 
 /**
  * Strain names on the wall screens run 21% over the heading step, then clamp-fit
@@ -79,6 +82,13 @@ const TABLET_LABEL_PX = HUD_SCORE_PX;
  */
 const TABLET_LABEL_INSET = 4;
 
+/**
+ * Shop speech bubbles: {@link scaleMsgPx} bump (+25%, plus mobile ramp / CSS floors when the contain
+ * scale is small). Lazy so create() sees the shell contain scale.
+ */
+const msgPx = (): string => scaleMsgPx(19.2);
+const msgNoticePx = (): string => scaleMsgPx(13);
+const feedbackH = (): number => scaleMsgBox(48);
 
 /** Concurrent customers the pool covers without mid-frame allocate (4 is typical peak). */
 const CUSTOMER_VISUAL_POOL = 4;
@@ -197,8 +207,7 @@ export class ShopScene extends Phaser.Scene {
     const tab = tabletLayout();
     this.tabletScreen = this.add.graphics().setDepth(10);
     this.tabletLabel = addUiText(this, TABLET.x, tab.screenTop + tab.screenH / 2, "ORDERS", {
-      size: typeRolePx("hudTitle"),
-      typeRole: "hudTitle",
+      size: scaleChromePx(TABLET_LABEL_PX),
       color: Color.creamHex,
       fontStyle: "700",
       // Caps tracking would spend 8% of a 144px screen on the gaps between six letters.
@@ -221,33 +230,36 @@ export class ShopScene extends Phaser.Scene {
     wireHover(this.tabletHit);
 
     this.queueBadge = addSignText(this, tab.left + tab.w - 10, tab.top + 10, "", {
-      size: typeRolePx("hudSmall"),
-      typeRole: "hudSmall",
+      size: Type.caption,
       fontStyle: "700",
-      noWrap: true,
+      ...MENU_TYPE_FIT,
+      maxWidth: 48,
+      maxHeight: 28,
     })
       .setOrigin(0.5)
       .setDepth(13)
       .setVisible(false);
 
     this.targetCallout = addSignText(this, 0, 0, "", {
-      size: typeRolePx("speech"),
-      typeRole: "speech",
+      size: msgNoticePx(),
       align: "center",
       fontStyle: "700",
       accent: Color.danger,
-      noWrap: true,
+      ...MSG_TYPE_FIT,
+      maxWidth: scaleMsgBox(200),
+      maxHeight: scaleMsgBox(44),
     })
       .setOrigin(0.5, 1)
       .setDepth(14)
       .setVisible(false);
 
     this.keyLeadBubble = addSignText(this, KEYLEAD.x - 168, KEYLEAD.y - PERSON_DISPLAY_H - 24, "", {
-      size: typeRolePx("speech"),
-      typeRole: "speech",
+      size: msgPx(),
       align: "center",
       fontStyle: "600",
-      maxWidth: 340,
+      ...MSG_TYPE_FIT,
+      maxWidth: scaleMsgBox(340),
+      maxHeight: scaleMsgBox(104),
     })
       .setOrigin(0.5)
       .setDepth(12)
@@ -260,11 +272,12 @@ export class ShopScene extends Phaser.Scene {
     wireHover(this.driver);
 
     this.driverBubble = addSignText(this, DRIVER.x - 24, DRIVER.y - PERSON_DISPLAY_H - 8, "", {
-      size: typeRolePx("speech"),
-      typeRole: "speech",
+      size: msgPx(),
       align: "center",
       fontStyle: "600",
-      maxWidth: 336,
+      ...MSG_TYPE_FIT,
+      maxWidth: scaleMsgBox(336),
+      maxHeight: scaleMsgBox(124),
     })
       .setOrigin(1, 1)
       .setDepth(12)
@@ -588,22 +601,25 @@ export class ShopScene extends Phaser.Scene {
     });
     wireHover(sprite);
     const bubble = addSignText(this, -400, CUSTOMER_SPOT.y - PERSON_DISPLAY_H, "", {
-      size: typeRolePx("speech"),
+      size: msgPx(),
       typeRole: "speech",
       align: "center",
       fontStyle: "600",
+      ...MSG_TYPE_FIT,
       maxWidth: CUSTOMER_SPEECH_MAX_W,
+      maxHeight: CUSTOMER_SPEECH_H,
     })
       .setOrigin(0.5)
       .setDepth(10)
       .setVisible(false);
     const feedback = addSignText(this, -400, CUSTOMER_SPOT.y - PERSON_DISPLAY_H, "", {
-      size: typeRolePx("speech"),
-      typeRole: "speech",
+      size: msgNoticePx(),
       align: "center",
       fontStyle: "600",
       accent: Color.danger,
+      ...MSG_TYPE_FIT,
       maxWidth: CUSTOMER_SPEECH_MAX_W,
+      maxHeight: feedbackH(),
     })
       .setOrigin(0.5)
       .setDepth(10)
