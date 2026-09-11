@@ -69,6 +69,15 @@ describe("settings cog panel", () => {
     expect(close).toContain("this.setCogCaptionShown(true)");
   });
 
+  it("fixes the settings cog to the screen like score and clock readouts", () => {
+    const create = between(settings, "create(): void {", "\n  }", "settings create");
+    expect(create).toMatch(/this\.cog = this\.scene\.add[\s\S]*\.setScrollFactor\(0\)/);
+    expect(create).toContain("enableItemHit(this.cog)");
+    expect(create).toContain("enableItemHit(this.cogCaption)");
+    expect(create).toContain('"tex-cog"');
+    expect(create).toMatch(/\.setDisplaySize\(cogSize, cogSize\)/);
+  });
+
   it("keeps a hud button's hit area on the box it paints", () => {
     const paint = between(chrome, "container.setSize(w, h);", "container.input!.cursor", "addHudButton paint");
     expect(paint).toContain("left + container.displayOriginX");

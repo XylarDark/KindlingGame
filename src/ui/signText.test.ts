@@ -80,6 +80,16 @@ describe("text boxes are all the counter plaque", () => {
     expect(helper).toContain("scene.add.container");
     expect(helper).toContain("SIGN_HOST");
   });
+
+  it("lays out inner glyph locally without the host-moving setPosition patch", () => {
+    const layoutStart = helper.indexOf("function layoutPlaque(entry: SignPlaqueEntry): void {");
+    if (layoutStart === -1) throw new Error("layoutPlaque not found");
+    const layoutEnd = helper.indexOf("\n}", layoutStart);
+    if (layoutEnd === -1) throw new Error("layoutPlaque end not found");
+    const layout = helper.slice(layoutStart, layoutEnd);
+    expect(layout).toContain("setTextLocal(textX, textY)");
+    expect(layout).not.toMatch(/text\.setPosition\(textX, textY\)/);
+  });
 });
 
 describe("typekit fixed HUD roles", () => {

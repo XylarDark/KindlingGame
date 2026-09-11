@@ -27,6 +27,8 @@ type SignPlaqueEntry = {
   scene: Phaser.Scene;
   lastLayoutKey: string;
   dirty: boolean;
+  /** Inner glyph offset — must bypass the host-moving setPosition patch on Text. */
+  setTextLocal: (x: number, y: number) => void;
 };
 
 class SceneSignPlaquePump {
@@ -178,7 +180,7 @@ function layoutPlaque(entry: SignPlaqueEntry): void {
 
   const textX = -w * text.originX;
   const textY = -h * text.originY;
-  text.setPosition(textX, textY);
+  entry.setTextLocal(textX, textY);
   plaque.setSize(panelW, panelH);
   plaque.setPosition(textX - SIGN_PAD_X + panelW / 2, textY - SIGN_PAD_Y + panelH / 2);
   plaque.setOrigin(0.5, 0.5);
@@ -218,13 +220,16 @@ export function addSignText(
   text.setData(SIGN_PLAQUE, plaque);
 
   const rawSetPosition = text.setPosition.bind(text);
+  const setTextLocal = (x: number, y: number): void => {
+    rawSetPosition(x, y);
+  };
   text.setPosition = ((x?: number, y?: number, z?: number, w?: number) => {
     if (x !== undefined && y !== undefined) host.setPosition(x, y);
     return rawSetPosition(0, 0, z, w);
   }) as typeof text.setPosition;
 
   const pump = pumpFor(scene);
-  const entry = pump.register({ text, host, plaque, scene, lastLayoutKey: "", dirty: true });
+  const entry = pump.register({ text, host, plaque, scene, lastLayoutKey: "", dirty: true, setTextLocal });
   text.once(Phaser.GameObjects.Events.DESTROY, () => {
     pump.unregister(entry);
     host.destroy();
