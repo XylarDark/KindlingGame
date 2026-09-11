@@ -10,8 +10,9 @@ describe("HudScene fixed-step wall-clock sim tick", () => {
   it("advances sim through kindlingClock with scene delta for both clock modes", () => {
     const src = read("HudScene.ts");
     expect(src).toContain("advanceSimClock");
-    expect(src).toContain("frameMs: delta");
-    expect(src).not.toMatch(/fixedRaw\s*\?\s*rawDelta\s*:\s*delta/);
+    expect(src).toContain("const frameMs = delta");
+    expect(src).toMatch(/frameMs[,\s]/);
+    expect(src).not.toMatch(/fixedRaw\s*\?\s*rawDelta/);
     expect(src).not.toMatch(/getClockMode\(\)\s*===\s*"fixedRaw"\s*\?\s*rawDelta/);
     expect(src).not.toMatch(/sim\.tick\(Math\.min\(Math\.max\(0, delta\), MAX_SIM_STEP_MS\)\)/);
   });

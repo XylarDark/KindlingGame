@@ -1,11 +1,11 @@
 /**
  * Gaffer-style fixed timestep for Kindling sim + render interpolation alpha.
  *
- * Fixed step: **1/60 s** (~16.667 ms). Both modes feed the accumulator from
- * Phaser scene `update` delta (time between game steps). Under `fps.limit: 30`
- * that is ~33 ms per frame — fixedRaw runs two 60 Hz steps, not one half-speed
- * step from RAF rawDelta (~16 ms). Default mode is `smooth` until meter
- * evidence on an installed PWA says otherwise; opt in with `?clock=fixedRaw`.
+ * Fixed step: **1/60 s** (~16.667 ms). Both modes feed from Phaser scene
+ * `update` delta (time between game steps). Under `fps.limit: 30` that is
+ * ~33 ms per frame — fixedRaw runs two 60 Hz steps, not one half-speed step
+ * from RAF rawDelta (~16 ms). Default mode is `smooth` until meter evidence
+ * on an installed PWA says otherwise; opt in with `?clock=fixedRaw`.
  */
 import type { SimSnapshot } from "./gameSim";
 import { SimInterpolator } from "./simInterpolator";

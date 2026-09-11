@@ -751,8 +751,10 @@ export class HudScene extends Phaser.Scene {
       sim.setPlayerInput(0, 0);
     }
     const rawDelta = this.game.loop.rawDelta;
+    // Both modes: scene delta = time between game steps (not loop.rawDelta under fps.limit).
+    const frameMs = delta;
     advanceSimClock({
-      frameMs: delta,
+      frameMs,
       tick: (dt) => sim.tick(Math.min(Math.max(0, dt), MAX_SIM_STEP_MS)),
       snapshot: () => sim.snapshot(),
     });
