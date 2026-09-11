@@ -83,7 +83,7 @@ const scoreBox = boxOf(scoreBlock, "score value");
 const captionBox = boxOf(captionBlock, "SCORE caption");
 const clockBox = boxOf(clockBlock, "clock");
 const popBox = boxOf(popBlock, "score pop");
-const POP_LIFT = number(placeReadouts, /scorePopLayer\.setPosition\(signLeft, COUNTER_SIGN\.y - (\d+)\)/, "pop lift");
+const POP_LIFT = number(placeReadouts, /scorePopLayer\.setPosition\(signLeft, y - (\d+)\)/, "pop lift");
 const popTween = between(hud, "private spawnScorePop(", "\n  }", "spawnScorePop");
 const POP_RISE = number(popTween, /y: \{ from: 0, to: -(\d+) \}/, "pop rise");
 const ORDERS_INSET = number(shop, /const TABLET_LABEL_INSET = (\d+);/, "TABLET_LABEL_INSET");
@@ -155,7 +155,8 @@ describe("ORDERS against the counter readouts", () => {
     // Origin (1, 0.5) at the sign's left edge: every digit added extends the value
     // leftward into open counter, never rightward toward the tablet. Without this the
     // bounded-box argument above would still hold, but only by luck of the direction.
-    expect(placeReadouts).toContain("this.scoreText.setOrigin(1, 0.5).setPosition(signLeft, COUNTER_SIGN.y)");
+    expect(placeReadouts).toContain("counterSignReadoutAnchors()");
+    expect(placeReadouts).toContain("this.scoreText.setOrigin(1, 0.5).setPosition(signLeft, y)");
     expect(placeReadouts).toContain("signLeft - valueW - HUD_SCORE_GAP");
     expect(scoreBox.w).toBeGreaterThan(0);
     expect(scoreBlock).toContain("scaleChromePx(HUD_SCORE_PX)");

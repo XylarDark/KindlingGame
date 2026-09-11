@@ -118,9 +118,19 @@ describe("init / tickRenderBudget", () => {
 describe("applyRenderScale / applyRenderBudgetToGame", () => {
   beforeEach(() => resetRenderBudgetForTests());
 
-  it("resizes the backbuffer and zooms every registered scene", () => {
+  it("resizes the backbuffer and zooms world scenes; HUD stays at zoom 1", () => {
     const resizeCalls: Array<[number, number]> = [];
     const shopCam = {
+      zoom: 1,
+      centered: false,
+      setZoom(z: number) {
+        this.zoom = z;
+      },
+      centerOn() {
+        this.centered = true;
+      },
+    };
+    const hudCam = {
       zoom: 1,
       centered: false,
       setZoom(z: number) {
@@ -147,6 +157,7 @@ describe("applyRenderScale / applyRenderBudgetToGame", () => {
       scene: {
         getScenes: () => [
           { sys: { settings: { key: "shop" } }, cameras: { main: shopCam } },
+          { sys: { settings: { key: "hud" } }, cameras: { main: hudCam } },
           { sys: { settings: { key: "drive" } }, cameras: { main: driveCam } },
         ],
       },
@@ -154,6 +165,7 @@ describe("applyRenderScale / applyRenderBudgetToGame", () => {
     applyRenderScale(game as unknown as Phaser.Game, 0.85);
     expect(resizeCalls[0]).toEqual([Math.round(GAME_WIDTH * 0.85), Math.round(GAME_HEIGHT * 0.85)]);
     expect(shopCam.zoom).toBe(0.85);
+    expect(hudCam.zoom).toBe(1);
     expect(driveCam.centered).toBe(false);
   });
 

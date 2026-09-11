@@ -185,7 +185,9 @@ export function syncSceneRenderCamera(
 ): void {
   const cam = scene.cameras?.main;
   if (!cam) return;
-  cam.setZoom(scale);
+  // HUD chrome is screen-space at design coords — zoom would drift score/clock off the counter sign.
+  const zoom = scene.sys.settings.key === "hud" ? 1 : scale;
+  cam.setZoom(zoom);
   if (scene.sys.settings.key !== "drive") {
     cam.centerOn(GAME_WIDTH / 2, GAME_HEIGHT / 2);
   }

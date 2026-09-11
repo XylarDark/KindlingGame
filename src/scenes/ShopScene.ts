@@ -118,8 +118,8 @@ function modelHeadTop(model: Phaser.GameObjects.Image): number {
  * clears a one-line callout puts a two-line one across the face — the key lead's hat is where
  * that showed. Recompute chip Y when text changes (height) or the model moves.
  */
-function hangAboveHead(chip: Phaser.GameObjects.Text, model: Phaser.GameObjects.Image): void {
-  setSignPosition(chip, chip.x, modelHeadTop(model) - CUSTOMER_SPEECH_GAP - chip.height / 2);
+function hangAboveHead(chip: Phaser.GameObjects.Text, model: Phaser.GameObjects.Image, x: number): void {
+  setSignPosition(chip, x, modelHeadTop(model) - CUSTOMER_SPEECH_GAP - chip.height / 2);
 }
 
 export class ShopScene extends Phaser.Scene {
@@ -329,9 +329,8 @@ export class ShopScene extends Phaser.Scene {
       const textDirty = this.keyLeadBubble.text !== callout;
       if (textDirty) this.keyLeadBubble.setText(callout);
       const bx = kx - 168;
-      if (Math.round(this.keyLeadBubble.x) !== Math.round(bx)) this.keyLeadBubble.setX(bx);
-      // Bubble follows a walking sprite — update Y when the lead moves or copy refits.
-      if (textDirty || leadMoved) hangAboveHead(this.keyLeadBubble, this.keyLead);
+      // Bubble follows a walking sprite — host x/y, not inner Text locals (9-slice host model).
+      if (textDirty || leadMoved) hangAboveHead(this.keyLeadBubble, this.keyLead, bx);
     }
 
     const next = nextShopHint(snap);
@@ -346,7 +345,7 @@ export class ShopScene extends Phaser.Scene {
       const driverTextDirty = this.driverBubble.text !== driverLine;
       if (driverTextDirty) this.driverBubble.setText(driverLine);
       this.driverBubble.setAlpha(1);
-      if (driverTextDirty) hangAboveHead(this.driverBubble, this.driver);
+      if (driverTextDirty) hangAboveHead(this.driverBubble, this.driver, DRIVER.x - 24);
     }
     if (highlightGo) {
       this.driver.setAlpha(pulse);
@@ -400,7 +399,7 @@ export class ShopScene extends Phaser.Scene {
     const p = strainPos(idx);
     if (this.targetCallout.text !== cue.text) this.targetCallout.setText(cue.text);
     this.targetCallout.setVisible(true);
-    this.targetCallout.setPosition(p.x, p.y - strainSlotH() / 2 - 6);
+    setSignPosition(this.targetCallout, p.x, p.y - strainSlotH() / 2 - 6);
   }
 
   private departNow(): void {
