@@ -105,13 +105,22 @@ type CustomerVisual = {
 };
 
 /**
- * Hang a chip in the air above a model's head, measuring off what it rendered rather than
- * off a guessed centre offset. A box grows downward from its middle as its copy wraps, so
- * a fixed offset that clears a one-line callout puts a two-line one across the face — the
- * key lead's hat is where that showed.
+ * Top edge of a bottom-anchored person sprite without walking the display tree.
+ * {@link Phaser.GameObjects.Components.GetBounds#getBounds} allocates a Rect every call —
+ * paid every Shop frame during key-lead fetch when the bubble follows a moving sprite.
+ */
+function modelHeadTop(model: Phaser.GameObjects.Image): number {
+  return model.y - model.displayHeight * model.originY;
+}
+
+/**
+ * Hang a chip in the air above a model's head, measuring off displayHeight/origin rather than
+ * getBounds. A box grows downward from its middle as its copy wraps, so a fixed offset that
+ * clears a one-line callout puts a two-line one across the face — the key lead's hat is where
+ * that showed. Recompute chip Y when text changes (height) or the model moves.
  */
 function hangAboveHead(chip: Phaser.GameObjects.Text, model: Phaser.GameObjects.Image): void {
-  chip.setY(model.getBounds().y - CUSTOMER_SPEECH_GAP - chip.height / 2);
+  chip.setY(modelHeadTop(model) - CUSTOMER_SPEECH_GAP - chip.height / 2);
 }
 
 export class ShopScene extends Phaser.Scene {
@@ -308,15 +317,22 @@ export class ShopScene extends Phaser.Scene {
     // PostFX lives on PRE_RENDER; keep the 80ms throttle there only.
     this.driver.setVisible(snap.playerRole === "keyLead");
     this.keyLead.setVisible(snap.keyLead.visible && snap.playerRole === "keyLead");
-    this.keyLead.setPosition(snap.keyLead.x, snap.keyLead.y);
+    const kx = snap.keyLead.x;
+    const ky = snap.keyLead.y;
+    const leadMoved =
+      Math.round(this.keyLead.x) !== Math.round(kx) || Math.round(this.keyLead.y) !== Math.round(ky);
+    if (leadMoved) this.keyLead.setPosition(kx, ky);
     const callout = snap.keyLeadLine;
     const showKeyLeadBubble = !!callout && snap.keyLead.visible && snap.playerRole === "keyLead";
     this.keyLeadBubble.setVisible(showKeyLeadBubble);
     // setText refits typekit — only pay when the Grabbing line changes (not every walk frame).
     if (showKeyLeadBubble) {
-      if (this.keyLeadBubble.text !== callout) this.keyLeadBubble.setText(callout);
-      this.keyLeadBubble.setX(snap.keyLead.x - 168);
-      hangAboveHead(this.keyLeadBubble, this.keyLead);
+      const textDirty = this.keyLeadBubble.text !== callout;
+      if (textDirty) this.keyLeadBubble.setText(callout);
+      const bx = kx - 168;
+      if (Math.round(this.keyLeadBubble.x) !== Math.round(bx)) this.keyLeadBubble.setX(bx);
+      // Bubble follows a walking sprite — update Y when the lead moves or copy refits.
+      if (textDirty || leadMoved) hangAboveHead(this.keyLeadBubble, this.keyLead);
     }
 
     const next = nextShopHint(snap);
