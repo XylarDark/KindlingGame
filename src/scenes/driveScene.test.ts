@@ -51,6 +51,14 @@ describe("DriveScene grade throttle and dirty guards", () => {
   it("skips shop caption plaque work when not driving", () => {
     expect(src).toContain("if (!driving)");
     expect(src).toContain("Skip plaque setText");
+    expect(src).toContain("shopCaptionHost.setVisible(false)");
+  });
+
+  it("never shows sign plaques with empty copy", () => {
+    expect(src).toContain("setSignCopy(this.pinLabel");
+    expect(src).toContain("setSignCopy(this.vanBanner");
+    expect(src).toContain("setSignCopy(this.shopCaption");
+    expect(src).not.toMatch(/pinLabel\.setVisible\(true\)/);
   });
 
   it("animates the pin from gameMs with no idle tweens", () => {
@@ -65,6 +73,7 @@ describe("DriveScene grade throttle and dirty guards", () => {
 
   it("keeps drive sign copy on plaques with screen-stable scale", () => {
     expect(src).toContain("addSignText");
+    expect(src).toContain("setSignCopy");
     expect(src).toContain("mountDriveSign");
     expect(src).toContain("pinLabelHost");
     expect(src).toContain("syncDriveLabelScale");

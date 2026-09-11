@@ -17,10 +17,8 @@ import { getSim } from "../session";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import { skyAt, skyVisualDirtyKey } from "../sim/dayNight";
 import type { SimSnapshot } from "../sim/gameSim";
-import { formatSlaClock, isSlaUrgent } from "../ui/copy";
-import { addSignText, setSignAccent } from "../ui/signText";
+import { addSignText, setSignCopy } from "../ui/signText";
 import { Color, MSG_TYPE_FIT, scaleMsgBox, scaleMsgPad, scaleMsgPx } from "../ui/theme";
-import { fitTypeToWidth } from "../ui/typekit";
 import { designHudInset, HUD_TOUCH_MIN_DESIGN, readCssSafeArea, VIEWFIT_EVENT } from "../ui/viewFit";
 
 /** 25% larger than shop bags (BAG_SCALE 0.7). */
@@ -36,7 +34,6 @@ const BAG_HIT_PAD = 88; // ~10% over prior 80 for mobile taps
  * `maxHeight` must move with the seed — clamp-fit will otherwise drop below it.
  */
 const doorPromptPx = (): string => scaleMsgPx(25);
-const doorTitlePx = (): string => scaleMsgPx(50.625);
 /** Gap between a sprite's edge and the chip anchored off it. */
 const DOOR_CHIP_GAP = 36;
 /** Keep a wide chip on screen when the sprite it hangs off is near an edge. */
@@ -73,14 +70,12 @@ export class DoorScene extends Phaser.Scene {
   private customer!: Phaser.GameObjects.Image;
   private bag!: Phaser.GameObjects.Image;
   private prompt!: Phaser.GameObjects.Text;
-  private houseLabel!: Phaser.GameObjects.Text;
   private floorY = 0;
   /** Cached so the per-frame chip placement does not re-read CSS safe areas. */
   private insetTop = 0;
   private lastHouse = "";
   private lastSkyKey = "";
   private lastBagHanded: boolean | null = null;
-  private lastHouseTitle = "";
   private lastPrompt = "";
   private lighting?: DayNightPipeline;
   private lastGradeKey = "";
@@ -102,17 +97,6 @@ export class DoorScene extends Phaser.Scene {
     const startSky = skyAt(0);
     paintDoorstepSky(this.skyLayer, startSky);
     paintDoorstepNightFx(this.nightFx, 0, startSky);
-
-    this.houseLabel = addSignText(this, DOORSTEP_DOOR_X, 56, "", {
-      size: doorTitlePx(),
-      padding: scaleMsgPad({ x: 20, y: 10 }),
-      fontStyle: "700",
-      ...MSG_TYPE_FIT,
-      maxWidth: scaleMsgBox(1200),
-      maxHeight: scaleMsgBox(108),
-    })
-      .setOrigin(0.5)
-      .setDepth(4);
 
     this.floorY = DOORSTEP_FLOOR_Y + 8;
     this.driver = this.add.image(DRIVER_X, this.floorY, "tex-driver").setOrigin(0.5, 1).setScale(PEOPLE_SCALE).setDepth(5);
@@ -174,7 +158,6 @@ export class DoorScene extends Phaser.Scene {
   private layoutDoorHud(): void {
     const inset = designHudInset(readCssSafeArea(document.getElementById("game-root")));
     this.insetTop = inset.top;
-    this.houseLabel.setPosition(DOORSTEP_DOOR_X, 56 + inset.top);
     this.placePrompt();
   }
 
@@ -187,7 +170,16 @@ export class DoorScene extends Phaser.Scene {
   private placePrompt(): void {
     const headTop = this.customer.y - this.customer.displayHeight * this.customer.originY;
     const half = this.prompt.displayWidth / 2 + DOOR_CHIP_MARGIN;
-    const x = Phaser.Math.Clamp(this.customer.x, half, GAME_WIDTH - half);
+    let x = Phaser.Math.Clamp(this.customer.x, half, GAME_WIDTH - half);
+    if (this.bag.visible && this.bag.input?.enabled) {
+      const bagHalf = this.bag.displayWidth * 0.5 + DOOR_CHIP_MARGIN;
+      const bagLeft = this.bag.x - bagHalf;
+      const bagRight = this.bag.x + bagHalf;
+      if (x + half > bagLeft && x - half < bagRight) {
+        x = this.customer.x <= this.bag.x ? bagLeft - half - 8 : bagRight + half + 8;
+        x = Phaser.Math.Clamp(x, half, GAME_WIDTH - half);
+      }
+    }
     const floor = this.insetTop + this.prompt.displayHeight + DOOR_CHIP_GAP;
     this.prompt.setPosition(x, Math.max(floor, headTop - DOOR_CHIP_GAP));
   }
@@ -218,20 +210,6 @@ export class DoorScene extends Phaser.Scene {
       this.nightFx.clear();
       paintDoorstepNightFx(this.nightFx, houseIndex, sky);
     }
-    const destOrder = snap.orders.find((o) => o.destinationId === drop.houseId && o.status === "onRun");
-    const sla = destOrder ? formatSlaClock(destOrder.slaRemainingMs) : "";
-    const title = drop.houseId
-      ? `${drop.customerName ?? "Customer"}  ·  ${houseLabel(drop.houseId)}${sla ? `  ·  ${sla}` : ""}${runNote(snap)}`
-      : "";
-    if (title !== this.lastHouseTitle) {
-      this.lastHouseTitle = title;
-      this.houseLabel.setText(title);
-      fitTypeToWidth(this.houseLabel, 1200);
-    }
-    // The clock in this title is the urgent part, and it stays ink on white like every
-    // other box; the frame is what reddens when the SLA is running out.
-    setSignAccent(this.houseLabel, destOrder && isSlaUrgent(destOrder.slaRemainingMs) ? Color.danger : undefined);
-
     const flash = doorFlashPhase(snap.gameMs);
     const pulse = 0.7 + 0.3 * flash;
     const nextPhoto = drop.actionLabel === "PHOTO";
@@ -283,6 +261,7 @@ export class DoorScene extends Phaser.Scene {
     const canBag = !idModal && (nextHand || nextPhoto) && drop.interactArmed;
     armHit(this.customer, canAsk, PERSON_HIT_PAD);
     armHit(this.bag, canBag, BAG_HIT_PAD);
+    if (canBag && !this.bag.input) enableWideHit(this.bag, BAG_HIT_PAD);
 
     const who = drop.customerName ?? "the customer";
     const promptLine = nextAsk
@@ -295,7 +274,7 @@ export class DoorScene extends Phaser.Scene {
     // setText refits typekit — only pay when the instruction changes.
     if (promptLine !== this.lastPrompt) {
       this.lastPrompt = promptLine;
-      this.prompt.setText(promptLine);
+      setSignCopy(this.prompt, promptLine);
     }
     this.prompt.setAlpha(1);
     this.placePrompt();
@@ -367,16 +346,6 @@ function bagDriverPos(floorY: number): { x: number; y: number } {
 
 function bagCustomerPos(floorY: number): { x: number; y: number } {
   return { x: CUSTOMER_X - 44, y: floorY - PERSON_DISPLAY_H * 0.42 };
-}
-
-function houseLabel(id: string): string {
-  return `House ${id.replace("house-", "")}`;
-}
-
-function runNote(snap: SimSnapshot): string {
-  const n = snap.run?.orderIds.length ?? 0;
-  if (n <= 1) return "";
-  return `  ·  ${n} bags in the car`;
 }
 
 function enableWideHit(obj: Phaser.GameObjects.Image, pad: number): void {

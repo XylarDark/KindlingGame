@@ -530,6 +530,45 @@ describe("GameSim order loops", () => {
     expect(sim.snapshot().dropoff.phase).toBe("none");
   });
 
+  it("clears dropoffConfirmHeld when CHECK ID closes without pointerup", () => {
+    const sim = GameSim.create({ seed: 4, autoSpawn: false });
+    fillTicket(sim, "delivery", { destinationId: "house-1", ageOk: true });
+    sim.hitTheRoad();
+    startDoor(sim, "house-1");
+    stepDropoff(sim); // ask
+    sim.pressDropoffConfirm(); // check ID — no release (card hides mid-gesture)
+    sim.tick(16);
+    expect(sim.snapshot().dropoff.actionLabel).toBe("HAND BAG");
+    sim.tick(NPC_INTERACT_COOLDOWN_MS + 16);
+    sim.pressDropoffConfirm();
+    sim.releaseDropoffConfirm();
+    sim.tick(16);
+    expect(sim.snapshot().dropoff.actionLabel).toBe("PHOTO");
+  });
+
+  it("second stop accepts bag tap after the ID card closes", () => {
+    const sim = GameSim.create({ seed: 4, autoSpawn: false });
+    fillTicket(sim, "delivery", { destinationId: "house-1", ageOk: true });
+    fillTicket(sim, "delivery", { destinationId: "house-2", ageOk: true });
+    sim.hitTheRoad();
+    startDoor(sim, "house-1");
+    stepDropoff(sim); // ask
+    stepDropoff(sim); // check
+    stepDropoff(sim); // hand bag
+    stepDropoff(sim); // photo
+    expect(sim.snapshot().run?.nextStopId).toBe("house-2");
+    startDoor(sim, "house-2");
+    stepDropoff(sim); // ask
+    sim.pressDropoffConfirm();
+    sim.tick(16); // check without release
+    expect(sim.snapshot().dropoff.actionLabel).toBe("HAND BAG");
+    sim.tick(NPC_INTERACT_COOLDOWN_MS + 16);
+    sim.pressDropoffConfirm();
+    sim.releaseDropoffConfirm();
+    sim.tick(16);
+    expect(sim.snapshot().dropoff.actionLabel).toBe("PHOTO");
+  });
+
   it("rapid double-confirm during lock advances at most one step after release", () => {
     const sim = GameSim.create({ seed: 4, autoSpawn: false });
     fillTicket(sim, "delivery", { destinationId: "house-1", ageOk: true });

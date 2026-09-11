@@ -15,7 +15,7 @@ import {
 } from "../art/phoneArt";
 import { clampInput } from "../input/controls";
 import { enableItemHit, syncItemHit } from "../input/hit";
-import { houseById, lotWorldRect } from "../maps/cityT0";
+import { houseById, houseTitle, lotWorldRect } from "../maps/cityT0";
 import { cityMinimapGeometry, fitCityPanel, minimapProjection, type WorldRect } from "../maps/cityMinimap";
 import { COUNTER_SIGN } from "../maps/shopT0";
 import { GAME_HEIGHT, GAME_WIDTH, NPC_INTERACT_COOLDOWN_MS, SCORE_DELIVERY_LATE, SCORE_DELIVERY_ON_TIME, SCORE_FAIL, SCORE_INSTORE, SCORE_PICKUP } from "../sim/constants";
@@ -26,8 +26,8 @@ import type { ShiftResults } from "../sim/shiftResults";
 import { tutorialHints, type TutorialHint } from "../sim/tutorialHints";
 import { skyAt, skyVisualDirtyKey } from "../sim/dayNight";
 import { addHudButton, addPanel } from "../ui/chrome";
-import { END_SHIFT_CAPTION, END_SHIFT_LABEL, RESULTS_NEW_DAY, RESULTS_TITLE } from "../ui/copy";
-import { addSignText, setSignAccent } from "../ui/signText";
+import { END_SHIFT_CAPTION, END_SHIFT_LABEL, formatSlaClock, isSlaUrgent, RESULTS_NEW_DAY, RESULTS_TITLE } from "../ui/copy";
+import { addSignText, setSignAccent, setSignCopy, syncSignPlaque } from "../ui/signText";
 import { addUiText } from "../ui/text";
 import { settingsGeom, type SettingsGeom } from "../ui/settingsGeom";
 import { ackTap, releaseTapAck } from "../input/tapAck";
@@ -279,6 +279,7 @@ export class HudScene extends Phaser.Scene {
   private flash!: Phaser.GameObjects.Rectangle;
   private toastText!: Phaser.GameObjects.Text;
   private coverText!: Phaser.GameObjects.Text;
+  private doorTitleText!: Phaser.GameObjects.Text;
   private sawPhoto = false;
   private idWasShowing = false;
   private idCardArmedAt = 0;
@@ -335,6 +336,7 @@ export class HudScene extends Phaser.Scene {
   private lastIdLive: boolean | null = null;
   private lastDriveSceneKey = "";
   private lastDoorSceneKey = "";
+  private lastDoorTitle = "";
   private lastMusicSkyKey = "";
   private volumeTrackBounds = { left: 0, width: VOL_TRACK_W };
 
@@ -465,10 +467,23 @@ export class HudScene extends Phaser.Scene {
       fontStyle: "600",
       noWrap: true,
       ...MSG_TYPE_FIT,
-      maxWidth: scaleMsgBox(560),
+      maxWidth: scaleMsgBox(280),
       maxHeight: scaleMsgBox(40),
     })
       .setOrigin(0, 0)
+      .setDepth(20)
+      .setVisible(false);
+
+    this.doorTitleText = addSignText(this, 0, 0, "", {
+      size: scaleMsgPx(16),
+      padding: scaleMsgPad({ x: 16, y: 8 }),
+      fontStyle: "700",
+      noWrap: true,
+      ...MSG_TYPE_FIT,
+      maxWidth: scaleMsgBox(900),
+      maxHeight: scaleMsgBox(48),
+    })
+      .setOrigin(0, 0.5)
       .setDepth(20)
       .setVisible(false);
 
@@ -793,6 +808,7 @@ export class HudScene extends Phaser.Scene {
     const bottom = GAME_HEIGHT - 40 - inset.bottom;
     this.readoutCorner = { left, right, top: HUD_CORNER_TOP + inset.top };
     this.coverText.setPosition(left, this.readoutCorner.top + 40);
+    this.doorTitleText.setPosition(left, this.readoutCorner.top + 44);
     this.placeReadouts();
     const cogSize = HUD_TOUCH_MIN_DESIGN;
     const cogX = GAME_WIDTH - 24 - inset.right;
@@ -888,6 +904,7 @@ export class HudScene extends Phaser.Scene {
     if (snap.shiftEnded) {
       this.toastText.setVisible(false);
       this.coverText.setVisible(false);
+      this.doorTitleText.setVisible(false);
       this.phone.setVisible(false);
       this.phoneHit.disableInteractive();
       this.idDim.setVisible(false);
@@ -943,11 +960,15 @@ export class HudScene extends Phaser.Scene {
       this.lastPhoneAccentKey = "";
       this.lastPhoneMapKey = "";
       this.phoneMap.clear();
+      if (this.phoneStatus.visible) this.phoneStatus.setVisible(false);
     }
 
     const showId = !!drop.idCard && drop.idAsked;
     if (showId && !this.idWasShowing) {
       this.idCardArmedAt = snap.gameMs + NPC_INTERACT_COOLDOWN_MS;
+    }
+    if (!showId && this.idWasShowing) {
+      getSim().releaseDropoffConfirm();
     }
     this.idWasShowing = showId;
     const idLive = showId && snap.gameMs >= this.idCardArmedAt;
@@ -1014,7 +1035,7 @@ export class HudScene extends Phaser.Scene {
 
     if ((snap.toast ?? "") !== this.lastToast) {
       this.lastToast = snap.toast ?? "";
-      this.toastText.setText(snap.toast);
+      setSignCopy(this.toastText, snap.toast ?? "");
     }
     const driving = snap.playerRole === "driver" && !atDoor;
     // Drive prompts float over the van; ID/phone keep their own UI.
@@ -1029,7 +1050,8 @@ export class HudScene extends Phaser.Scene {
         !showPhone &&
         !driveBanner,
     );
-    this.paintCover(snap);
+    this.paintDoorTitle(snap, atDoor, drop);
+    this.paintCover(snap, atDoor);
     const showPad =
       driving &&
       !showPhone &&
@@ -1063,12 +1085,43 @@ export class HudScene extends Phaser.Scene {
   }
 
   /**
+   * Door stop title lives in the HUD readout column — not a second plaque on the doorstep.
+   */
+  private paintDoorTitle(snap: SimSnapshot, atDoor: boolean, drop: SimSnapshot["dropoff"]): void {
+    if (!atDoor || !drop.houseId) {
+      if (this.lastDoorTitle !== "") {
+        this.lastDoorTitle = "";
+        this.doorTitleText.setVisible(false);
+      }
+      return;
+    }
+    const destOrder = snap.orders.find((o) => o.destinationId === drop.houseId && o.status === "onRun");
+    const sla = destOrder ? formatSlaClock(destOrder.slaRemainingMs) : "";
+    const runNote = (snap.run?.orderIds.length ?? 0) > 1 ? `  ·  ${snap.run!.orderIds.length} bags in the car` : "";
+    const title = `${drop.customerName ?? "Customer"}  ·  ${houseTitle(drop.houseId)}${sla ? `  ·  ${sla}` : ""}${runNote}`;
+    const show = title.trim().length > 0;
+    this.doorTitleText.setVisible(show);
+    if (!show) return;
+    if (title !== this.lastDoorTitle) {
+      this.lastDoorTitle = title;
+      setSignCopy(this.doorTitleText, title);
+    }
+    setSignAccent(this.doorTitleText, destOrder && isSlaUrgent(destOrder.slaRemainingMs) ? Color.danger : undefined);
+    syncSignPlaque(this.doorTitleText);
+  }
+
+  /**
    * The key lead keeps trading while the player drives, but the shop scene is asleep for
    * the whole run. Without this line the only sign of it is an unexplained score pop.
    */
-  private paintCover(snap: SimSnapshot): void {
+  private paintCover(snap: SimSnapshot, atDoor: boolean): void {
     const cover = snap.shopCover;
-    const show = cover.active && !this.settingsOpen && !this.resultsVisible && !snap.dropoff.idCard;
+    const show =
+      cover.active &&
+      !atDoor &&
+      !this.settingsOpen &&
+      !this.resultsVisible &&
+      !snap.dropoff.idCard;
     this.coverText.setVisible(show);
     if (!show) return;
     const tally = [
@@ -1080,9 +1133,31 @@ export class HudScene extends Phaser.Scene {
       .filter(Boolean)
       .join("  ·  ");
     const line = `COUNTER  ·  ${cover.line}${tally ? `  ·  ${tally}` : ""}`;
-    if (this.coverText.text !== line) {
-      this.coverText.setText(line);
+    const maxW = this.coverMaxWidth();
+    const clipped = this.clipCoverLine(line, maxW);
+    if (this.coverText.text !== clipped) {
+      setSignCopy(this.coverText, clipped);
     }
+    syncSignPlaque(this.coverText);
+  }
+
+  /** Keep the counter cover inside the SCORE readout column — never over the shop sprite. */
+  private coverMaxWidth(): number {
+    const { left } = this.readoutCorner;
+    const columnCap = Math.floor(GAME_WIDTH * 0.26);
+    const scoreCap = this.scoreText.x + this.scoreText.width - left - 12;
+    return Math.max(96, Math.min(columnCap, scoreCap, scaleMsgBox(220)));
+  }
+
+  private clipCoverLine(line: string, maxW: number): string {
+    if (line.length <= 8) return line;
+    let clipped = line;
+    this.coverText.setText(clipped);
+    while (clipped.length > 8 && this.coverText.width > maxW) {
+      clipped = `${clipped.slice(0, clipped.length - 2).trimEnd()}…`;
+      this.coverText.setText(clipped);
+    }
+    return clipped;
   }
 
   private tutorialFlashHint(snap: SimSnapshot): TutorialHint | null {
@@ -1870,6 +1945,12 @@ export class HudScene extends Phaser.Scene {
         else this.scene.launch("door");
       } else if (!wantDoor && doorUp) {
         this.scene.sleep("door");
+        this.idWasShowing = false;
+        this.lastShowId = false;
+        this.idDim.setVisible(false).disableInteractive();
+        this.idPanel.setVisible(false);
+        this.idBg.disableInteractive();
+        getSim().releaseDropoffConfirm();
         if (snap.playerRole === "driver" && this.scene.isSleeping("drive")) this.scene.wake("drive");
       }
     }

@@ -27,7 +27,7 @@ import type { SimSnapshot } from "../sim/gameSim";
 import { tutorialHints, type TutorialHint } from "../sim/tutorialHints";
 import { formatSlaClock, isSlaUrgent } from "../ui/copy";
 import { CITY_BUILD_ROWS_PER_CHUNK, markCityBuildComplete } from "../ui/cityBuild";
-import { addSignText, setSignAccent, syncSignPlaque, type SignTextOptions } from "../ui/signText";
+import { addSignText, setSignAccent, setSignCopy, syncSignPlaque, type SignTextOptions } from "../ui/signText";
 import { Color, MSG_TYPE_FIT, Type, scaleMsgBox, scaleMsgPad, scaleMsgPx } from "../ui/theme";
 import { addUiText } from "../ui/text";
 import { addMark, fitTypeToBox, fitTypeToWidth, overlayStroke } from "../ui/typekit";
@@ -270,17 +270,20 @@ export class DriveScene extends Phaser.Scene {
           ? `${houseTitle(stopId)}\n${destOrder.customerName}${clock ? `\n${clock}` : ""}`
           : houseTitle(stopId);
         const signGap = driveSignGap();
+        const showPin = who.trim().length > 0;
         this.syncDriveLabelScale(this.pinLabel, this.pinLabelHost);
         this.pinLabelHost
-          .setVisible(true)
+          .setVisible(showPin)
           .setPosition(x, this.pinBase.y - pinBob - this.pin.displayHeight - signGap);
-        this.pinLabel.setPosition(0, 0).setVisible(true);
+        this.pinLabel.setPosition(0, 0);
         // SLA clock changes ~1/s; dirty-guard avoids typekit work every frame.
         if (who !== this.lastPinWho) {
           this.lastPinWho = who;
           this.pinLabel.setFixedSize(0, 0);
-          this.pinLabel.setText(who);
-          syncSignPlaque(this.pinLabel);
+          setSignCopy(this.pinLabel, who);
+        } else if (this.pinLabel.visible !== showPin) {
+          this.pinLabel.setVisible(showPin);
+          if (showPin) syncSignPlaque(this.pinLabel);
         }
         // Ink on white in every state, LATE included: the urgency is carried by the
         // frame, so the stop name never drops to danger-red on a coloured chip.
@@ -318,13 +321,13 @@ export class DriveScene extends Phaser.Scene {
       this.vanBannerHost
         .setVisible(true)
         .setPosition(vehicle.x, vehicle.y - this.vehicle.displayHeight / 2 - driveSignGap());
-      this.vanBanner.setPosition(0, 0).setVisible(true);
+      this.vanBanner.setPosition(0, 0);
       if (snap.toast !== this.lastVanToast) {
         this.lastVanToast = snap.toast;
-        this.vanBanner.setText(snap.toast);
+        setSignCopy(this.vanBanner, snap.toast);
         fitTypeToBox(this.vanBanner, driveVanMaxW(), driveVanMaxH());
+        syncSignPlaque(this.vanBanner);
       }
-      syncSignPlaque(this.vanBanner);
     } else {
       this.lastVanToast = "";
       this.vanBannerHost.setVisible(false);
@@ -344,11 +347,11 @@ export class DriveScene extends Phaser.Scene {
     const flashShop = next?.kind === "shop";
     if (this.shopImg.input) this.shopImg.input.enabled = driving;
     this.shopImg.setTint(flashShop && canTapShop ? Color.flash : 0xffffff);
-    this.shopCaptionHost.setVisible(driving);
-    this.shopCaption.setVisible(driving);
     // Skip plaque setText/accent while hidden (not driving) — typekit work is wasted fill.
     if (!driving) {
       this.lastShopCaptionKey = "";
+      this.shopCaptionHost.setVisible(false);
+      this.shopCaption.setVisible(false);
     } else {
       this.syncDriveLabelScale(this.shopCaption, this.shopCaptionHost);
       this.shopCaption.setAlpha(1);
@@ -359,13 +362,17 @@ export class DriveScene extends Phaser.Scene {
           : snap.autoDriving
             ? "Van heading to Kindling"
             : "Drive to Kindling";
+      const showCaption = captionText.trim().length > 0;
+      this.shopCaptionHost.setVisible(showCaption);
       const captionKey = `${captionText}:${nearShop ? 1 : 0}`;
       if (captionKey !== this.lastShopCaptionKey) {
         this.lastShopCaptionKey = captionKey;
-        this.shopCaption.setText(captionText);
+        setSignCopy(this.shopCaption, captionText);
         setSignAccent(this.shopCaption, snap.run?.nextStopId ? undefined : nearShop ? Color.lime : undefined);
+      } else if (this.shopCaption.visible !== showCaption) {
+        this.shopCaption.setVisible(showCaption);
+        if (showCaption) syncSignPlaque(this.shopCaption);
       }
-      syncSignPlaque(this.shopCaption);
     }
   }
 
@@ -618,7 +625,8 @@ export class DriveScene extends Phaser.Scene {
       maxHeight: scaleMsgBox(52),
     }));
     this.shopCaptionHost.setPosition(shop.x, shop.y + CITY.shopLot.h * TILE * 0.42);
-    this.shopCaption.setOrigin(0.5, 0).setPosition(0, 0).setText("Tap Kindling to return");
+    this.shopCaption.setOrigin(0.5, 0).setPosition(0, 0);
+    setSignCopy(this.shopCaption, "");
 
     this.streetLamps = cityStreetLamps();
     for (const lamp of this.streetLamps) {

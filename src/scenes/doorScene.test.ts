@@ -101,11 +101,14 @@ describe("doorstep prompt", () => {
     expect(pxConstant("doorPromptPx")).toBeCloseTo(31.25, 5);
   });
 
-  it("seeds the house title 50% above the prior 33.75px base (then MSG_SCALE)", () => {
-    expect(pxConstant("doorTitlePx")).toBeCloseTo(50.625 * 1.25, 5);
-    const box = between(src, "this.houseLabel = addSignText(", ".setOrigin(0.5)", "house title box");
-    expect(box).toContain("maxHeight: scaleMsgBox(108)");
-    expect(box).toContain("maxWidth: scaleMsgBox(1200)");
+  it("uses setSignCopy so empty prompt copy never paints a plaque", () => {
+    expect(src).toContain("setSignCopy(this.prompt");
+  });
+
+  it("clamps the prompt away from the bag hit target", () => {
+    const fn = between(src, "private placePrompt(", "\n  }", "placePrompt");
+    expect(fn).toContain("this.bag.input?.enabled");
+    expect(fn).toContain("bagLeft");
   });
 
   it("lifts the prompt farther above the customer head", () => {

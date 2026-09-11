@@ -58,6 +58,10 @@ describe("HudScene paint dirty guards", () => {
     expect(phone).not.toContain("refitType(this.phoneStatus)");
     const cover = src.slice(src.indexOf("private paintCover"), src.indexOf("private tutorialFlashHint"));
     expect(cover).not.toContain("refitType(this.coverText)");
+    expect(cover).toContain("clipCoverLine");
+    expect(cover).toContain("coverMaxWidth");
+    expect(src).toContain("paintDoorTitle");
+    expect(src).toContain("releaseDropoffConfirm()");
   });
 
   it("caches tutorial hints and music sync on sky band", () => {
