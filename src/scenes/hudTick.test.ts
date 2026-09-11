@@ -59,6 +59,14 @@ describe("HudScene paint dirty guards", () => {
     expect(phone).toMatch(/if \(phoneLine !== this\.lastPhoneLine\)[\s\S]*refitType\(this\.phoneStatus\)/);
   });
 
+  it("caches tutorial hints and music sync on sky band", () => {
+    const src = read("HudScene.ts");
+    expect(src).toContain("tutorialFlashHint");
+    expect(src).toContain("syncMusicIfNeeded");
+    expect(src).toContain("lastShowPhone");
+    expect(src).toContain("lastShowId");
+  });
+
   it("calls setPwaIdle only on shiftEnded edge", () => {
     const src = read("HudScene.ts");
     expect(src).toContain("pwaIdleShiftEnded");

@@ -1679,6 +1679,26 @@ describe("resetting the day returns a cold start", () => {
     expect(sim.score).toBe(SCORE_INSTORE);
   });
 
+  it("exposes rolePhase without building a snapshot", () => {
+    const sim = GameSim.create({ seed: 1, autoSpawn: false });
+    expect(sim.rolePhase()).toEqual({ role: "keyLead", dropoffPhase: null });
+  });
+
+  it("keeps customer bubble copy across motion ticks when bubble inputs are unchanged", () => {
+    const sim = GameSim.create({ seed: 8, autoSpawn: false });
+    const order = sim.spawnOrder("pickup");
+    sim.shopClick({ type: "tablet", orderId: order.id });
+    sim.shopClick({ type: "strain", skuId: order.skuId });
+    waitForFetch(sim);
+    sim.shopClick({ type: "bagRack" });
+    waitForCustomerAtCounter(sim, order.id);
+    const before = sim.snapshot().customers.find((c) => c.orderId === order.id)?.bubble;
+    expect(before).toBeTruthy();
+    sim.tick(32);
+    const after = sim.snapshot().customers.find((c) => c.orderId === order.id)?.bubble;
+    expect(after).toBe(before);
+  });
+
   it("puts the tutorial back on its first step", () => {
     const sim = GameSim.create({ seed: 4, autoSpawn: false });
     makeMessy(sim);
