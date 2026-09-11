@@ -95,4 +95,11 @@ describe("HudScene paint dirty guards", () => {
     expect(src).toContain("syncShopVisibility");
     expect(src).toContain('this.scene.setVisible(show, "shop")');
   });
+
+  it("sleeps drive/door when keyLead owns the shop world", () => {
+    const src = read("HudScene.ts");
+    const sync = src.slice(src.indexOf("private syncDriveScene"), src.indexOf("private makeResults"));
+    expect(sync).toContain('this.lastDriveSceneKey !== "__shop__"');
+    expect(sync).toContain("ensureShopVisible()");
+  });
 });

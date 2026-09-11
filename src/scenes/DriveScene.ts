@@ -4,6 +4,10 @@ import { applyPersonTexture, personImageKey } from "../art/peopleAtlas";
 import { driveGrade } from "../art/dayNightGrade";
 import { applyDayNight, attachDayNight, dayNightFrom, shouldApplyGrade, type DayNightPipeline } from "../art/dayNightPipeline";
 import { getRenderBudget, syncSceneRenderCamera } from "../ui/renderBudget";
+import { wireSceneDayNightLifecycle } from "../ui/sceneDayNightLifecycle";
+import { PIN_CYCLE_MS } from "./driveConstants";
+
+export { PIN_CYCLE_MS } from "./driveConstants";
 import {
   CITY,
   MAP_PX_H,
@@ -45,8 +49,6 @@ const CITY_BAKE_CELL = 2048;
 const TRAFFIC_CULL_PAD = 192;
 const TRAFFIC_SPRITE_CAP = 12;
 
-/** Pin bob + pulse share one game-clock phase (~720ms). HudScene reads this for label anchor. */
-export const PIN_CYCLE_MS = 720;
 export class DriveScene extends Phaser.Scene {
   private vehicle!: Phaser.GameObjects.Image;
   private walker!: Phaser.GameObjects.Image;
@@ -70,7 +72,7 @@ export class DriveScene extends Phaser.Scene {
   /** Grade focus from update — PRE_RENDER reads gameMs() only, not a full snapshot. */
   private dayNightFocus = { x: 0, y: 0 };
   private onPreRenderDayNight = (): void => {
-    if (!this.sys.isActive()) return;
+    if (!this.sys.isActive() || this.sys.isSleeping()) return;
     this.paintDayNightAt(getSim().gameMs());
   };
   private trafficLoops: TrafficLoop[] = [];
@@ -91,6 +93,7 @@ export class DriveScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(skyAt(0).mapGrass);
     syncSceneRenderCamera(this);
     this.lighting = attachDayNight(this.cameras.main);
+    wireSceneDayNightLifecycle(this, this.cameras.main);
     void this.buildCityChunked();
     this.nightGlow = this.add.graphics().setDepth(2);
     this.glow = this.add.graphics().setDepth(3);
@@ -260,7 +263,7 @@ export class DriveScene extends Phaser.Scene {
   }
 
   private paintDayNightAt(gameMs: number): void {
-    if (!this.sys.isActive()) return;
+    if (!this.sys.isActive() || this.sys.isSleeping()) return;
     const sky = skyAt(gameMs);
     this.cameras.main.setBackgroundColor(sky.mapGrass);
     if (getRenderBudget().postFx) {

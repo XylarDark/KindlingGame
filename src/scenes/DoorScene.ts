@@ -3,6 +3,7 @@ import { applyCrewTexture, applyPersonTexture } from "../art/peopleAtlas";
 import { doorGrade } from "../art/dayNightGrade";
 import { applyDayNight, attachDayNight, dayNightFrom, shouldApplyGrade, type DayNightPipeline } from "../art/dayNightPipeline";
 import { getRenderBudget, syncSceneRenderCamera } from "../ui/renderBudget";
+import { wireSceneDayNightLifecycle } from "../ui/sceneDayNightLifecycle";
 import {
   paintDoorstepNightFx,
   paintDoorstepSky,
@@ -87,7 +88,10 @@ export class DoorScene extends Phaser.Scene {
   private lighting?: DayNightPipeline;
   private lastGradeKey = "";
   private lastGradeMs = -1e9;
-  private onPreRenderDayNight = (): void => this.paintDoorDayNight(getSim().snapshot());
+  private onPreRenderDayNight = (): void => {
+    if (!this.sys.isActive() || this.sys.isSleeping()) return;
+    this.paintDoorDayNight(getSim().snapshot());
+  };
 
   constructor() {
     super("door");
@@ -98,6 +102,7 @@ export class DoorScene extends Phaser.Scene {
     this.cameras.main.disableCull = false;
     syncSceneRenderCamera(this);
     this.lighting = attachDayNight(this.cameras.main);
+    wireSceneDayNightLifecycle(this, this.cameras.main);
     this.skyLayer = this.add.graphics().setDepth(0);
     this.facadeBake = this.bakeDoorFacade(0);
     this.nightFx = this.add.graphics().setDepth(1);
@@ -303,7 +308,7 @@ export class DoorScene extends Phaser.Scene {
   }
 
   private paintDoorDayNight(snap: SimSnapshot): void {
-    if (!this.sys.isActive()) return;
+    if (!this.sys.isActive() || this.sys.isSleeping()) return;
     if (!getRenderBudget().postFx) return;
     const sky = skyAt(snap.gameMs);
     const gradeKey = `${sky.mapOverlay}:${sky.mapOverlayAlpha.toFixed(3)}:${sky.lampAlpha.toFixed(2)}:${sky.windowGlow.toFixed(2)}`;

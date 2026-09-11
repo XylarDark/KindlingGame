@@ -17,6 +17,7 @@ import {
   tickRenderBudget,
 } from "./ui/renderBudget";
 import { feelMeterEnabled } from "./ui/feelMeter";
+import { resetPerfProbeWindow, samplePerfProbe } from "./ui/perfProbe";
 import "@fontsource/inter/latin-400.css";
 import "@fontsource/inter/latin-600.css";
 import "@fontsource/inter/latin-700.css";
@@ -30,7 +31,8 @@ function syncDayNightCameras(game: Phaser.Game): void {
     if (typeof key !== "string" || !DAY_NIGHT_SCENES.has(key)) continue;
     const cam = scene.cameras?.main;
     if (!cam) continue;
-    if (postFx) attachDayNight(cam);
+    // Sleeping/inactive world scenes must not keep PostFX attached — only one grades at a time.
+    if (postFx && scene.sys.isActive() && !scene.sys.isSleeping()) attachDayNight(cam);
     else detachDayNight(cam);
   }
 }
@@ -80,8 +82,13 @@ function startGame(): void {
       setMode: typeof setClockMode;
       meter: boolean;
     };
+    kindlingPerfProbe?: {
+      reset: typeof resetPerfProbeWindow;
+      sample: () => ReturnType<typeof samplePerfProbe>;
+    };
   };
   handle.kindlingGame = game;
+  resetPerfProbeWindow();
   handle.kindlingRenderBudget = {
     get: getRenderBudget,
     apply: () => applyBudget(game),
@@ -96,6 +103,10 @@ function startGame(): void {
     stats: getClockStats,
     setMode: setClockMode,
     meter: feelMeterEnabled(),
+  };
+  handle.kindlingPerfProbe = {
+    reset: resetPerfProbeWindow,
+    sample: () => samplePerfProbe(game),
   };
 }
 

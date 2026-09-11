@@ -4,6 +4,8 @@ import { drawReceiptRail } from "../art/receiptRail";
 import { shopGrade } from "../art/dayNightGrade";
 import { applyDayNight, attachDayNight, dayNightFrom, type DayNightPipeline } from "../art/dayNightPipeline";
 import { getRenderBudget, syncSceneRenderCamera } from "../ui/renderBudget";
+import { wireSceneDayNightLifecycle } from "../ui/sceneDayNightLifecycle";
+import { loadWorldScenes } from "./worldScenes";
 import { drawShopCounter, drawShopInterior, paintShopDayNight, paintWindowGlow } from "../art/shopInterior";
 import {
   BAG_PANEL,
@@ -160,7 +162,10 @@ export class ShopScene extends Phaser.Scene {
   /** Ordered settled ids + quantized x — layoutCustomerSpeech only when this changes. */
   private lastCustomerLayoutKey = "";
   private customerLayoutById = new Map<string, ReturnType<typeof layoutCustomerSpeech>[number]>();
-  private onPreRenderLighting = (): void => this.syncLighting(getSim().gameMs());
+  private onPreRenderLighting = (): void => {
+    if (!this.sys.isActive() || this.sys.isSleeping()) return;
+    this.syncLighting(getSim().gameMs());
+  };
   /** Static shop Graphics/Text collapsed into RTs (Drive-style). */
   private shopBakeLayers: Phaser.GameObjects.RenderTexture[] = [];
 
@@ -178,6 +183,7 @@ export class ShopScene extends Phaser.Scene {
     paintShopDayNight(this.sky, startMs);
     paintWindowGlow(this.windowGlow, startMs);
     this.lighting = attachDayNight(this.cameras.main);
+    wireSceneDayNightLifecycle(this, this.cameras.main);
     this.syncLighting(getSim().gameMs());
     this.events.on(Phaser.Scenes.Events.PRE_RENDER, this.onPreRenderLighting);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -291,8 +297,8 @@ export class ShopScene extends Phaser.Scene {
 
   private syncLighting(gameMs: number): void {
     if (!getRenderBudget().postFx) return;
-    // Sleeping shop still renders behind drive/title — skip PostFX when inactive.
-    if (!this.sys.isActive()) return;
+    // Sleeping shop still renders behind drive/title — skip PostFX when inactive/asleep.
+    if (!this.sys.isActive() || this.sys.isSleeping()) return;
     const pipe = this.lighting ?? dayNightFrom(this.cameras.main);
     this.lighting = pipe;
     if (Math.abs(gameMs - this.lastLightMs) < 80) return;
@@ -405,10 +411,12 @@ export class ShopScene extends Phaser.Scene {
   private departNow(): void {
     if (!getSim().hitTheRoad()) return;
     this.targetCallout.setVisible(false);
-    this.scene.sleep("shop");
-    if (this.scene.isSleeping("drive")) this.scene.wake("drive");
-    else if (!this.scene.isActive("drive")) this.scene.launch("drive");
-    this.scene.bringToTop("hud");
+    void loadWorldScenes(this.game).then(() => {
+      this.scene.sleep("shop");
+      if (this.scene.isSleeping("drive")) this.scene.wake("drive");
+      else if (!this.scene.isActive("drive")) this.scene.launch("drive");
+      this.scene.bringToTop("hud");
+    });
   }
 
   private syncTablet(snap: SimSnapshot, pulse: number, flash: boolean): void {

@@ -11,7 +11,7 @@ describe("ShopScene session perf guards", () => {
 
   it("skips PostFX when the scene is inactive and throttles when active", () => {
     const block = src.slice(src.indexOf("private syncLighting"), src.indexOf("private sync(snap"));
-    expect(block).toContain("if (!this.sys.isActive()) return");
+    expect(block).toMatch(/if \(!this\.sys\.isActive\(\) \|\| this\.sys\.isSleeping\(\)\) return/);
     expect(block).not.toMatch(/playing && Math\.abs\(gameMs - this\.lastLightMs\)/);
     expect(block).toContain("if (Math.abs(gameMs - this.lastLightMs) < 80) return");
   });

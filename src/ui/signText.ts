@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { notePerfPlaquePump, notePerfSetText } from "./perfProbe";
 import { SIGN_BORDER, SIGN_PAD_X, SIGN_PAD_Y } from "./signPlaque";
 import { makePlaqueNineSlice, plaqueTextureForAccent } from "./signPlaqueNine";
 import { addUiText, type UiTextOptions } from "./text";
@@ -66,8 +67,10 @@ class SceneSignPlaquePump {
   }
 
   private onPreRender = (): void => {
+    if (!this.scene.sys.isActive() || this.scene.sys.isSleeping()) return;
     for (const entry of this.entries) {
       if (!entry.dirty) continue;
+      notePerfPlaquePump();
       layoutPlaque(entry);
     }
   };
@@ -77,6 +80,7 @@ class SceneSignPlaquePump {
     const rawSetText = text.setText.bind(text);
     text.setText = ((value: string | string[]) => {
       const out = rawSetText(value);
+      notePerfSetText();
       mark();
       return out;
     }) as typeof text.setText;

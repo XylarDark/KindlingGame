@@ -28,6 +28,7 @@ import { hideLoading, showLoading } from "../ui/loadingGate";
 import { applyRenderBudgetToGame, getRenderBudget } from "../ui/renderBudget";
 import { registerSignPlaqueTextures } from "../ui/signPlaqueNine";
 import { installTypekit } from "../ui/typekit";
+import { loadWorldScenes } from "./worldScenes";
 
 /**
  * Wall-clock cap for the whole warm path. Phaser delayedCall is game-time and
@@ -129,6 +130,9 @@ export class BootScene extends Phaser.Scene {
     if (this.warmAborted) return;
 
     await this.warmShopPostFx();
+    if (this.warmAborted) return;
+
+    await loadWorldScenes(this.game);
     if (this.warmAborted) return;
 
     this.showBootStage("Map");
