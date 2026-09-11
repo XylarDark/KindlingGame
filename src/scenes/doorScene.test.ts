@@ -28,16 +28,6 @@ function constant(name: string): number {
   return Number(hit[1]);
 }
 
-/** Read a message px seed — lazy `name = () => scaleMsgPx(N)` or legacy const forms. */
-function pxConstant(name: string): number {
-  const lazy = new RegExp(`const ${name} = \\(\\): string => scaleMsgPx\\(([\\d.]+)\\);`).exec(src);
-  if (lazy) return Number(lazy[1]) * 1.25;
-  const scaled = new RegExp(`const ${name} = scaleMsgPx\\(([\\d.]+)\\);`).exec(src);
-  if (scaled) return Number(scaled[1]) * 1.25;
-  const hit = new RegExp(`const ${name} = "([\\d.]+)px";`).exec(src);
-  if (!hit) throw new Error(`px constant not found: ${name}`);
-  return Number(hit[1]);
-}
 
 describe("doorstep tap target flash", () => {
   it("throbs on a period a person can see, not a strobe", () => {
@@ -97,12 +87,19 @@ describe("doorstep tap target flash", () => {
 });
 
 describe("doorstep prompt", () => {
-  it("seeds the prompt with the shared +25% message bump over 25px", () => {
-    expect(pxConstant("doorPromptPx")).toBeCloseTo(31.25, 5);
+  it("uses the hudBody type role token, not a per-site scaleMsgPx seed", () => {
+    const box = between(src, "this.prompt = addSignText(", ".setOrigin(0.5, 1)", "prompt box");
+    expect(box).toContain('typeRole: "hudBody"');
+    expect(box).toContain('typeRolePx("hudBody")');
   });
 
   it("uses setSignCopy so empty prompt copy never paints a plaque", () => {
     expect(src).toContain("setSignCopy(this.prompt");
+  });
+
+  it("positions the prompt via setSignPosition on the plaque host", () => {
+    const fn = between(src, "private placePrompt(", "\n  }", "placePrompt");
+    expect(fn).toContain("setSignPosition(this.prompt");
   });
 
   it("clamps the prompt away from the bag hit target", () => {
@@ -113,17 +110,6 @@ describe("doorstep prompt", () => {
 
   it("lifts the prompt farther above the customer head", () => {
     expect(constant("DOOR_CHIP_GAP")).toBe(36);
-  });
-
-  it("grows the prompt's box with its font, because clamp-fit will drop a tight box", () => {
-    // The trap: raise the seed and leave the box, and the text renders at the old size
-    // while the constant claims otherwise — a change that looks done and does nothing.
-    const box = between(src, "this.prompt = addSignText(", ".setOrigin(0.5, 1)", "prompt box");
-    const height = /maxHeight: (?:scaleMsgBox\()?(\d+)/.exec(box);
-    if (!height) throw new Error("prompt maxHeight not found");
-    expect(Number(height[1]) * 1.25).toBeGreaterThanOrEqual(113 * 1.25);
-    // Authored base must already clear the prior 113px floor before MSG_SCALE.
-    expect(Number(height[1])).toBeGreaterThanOrEqual(113);
   });
 
   it("still floors the chip against the top safe inset", () => {

@@ -64,6 +64,11 @@ export const Color = {
  * {@link HUD_CHROME_MIN_CSS_PX} and are enforced via {@link scaleMsgPx} /
  * {@link scaleChromePx} + `fitTypeToBox` `minCssFloor` / `maxCssCeiling`.
  */
+/** SCORE digits and caption — exported for tablet ORDERS parity. */
+export const HUD_SCORE_PX = 44;
+export const HUD_READOUT_PX = 40;
+export const HUD_COG_CAPTION_PX = 18 * 1.25;
+
 export const Type = {
   display: "36px",
   title: "27px",
@@ -72,6 +77,14 @@ export const Type = {
   caption: "13px",
   micro: "11px",
 } as const;
+
+/** Role tokens — one size per UI job; prefer these over scaleMsgPx at call sites. */
+export {
+  typeRolePx,
+  typeClockPx,
+  isFixedTypeRole,
+  type TypeRole,
+} from "./typeScale";
 
 /** Absolute shrink floor — below this, prefer wrapping/ellipsis over unreadable glyphs. */
 export const TYPE_MIN_FIT_PX = 10;

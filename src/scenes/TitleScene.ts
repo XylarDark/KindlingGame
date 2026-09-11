@@ -22,7 +22,7 @@ import { getRenderBudget, syncSceneRenderCamera } from "../ui/renderBudget";
 import { SIGN_FRAME_W, signPlaqueRings } from "../ui/signPlaque";
 import { addSignText } from "../ui/signText";
 import { addUiText } from "../ui/text";
-import { Color, MENU_TYPE_FIT, MSG_TYPE_FIT, scaleMsgBox, scaleMsgPad, scaleMsgPx, Type } from "../ui/theme";
+import { Color, MENU_TYPE_FIT, MSG_TYPE_FIT, scaleMsgBox, scaleMsgPad, typeRolePx, Type } from "../ui/theme";
 import { fitTypeToWidth } from "../ui/typekit";
 import { designHudInset, readCssSafeArea, VIEWFIT_EVENT } from "../ui/viewFit";
 
@@ -344,7 +344,8 @@ export class TitleScene extends Phaser.Scene {
     // How-to tap hint: base seed already on scaleMsg*; add the intro scale on top.
     const hintSeed = 13 * TITLE_INTRO_SCALE;
     addSignText(this, GAME_WIDTH / 2, play.y + btnH + hintGap, HOWTO_HINT, {
-      size: scaleMsgPx(hintSeed),
+      size: typeRolePx("hudBody"),
+      typeRole: "hudBody",
       padding: scaleMsgPad({ x: introN(16), y: introN(7) }),
       fontStyle: "700",
       lineSpacing: 0,

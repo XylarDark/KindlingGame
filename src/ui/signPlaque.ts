@@ -3,12 +3,6 @@ import { Pal } from "../art/palette";
 /**
  * The counter plaque's border treatment, shared so other signage can match it
  * exactly rather than approximately.
- *
- * Source of truth is `drawShopCounter` in `src/art/shopInterior.ts`: a leaf-dark
- * outer edge, a leaf inner edge, then a white field carrying ink type. That art
- * paints through `fill` from `src/art/px.ts`, which snaps every edge to the 4px
- * pixel grid, so its authored 3px and 8px insets land on screen as two 4px
- * rings — the snapped widths are what is reused here.
  */
 export const SIGN_EDGE = Pal.leafDark;
 export const SIGN_BORDER = Pal.leaf;
@@ -19,6 +13,14 @@ export const SIGN_EDGE_W = 4;
 export const SIGN_BORDER_W = 4;
 /** Total frame thickness on each side of the white field. */
 export const SIGN_FRAME_W = SIGN_EDGE_W + SIGN_BORDER_W;
+
+/** White margin around glyphs — panel grows by this, not Phaser Text padding. */
+export const SIGN_PAD_X = 12;
+export const SIGN_PAD_Y = 8;
+
+export const PLAQUE_TEX = "sign-plaque";
+export const PLAQUE_TEX_LIME = "sign-plaque-lime";
+export const PLAQUE_TEX_DANGER = "sign-plaque-danger";
 
 export interface SignRect {
   x: number;
@@ -32,10 +34,9 @@ export interface SignRing extends SignRect {
 }
 
 /**
- * Filled rects for a plaque wrapping `field`, outermost first — draw them in
- * order and each one covers the middle of the last, leaving two even rings.
- * `field` is the white area, so callers pass the measured bounds of whatever
- * sits on the plaque and the frame grows outward from there.
+ * Filled rects for a plaque wrapping `field`, outermost first.
+ *
+ * @deprecated Runtime plaques use {@link registerSignPlaqueTextures} in signPlaqueNine.ts.
  */
 export function signPlaqueRings(field: SignRect): SignRing[] {
   const grow = (by: number, color: number): SignRing => ({

@@ -47,21 +47,16 @@ import { nextShopHint } from "../sim/tutorialHints";
 import { driverReadyCopy } from "../ui/copy";
 import { readyTally, receiptSlips } from "../ui/receipts";
 import { wireHover } from "../ui/chrome";
-import { addSignText, setSignAccent } from "../ui/signText";
+import { addSignText, setSignAccent, setSignPosition } from "../ui/signText";
 import { addUiText } from "../ui/text";
-import { fitTypeToBox } from "../ui/typekit";
 import {
   Color,
   HUD_TYPE_FIT,
   MENU_TYPE_FIT,
-  MSG_TYPE_FIT,
-  scaleChromePx,
-  scaleMsgBox,
-  scaleMsgPad,
-  scaleMsgPx,
+  typeRolePx,
   Type,
 } from "../ui/theme";
-import { HUD_SCORE_PX } from "./HudScene";
+import { HUD_SCORE_PX } from "../ui/theme";
 
 /**
  * Strain names on the wall screens run 21% over the heading step, then clamp-fit
@@ -84,16 +79,6 @@ const TABLET_LABEL_PX = HUD_SCORE_PX;
  */
 const TABLET_LABEL_INSET = 4;
 
-/**
- * Customer / driver action messages: prior +20% over body, then the shared
- * {@link scaleMsgPx} bump (+25%, plus mobile ramp / CSS floors when the contain
- * stage is small). Lazy so create() sees the shell's published stage scale.
- */
-const msgPx = (): string => scaleMsgPx(19.2);
-const msgPad = (): { x: number; y: number } => scaleMsgPad({ x: 12, y: 7 });
-const msgNoticePx = (): string => scaleMsgPx(13);
-const msgNoticePad = (): { x: number; y: number } => scaleMsgPad({ x: 10, y: 5 });
-const feedbackH = (): number => scaleMsgBox(48);
 
 /** Concurrent customers the pool covers without mid-frame allocate (4 is typical peak). */
 const CUSTOMER_VISUAL_POOL = 4;
@@ -106,8 +91,6 @@ type CustomerVisual = {
   orderId: string | null;
   /** Last look applied — applyPersonTexture only when this differs. */
   look: number;
-  bubbleFitKey: string;
-  feedbackFitKey: string;
 };
 
 /**
@@ -126,7 +109,7 @@ function modelHeadTop(model: Phaser.GameObjects.Image): number {
  * that showed. Recompute chip Y when text changes (height) or the model moves.
  */
 function hangAboveHead(chip: Phaser.GameObjects.Text, model: Phaser.GameObjects.Image): void {
-  chip.setY(modelHeadTop(model) - CUSTOMER_SPEECH_GAP - chip.height / 2);
+  setSignPosition(chip, chip.x, modelHeadTop(model) - CUSTOMER_SPEECH_GAP - chip.height / 2);
 }
 
 export class ShopScene extends Phaser.Scene {
@@ -214,7 +197,8 @@ export class ShopScene extends Phaser.Scene {
     const tab = tabletLayout();
     this.tabletScreen = this.add.graphics().setDepth(10);
     this.tabletLabel = addUiText(this, TABLET.x, tab.screenTop + tab.screenH / 2, "ORDERS", {
-      size: scaleChromePx(TABLET_LABEL_PX),
+      size: typeRolePx("hudTitle"),
+      typeRole: "hudTitle",
       color: Color.creamHex,
       fontStyle: "700",
       // Caps tracking would spend 8% of a 144px screen on the gaps between six letters.
@@ -237,39 +221,33 @@ export class ShopScene extends Phaser.Scene {
     wireHover(this.tabletHit);
 
     this.queueBadge = addSignText(this, tab.left + tab.w - 10, tab.top + 10, "", {
-      size: Type.caption,
-      padding: { x: 6, y: 2 },
+      size: typeRolePx("hudSmall"),
+      typeRole: "hudSmall",
       fontStyle: "700",
-      ...MENU_TYPE_FIT,
-      maxWidth: 48,
-      maxHeight: 28,
+      noWrap: true,
     })
       .setOrigin(0.5)
       .setDepth(13)
       .setVisible(false);
 
     this.targetCallout = addSignText(this, 0, 0, "", {
-      size: msgNoticePx(),
-      padding: msgNoticePad(),
+      size: typeRolePx("speech"),
+      typeRole: "speech",
       align: "center",
       fontStyle: "700",
       accent: Color.danger,
-      ...MSG_TYPE_FIT,
-      maxWidth: scaleMsgBox(200),
-      maxHeight: scaleMsgBox(44),
+      noWrap: true,
     })
       .setOrigin(0.5, 1)
       .setDepth(14)
       .setVisible(false);
 
     this.keyLeadBubble = addSignText(this, KEYLEAD.x - 168, KEYLEAD.y - PERSON_DISPLAY_H - 24, "", {
-      size: msgPx(),
-      padding: msgPad(),
+      size: typeRolePx("speech"),
+      typeRole: "speech",
       align: "center",
       fontStyle: "600",
-      ...MSG_TYPE_FIT,
-      maxWidth: scaleMsgBox(340),
-      maxHeight: scaleMsgBox(104),
+      maxWidth: 340,
     })
       .setOrigin(0.5)
       .setDepth(12)
@@ -282,13 +260,11 @@ export class ShopScene extends Phaser.Scene {
     wireHover(this.driver);
 
     this.driverBubble = addSignText(this, DRIVER.x - 24, DRIVER.y - PERSON_DISPLAY_H - 8, "", {
-      size: msgPx(),
-      padding: msgPad(),
+      size: typeRolePx("speech"),
+      typeRole: "speech",
       align: "center",
       fontStyle: "600",
-      ...MSG_TYPE_FIT,
-      maxWidth: scaleMsgBox(336),
-      maxHeight: scaleMsgBox(124),
+      maxWidth: 336,
     })
       .setOrigin(1, 1)
       .setDepth(12)
@@ -612,31 +588,27 @@ export class ShopScene extends Phaser.Scene {
     });
     wireHover(sprite);
     const bubble = addSignText(this, -400, CUSTOMER_SPOT.y - PERSON_DISPLAY_H, "", {
-      size: msgPx(),
-      padding: msgPad(),
+      size: typeRolePx("speech"),
+      typeRole: "speech",
       align: "center",
       fontStyle: "600",
-      ...MSG_TYPE_FIT,
       maxWidth: CUSTOMER_SPEECH_MAX_W,
-      maxHeight: CUSTOMER_SPEECH_H,
     })
       .setOrigin(0.5)
       .setDepth(10)
       .setVisible(false);
     const feedback = addSignText(this, -400, CUSTOMER_SPOT.y - PERSON_DISPLAY_H, "", {
-      size: msgNoticePx(),
-      padding: msgNoticePad(),
+      size: typeRolePx("speech"),
+      typeRole: "speech",
       align: "center",
       fontStyle: "600",
       accent: Color.danger,
-      ...MSG_TYPE_FIT,
       maxWidth: CUSTOMER_SPEECH_MAX_W,
-      maxHeight: feedbackH(),
     })
       .setOrigin(0.5)
       .setDepth(10)
       .setVisible(false);
-    return { sprite, bubble, feedback, orderId: null, look: -1, bubbleFitKey: "", feedbackFitKey: "" };
+    return { sprite, bubble, feedback, orderId: null, look: -1 };
   }
 
   private acquireCustomerVisual(orderId: string, look: number): CustomerVisual {
@@ -655,8 +627,6 @@ export class ShopScene extends Phaser.Scene {
     free.sprite.setData("orderId", orderId);
     free.look = look;
     applyPersonTexture(free.sprite, look);
-    free.bubbleFitKey = "";
-    free.feedbackFitKey = "";
     free.sprite.setVisible(true).setActive(true);
     this.customers.set(orderId, free);
     return free;
@@ -672,8 +642,6 @@ export class ShopScene extends Phaser.Scene {
     visual.bubble.setVisible(false);
     visual.feedback.setVisible(false);
     visual.look = -1;
-    visual.bubbleFitKey = "";
-    visual.feedbackFitKey = "";
   }
 
   private syncCustomers(list: CustomerView[], pulse: number, focusId: string | null): void {
@@ -720,30 +688,22 @@ export class ShopScene extends Phaser.Scene {
       const layout = this.customerLayoutById.get(customer.orderId);
       if (layout && customer.bubble) {
         bubble.setAlpha(1).setVisible(true);
-        const layoutFitKey = String(layout.w);
         if (bubble.text !== customer.bubble) bubble.setText(customer.bubble);
-        if (layoutFitKey !== visual.bubbleFitKey) {
-          visual.bubbleFitKey = layoutFitKey;
-          fitTypeToBox(bubble, layout.w, CUSTOMER_SPEECH_H);
-        }
-        bubble.setPosition(layout.x, layout.y);
+        setSignPosition(bubble, layout.x, layout.y);
       } else {
-        visual.bubbleFitKey = "";
         bubble.setVisible(false);
       }
       setSignAccent(bubble, focus ? Color.lime : undefined);
       const note = customer.feedback;
       if (layout && note) {
         feedback.setVisible(true);
-        const layoutFitKey = String(layout.w);
         if (feedback.text !== note) feedback.setText(note);
-        if (layoutFitKey !== visual.feedbackFitKey) {
-          visual.feedbackFitKey = layoutFitKey;
-          fitTypeToBox(feedback, layout.w, feedbackH());
-        }
-        feedback.setPosition(layout.x, layout.y + layout.h / 2 + CUSTOMER_SPEECH_GAP + feedback.height / 2);
+        setSignPosition(
+          feedback,
+          layout.x,
+          layout.y + layout.h / 2 + CUSTOMER_SPEECH_GAP + feedback.height / 2,
+        );
       } else {
-        visual.feedbackFitKey = "";
         feedback.setVisible(false);
       }
     }

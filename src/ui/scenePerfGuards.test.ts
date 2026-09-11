@@ -225,7 +225,7 @@ describe("scene perf guards", () => {
   it("sign plaques share one PRE_RENDER pump per scene", () => {
     const sign = read("src/ui/signText.ts");
     expect(sign).toContain("SceneSignPlaquePump");
-    expect(sign).toContain("anyDirty");
+    expect(sign).toContain("layoutPlaque");
   });
 
   it("Drive and tickDrive share one trafficCars list per sim step", () => {
