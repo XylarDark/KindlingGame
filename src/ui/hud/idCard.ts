@@ -13,9 +13,14 @@ import {
   ID_CARD_W,
   ID_DENY_INK,
   ID_DOB_PX,
+  ID_FIELD_LABEL_H,
+  ID_FIELD_ROW_STEP,
+  ID_FIELD_VALUE_LEAD,
   ID_FIELD_W,
   ID_FIELD_X,
+  ID_HEADER_CAP_MAX_W,
   ID_HEADER_H,
+  ID_HEADER_SEAL_D,
   ID_HINT_PX,
   ID_KIND_PX,
   ID_LABEL_PX,
@@ -112,23 +117,23 @@ export class HudIdCard {
       size: ID_TITLE_PX,
       color: Color.creamHex,
       fontStyle: "700",
-      letterSpacing: 2,
-      strokeThickness: 0,
-      noWrap: true,
-      ...HUD_TYPE_FIT,
-      maxWidth: ID_CARD_W * 0.6,
-      maxHeight: ID_HEADER_H - 12,
-    }).setOrigin(0, 0.5);
-    this.idKind = addUiText(this.scene, halfW - ID_PAD, headerMid, "IDENTITY CARD  ·  CLASS G", {
-      size: ID_KIND_PX,
-      color: Color.creamHex,
-      fontStyle: "600",
       letterSpacing: 1,
       strokeThickness: 0,
       noWrap: true,
       ...HUD_TYPE_FIT,
-      maxWidth: ID_CARD_W * 0.4,
-      maxHeight: ID_HEADER_H - 16,
+      maxWidth: ID_HEADER_CAP_MAX_W,
+      maxHeight: ID_HEADER_H - 14,
+    }).setOrigin(0, 0.5);
+    this.idKind = addUiText(this.scene, halfW - ID_PAD, headerMid, "IDENTITY CARD · CLASS G", {
+      size: ID_KIND_PX,
+      color: Color.creamHex,
+      fontStyle: "600",
+      letterSpacing: 0.5,
+      strokeThickness: 0,
+      noWrap: true,
+      ...HUD_TYPE_FIT,
+      maxWidth: ID_HEADER_CAP_MAX_W,
+      maxHeight: ID_HEADER_H - 14,
     }).setOrigin(1, 0.5);
 
     const photoTex = portraitImageKey("tex-face-0");
@@ -143,8 +148,8 @@ export class HudIdCard {
       strokeThickness: 0,
       ...HUD_TYPE_FIT,
       maxWidth: ID_FIELD_W,
-      maxHeight: 46,
-    }).setOrigin(0, 0.5);
+      maxHeight: 40,
+    }).setOrigin(0, 0);
     this.idDob = addUiText(this.scene, ID_FIELD_X, 0, "", {
       size: ID_DOB_PX,
       color: "#3a2418",
@@ -152,18 +157,18 @@ export class HudIdCard {
       strokeThickness: 0,
       ...HUD_TYPE_FIT,
       maxWidth: ID_FIELD_W,
-      maxHeight: 34,
-    }).setOrigin(0, 0.5);
+      maxHeight: 30,
+    }).setOrigin(0, 0);
     this.idNumber = addUiText(this.scene, ID_FIELD_X, 0, "", {
       size: ID_DOB_PX,
       color: "#3a2418",
       fontStyle: "600",
-      letterSpacing: 1,
+      letterSpacing: 0.5,
       strokeThickness: 0,
       ...HUD_TYPE_FIT,
       maxWidth: ID_FIELD_W,
-      maxHeight: 34,
-    }).setOrigin(0, 0.5);
+      maxHeight: 30,
+    }).setOrigin(0, 0);
     this.idHint = addUiText(this.scene, 0, halfH - ID_PAD - 20, "Tap the card to confirm 19+", {
       size: ID_HINT_PX,
       color: Color.creamHex,
@@ -183,21 +188,21 @@ export class HudIdCard {
       strokeThickness: 0,
       ...HUD_TYPE_FIT,
       maxWidth: ID_FIELD_W,
-      maxHeight: 34,
-    }).setOrigin(0, 0.5);
+      maxHeight: 30,
+    }).setOrigin(0, 0);
 
     const labels = ["NAME", "DATE OF BIRTH", "ID NO.", "EXPIRES"].map((text) =>
       addUiText(this.scene, ID_FIELD_X, 0, text, {
         size: ID_LABEL_PX,
         color: "#8a7a58",
         fontStyle: "700",
-        letterSpacing: 2,
+        letterSpacing: 1,
         strokeThickness: 0,
         noWrap: true,
         ...HUD_TYPE_FIT,
         maxWidth: ID_FIELD_W,
-        maxHeight: 22,
-      }).setOrigin(0, 0.5),
+        maxHeight: ID_FIELD_LABEL_H,
+      }).setOrigin(0, 0),
     );
     const sigLabel = addUiText(this.scene, photoX, 0, "SIGNATURE", {
       size: ID_SIG_PX,
@@ -211,13 +216,12 @@ export class HudIdCard {
       maxHeight: 20,
     }).setOrigin(0.5, 0);
 
-    const rowTop = photoTop + 6;
-    const rowStep = 74;
+    const rowTop = photoTop + 4;
     labels.forEach((label, i) => {
-      const y = rowTop + i * rowStep;
+      const y = rowTop + i * ID_FIELD_ROW_STEP;
       label.setPosition(ID_FIELD_X, y);
       const value = [this.idName, this.idDob, this.idNumber, this.idExpiry][i]!;
-      value.setPosition(ID_FIELD_X, y + 30);
+      value.setPosition(ID_FIELD_X, y + ID_FIELD_VALUE_LEAD);
     });
     const sigTop = photoTop + ID_PHOTO_H + 14;
     sigLabel.setPosition(photoX, sigTop + 44);
@@ -262,6 +266,14 @@ export class HudIdCard {
     g.clear();
     g.fillStyle(ink, 1);
     g.fillRect(-halfW, -halfH, ID_CARD_W, ID_HEADER_H);
+    const sealY = -halfH + ID_HEADER_H / 2;
+    const sealR = ID_HEADER_SEAL_D / 2;
+    g.lineStyle(2, 0xfdf6e0, 0.92);
+    g.strokeCircle(0, sealY, sealR);
+    g.fillStyle(0xfdf6e0, 0.14);
+    g.fillCircle(0, sealY, sealR - 2);
+    g.lineStyle(1, 0xfdf6e0, 0.55);
+    g.strokeCircle(0, sealY, sealR - 7);
     g.fillStyle(ink, 0.06);
     g.fillRect(ID_FIELD_X - 16, photoTop - 8, ID_FIELD_W + 32, ID_PHOTO_H + 16);
     g.lineStyle(1, ink, 0.16);

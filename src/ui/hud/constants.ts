@@ -118,18 +118,30 @@ export const ID_CARD_H = 440;
 export const ID_RING_PAD = 16;
 export const ID_PAD = 24;
 export const ID_HEADER_H = 56;
+/** Provincial seal diameter — header captions must stay outside this band. */
+export const ID_HEADER_SEAL_D = 38;
+/** Ink gap between caption max edge and the seal ring. */
+export const ID_HEADER_SEAL_GAP = 12;
+const ID_HALF_W = ID_CARD_W / 2;
+/** Max caption width from each card edge to the seal reserve (symmetric). */
+export const ID_HEADER_CAP_MAX_W = ID_HALF_W - ID_PAD - ID_HEADER_SEAL_D / 2 - ID_HEADER_SEAL_GAP;
 export const ID_PHOTO_W = 180;
 export const ID_PHOTO_H = Math.round((ID_PHOTO_W * PORTRAIT_H) / PORTRAIT_W);
 export const ID_PHOTO_FRAME = 4;
-export const ID_TITLE_PX = "19.2px";
-export const ID_KIND_PX = "15.6px";
-export const ID_NAME_PX = "31.2px";
-export const ID_LABEL_PX = "13.2px";
-export const ID_DOB_PX = "22.8px";
+export const ID_TITLE_PX = "18px";
+export const ID_KIND_PX = "14.4px";
+export const ID_NAME_PX = "28.8px";
+export const ID_LABEL_PX = "14.4px";
+export const ID_DOB_PX = "21.6px";
 export const ID_HINT_PX = "24px";
 export const ID_SIG_PX = "13.2px";
 export const ID_OK_INK = 0x3d7a45;
 export const ID_DENY_INK = 0xc45a3a;
 export const ID_CARD_FILL = 0xf4e8c1;
-export const ID_FIELD_X = -ID_CARD_W / 2 + ID_PAD + ID_PHOTO_W + 28;
-export const ID_FIELD_W = ID_CARD_W / 2 - ID_PAD - ID_FIELD_X;
+export const ID_FIELD_X = -ID_HALF_W + ID_PAD + ID_PHOTO_W + 28;
+export const ID_FIELD_W = ID_HALF_W - ID_PAD - ID_FIELD_X;
+/** Label/value rows — shared left edge, fixed vertical rhythm. */
+export const ID_FIELD_LABEL_H = 18;
+export const ID_FIELD_VALUE_GAP = 5;
+export const ID_FIELD_ROW_STEP = 72;
+export const ID_FIELD_VALUE_LEAD = ID_FIELD_LABEL_H + ID_FIELD_VALUE_GAP;
