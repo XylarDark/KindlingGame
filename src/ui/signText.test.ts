@@ -1,5 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { glyphAabb, inkInsidePlaque } from "./signTextInk";
+import { SIGN_PAD_X, SIGN_PAD_Y } from "./signPlaque";
 
 function read(path: string): string {
   const src = readFileSync(new URL(path, import.meta.url), "utf8").replace(/\r\n/g, "\n");
@@ -16,6 +18,65 @@ const SCENES = [
 ];
 
 const helper = read("./signText.ts");
+
+function mockGlyph(w: number, h: number, originX: number, originY: number) {
+  return { width: w, height: h, originX, originY };
+}
+
+function mockPlaque(x: number, y: number, width: number, height: number, originX = 0.5, originY = 0.5) {
+  return { x, y, width, height, originX, originY };
+}
+
+describe("sign text ink contract", () => {
+  it("states the ink-inside-panel contract at the top of signText", () => {
+    expect(helper).toContain("Sign text contract — standard UI: ink stays inside its panel");
+    expect(helper).toContain("syncChildScrollFactors");
+  });
+
+  it("fails on empty glyph or plaque boxes", () => {
+    expect(inkInsidePlaque(mockGlyph(0, 0, 0.5, 0.5), mockPlaque(0, 0, 40, 24)).ok).toBe(false);
+    expect(inkInsidePlaque(mockGlyph(20, 12, 0.5, 0.5), mockPlaque(0, 0, 0, 24)).ok).toBe(false);
+  });
+
+  it("fails when ink would clip the plaque top", () => {
+    const glyph = mockGlyph(40, 16, 0.5, 0.5);
+    const w = 40;
+    const h = 16;
+    const panelW = w + SIGN_PAD_X * 2;
+    const panelH = h + SIGN_PAD_Y * 2;
+    const { top: inkTop } = glyphAabb(glyph);
+    const plaque = mockPlaque(0, inkTop + SIGN_PAD_Y - 2 + panelH / 2, panelW, panelH);
+    const result = inkInsidePlaque(glyph, plaque);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe("top-clipped ink");
+  });
+
+  it("passes when ink sits inside the padded plaque field", () => {
+    const glyph = mockGlyph(40, 16, 0.5, 0.5);
+    const w = 40;
+    const h = 16;
+    const panelW = w + SIGN_PAD_X * 2;
+    const panelH = h + SIGN_PAD_Y * 2;
+    const { left, top } = glyphAabb(glyph);
+    const plaque = mockPlaque(
+      left - SIGN_PAD_X + panelW / 2,
+      top - SIGN_PAD_Y + panelH / 2,
+      panelW,
+      panelH,
+    );
+    expect(inkInsidePlaque(glyph, plaque).ok).toBe(true);
+  });
+
+  it("layoutPlaque validates ink before lastLayoutKey early-return", () => {
+    const layoutStart = helper.indexOf("function layoutPlaque(entry: SignPlaqueEntry): void {");
+    if (layoutStart === -1) throw new Error("layoutPlaque not found");
+    const layoutEnd = helper.indexOf("\n}", layoutStart);
+    if (layoutEnd === -1) throw new Error("layoutPlaque end not found");
+    const layout = helper.slice(layoutStart, layoutEnd);
+    expect(layout).toContain("inkFitsPlaque(");
+    expect(layout).toMatch(/inkFitsPlaque[\s\S]*if \(key === entry\.lastLayoutKey\)/);
+  });
+});
 
 describe("text boxes are all the counter plaque", () => {
   it("leaves no flat chip anywhere in the game's screens", () => {

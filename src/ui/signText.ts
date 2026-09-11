@@ -1,15 +1,20 @@
 import Phaser from "phaser";
 import { notePerfPlaquePump, notePerfSetText } from "./perfProbe";
 import { SIGN_BORDER, SIGN_PAD_X, SIGN_PAD_Y } from "./signPlaque";
+import { glyphLocalBounds as glyphLocalBoundsInk, inkInsidePlaque as inkFitsPlaque } from "./signTextInk";
 import { makePlaqueNineSlice, plaqueTextureForAccent } from "./signPlaqueNine";
 import { makeType, type TypeStyle } from "./typekit";
 import type { UiTextOptions } from "./text";
 import { Color } from "./theme";
 
 /**
- * Counter plaque chips: ink type on a white 9-slice field in a leaf-green frame.
- * {@link addSignText} returns the inner `Text`; the panel lives in a host
- * {@link signContainer} that callers position via {@link setSignPosition}.
+ * Sign text contract — standard UI: ink stays inside its panel.
+ *
+ * - {@link addSignText} returns inner `Text`; callers move the {@link signContainer} host only.
+ * - Patched `Text.setPosition` never zeroes glyph locals (#53).
+ * - {@link layoutPlaque} sizes the nine-slice from glyph bounds + {@link SIGN_PAD_X}/{@link SIGN_PAD_Y}.
+ * - {@link inkInsidePlaque} fails on empty boxes or top-clipped ink.
+ * - {@link syncChildScrollFactors} copies scroll from the host only.
  */
 const ACCENT = "signAccent";
 const SIGN_HOST = "signHost";
@@ -171,10 +176,10 @@ export interface SignPlaqueExtents {
 }
 
 function glyphLocalBounds(text: Phaser.GameObjects.Text, w: number, h: number): { left: number; top: number } {
-  const textX = -w * text.originX;
-  const textY = -h * text.originY;
-  return { left: textX - w * text.originX, top: textY - h * text.originY };
+  return glyphLocalBoundsInk({ width: w, height: h, originX: text.originX, originY: text.originY });
 }
+
+export { glyphAabb, inkInsidePlaque } from "./signTextInk";
 
 function plaqueCenterFromGlyphs(
   text: Phaser.GameObjects.Text,
@@ -269,6 +274,14 @@ function layoutPlaque(entry: SignPlaqueEntry): void {
   entry.setTextLocal(textX, textY);
   plaque.setPosition(plaqueCenter.x, plaqueCenter.y);
   syncChildScrollFactors(host);
+
+  const ink = inkFitsPlaque(
+    { width: w, height: h, originX: text.originX, originY: text.originY },
+    { x: plaque.x, y: plaque.y, width: plaque.width, height: plaque.height, originX: plaque.originX, originY: plaque.originY },
+  );
+  if (!ink.ok) {
+    throw new Error(`sign plaque layout: ${ink.reason} for "${copy.slice(0, 32)}"`);
+  }
 
   const key = [copy, w, h, text.originX, text.originY, accent, text.depth, tex].join(":");
   if (key === entry.lastLayoutKey) {
