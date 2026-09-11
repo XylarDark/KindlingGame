@@ -42,6 +42,11 @@ describe("speech stays off the models it belongs to", () => {
     expect(hang, "subtracts the chip's own half-height").toMatch(/chip\.height \/ 2/);
     expect(hang, "leaves the standard daylight").toMatch(/CUSTOMER_SPEECH_GAP/);
     expect(hang, "does not walk the display tree").not.toMatch(/getBounds/);
+    expect(hang, "takes explicit host x — inner Text x is local under 9-slice hosts").toMatch(
+      /function hangAboveHead\(chip[^)]*, x: number\)/,
+    );
+    expect(hang, "positions via setSignPosition").toMatch(/setSignPosition\(chip, x,/);
+    expect(hang, "never reads chip\.x for placement").not.toMatch(/chip\.x/);
 
     for (const speaker of ["keyLeadBubble", "driverBubble"]) {
       expect(src, `${speaker} is hung, not offset`).toMatch(
@@ -64,9 +69,15 @@ describe("speech stays off the models it belongs to", () => {
     expect(sync, "hang key-lead only when shown").toMatch(/if \(showKeyLeadBubble\)/);
     expect(sync, "hang driver only when shown").toMatch(/if \(showDriverBubble\)/);
     expect(sync, "key-lead position quantized").toMatch(/Math\.round\(this\.keyLead\.x\) !== Math\.round\(kx\)/);
-    expect(sync, "bubble X quantized").toMatch(/Math\.round\(this\.keyLeadBubble\.x\) !== Math\.round\(bx\)/);
-    expect(sync, "bubble Y only when lead moved or copy changed").toMatch(/if \(textDirty \|\| leadMoved\)/);
-    expect(sync, "driver bubble Y only when copy changes").toMatch(/if \(driverTextDirty\) hangAboveHead\(this\.driverBubble/);
+    expect(sync, "bubble host follows lead with explicit bx").toMatch(
+      /if \(textDirty \|\| leadMoved\) hangAboveHead\(this\.keyLeadBubble, this\.keyLead, bx\)/,
+    );
+    expect(sync, "driver bubble Y only when copy changes").toMatch(
+      /if \(driverTextDirty\) hangAboveHead\(this\.driverBubble, this\.driver, DRIVER\.x - 24\)/,
+    );
+    expect(src, "target callout uses setSignPosition").toMatch(
+      /setSignPosition\(this\.targetCallout, p\.x, p\.y - strainSlotH\(\) \/ 2 - 6\)/,
+    );
   });
 
   it("draws lobby customers in front of the baked counter face", () => {

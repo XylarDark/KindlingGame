@@ -869,7 +869,13 @@ export class HudScene extends Phaser.Scene {
     this.cog.setPosition(cogX, cogY);
     this.cog.setDisplaySize(cogSize, cogSize);
     syncItemHit(this.cog);
-    setSignPosition(this.cogCaption, cogX - cogSize / 2, cogY - cogSize - 8);
+    const cogCaptionX = Phaser.Math.Clamp(
+      cogX - cogSize / 2,
+      inset.left + HUD_COG_CAPTION_BOX.w / 2 + 8,
+      GAME_WIDTH - inset.right - HUD_COG_CAPTION_BOX.w / 2 - 8,
+    );
+    const cogCaptionY = Math.max(inset.top + HUD_COG_CAPTION_BOX.h + 8, cogY - cogSize - 8);
+    setSignPosition(this.cogCaption, cogCaptionX, cogCaptionY);
     const panelTop = Math.max(inset.top, cogY - cogSize - 32 - this.settingsBox.h);
     this.settingsPanel.setPosition(cogX - SETTINGS_W, panelTop);
 
@@ -894,6 +900,31 @@ export class HudScene extends Phaser.Scene {
   }
 
   /**
+   * Project the counter-sign row through the live shop camera. HUD stays at zoom 1 while
+   * the shop may render at {@link getRenderBudget}.renderScale, so raw COUNTER_SIGN coords
+   * drift off the plaque on phones unless they are screen-projected like drive callouts.
+   */
+  private counterSignReadoutAnchors(): { signLeft: number; signRight: number; y: number } {
+    const shop = this.scene.get("shop") as Phaser.Scene | undefined;
+    if (shop?.sys.isActive()) {
+      const cam = shop.cameras.main;
+      const y = COUNTER_SIGN.y;
+      const leftX = COUNTER_SIGN.x - COUNTER_SIGN.w / 2 - HUD_SIGN_GAP;
+      const rightX = COUNTER_SIGN.x + COUNTER_SIGN.w / 2 + HUD_SIGN_GAP;
+      return {
+        signLeft: worldToScreen(cam, leftX, y).x,
+        signRight: worldToScreen(cam, rightX, y).x,
+        y: worldToScreen(cam, COUNTER_SIGN.x, y).y,
+      };
+    }
+    return {
+      signLeft: COUNTER_SIGN.x - COUNTER_SIGN.w / 2 - HUD_SIGN_GAP,
+      signRight: COUNTER_SIGN.x + COUNTER_SIGN.w / 2 + HUD_SIGN_GAP,
+      y: COUNTER_SIGN.y,
+    };
+  }
+
+  /**
    * In the shop the readouts flank the counter sign; out on the road there is no
    * sign to flank, so they fall back to the screen corners.
    */
@@ -905,12 +936,11 @@ export class HudScene extends Phaser.Scene {
     // out instead of ever running under it. Re-run whenever the value text changes.
     const valueW = this.scoreText.width;
     if (this.readoutsInShop) {
-      const signLeft = COUNTER_SIGN.x - COUNTER_SIGN.w / 2 - HUD_SIGN_GAP;
-      const signRight = COUNTER_SIGN.x + COUNTER_SIGN.w / 2 + HUD_SIGN_GAP;
-      this.scoreText.setOrigin(1, 0.5).setPosition(signLeft, COUNTER_SIGN.y);
-      this.scoreCaption.setOrigin(1, 0.5).setPosition(signLeft - valueW - HUD_SCORE_GAP, COUNTER_SIGN.y);
-      this.clockText.setOrigin(0, 0.5).setPosition(signRight, COUNTER_SIGN.y);
-      this.scorePopLayer.setPosition(signLeft, COUNTER_SIGN.y - 46);
+      const { signLeft, signRight, y } = this.counterSignReadoutAnchors();
+      this.scoreText.setOrigin(1, 0.5).setPosition(signLeft, y);
+      this.scoreCaption.setOrigin(1, 0.5).setPosition(signLeft - valueW - HUD_SCORE_GAP, y);
+      this.clockText.setOrigin(0, 0.5).setPosition(signRight, y);
+      this.scorePopLayer.setPosition(signLeft, y - 46);
       return;
     }
     // Corner fallback reads the same way, but digits grow right into open screen.
@@ -950,7 +980,7 @@ export class HudScene extends Phaser.Scene {
     const inShop = snap.playerRole !== "driver";
     const modeChanged = inShop !== this.readoutsInShop;
     this.readoutsInShop = inShop;
-    if (scoreResized || modeChanged) this.placeReadouts();
+    if (scoreResized || modeChanged || this.readoutsInShop) this.placeReadouts();
     this.consumeScoreFlash(snap);
     this.consumeSfx(snap);
     this.syncResults(snap);
@@ -1863,7 +1893,8 @@ export class HudScene extends Phaser.Scene {
         .setAlpha(0);
       this.scorePopPool.push(label);
       this.scorePopFree.push(label);
-      this.scorePopLayer.add(label);
+      // Parent the host, not the inner Text — reparenting the Text leaves an orphan plaque at (0,0).
+      this.scorePopLayer.add(signContainer(label));
     }
   }
 

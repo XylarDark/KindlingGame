@@ -131,6 +131,12 @@ export function signContainer(text: Phaser.GameObjects.Text): Phaser.GameObjects
   return (text.getData(SIGN_HOST) as Phaser.GameObjects.Container | undefined) ?? text.parentContainer ?? text.scene.add.container(text.x, text.y);
 }
 
+/** World position of a sign chip's host — inner Text x/y are local to the plaque. */
+export function signHostPosition(text: Phaser.GameObjects.Text): { x: number; y: number } {
+  const host = text.getData(SIGN_HOST) as Phaser.GameObjects.Container | undefined;
+  return host ? { x: host.x, y: host.y } : { x: text.x, y: text.y };
+}
+
 /** Move a sign chip — updates the host container when present. */
 export function setSignPosition(text: Phaser.GameObjects.Text, x: number, y: number): void {
   const host = text.getData(SIGN_HOST) as Phaser.GameObjects.Container | undefined;
