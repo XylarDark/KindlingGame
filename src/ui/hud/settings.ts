@@ -6,7 +6,15 @@ import { loadDisplayPrefs, saveDisplayPrefs } from "../displayPrefs";
 import { openInstallCoachFromSettings } from "../installCoach";
 import { addHudButton, addPanel } from "../chrome";
 import { END_SHIFT_CAPTION, END_SHIFT_LABEL } from "../copy";
-import { addSignText, setSignPosition, signContainer, syncSignHit, syncSignPlaque } from "../signText";
+import {
+  addSignText,
+  setSignPosition,
+  signContainer,
+  signPlaqueExtents,
+  signYAbove,
+  syncSignHit,
+  syncSignPlaque,
+} from "../signText";
 import { addUiText } from "../text";
 import { settingsGeom, type SettingsGeom } from "../settingsGeom";
 import { Color, HUD_TYPE_FIT, MENU_TYPE_FIT, scaleChromePx } from "../theme";
@@ -335,7 +343,7 @@ export class HudSettings {
       maxWidth: HUD_COG_CAPTION_BOX.w,
       maxHeight: HUD_COG_CAPTION_BOX.h,
     })
-      .setOrigin(0.5, 1)
+      .setOrigin(0.5, 0.5)
       .setDepth(42);
     const captionHost = signContainer(this.cogCaption);
     // scrollFactor 0 on sign hosts skews input on RenderBudget-shrunk HUD cameras.
@@ -355,14 +363,17 @@ export class HudSettings {
     this.cog.setDisplaySize(cogSize, cogSize);
     this.cogHit.setPosition(cogX - cogSize / 2, cogY - cogSize / 2);
     this.cogHit.setSize(cogSize, cogSize);
+    syncSignPlaque(this.cogCaption);
     const cogCaptionX = Phaser.Math.Clamp(
       cogX - cogSize / 2,
       inset.left + HUD_COG_CAPTION_BOX.w / 2 + 8,
       viewW - inset.right - HUD_COG_CAPTION_BOX.w / 2 - 8,
     );
-    const cogCaptionY = Math.max(inset.top + HUD_COG_CAPTION_BOX.h + 8, cogY - cogSize - 8);
+    const cogTop = cogY - cogSize;
+    const extents = signPlaqueExtents(this.cogCaption);
+    const minCenterY = inset.top + extents.panelH / 2 + 8;
+    const cogCaptionY = Math.max(minCenterY, signYAbove(this.cogCaption, cogTop, 8));
     setSignPosition(this.cogCaption, cogCaptionX, cogCaptionY);
-    syncSignPlaque(this.cogCaption);
     syncSignHit(this.cogCaption);
     const panelTop = Math.max(inset.top, cogY - cogSize - 32 - this.settingsBox.h);
     this.settingsPanel.setPosition(cogX - SETTINGS_W, panelTop);
