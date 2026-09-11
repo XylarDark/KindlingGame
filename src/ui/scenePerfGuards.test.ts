@@ -57,12 +57,12 @@ describe("scene perf guards", () => {
   });
 
   it("Hud reuses a capped score pop pool instead of destroy-per-flash", () => {
-    const hud = read("src/scenes/HudScene.ts");
-    expect(hud).toContain("SCORE_POP_POOL");
-    expect(hud).toContain("warmScorePopPool");
-    expect(hud).toContain("acquireScorePop");
-    expect(hud).toContain("releaseScorePop");
-    const pop = hud.slice(hud.indexOf("private spawnScorePop"), hud.indexOf("private syncResults"));
+    const readouts = read("src/ui/hud/readouts.ts");
+    expect(readouts).toContain("SCORE_POP_POOL");
+    expect(readouts).toContain("warmScorePopPool");
+    expect(readouts).toContain("acquireScorePop");
+    expect(readouts).toContain("releaseScorePop");
+    const pop = readouts.slice(readouts.indexOf("spawnScorePop(delta: number): void {"), readouts.indexOf("}\n"));
     expect(pop).not.toContain("label.destroy()");
   });
 
@@ -90,12 +90,13 @@ describe("scene perf guards", () => {
 
   it("Hud skips pre-tick snapshot and dirty-guards ID/pad/phone map", () => {
     const hud = read("src/scenes/HudScene.ts");
+    const phone = read("src/ui/hud/phone.ts");
     const update = hud.slice(hud.indexOf("update(_time"), hud.indexOf("private layoutHud"));
     expect(update).toContain("isAutoDriving()");
     expect(update).not.toContain("const pre = sim.snapshot()");
     expect(hud).toContain("lastIdTextKey");
     expect(hud).toContain("lastPadFlash");
-    expect(hud).toContain("lastPhoneMapKey");
+    expect(phone).toContain("lastPhoneMapKey");
   });
 
   it("every gameplay scene re-syncs camera zoom on create (RenderBudget race fix)", () => {
@@ -154,6 +155,8 @@ describe("scene perf guards", () => {
 
   it("Hud caches tutorial hints and gates scene/music sync", () => {
     const hud = read("src/scenes/HudScene.ts");
+    const readouts = read("src/ui/hud/readouts.ts");
+    const settings = read("src/ui/hud/settings.ts");
     expect(hud).toContain("tutorialFlashHint");
     expect(hud).toContain("lastTutorialHintKey");
     expect(hud).toContain("syncMusicIfNeeded");
@@ -161,11 +164,11 @@ describe("scene perf guards", () => {
     expect(hud).toContain("lastDriveSceneKey");
     expect(hud).toContain("lastDoorSceneKey");
     expect(hud).toContain("lastShowPhone");
-    expect(hud).toContain("volumeTrackBounds");
-    const cover = hud.slice(hud.indexOf("private paintCover"), hud.indexOf("private tutorialFlashHint"));
+    expect(settings).toContain("volumeTrackBounds");
+    const cover = readouts.slice(readouts.indexOf("paintCover("), readouts.indexOf("coverMaxWidth(): number"));
     expect(cover).not.toContain("setPosition");
-    const layout = hud.slice(hud.indexOf("private layoutHud"), hud.indexOf("private placeReadouts"));
-    expect(layout).toContain("setSignPosition(this.coverText");
+    const layout = hud.slice(hud.indexOf("private layoutHud"), hud.indexOf("private paintHud"));
+    expect(layout).toContain("this.readouts.layoutReadoutColumn(inset)");
   });
 
   it("Drive PRE_RENDER grades from gameMs and culls traffic before transforms", () => {
