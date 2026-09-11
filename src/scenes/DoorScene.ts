@@ -18,7 +18,8 @@ import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import { skyAt, skyVisualDirtyKey } from "../sim/dayNight";
 import type { SimSnapshot } from "../sim/gameSim";
 import { addSignText, setSignCopy, setSignPosition } from "../ui/signText";
-import { Color, typeRolePx } from "../ui/theme";
+import { Color } from "../ui/theme";
+import { typeRolePx } from "../ui/typeScale";
 import { designHudInset, HUD_TOUCH_MIN_DESIGN, readCssSafeArea, VIEWFIT_EVENT } from "../ui/viewFit";
 
 /** 25% larger than shop bags (BAG_SCALE 0.7). */

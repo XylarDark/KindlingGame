@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { MARK } from "./copy";
-import { TYPE_MIN_FIT_PX, Type, designPxForMinCss, type TypeRole, isFixedTypeRole } from "./theme";
+import { TYPE_MIN_FIT_PX, Type, designPxForMinCss } from "./theme";
+import { type TypeRole, isFixedTypeRole } from "./typeScale";
 import { warmTokenMetrics } from "./typeMetrics";
 import { canReuseFitSize, clampFitSize, typeFitRange, type SizeMeasure } from "./typeFit";
 import {

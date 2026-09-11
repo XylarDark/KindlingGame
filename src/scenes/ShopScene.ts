@@ -51,12 +51,12 @@ import { addSignText, setSignAccent, setSignPosition } from "../ui/signText";
 import { addUiText } from "../ui/text";
 import {
   Color,
+  HUD_SCORE_PX,
   HUD_TYPE_FIT,
   MENU_TYPE_FIT,
-  typeRolePx,
   Type,
 } from "../ui/theme";
-import { HUD_SCORE_PX } from "../ui/theme";
+import { typeRolePx } from "../ui/typeScale";
 
 /**
  * Strain names on the wall screens run 21% over the heading step, then clamp-fit

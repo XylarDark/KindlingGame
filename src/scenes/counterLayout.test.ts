@@ -208,7 +208,7 @@ describe("SCORE caption type size", () => {
 describe("ORDERS type size", () => {
   it("is seeded from the score's own constant rather than a copy of the number", () => {
     expect(hud).toMatch(/HUD_SCORE_PX/);
-    expect(shop).toContain('import { HUD_SCORE_PX } from "../ui/theme";');
+    expect(shop).toMatch(/import \{[\s\S]*HUD_SCORE_PX[\s\S]*\} from "\.\.\/ui\/theme"/);
     expect(shop).toContain("const TABLET_LABEL_PX = HUD_SCORE_PX;");
     expect(ordersBlock).toContain('typeRole: "hudTitle"');
     expect(ordersBlock).toContain('typeRolePx("hudTitle")');

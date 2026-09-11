@@ -78,14 +78,6 @@ export const Type = {
   micro: "11px",
 } as const;
 
-/** Role tokens — one size per UI job; prefer these over scaleMsgPx at call sites. */
-export {
-  typeRolePx,
-  typeClockPx,
-  isFixedTypeRole,
-  type TypeRole,
-} from "./typeScale";
-
 /** Absolute shrink floor — below this, prefer wrapping/ellipsis over unreadable glyphs. */
 export const TYPE_MIN_FIT_PX = 10;
 
