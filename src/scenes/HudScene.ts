@@ -23,7 +23,15 @@ import { tutorialHints, type TutorialHint } from "../sim/tutorialHints";
 import { skyAt, skyVisualDirtyKey } from "../sim/dayNight";
 import { addHudButton, addPanel } from "../ui/chrome";
 import { formatSlaClock, isSlaUrgent, RESULTS_NEW_DAY, RESULTS_TITLE } from "../ui/copy";
-import { setSignCopy, setSignAccent, setSignPosition, signContainer, syncSignPlaque, addSignText } from "../ui/signText";
+import {
+  addSignText,
+  setSignAccent,
+  setSignCopy,
+  setSignPosition,
+  signContainer,
+  signPlaqueExtents,
+  syncSignPlaque,
+} from "../ui/signText";
 import { addUiText } from "../ui/text";
 import { enableItemHit } from "../input/hit";
 import { ackTap, releaseTapAck } from "../input/tapAck";
@@ -36,7 +44,14 @@ import { typeRolePx } from "../ui/typeScale";
 import { worldToScreen } from "../ui/worldProject";
 import { PIN_CYCLE_MS } from "./driveConstants";
 import { loadWorldScenes } from "./worldScenes";
-import { designHudInset, hudSceneViewport, HUD_TOUCH_MIN_DESIGN, readCssSafeArea, VIEWFIT_EVENT } from "../ui/viewFit";
+import {
+  designHudInset,
+  hudSceneViewport,
+  HUD_TOUCH_MIN_DESIGN,
+  readCssSafeArea,
+  VIEWFIT_EVENT,
+  type SafeInset,
+} from "../ui/viewFit";
 import { HudReadouts } from "../ui/hud/readouts";
 import { HudSettings } from "../ui/hud/settings";
 import { HudPhone } from "../ui/hud/phone";
@@ -54,6 +69,8 @@ const padLabelPx = (): string => scaleMsgPx(16.25);
 const DRIVE_PIN_H = 96;
 const DRIVE_VAN_H = 104;
 const DRIVE_CHIP_GAP = 14;
+/** Keep sign plaques fully inside the HUD camera — matches Door prompt dodge margin. */
+const SCREEN_CHIP_MARGIN = 12;
 
 const RESULTS_W = 740;
 const RESULTS_H = 640;
@@ -275,7 +292,14 @@ export class HudScene extends Phaser.Scene {
     this.lastPadFlash = null;
     this.drawPad();
     this.padKnob.setPosition(this.padCenter.x, this.padCenter.y);
-    setSignPosition(this.padLabel, this.padCenter.x, this.padCenter.y - 128);
+    this.placePadLabel(inset, viewW, viewH);
+  }
+
+  /** Auto-drive nudge label — clamp so the plaque never clips the HUD edge. */
+  private placePadLabel(inset: SafeInset, viewW: number, viewH: number): void {
+    const anchorY = this.padCenter.y - 128;
+    const clamped = clampSignHost(this.padLabel, this.padCenter.x, anchorY, viewW, viewH, inset);
+    setSignPosition(this.padLabel, clamped.x, clamped.y);
   }
 
   private paintHud(snap: SimSnapshot): void {
@@ -449,7 +473,11 @@ export class HudScene extends Phaser.Scene {
       if (padLine !== this.lastPadLabel) {
         this.lastPadLabel = padLine;
         this.padLabel.setText(padLine);
+        syncSignPlaque(this.padLabel);
       }
+      const inset = designHudInset(readCssSafeArea(document.getElementById("game-root")));
+      const { width: viewW, height: viewH } = hudSceneViewport(this);
+      this.placePadLabel(inset, viewW, viewH);
       const padFlash = !!flashNext && flashNext.kind === "gpsPin";
       if (padFlash !== this.lastPadFlash) {
         this.lastPadFlash = padFlash;
@@ -493,6 +521,8 @@ export class HudScene extends Phaser.Scene {
       return;
     }
     const cam = (drive as Phaser.Scene).cameras.main;
+    const inset = designHudInset(readCssSafeArea(document.getElementById("game-root")));
+    const { width: viewW, height: viewH } = hudSceneViewport(this);
     const stopId = snap.run?.nextStopId;
     const destOrder = snap.orders.find((o) => o.destinationId === stopId && o.status === "onRun");
     const pinBob =
@@ -509,8 +539,6 @@ export class HudScene extends Phaser.Scene {
         const who = destOrder
           ? `${houseTitle(stopId)}\n${destOrder.customerName}${clock ? `\n${clock}` : ""}`
           : houseTitle(stopId);
-        const anchor = worldToScreen(cam, x, y - pinBob - DRIVE_PIN_H - DRIVE_CHIP_GAP);
-        setSignPosition(this.drivePinLabel, anchor.x, anchor.y);
         if (who !== this.lastPinWho) {
           this.lastPinWho = who;
           setSignCopy(this.drivePinLabel, who);
@@ -520,6 +548,9 @@ export class HudScene extends Phaser.Scene {
         const flashPin = flashNext?.kind === "gpsPin";
         if (flashPin) setSignAccent(this.drivePinLabel, Color.lime);
         syncSignPlaque(this.drivePinLabel);
+        const anchor = worldToScreen(cam, x, y - pinBob - DRIVE_PIN_H - DRIVE_CHIP_GAP);
+        const pinPos = clampSignHost(this.drivePinLabel, anchor.x, anchor.y, viewW, viewH, inset);
+        setSignPosition(this.drivePinLabel, pinPos.x, pinPos.y);
       }
     } else {
       this.lastPinWho = "";
@@ -528,12 +559,14 @@ export class HudScene extends Phaser.Scene {
 
     if (snap.toast && !stopId) {
       const vehicle = snap.vehicle;
-      const anchor = worldToScreen(cam, vehicle.x, vehicle.y - DRIVE_VAN_H / 2 - DRIVE_CHIP_GAP);
-      setSignPosition(this.driveVanBanner, anchor.x, anchor.y);
       if (snap.toast !== this.lastVanToast) {
         this.lastVanToast = snap.toast;
         setSignCopy(this.driveVanBanner, snap.toast);
       }
+      syncSignPlaque(this.driveVanBanner);
+      const anchor = worldToScreen(cam, vehicle.x, vehicle.y - DRIVE_VAN_H / 2 - DRIVE_CHIP_GAP);
+      const vanPos = clampSignHost(this.driveVanBanner, anchor.x, anchor.y, viewW, viewH, inset);
+      setSignPosition(this.driveVanBanner, vanPos.x, vanPos.y);
     } else {
       this.lastVanToast = "";
       setSignCopy(this.driveVanBanner, "");
@@ -550,17 +583,19 @@ export class HudScene extends Phaser.Scene {
           ? "Van heading to Kindling"
           : "Drive to Kindling";
     const captionKey = `${captionText}:${nearShop ? 1 : 0}`;
-    const shopAnchor = worldToScreen(
-      cam,
-      this.driveShopCenter.x,
-      this.driveShopCenter.y + CITY.shopLot.h * TILE * 0.42,
-    );
-    setSignPosition(this.driveShopCaption, shopAnchor.x, shopAnchor.y);
     if (captionKey !== this.lastShopCaptionKey) {
       this.lastShopCaptionKey = captionKey;
       setSignCopy(this.driveShopCaption, captionText);
       setSignAccent(this.driveShopCaption, snap.run?.nextStopId ? undefined : nearShop ? Color.lime : undefined);
     }
+    syncSignPlaque(this.driveShopCaption);
+    const shopAnchor = worldToScreen(
+      cam,
+      this.driveShopCenter.x,
+      this.driveShopCenter.y + CITY.shopLot.h * TILE * 0.42,
+    );
+    const shopPos = clampSignHost(this.driveShopCaption, shopAnchor.x, shopAnchor.y, viewW, viewH, inset);
+    setSignPosition(this.driveShopCaption, shopPos.x, shopPos.y);
   }
 
   private tutorialFlashHint(snap: SimSnapshot): TutorialHint | null {
@@ -862,6 +897,29 @@ export class HudScene extends Phaser.Scene {
       releaseTapAck(this.padKnob, 1, 1);
     }
   }
+}
+
+/** Nudge a projected sign host so its plaque stays inside the HUD viewport. */
+function clampSignHost(
+  text: Phaser.GameObjects.Text,
+  x: number,
+  y: number,
+  viewW: number,
+  viewH: number,
+  inset: SafeInset,
+  margin = SCREEN_CHIP_MARGIN,
+): { x: number; y: number } {
+  syncSignPlaque(text);
+  const plaque = signPlaqueExtents(text);
+  const halfW = plaque.panelW / 2;
+  return {
+    x: Phaser.Math.Clamp(x, inset.left + margin + halfW, viewW - inset.right - margin - halfW),
+    y: Phaser.Math.Clamp(
+      y,
+      inset.top + margin - plaque.topLocal,
+      viewH - inset.bottom - margin - plaque.bottomLocal,
+    ),
+  };
 }
 
 function formatBreakdown(results: ShiftResults): string {

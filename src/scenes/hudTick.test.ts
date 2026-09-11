@@ -96,6 +96,23 @@ describe("HudScene paint dirty guards", () => {
     expect(src).toContain('this.scene.setVisible(show, "shop")');
   });
 
+  it("shows COUNTER cover only in shop (keyLead), not on Drive", () => {
+    const readouts = read("../ui/hud/readouts.ts");
+    const cover = readouts.slice(readouts.indexOf("paintCover("), readouts.indexOf("coverMaxWidth(): number"));
+    expect(cover).toMatch(/playerRole\s*===\s*"keyLead"/);
+    expect(cover).toContain("cover.active");
+  });
+
+  it("clamps drive pad and callout plaques inside the HUD viewport", () => {
+    const src = read("HudScene.ts");
+    expect(src).toContain("clampSignHost");
+    expect(src).toContain("placePadLabel");
+    const callouts = src.slice(src.indexOf("private paintDriveCallouts"), src.indexOf("private tutorialFlashHint"));
+    expect(callouts).toContain("clampSignHost(this.drivePinLabel");
+    expect(callouts).toContain("clampSignHost(this.driveVanBanner");
+    expect(callouts).toContain("clampSignHost(this.driveShopCaption");
+  });
+
   it("sleeps drive/door when keyLead owns the shop world", () => {
     const src = read("HudScene.ts");
     const sync = src.slice(src.indexOf("private syncDriveScene"), src.indexOf("private makeResults"));
