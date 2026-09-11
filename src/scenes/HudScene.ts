@@ -57,6 +57,7 @@ import {
   HUD_SCORE_PX,
   HUD_TYPE_FIT,
   MENU_TYPE_FIT,
+  scaleChromePx,
   Type,
 } from "../ui/theme";
 import { typeClockPx, typeRolePx } from "../ui/typeScale";
@@ -373,6 +374,9 @@ export class HudScene extends Phaser.Scene {
       fontStyle: "700",
       align: "right",
       noWrap: true,
+      ...HUD_TYPE_FIT,
+      maxWidth: 360,
+      maxHeight: 68,
       ...readoutOutline(HUD_SCORE_PX),
     })
       .setOrigin(1, 0.5)
@@ -390,6 +394,9 @@ export class HudScene extends Phaser.Scene {
       align: "right",
       letterSpacing: 2,
       noWrap: true,
+      ...HUD_TYPE_FIT,
+      maxWidth: 220,
+      maxHeight: 68,
       ...readoutOutline(HUD_SCORE_PX),
     })
       .setOrigin(1, 0.5)
@@ -404,6 +411,9 @@ export class HudScene extends Phaser.Scene {
       color: Color.creamHex,
       fontStyle: "700",
       noWrap: true,
+      ...HUD_TYPE_FIT,
+      maxWidth: 360,
+      maxHeight: 62,
       ...readoutOutline(HUD_READOUT_PX),
     })
       .setOrigin(0, 0.5)
@@ -1581,8 +1591,7 @@ export class HudScene extends Phaser.Scene {
     // to the left. layoutHud repositions it from the same expression — the two must agree,
     // or the caption drifts off the control it labels on the first resize.
     this.cogCaption = addSignText(this, cogX - cogSize / 2, cogY - cogSize - 8, "Settings", {
-      size: typeRolePx("hudSmall"),
-      typeRole: "hudSmall",
+      size: scaleChromePx(HUD_COG_CAPTION_PX),
       padding: HUD_COG_CAPTION_PAD,
       fontStyle: "600",
       align: "center",

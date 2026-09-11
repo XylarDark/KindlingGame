@@ -45,6 +45,7 @@ describe("boot warm wiring guards", () => {
   it("Title begin awaits deferred warm before resume", () => {
     const title = read("src/scenes/TitleScene.ts");
     expect(title).toContain("deferredWarm");
-    expect(title).toContain("await this.deferredWarm");
+    expect(title).toContain("Promise.race");
+    expect(title).toContain("this.deferredWarm");
   });
 });
