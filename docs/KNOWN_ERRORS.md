@@ -377,6 +377,22 @@ the thing it described.
 - **Fix:** remove entry `touch()`; `patchSnapCacheFromTick()` mutates cached `gameMs`, key-lead pose, customer `x`, and other tick-motion fields in place; discrete mutations (arrival, failOrder, spawn) still call `touch()`.
 - **Prevention:** `gameSim.test.ts` expects same snapshot object after tick with updated `gameMs`; `scenePerfGuards.test.ts` asserts tick no longer opens with `touch()`.
 
+### Tablet pointerdown built a full snapshot on the click stack
+
+- **Date:** 2026-09-11
+- **Symptom:** p95 frame spike on the frames after tapping the ORDERS tablet — worse than strain/bag taps because the handler ran before any press feedback.
+- **Cause:** `ShopScene` tablet `pointerdown` called `getSim().snapshot()` just to read `tabletTicket.id`, remapping customers/orders on the input stack.
+- **Fix:** cache `tabletTicketId` during `syncTablet`; pointer handler reads the cached id only.
+- **Prevention:** `shopSpeech.test.ts` and `scenePerfGuards.test.ts` source-scan for `snapshot(` inside `pointerdown` blocks.
+
+### shopClick touch() on every tap, including no-ops
+
+- **Date:** 2026-09-11
+- **Symptom:** repeat taps on an already-selected ticket or empty bag rack still paid for a full snapshot rebuild before HUD/Shop could paint the notice.
+- **Cause:** `GameSim.shopClick` called `touch()` before dispatch, nulling `snapCache` even when the click only re-set the same notice string.
+- **Fix:** drop entry `touch()`; make `setOrdersNotice` / feedback / callout setters and discrete mutation paths call `touch()` only when exposed snapshot fields actually change.
+- **Prevention:** `gameSim.test.ts` same-ticket re-tap and repeated bag-rack no-op keep order count/phase stable and preserve the snap cache when the notice is unchanged.
+
 ---
 
 ## Related
