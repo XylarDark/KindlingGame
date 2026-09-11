@@ -123,19 +123,23 @@ describe("GameSim order loops", () => {
     expect(sim.snapshot().shiftResults!.breakdown.inStore).toBe(8);
   });
 
-  it("reuses the same snapshot object until a mutation or tick", () => {
+  it("patches snapshot in place on tick; rebuilds after touch()", () => {
     const sim = GameSim.create({ seed: 3, autoSpawn: false });
     const a = sim.snapshot();
     const b = sim.snapshot();
     expect(a).toBe(b);
-    expect(sim.gameMs()).toBe(a.gameMs);
+    const beforeMs = a.gameMs;
+    expect(sim.gameMs()).toBe(beforeMs);
     expect(sim.isAutoDriving()).toBe(false);
     sim.tick(16);
     const c = sim.snapshot();
-    expect(c).not.toBe(a);
-    expect(c.gameMs).toBeGreaterThan(a.gameMs);
+    expect(c).toBe(a);
+    expect(c.gameMs).toBeGreaterThan(beforeMs);
     const d = sim.snapshot();
     expect(d).toBe(c);
+    sim.shopClick({ type: "keyLead" });
+    const e = sim.snapshot();
+    expect(e).not.toBe(a);
   });
 
   it("completes pickup: bag, strain, counter, arrive, handoff", () => {

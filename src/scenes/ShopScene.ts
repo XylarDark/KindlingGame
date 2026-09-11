@@ -102,6 +102,10 @@ type CustomerVisual = {
   bubble: Phaser.GameObjects.Text;
   feedback: Phaser.GameObjects.Text;
   orderId: string | null;
+  /** Last look applied — applyPersonTexture only when this differs. */
+  look: number;
+  bubbleFitKey: string;
+  feedbackFitKey: string;
 };
 
 /**
@@ -156,6 +160,9 @@ export class ShopScene extends Phaser.Scene {
   private lastTabletKey = "";
   private lastReceiptKey = "";
   private lastTvKey = "";
+  /** Ordered settled ids + quantized x — layoutCustomerSpeech only when this changes. */
+  private lastCustomerLayoutKey = "";
+  private customerLayoutById = new Map<string, ReturnType<typeof layoutCustomerSpeech>[number]>();
   private onPreRenderLighting = (): void => this.syncLighting(getSim().gameMs());
   /** Static shop Graphics/Text collapsed into RTs (Drive-style). */
   private shopBakeLayers: Phaser.GameObjects.RenderTexture[] = [];
@@ -344,12 +351,18 @@ export class ShopScene extends Phaser.Scene {
     const showDriverBubble = !!driverLine && snap.playerRole === "keyLead";
     this.driverBubble.setVisible(showDriverBubble);
     if (showDriverBubble) {
-      if (this.driverBubble.text !== driverLine) this.driverBubble.setText(driverLine);
+      const driverTextDirty = this.driverBubble.text !== driverLine;
+      if (driverTextDirty) this.driverBubble.setText(driverLine);
       this.driverBubble.setAlpha(1);
-      hangAboveHead(this.driverBubble, this.driver);
+      if (driverTextDirty) hangAboveHead(this.driverBubble, this.driver);
     }
-    this.driver.setAlpha(highlightGo ? pulse : 1);
-    this.driver.setTint(highlightGo ? Color.flash : 0xffffff);
+    if (highlightGo) {
+      this.driver.setAlpha(pulse);
+      this.driver.setTint(Color.flash);
+    } else if (this.driver.alpha !== 1 || this.driver.tintTopLeft !== 0xffffff) {
+      this.driver.setAlpha(1);
+      this.driver.clearTint();
+    }
     if (this.driver.input) this.driver.input.enabled = highlightGo;
 
     // The prompt is printed on the bag's own panel, so it flashes with the sprite
@@ -607,7 +620,7 @@ export class ShopScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(7)
       .setVisible(false);
-    return { sprite, bubble, feedback, orderId: null };
+    return { sprite, bubble, feedback, orderId: null, look: -1, bubbleFitKey: "", feedbackFitKey: "" };
   }
 
   private acquireCustomerVisual(orderId: string, look: number): CustomerVisual {
@@ -624,7 +637,10 @@ export class ShopScene extends Phaser.Scene {
     }
     free.orderId = orderId;
     free.sprite.setData("orderId", orderId);
+    free.look = look;
     applyPersonTexture(free.sprite, look);
+    free.bubbleFitKey = "";
+    free.feedbackFitKey = "";
     free.sprite.setVisible(true).setActive(true);
     this.customers.set(orderId, free);
     return free;
@@ -637,8 +653,11 @@ export class ShopScene extends Phaser.Scene {
     visual.orderId = null;
     visual.sprite.setData("orderId", null);
     visual.sprite.setVisible(false).setActive(false).clearTint().setAlpha(1);
-    visual.bubble.setVisible(false).setText("");
-    visual.feedback.setVisible(false).setText("");
+    visual.bubble.setVisible(false);
+    visual.feedback.setVisible(false);
+    visual.look = -1;
+    visual.bubbleFitKey = "";
+    visual.feedbackFitKey = "";
   }
 
   private syncCustomers(list: CustomerView[], pulse: number, focusId: string | null): void {
@@ -653,37 +672,62 @@ export class ShopScene extends Phaser.Scene {
     );
     // Front-of-queue first keeps preferred right side for earlier arrivals.
     const ordered = [...settledList].sort((a, b) => a.slot - b.slot);
-    const layouts = layoutCustomerSpeech(ordered.map((c) => ({ orderId: c.orderId, x: c.x })));
-    const layoutById = new Map(layouts.map((box) => [box.orderId, box]));
+    const layoutKey = ordered.map((c) => `${c.orderId}:${Math.round(c.x)}`).join("|");
+    if (layoutKey !== this.lastCustomerLayoutKey) {
+      this.lastCustomerLayoutKey = layoutKey;
+      this.customerLayoutById = new Map(
+        layoutCustomerSpeech(ordered.map((c) => ({ orderId: c.orderId, x: c.x }))).map((box) => [
+          box.orderId,
+          box,
+        ]),
+      );
+    }
 
     for (const customer of list) {
       let visual = this.customers.get(customer.orderId);
       if (!visual) {
         visual = this.acquireCustomerVisual(customer.orderId, customer.look);
-      } else {
+      } else if (visual.look !== customer.look) {
+        visual.look = customer.look;
         applyPersonTexture(visual.sprite, customer.look);
       }
       const { sprite, bubble, feedback } = visual;
       const focus = customer.orderId === focusId;
       sprite.setPosition(customer.x, CUSTOMER_SPOT.y);
-      sprite.setAlpha(focus ? pulse : 1);
-      sprite.setTint(focus ? Color.flash : 0xffffff);
-      const layout = layoutById.get(customer.orderId);
+      if (focus) {
+        sprite.setAlpha(pulse);
+        sprite.setTint(Color.flash);
+      } else if (sprite.alpha !== 1 || sprite.tintTopLeft !== 0xffffff) {
+        sprite.setAlpha(1);
+        sprite.clearTint();
+      }
+      const layout = this.customerLayoutById.get(customer.orderId);
       if (layout && customer.bubble) {
-        bubble.setText(customer.bubble).setAlpha(1).setVisible(true);
-        // Refit before measuring — side room is the layout's width budget.
-        fitTypeToBox(bubble, layout.w, CUSTOMER_SPEECH_H);
+        bubble.setAlpha(1).setVisible(true);
+        const fitKey = `${customer.bubble}:${layout.w}`;
+        if (bubble.text !== customer.bubble) bubble.setText(customer.bubble);
+        if (fitKey !== visual.bubbleFitKey) {
+          visual.bubbleFitKey = fitKey;
+          fitTypeToBox(bubble, layout.w, CUSTOMER_SPEECH_H);
+        }
         bubble.setPosition(layout.x, layout.y);
       } else {
+        visual.bubbleFitKey = "";
         bubble.setVisible(false);
       }
       setSignAccent(bubble, focus ? Color.lime : undefined);
       const note = customer.feedback;
       if (layout && note) {
-        feedback.setText(note).setVisible(true);
-        fitTypeToBox(feedback, layout.w, feedbackH());
+        feedback.setVisible(true);
+        const fitKey = `${note}:${layout.w}`;
+        if (feedback.text !== note) feedback.setText(note);
+        if (fitKey !== visual.feedbackFitKey) {
+          visual.feedbackFitKey = fitKey;
+          fitTypeToBox(feedback, layout.w, feedbackH());
+        }
         feedback.setPosition(layout.x, layout.y + layout.h / 2 + CUSTOMER_SPEECH_GAP + feedback.height / 2);
       } else {
+        visual.feedbackFitKey = "";
         feedback.setVisible(false);
       }
     }
