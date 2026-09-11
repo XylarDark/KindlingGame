@@ -357,6 +357,8 @@ export class HudScene extends Phaser.Scene {
   private cachedTutorialHint: TutorialHint | null = null;
   private lastShowPhone: boolean | null = null;
   private lastShowId: boolean | null = null;
+  private lastReadoutsHidden: boolean | null = null;
+  private lastShopSceneVisible = true;
   private lastIdLive: boolean | null = null;
   private lastDriveSceneKey = "";
   private lastDoorSceneKey = "";
@@ -1133,6 +1135,8 @@ export class HudScene extends Phaser.Scene {
         !showPhone &&
         !driveBanner,
     );
+    this.paintReadoutChrome(atDoor, showId);
+    this.syncShopVisibility(snap);
     this.paintDoorTitle(snap, atDoor, drop);
     this.paintCover(snap, atDoor);
     this.paintDriveCallouts(snap, driving, flashNext);
@@ -1166,6 +1170,35 @@ export class HudScene extends Phaser.Scene {
     this.syncDriveScene(snap);
     this.syncDoorScene(snap);
     this.syncMusicIfNeeded(snap.gameMs);
+  }
+
+  /**
+   * Score, clock, and settings chrome stay in the shop and on the road — not over the
+   * doorstep or the ID card (#45 hides under Title; same idea here).
+   */
+  private paintReadoutChrome(atDoor: boolean, showId: boolean): void {
+    const hide = atDoor || showId;
+    if (hide === this.lastReadoutsHidden) return;
+    this.lastReadoutsHidden = hide;
+    this.scoreText.setVisible(!hide);
+    this.scoreCaption.setVisible(!hide);
+    this.clockText.setVisible(!hide);
+    this.cog.setVisible(!hide);
+    this.scorePopLayer.setVisible(!hide);
+    if (hide) {
+      this.setCogCaptionShown(false);
+      for (const label of this.scorePopPool) this.releaseScorePop(label);
+    } else if (!this.settingsOpen) {
+      this.setCogCaptionShown(true);
+    }
+  }
+
+  /** Shop ORDERS and strain chips must not paint through Door while the scene sleeps. */
+  private syncShopVisibility(snap: SimSnapshot): void {
+    const show = snap.playerRole === "keyLead";
+    if (show === this.lastShopSceneVisible) return;
+    this.lastShopSceneVisible = show;
+    this.scene.setVisible(show, "shop");
   }
 
   /**

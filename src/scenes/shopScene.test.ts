@@ -28,6 +28,11 @@ describe("ShopScene session perf guards", () => {
     expect(src).toContain("if (this.targetCallout.text !== cue.text)");
   });
 
+  it("positions the target callout via setSignPosition and hides it on depart", () => {
+    expect(src).toContain("setSignPosition(this.targetCallout");
+    expect(src).toContain("this.targetCallout.setVisible(false)");
+  });
+
   it("removes PRE_RENDER lighting on SHUTDOWN", () => {
     expect(src).toContain("onPreRenderLighting");
     expect(src).toContain("Phaser.Scenes.Events.SHUTDOWN");

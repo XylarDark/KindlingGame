@@ -38,6 +38,10 @@ const doorPromptPx = (): string => scaleMsgPx(25);
 const DOOR_CHIP_GAP = 36;
 /** Keep a wide chip on screen when the sprite it hangs off is near an edge. */
 const DOOR_CHIP_MARGIN = 24;
+/** Prompt chip width — hugs copy; prior 720px plaque covered faces. */
+const DOOR_PROMPT_MAX_W = 360;
+/** Two wrapped lines at the door prompt seed. */
+const DOOR_PROMPT_MAX_H = 72;
 
 /**
  * Flash cadence for the next tap target, as `Math.sin(gameMs / DOOR_FLASH_RATE)` — a
@@ -77,6 +81,9 @@ export class DoorScene extends Phaser.Scene {
   private lastSkyKey = "";
   private lastBagHanded: boolean | null = null;
   private lastPrompt = "";
+  /** Updated each sync so placePrompt can anchor off bag or customer head. */
+  private promptAnchorX = CUSTOMER_X;
+  private promptAnchorY = 0;
   private lighting?: DayNightPipeline;
   private lastGradeKey = "";
   private lastGradeMs = -1e9;
@@ -134,10 +141,8 @@ export class DoorScene extends Phaser.Scene {
       align: "center",
       fontStyle: "600",
       ...MSG_TYPE_FIT,
-      maxWidth: scaleMsgBox(720),
-      // Prior box was 113 for the 25px seed; grow with MSG_SCALE so fitTypeToBox
-      // cannot silently shrink the larger seed back down.
-      maxHeight: scaleMsgBox(113),
+      maxWidth: scaleMsgBox(DOOR_PROMPT_MAX_W),
+      maxHeight: scaleMsgBox(DOOR_PROMPT_MAX_H),
     })
       .setOrigin(0.5, 1)
       .setDepth(8);
@@ -167,20 +172,19 @@ export class DoorScene extends Phaser.Scene {
    * every frame — the sentence changes width as the action changes.
    */
   private placePrompt(): void {
-    const headTop = this.customer.y - this.customer.displayHeight * this.customer.originY;
     const half = this.prompt.displayWidth / 2 + DOOR_CHIP_MARGIN;
-    let x = Phaser.Math.Clamp(this.customer.x, half, GAME_WIDTH - half);
+    let x = Phaser.Math.Clamp(this.promptAnchorX, half, GAME_WIDTH - half);
     if (this.bag.visible && this.bag.input?.enabled) {
       const bagHalf = this.bag.displayWidth * 0.5 + DOOR_CHIP_MARGIN;
       const bagLeft = this.bag.x - bagHalf;
       const bagRight = this.bag.x + bagHalf;
       if (x + half > bagLeft && x - half < bagRight) {
-        x = this.customer.x <= this.bag.x ? bagLeft - half - 8 : bagRight + half + 8;
+        x = this.promptAnchorX <= this.bag.x ? bagLeft - half - 8 : bagRight + half + 8;
         x = Phaser.Math.Clamp(x, half, GAME_WIDTH - half);
       }
     }
     const floor = this.insetTop + this.prompt.displayHeight + DOOR_CHIP_GAP;
-    setSignPosition(this.prompt, x, Math.max(floor, headTop - DOOR_CHIP_GAP));
+    setSignPosition(this.prompt, x, Math.max(floor, this.promptAnchorY - DOOR_CHIP_GAP));
   }
 
   update(): void {
@@ -263,13 +267,21 @@ export class DoorScene extends Phaser.Scene {
     if (canBag && !this.bag.input) enableWideHit(this.bag, BAG_HIT_PAD);
 
     const who = drop.customerName ?? "the customer";
+    const headTop = this.customer.y - this.customer.displayHeight * this.customer.originY;
+    if (nextHand || nextPhoto) {
+      this.promptAnchorX = this.bag.x;
+      this.promptAnchorY = this.bag.y - this.bag.displayHeight * 0.35;
+    } else {
+      this.promptAnchorX = this.customer.x;
+      this.promptAnchorY = headTop;
+    }
     const promptLine = nextAsk
-      ? `Tap ${who} to ask for ID.`
+      ? `Tap ${who} for ID.`
       : nextHand
-        ? `Tap the bag to hand it to ${who}.`
+        ? `Tap bag → ${who}.`
         : nextPhoto
-          ? `Tap the bag in their hands to take the photo.`
-          : drop.hint || "They're at the door.";
+          ? `Photo — tap bag.`
+          : drop.hint || "At the door.";
     // setText refits typekit — only pay when the instruction changes.
     if (promptLine !== this.lastPrompt) {
       this.lastPrompt = promptLine;

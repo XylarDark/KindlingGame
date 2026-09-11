@@ -404,6 +404,7 @@ export class ShopScene extends Phaser.Scene {
 
   private departNow(): void {
     if (!getSim().hitTheRoad()) return;
+    this.targetCallout.setVisible(false);
     this.scene.sleep("shop");
     if (this.scene.isSleeping("drive")) this.scene.wake("drive");
     else if (!this.scene.isActive("drive")) this.scene.launch("drive");

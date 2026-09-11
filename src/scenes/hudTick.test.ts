@@ -77,4 +77,20 @@ describe("HudScene paint dirty guards", () => {
     expect(src).toContain("pwaIdleShiftEnded");
     expect(src).toContain("if (snap.shiftEnded !== this.pwaIdleShiftEnded)");
   });
+
+  it("hides score/clock/cog at door and during ID inspect", () => {
+    const src = read("HudScene.ts");
+    expect(src).toContain("paintReadoutChrome");
+    const fn = src.slice(src.indexOf("private paintReadoutChrome"), src.indexOf("private syncShopVisibility"));
+    expect(fn).toMatch(/atDoor \|\| showId/);
+    expect(fn).toContain("this.scoreText.setVisible(!hide)");
+    expect(fn).toContain("this.clockText.setVisible(!hide)");
+    expect(fn).toContain("this.cog.setVisible(!hide)");
+  });
+
+  it("hides the shop scene while driving so ORDERS cannot leak into Door", () => {
+    const src = read("HudScene.ts");
+    expect(src).toContain("syncShopVisibility");
+    expect(src).toContain('this.scene.setVisible(show, "shop")');
+  });
 });

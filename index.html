@@ -49,8 +49,8 @@
         --kindling-safe-bottom: env(safe-area-inset-bottom, 0px);
         --kindling-safe-left: env(safe-area-inset-left, 0px);
       }
-      /* Full visual viewport; shell.ts sizes a height-filled 16:9 stage + side rails.
-         Overflow clips side overhang on tall viewports — no top/bottom letterbox. */
+      /* Full visual viewport; shell.ts sizes a height-filled 16:9 stage.
+         Overflow clips side overhang on tall viewports — shell sky fills the gaps. */
       #kindling-shell {
         position: absolute;
         left: 0;
@@ -61,43 +61,6 @@
         touch-action: none;
         overflow: hidden;
         background: #1b2238;
-      }
-      .kindling-rail {
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        overflow: hidden;
-        pointer-events: none;
-        background: #3d6a44;
-        color: #f4e8c1;
-        font-family: Inter, system-ui, sans-serif;
-        font-weight: 800;
-        letter-spacing: 0.28em;
-        text-transform: uppercase;
-        opacity: 0.88;
-        box-sizing: border-box;
-      }
-      .kindling-rail[data-side="left"] {
-        left: 0;
-        padding-left: max(4px, var(--kindling-safe-left));
-      }
-      .kindling-rail[data-side="right"] {
-        right: 0;
-        padding-right: max(4px, var(--kindling-safe-right));
-      }
-      .kindling-rail[hidden] {
-        display: none;
-      }
-      .kindling-rail span {
-        writing-mode: vertical-rl;
-        text-orientation: mixed;
-        transform: rotate(180deg);
-        font-size: clamp(14px, 4.2vh, 28px);
-        line-height: 1;
-        white-space: nowrap;
       }
       #game-root {
         position: absolute;
@@ -249,9 +212,7 @@
   </head>
   <body>
     <div id="kindling-shell">
-      <aside id="rail-left" class="kindling-rail" data-side="left" aria-hidden="true"><span>Kindling</span></aside>
       <div id="game-root"></div>
-      <aside id="rail-right" class="kindling-rail" data-side="right" aria-hidden="true"><span>Kindling</span></aside>
     </div>
     <div id="rotate-gate" hidden aria-hidden="true">Turn your phone sideways to run Kindling.</div>
     <div id="loading-gate" hidden aria-hidden="true" role="status" aria-live="polite" aria-busy="false">
