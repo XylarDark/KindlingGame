@@ -49,9 +49,10 @@ describe("text boxes are all the counter plaque", () => {
   it("measures the field off the text that rendered, not the box it asked for", () => {
     // `fitTypeToBox` clamp-fits, so a plaque sized from the authored constants
     // would stand proud of a shrunken caption. This is the same trap that has caught
-    // the layout audit and the SCORE caption before it.
+    // the layout audit and the SCORE caption before it. Drive labels compensate
+    // camera zoom with setScale, so the field must read displayWidth/Height.
+    expect(helper).toMatch(/text\.updateText\(\)/);
     expect(helper).toMatch(/text\.width \* text\.originX/);
-    expect(helper).toMatch(/text\.height \* text\.originY/);
   });
 
   it("repaints before the frame is drawn via one scene pump, not one listener per chip", () => {
@@ -75,6 +76,23 @@ describe("text boxes are all the counter plaque", () => {
   it("does not measure hidden chip bounds on PRE_RENDER", () => {
     expect(helper).toMatch(/if \(!text\.visible\)[\s\S]*hiddenKey/);
     expect(helper).toMatch(/if \(hiddenKey === entry\.lastPaintKey\)/);
+  });
+
+  it("clears lastPaintKey and hooks scale when visibility or layout changes", () => {
+    expect(helper).toMatch(/if \(wasVisible !== value\)[\s\S]*entry\.lastPaintKey = ""/);
+    expect(helper).toMatch(/if \(value\) syncPlaque\(entry\)/);
+    expect(helper).toMatch(/text\.setScale = \(\(x\?: number, y\?: number\)/);
+    expect(helper).toMatch(/text\.parentContainer\?\.scaleX/);
+    expect(helper).toMatch(/text\.setFontSize = \(\(size: string \| number\)/);
+  });
+
+  it("exposes syncSignPlaque for scrolled labels that move every frame", () => {
+    expect(helper).toContain("export function syncSignPlaque");
+  });
+
+  it("positions the plaque at the field origin and draws rings locally", () => {
+    expect(helper).toMatch(/plaque\.setPosition\(field\.x, field\.y\)/);
+    expect(helper).toMatch(/signPlaqueRings\(\{ x: 0, y: 0, w: field\.w, h: field\.h \}\)/);
   });
 
   it("follows its text into a container", () => {

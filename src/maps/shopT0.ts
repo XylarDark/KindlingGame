@@ -1,4 +1,4 @@
-import { PERSON_W } from "../art/peopleSize";
+import { PERSON_HAT_H, PERSON_W } from "../art/peopleSize";
 import { GAME_WIDTH } from "../sim/constants";
 
 /** Shop cutaway at 1920×1080. Staff behind the counter; lobby in front. */
@@ -28,6 +28,8 @@ export const PERSON_NATIVE_H = 352;
 export const PEOPLE_SCALE = 0.873;
 export const BAG_SCALE = 0.7;
 export const PERSON_DISPLAY_H = Math.round(PERSON_NATIVE_H * PEOPLE_SCALE);
+/** Tallest standing frame (hats) at {@link PEOPLE_SCALE} — use for head-clearance math. */
+export const PERSON_DISPLAY_MAX_H = Math.round(PERSON_HAT_H * PEOPLE_SCALE);
 
 /** Shirt mark sits above the laminate; head stays under the TVs. */
 export const KEYLEAD = { x: COUNTER_MID, y: COUNTER_TOP + 78 };
@@ -128,10 +130,16 @@ export const CUSTOMER_HEAD_CLEAR = 12;
  * Prefer {@link CUSTOMER_HEAD_CLEAR}.
  */
 export const CUSTOMER_SPEECH_BASE = COUNTER_FRONT + CUSTOMER_HEAD_CLEAR;
-/** Feet on the lobby boards; hair clears the counter front above it. */
+
+/** Feet Y for a bottom-anchored customer so head top sits on the clear line. */
+export function customerFeetY(displayHeight: number): number {
+  return COUNTER_FRONT + CUSTOMER_HEAD_CLEAR + displayHeight;
+}
+
+/** Feet on the lobby boards when the sprite is as tall as a hat frame. */
 export const CUSTOMER_SPOT = {
   x: COUNTER_MID,
-  y: COUNTER_FRONT + CUSTOMER_HEAD_CLEAR + PERSON_DISPLAY_H,
+  y: customerFeetY(PERSON_DISPLAY_MAX_H),
 };
 /** Bubbles must clear the lobby sandwich board on the far left. */
 export const CUSTOMER_BUBBLE_MIN_X = 300;
@@ -244,7 +252,7 @@ export function layoutCustomerSpeech(
 ): CustomerSpeechBox[] {
   const placed: CustomerSpeechBox[] = [];
   // Mid-upper torso / head band beside the model.
-  const y = CUSTOMER_SPOT.y - PERSON_DISPLAY_H + Math.max(48, bubbleH);
+  const y = CUSTOMER_SPOT.y - PERSON_DISPLAY_MAX_H + Math.max(48, bubbleH);
   for (const customer of customers) {
     const trySide = (side: CustomerSpeechSide): CustomerSpeechBox | null => {
       const room = customerSideRoom(customer.x, side);

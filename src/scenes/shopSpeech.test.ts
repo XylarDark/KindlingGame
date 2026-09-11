@@ -69,6 +69,14 @@ describe("speech stays off the models it belongs to", () => {
     expect(sync, "driver bubble Y only when copy changes").toMatch(/if \(driverTextDirty\) hangAboveHead\(this\.driverBubble/);
   });
 
+  it("draws lobby customers in front of the baked counter face", () => {
+    const make = between(src, "private makeCustomerVisual(", "return { sprite, bubble, feedback", "makeCustomerVisual");
+    expect(make, "customer sprite depth above counter RT (7)").toMatch(/\.setDepth\(8\)/);
+    expect(make, "speech chips above the sprite").toMatch(/\.setDepth\(10\)/);
+    const sync = between(src, "private syncCustomers(", "private makeHotspots(", "syncCustomers");
+    expect(sync, "feet Y from measured displayHeight").toMatch(/customerFeetY\(sprite\.displayHeight\)/);
+  });
+
   it("places customer chips beside settled speakers via layoutCustomerSpeech", () => {
     const sync = between(src, "private syncCustomers(", "private makeHotspots(", "syncCustomers");
     expect(sync, "uses side layout").toMatch(/layoutCustomerSpeech\(/);
