@@ -15,10 +15,20 @@ import {
 } from "../art/phoneArt";
 import { clampInput } from "../input/controls";
 import { enableItemHit, syncItemHit } from "../input/hit";
-import { houseById, houseTitle, lotWorldRect } from "../maps/cityT0";
+import { CITY, houseById, houseTitle, lotCenter, lotWorldRect, TILE } from "../maps/cityT0";
 import { cityMinimapGeometry, fitCityPanel, minimapProjection, type WorldRect } from "../maps/cityMinimap";
 import { COUNTER_SIGN } from "../maps/shopT0";
-import { GAME_HEIGHT, GAME_WIDTH, NPC_INTERACT_COOLDOWN_MS, SCORE_DELIVERY_LATE, SCORE_DELIVERY_ON_TIME, SCORE_FAIL, SCORE_INSTORE, SCORE_PICKUP } from "../sim/constants";
+import {
+  GAME_HEIGHT,
+  GAME_WIDTH,
+  HANDOFF_RADIUS,
+  NPC_INTERACT_COOLDOWN_MS,
+  SCORE_DELIVERY_LATE,
+  SCORE_DELIVERY_ON_TIME,
+  SCORE_FAIL,
+  SCORE_INSTORE,
+  SCORE_PICKUP,
+} from "../sim/constants";
 import { getSim, startSession } from "../session";
 import { setPwaIdle } from "../pwaUpdate";
 import type { SimSnapshot } from "../sim/gameSim";
@@ -27,7 +37,14 @@ import { tutorialHints, type TutorialHint } from "../sim/tutorialHints";
 import { skyAt, skyVisualDirtyKey } from "../sim/dayNight";
 import { addHudButton, addPanel } from "../ui/chrome";
 import { END_SHIFT_CAPTION, END_SHIFT_LABEL, formatSlaClock, isSlaUrgent, RESULTS_NEW_DAY, RESULTS_TITLE } from "../ui/copy";
-import { addSignText, setSignAccent, setSignCopy, syncSignPlaque } from "../ui/signText";
+import {
+  addSignText,
+  setSignAccent,
+  setSignCopy,
+  setSignPosition,
+  signContainer,
+  syncSignPlaque,
+} from "../ui/signText";
 import { addUiText } from "../ui/text";
 import { settingsGeom, type SettingsGeom } from "../ui/settingsGeom";
 import { ackTap, releaseTapAck } from "../input/tapAck";
@@ -36,34 +53,28 @@ import { syncSceneRenderCamera, tickRenderBudget } from "../ui/renderBudget";
 import { updateFeelMeter } from "../ui/feelMeter";
 import {
   Color,
+  HUD_READOUT_PX,
+  HUD_SCORE_PX,
   HUD_TYPE_FIT,
   MENU_TYPE_FIT,
-  MSG_TYPE_FIT,
-  scaleChromePx,
-  scaleMsgBox,
-  scaleMsgPad,
-  scaleMsgPx,
+  typeClockPx,
+  typeRolePx,
   Type,
 } from "../ui/theme";
+import { worldToScreen } from "../ui/worldProject";
+import { PIN_CYCLE_MS } from "./DriveScene";
 import { parseFontPx, retypeSize } from "../ui/typekit";
 import { designHudInset, HUD_TOUCH_MIN_DESIGN, readCssSafeArea, VIEWFIT_EVENT } from "../ui/viewFit";
 
-/** Readouts sit either side of the counter sign, 10% over the display ramp. */
-const HUD_READOUT_PX = 40;
 /**
  * Cap one sim step so a long background pause does not jump the shift clock.
  * Smoothed delta already softens hitch frames; this only bounds tab-away gaps.
  */
 const MAX_SIM_STEP_MS = 1_000;
-/**
- * The score carries a further 10%: it is the number the player is playing for. Exported
- * because the shop tablet's ORDERS label is specified as "the same size as the score",
- * and a copy of the number over there would be a copy that drifts.
- */
-export const HUD_SCORE_PX = 44;
 const HUD_CAPTION_PX = 18;
-/** Order banner runs 25% over the ramp — read across the room, mid-task. */
-const hudToastPx = (): string => scaleMsgPx(20);
+const DRIVE_PIN_H = 96;
+const DRIVE_VAN_H = 104;
+const DRIVE_CHIP_GAP = 14;
 const HUD_SIGN_GAP = 28;
 /** Corner fallback keeps clear of the ceiling band on the road and at doors. */
 const HUD_CORNER_TOP = 76;
@@ -178,7 +189,6 @@ const PHONE_STATUS_H = PHONE_CELL * 4;
 const PHONE_MAP_GAP = PHONE_CELL * 0.25;
 const PHONE_TITLE_PX = "20px";
 const PHONE_STATUS_PX = "20px";
-const padLabelPx = (): string => scaleMsgPx(16.25);
 
 /**
  * The map panel carries the city's own 1.43:1 aspect. The old 204x108 panel was
@@ -280,6 +290,13 @@ export class HudScene extends Phaser.Scene {
   private toastText!: Phaser.GameObjects.Text;
   private coverText!: Phaser.GameObjects.Text;
   private doorTitleText!: Phaser.GameObjects.Text;
+  private drivePinLabel!: Phaser.GameObjects.Text;
+  private driveVanBanner!: Phaser.GameObjects.Text;
+  private driveShopCaption!: Phaser.GameObjects.Text;
+  private driveShopCenter = { x: 0, y: 0 };
+  private lastPinWho = "";
+  private lastVanToast = "";
+  private lastShopCaptionKey = "";
   private sawPhoto = false;
   private idWasShowing = false;
   private idCardArmedAt = 0;
@@ -351,47 +368,47 @@ export class HudScene extends Phaser.Scene {
     // Readouts sit over bright shop walls AND dark night streets, so contrast comes
     // from an ink outline on the glyphs rather than a chip behind them.
     this.scoreText = addUiText(this, 0, 0, "", {
-      size: scaleChromePx(HUD_SCORE_PX),
+      size: typeRolePx("hudTitle"),
+      typeRole: "hudTitle",
       color: Color.creamHex,
       fontStyle: "700",
       align: "right",
-      ...HUD_TYPE_FIT,
-      maxWidth: 360,
-      maxHeight: 68,
+      noWrap: true,
       ...readoutOutline(HUD_SCORE_PX),
     })
       .setOrigin(1, 0.5)
+      .setScrollFactor(0)
       .setDepth(20);
     // Seeded at the value's step, and kept there by matchCaptionToValue: the caption
     // reads as part of the number rather than a footnote under it. The box is the
     // value's height and wide enough for tracked caps at 44px (164px of glyphs), so
     // clamp-fit leaves the seed alone at the size it was authored for.
     this.scoreCaption = addUiText(this, 0, 0, "SCORE", {
-      size: scaleChromePx(HUD_SCORE_PX),
+      size: typeRolePx("hudTitle"),
+      typeRole: "hudTitle",
       color: Color.creamHex,
       fontStyle: "700",
       align: "right",
       letterSpacing: 2,
-      ...HUD_TYPE_FIT,
-      maxWidth: 220,
-      maxHeight: 68,
+      noWrap: true,
       ...readoutOutline(HUD_SCORE_PX),
     })
       .setOrigin(1, 0.5)
+      .setScrollFactor(0)
       .setDepth(20);
     this.scorePopLayer = this.add.container(0, 0).setDepth(30);
     this.warmScorePopPool();
 
     this.clockText = addUiText(this, 0, 0, "", {
-      size: scaleChromePx(HUD_READOUT_PX),
+      size: typeClockPx(),
+      typeRole: "hudTitle",
       color: Color.creamHex,
       fontStyle: "700",
-      ...HUD_TYPE_FIT,
-      maxWidth: 360,
-      maxHeight: 62,
+      noWrap: true,
       ...readoutOutline(HUD_READOUT_PX),
     })
       .setOrigin(0, 0.5)
+      .setScrollFactor(0)
       .setDepth(20);
 
     this.phoneBody = this.add.image(0, 0, "tex-phone").setDisplaySize(PHONE_W, PHONE_H);
@@ -412,16 +429,14 @@ export class HudScene extends Phaser.Scene {
       maxHeight: PHONE_HEADER_H,
     }).setOrigin(0.5);
     this.phoneStatus = addSignText(this, 0, PHONE_APP.y + PHONE_APP.h - PHONE_STATUS_H / 2, "Tap to call", {
-      size: PHONE_STATUS_PX,
+      size: typeRolePx("hudBody"),
+      typeRole: "hudBody",
       fontStyle: "600",
       align: "center",
       lineSpacing: 2,
-      padding: { x: 10, y: 4 },
       noWrap: true,
-      ...HUD_TYPE_FIT,
-      maxWidth: PHONE_APP.w - 12,
-      maxHeight: PHONE_STATUS_H,
     }).setOrigin(0.5);
+    const phoneStatusHost = signContainer(this.phoneStatus);
     // Hit area is the chassis: the transparent button margin must not take taps.
     this.phoneHit = this.add
       .rectangle(0, 0, PHONE_CHASSIS.w, PHONE_CHASSIS.h, 0x000000, 0.001)
@@ -441,7 +456,7 @@ export class HudScene extends Phaser.Scene {
         this.phoneMapBase,
         this.phoneMap,
         this.phoneTitle,
-        this.phoneStatus,
+        phoneStatusHost,
         this.phoneHit,
       ])
       .setDepth(22)
@@ -449,42 +464,64 @@ export class HudScene extends Phaser.Scene {
     this.paintPhoneChrome();
 
     this.toastText = addSignText(this, GAME_WIDTH / 2, GAME_HEIGHT - 36, "", {
-      size: hudToastPx(),
-      padding: scaleMsgPad({ x: 22, y: 13 }),
+      size: typeRolePx("hudBody"),
+      typeRole: "hudBody",
       align: "center",
       fontStyle: "600",
-      ...MSG_TYPE_FIT,
-      maxWidth: scaleMsgBox(900),
-      maxHeight: scaleMsgBox(80),
+      maxWidth: 900,
     })
       .setOrigin(0.5, 1)
       .setDepth(20);
 
     // Out on the road the shop is off-screen, so the counter reports in under the score.
     this.coverText = addSignText(this, 0, 0, "", {
-      size: scaleMsgPx(13),
-      padding: scaleMsgPad({ x: 12, y: 6 }),
+      size: typeRolePx("hudBody"),
+      typeRole: "hudBody",
       fontStyle: "600",
       noWrap: true,
-      ...MSG_TYPE_FIT,
-      maxWidth: scaleMsgBox(280),
-      maxHeight: scaleMsgBox(40),
     })
       .setOrigin(0, 0)
       .setDepth(20)
       .setVisible(false);
 
     this.doorTitleText = addSignText(this, 0, 0, "", {
-      size: scaleMsgPx(16),
-      padding: scaleMsgPad({ x: 16, y: 8 }),
+      size: typeRolePx("hudBody"),
+      typeRole: "hudBody",
       fontStyle: "700",
       noWrap: true,
-      ...MSG_TYPE_FIT,
-      maxWidth: scaleMsgBox(900),
-      maxHeight: scaleMsgBox(48),
     })
       .setOrigin(0, 0.5)
       .setDepth(20)
+      .setVisible(false);
+
+    this.driveShopCenter = lotCenter(CITY.shopLot.origin, CITY.shopLot.w, CITY.shopLot.h);
+    this.drivePinLabel = addSignText(this, 0, 0, "", {
+      size: typeRolePx("pin"),
+      typeRole: "pin",
+      align: "center",
+      fontStyle: "700",
+    })
+      .setOrigin(0.5, 1)
+      .setDepth(21)
+      .setVisible(false);
+    this.driveVanBanner = addSignText(this, 0, 0, "", {
+      size: typeRolePx("hudBody"),
+      typeRole: "hudBody",
+      align: "center",
+      fontStyle: "600",
+      noWrap: true,
+    })
+      .setOrigin(0.5, 1)
+      .setDepth(21)
+      .setVisible(false);
+    this.driveShopCaption = addSignText(this, 0, 0, "", {
+      size: typeRolePx("hudBody"),
+      typeRole: "hudBody",
+      fontStyle: "700",
+      noWrap: true,
+    })
+      .setOrigin(0.5, 0)
+      .setDepth(21)
       .setVisible(false);
 
     this.idDim = this.add
@@ -502,12 +539,9 @@ export class HudScene extends Phaser.Scene {
     this.drawPad();
     this.padKnob = this.add.circle(this.padCenter.x, this.padCenter.y, 40, Color.cream, 0.92).setDepth(20);
     this.padLabel = addSignText(this, this.padCenter.x, this.padCenter.y - 128, "Heading to stop…", {
-      size: padLabelPx(),
-      padding: scaleMsgPad({ x: 13, y: 8 }),
+      size: typeRolePx("hudBody"),
+      typeRole: "hudBody",
       fontStyle: "600",
-      ...MSG_TYPE_FIT,
-      maxWidth: scaleMsgBox(300),
-      maxHeight: scaleMsgBox(50),
     })
       .setOrigin(0.5, 1)
       .setDepth(20);
@@ -1052,6 +1086,7 @@ export class HudScene extends Phaser.Scene {
     );
     this.paintDoorTitle(snap, atDoor, drop);
     this.paintCover(snap, atDoor);
+    this.paintDriveCallouts(snap, driving, flashNext);
     const showPad =
       driving &&
       !showPhone &&
@@ -1146,7 +1181,100 @@ export class HudScene extends Phaser.Scene {
     const { left } = this.readoutCorner;
     const columnCap = Math.floor(GAME_WIDTH * 0.26);
     const scoreCap = this.scoreText.x + this.scoreText.width - left - 12;
-    return Math.max(96, Math.min(columnCap, scoreCap, scaleMsgBox(220)));
+    return Math.max(96, Math.min(columnCap, scoreCap, 280));
+  }
+
+  /**
+   * Drive map callouts: screen-space HUD chips projected from world anchors each frame.
+   * Keeps labels constant px under the scrolling drive camera (no inverse-scale hosts).
+   */
+  private paintDriveCallouts(
+    snap: SimSnapshot,
+    driving: boolean,
+    flashNext: TutorialHint | null,
+  ): void {
+    const drive = this.scene.get("drive");
+    if (!driving || !drive?.sys.isActive()) {
+      this.lastPinWho = "";
+      this.lastVanToast = "";
+      this.lastShopCaptionKey = "";
+      this.drivePinLabel.setVisible(false);
+      this.driveVanBanner.setVisible(false);
+      this.driveShopCaption.setVisible(false);
+      signContainer(this.drivePinLabel).setVisible(false);
+      signContainer(this.driveVanBanner).setVisible(false);
+      signContainer(this.driveShopCaption).setVisible(false);
+      return;
+    }
+    const cam = (drive as Phaser.Scene).cameras.main;
+    const stopId = snap.run?.nextStopId;
+    const destOrder = snap.orders.find((o) => o.destinationId === stopId && o.status === "onRun");
+    const pinBob =
+      stopId && drive.sys.isActive()
+        ? 8 + 8 * Math.sin((snap.gameMs / PIN_CYCLE_MS) * Math.PI * 2)
+        : 0;
+
+    if (stopId) {
+      const house = CITY.houses.find((h) => h.id === stopId);
+      if (house) {
+        const x = house.stop.c * TILE + TILE / 2;
+        const y = house.stop.r * TILE + TILE / 2 - 6;
+        const clock = destOrder ? formatSlaClock(destOrder.slaRemainingMs) : "";
+        const who = destOrder
+          ? `${houseTitle(stopId)}\n${destOrder.customerName}${clock ? `\n${clock}` : ""}`
+          : houseTitle(stopId);
+        const anchor = worldToScreen(cam, x, y - pinBob - DRIVE_PIN_H - DRIVE_CHIP_GAP);
+        setSignPosition(this.drivePinLabel, anchor.x, anchor.y);
+        if (who !== this.lastPinWho) {
+          this.lastPinWho = who;
+          setSignCopy(this.drivePinLabel, who);
+        }
+        const urgent = !!destOrder && isSlaUrgent(destOrder.slaRemainingMs);
+        setSignAccent(this.drivePinLabel, urgent ? Color.danger : undefined);
+        const flashPin = flashNext?.kind === "gpsPin";
+        if (flashPin) setSignAccent(this.drivePinLabel, Color.lime);
+        syncSignPlaque(this.drivePinLabel);
+      }
+    } else {
+      this.lastPinWho = "";
+      setSignCopy(this.drivePinLabel, "");
+    }
+
+    if (snap.toast && !stopId) {
+      const vehicle = snap.vehicle;
+      const anchor = worldToScreen(cam, vehicle.x, vehicle.y - DRIVE_VAN_H / 2 - DRIVE_CHIP_GAP);
+      setSignPosition(this.driveVanBanner, anchor.x, anchor.y);
+      if (snap.toast !== this.lastVanToast) {
+        this.lastVanToast = snap.toast;
+        setSignCopy(this.driveVanBanner, snap.toast);
+      }
+    } else {
+      this.lastVanToast = "";
+      setSignCopy(this.driveVanBanner, "");
+    }
+
+    const nearShop =
+      Math.hypot(snap.vehicle.x - this.driveShopCenter.x, snap.vehicle.y - this.driveShopCenter.y) <=
+      HANDOFF_RADIUS;
+    const captionText = snap.run?.nextStopId
+      ? "Kindling"
+      : nearShop
+        ? "Tap Kindling to return"
+        : snap.autoDriving
+          ? "Van heading to Kindling"
+          : "Drive to Kindling";
+    const captionKey = `${captionText}:${nearShop ? 1 : 0}`;
+    const shopAnchor = worldToScreen(
+      cam,
+      this.driveShopCenter.x,
+      this.driveShopCenter.y + CITY.shopLot.h * TILE * 0.42,
+    );
+    setSignPosition(this.driveShopCaption, shopAnchor.x, shopAnchor.y);
+    if (captionKey !== this.lastShopCaptionKey) {
+      this.lastShopCaptionKey = captionKey;
+      setSignCopy(this.driveShopCaption, captionText);
+      setSignAccent(this.driveShopCaption, snap.run?.nextStopId ? undefined : nearShop ? Color.lime : undefined);
+    }
   }
 
   private clipCoverLine(line: string, maxW: number): string {
@@ -1454,7 +1582,8 @@ export class HudScene extends Phaser.Scene {
     // to the left. layoutHud repositions it from the same expression — the two must agree,
     // or the caption drifts off the control it labels on the first resize.
     this.cogCaption = addSignText(this, cogX - cogSize / 2, cogY - cogSize - 8, "Settings", {
-      size: scaleChromePx(HUD_COG_CAPTION_PX),
+      size: typeRolePx("hudSmall"),
+      typeRole: "hudSmall",
       padding: HUD_COG_CAPTION_PAD,
       fontStyle: "600",
       align: "center",

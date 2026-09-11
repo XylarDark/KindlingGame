@@ -26,6 +26,7 @@ import { isCityBuildComplete, resetCityBuildFlags } from "../ui/cityBuild";
 import { markSceneWarm, resetSceneWarmFlags, sceneWarmTimeout } from "../ui/sceneWarm";
 import { hideLoading, showLoading } from "../ui/loadingGate";
 import { applyRenderBudgetToGame, getRenderBudget } from "../ui/renderBudget";
+import { registerSignPlaqueTextures } from "../ui/signPlaqueNine";
 import { installTypekit } from "../ui/typekit";
 
 /**
@@ -54,6 +55,7 @@ export class BootScene extends Phaser.Scene {
   create(): void {
     showLoading({ mode: "boot", stage: "Fonts" });
     installTypekit(this.game);
+    registerSignPlaqueTextures(this);
     registerDayNightPipeline(this.game);
     installMusicUnlock(this.game);
     prewarmCameraSfx(this.game);

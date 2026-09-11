@@ -8,6 +8,7 @@ const read = (rel: string): string => readFileSync(join(here, rel), "utf8").repl
 
 describe("DriveScene grade throttle and dirty guards", () => {
   const src = read("DriveScene.ts");
+  const hud = read("HudScene.ts");
 
   it("throttles applyDayNight with shouldApplyGrade (diag rank #3)", () => {
     expect(src).toContain("shouldApplyGrade");
@@ -20,20 +21,14 @@ describe("DriveScene grade throttle and dirty guards", () => {
     expect(paint).toContain("applyDayNight");
   });
 
-  it("dirty-guards pinLabel setText and lot glow redraw", () => {
-    expect(src).toContain("lastPinWho");
-    expect(src).toContain("if (who !== this.lastPinWho)");
+  it("dirty-guards lot glow redraw", () => {
     expect(src).toContain("lastLotGlowKey");
     expect(src).toContain("stopId !== this.lastLotGlowKey");
   });
 
-  it("skips paintDayNight when inactive and dirty-guards van banner + shop caption", () => {
+  it("skips paintDayNight when inactive", () => {
     const paint = src.slice(src.indexOf("private paintDayNight"), src.indexOf("private paintNightGlow"));
     expect(paint).toContain("if (!this.sys.isActive()) return");
-    expect(src).toContain("lastVanToast");
-    expect(src).toContain("if (snap.toast !== this.lastVanToast)");
-    expect(src).toContain("lastShopCaptionKey");
-    expect(src).toContain("if (captionKey !== this.lastShopCaptionKey)");
   });
 
   it("removes PRE_RENDER day/night on SHUTDOWN", () => {
@@ -48,40 +43,29 @@ describe("DriveScene grade throttle and dirty guards", () => {
     expect(src).toContain("cityBuildReady");
   });
 
-  it("skips shop caption plaque work when not driving", () => {
-    expect(src).toContain("if (!driving)");
-    expect(src).toContain("Skip plaque setText");
-    expect(src).toContain("shopCaptionHost.setVisible(false)");
-  });
-
-  it("never shows sign plaques with empty copy", () => {
-    expect(src).toContain("setSignCopy(this.pinLabel");
-    expect(src).toContain("setSignCopy(this.vanBanner");
-    expect(src).toContain("setSignCopy(this.shopCaption");
-    expect(src).not.toMatch(/pinLabel\.setVisible\(true\)/);
+  it("does not mount inverse-scale sign hosts on the drive scene", () => {
+    expect(src).not.toContain("mountDriveSign");
+    expect(src).not.toContain("syncDriveLabelScale");
+    expect(src).not.toContain("pinLabelHost");
+    expect(src).not.toContain("addSignText");
+    expect(src).not.toContain("setSignCopy");
   });
 
   it("animates the pin from gameMs with no idle tweens", () => {
     expect(src).not.toContain("this.tweens.add");
     expect(src).toContain("PIN_CYCLE_MS");
     expect(src).toContain("Math.sin((snap.gameMs / PIN_CYCLE_MS)");
-    const update = src.slice(src.indexOf("update(): void"), src.indexOf("private syncDriveLabelScale"));
+    const update = src.slice(src.indexOf("update(): void"), src.indexOf("private tutorialFlashHint"));
     expect(update).toContain("pinActive = !!stopId && this.sys.isActive()");
-    expect(update).not.toMatch(/pinLabel\.setAlpha\(0\.85 \+/);
-    expect(update).not.toMatch(/shopCaption\.setAlpha\(flashShop/);
   });
 
-  it("keeps drive sign copy on plaques with screen-stable scale", () => {
-    expect(src).toContain("addSignText");
-    expect(src).toContain("setSignCopy");
-    expect(src).toContain("mountDriveSign");
-    expect(src).toContain("pinLabelHost");
-    expect(src).toContain("syncDriveLabelScale");
-    expect(src).toContain("syncSignPlaque");
-    expect(src).toContain("setFixedSize(0, 0)");
-    expect(src).toContain("fitTypeToBox(this.vanBanner");
-    expect(src).toContain("this.pin.displayHeight");
-    expect(src).toContain("this.vehicle.displayHeight");
+  it("projects drive callouts from HudScene screen-space", () => {
+    expect(hud).toContain("paintDriveCallouts");
+    expect(hud).toContain("worldToScreen");
+    expect(hud).toContain("drivePinLabel");
+    expect(hud).toContain("driveVanBanner");
+    expect(hud).toContain("driveShopCaption");
+    expect(hud).not.toContain("syncDriveLabelScale");
   });
 
   it("bakes static ground/props into RenderTextures and keeps movers live", () => {
@@ -91,7 +75,6 @@ describe("DriveScene grade throttle and dirty guards", () => {
     expect(src).toContain("renderTexture");
     expect(src).toContain("disableCull = false");
     expect(src).toContain("TRAFFIC_CULL_PAD");
-    // Interactive shop + movers must not be on the bake destroy list as the only path.
     expect(src).toContain("enableItemHit(this.shopImg)");
     expect(src).toContain("this.vehicle");
     expect(src).toContain("trafficSprites");

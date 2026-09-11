@@ -101,7 +101,7 @@ describe("typeResolution", () => {
     expect(typeResolution({ dpr: 3, fit: 3, objectScale: 4 })).toBe(8);
   });
 
-  it("caps resolution at 3 on coarse pointer so DPR 3 does not upload a 6× canvas", () => {
+  it("caps resolution at 2 on coarse pointer so DPR 3 does not upload a 6× canvas", () => {
     vi.stubGlobal("matchMedia", (query: string) => ({
       matches: query.includes("coarse"),
       media: query,
@@ -109,15 +109,22 @@ describe("typeResolution", () => {
       removeEventListener: () => {},
     }));
     expect(isCoarsePointer()).toBe(true);
-    expect(typeResolution({ dpr: 3, fit: 1, objectScale: 1 })).toBeLessThanOrEqual(3);
-    expect(typeResolution({ dpr: 3, fit: 1, objectScale: 1 })).toBe(3);
-    expect(typeResolution({ dpr: 2, fit: 1, objectScale: 1 })).toBeLessThanOrEqual(3);
+    expect(typeResolution({ dpr: 3, fit: 1, objectScale: 1 })).toBeLessThanOrEqual(2);
+    expect(typeResolution({ dpr: 3, fit: 1, objectScale: 1 })).toBe(2);
+    expect(typeResolution({ dpr: 2, fit: 1, objectScale: 1 })).toBeLessThanOrEqual(2);
     vi.unstubAllGlobals();
   });
 
   it("keeps desktop resolution at 4–8 for sharp type", () => {
+    vi.stubGlobal("matchMedia", () => ({
+      matches: false,
+      media: "",
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
     expect(typeResolution({ dpr: 2, fit: 1, objectScale: 1 })).toBe(4);
     expect(typeResolution({ dpr: 3, fit: 1, objectScale: 1 })).toBe(6);
+    vi.unstubAllGlobals();
   });
 });
 

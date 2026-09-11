@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { MARK } from "./copy";
-import { TYPE_MIN_FIT_PX, Type, designPxForMinCss } from "./theme";
+import { TYPE_MIN_FIT_PX, Type, designPxForMinCss, type TypeRole, isFixedTypeRole } from "./theme";
+import { warmTokenMetrics } from "./typeMetrics";
 import { canReuseFitSize, clampFitSize, typeFitRange, type SizeMeasure } from "./typeFit";
 import {
   capsTracking,
@@ -252,6 +253,8 @@ function bindPolish(text: Phaser.GameObjects.Text, scene: Phaser.Scene, explicit
 
 export interface TypeStyle {
   size?: string | number;
+  /** When set, uses a closed role token and skips clamp-fit unless wrap box is set. */
+  typeRole?: TypeRole;
   color?: string;
   align?: string;
   padding?: { x?: number; y?: number };
@@ -311,12 +314,14 @@ function finishType(
   options: TypeStyle,
 ): Phaser.GameObjects.Text {
   const basePx = parseFontPx(options.size ?? Type.body);
+  const fixedRole = options.typeRole !== undefined && isFixedTypeRole(options.typeRole);
+  const wrapOnly = fixedRole && (options.maxWidth || options.wordWrap?.width);
   text.setData(TYPEKIT_BOX, {
-    maxWidth: options.maxWidth ?? options.wordWrap?.width,
-    maxHeight: options.maxHeight,
+    maxWidth: wrapOnly ? (options.maxWidth ?? options.wordWrap?.width) : undefined,
+    maxHeight: fixedRole ? undefined : options.maxHeight,
     minPx: options.minPx ?? MIN_FIT_PX,
-    minCssFloor: options.minCssFloor,
-    maxCssCeiling: options.maxCssCeiling,
+    minCssFloor: fixedRole ? undefined : options.minCssFloor,
+    maxCssCeiling: fixedRole ? undefined : options.maxCssCeiling,
     basePx,
     noWrap: options.noWrap ?? false,
     growBox: options.growBox ?? false,
@@ -324,9 +329,12 @@ function finishType(
   applyTracking(text, content, options.letterSpacing);
   if (options.letterSpacing !== undefined) text.setData("typekitTracking", options.letterSpacing);
   bindPolish(text, scene, options.letterSpacing);
+  warmTokenMetrics(text, basePx);
   polishText(text, scene);
-  if (options.maxWidth || options.maxHeight || options.wordWrap) {
+  if (!fixedRole && (options.maxWidth || options.maxHeight || options.wordWrap)) {
     fitTypeToBox(text, options.maxWidth ?? options.wordWrap?.width, options.maxHeight, options.minPx);
+  } else if (wrapOnly) {
+    fitTypeToBox(text, options.maxWidth ?? options.wordWrap?.width, undefined, basePx);
   }
   return text;
 }

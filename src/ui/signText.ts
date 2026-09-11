@@ -1,24 +1,17 @@
 import Phaser from "phaser";
-import { SIGN_BORDER, signPlaqueRings } from "./signPlaque";
+import { SIGN_BORDER, SIGN_PAD_X, SIGN_PAD_Y } from "./signPlaque";
+import { makePlaqueNineSlice, plaqueTextureForAccent } from "./signPlaqueNine";
 import { addUiText, type UiTextOptions } from "./text";
 import { Color } from "./theme";
 
 /**
- * Every text box in the game wears the counter plaque: ink type on a white field inside
- * a leaf-green frame. The scheme itself lives in `signPlaque.ts` — this is the part that
- * puts it behind a live `Text` whose copy, size and position all move at runtime.
- *
- * A Phaser text's own `backgroundColor` cannot carry a border, which is why the boxes
- * were previously a scatter of flat chips: cream, lime, amber and two different inks,
- * each one a decision made where it was written. A plaque is a Graphics behind the text
- * instead, repainted from the text's measured bounds every frame the scene renders, so
- * it fits copy that rewraps or shrinks to fit without anyone having to remember to
- * resize it.
- *
- * Padding passed to the text becomes the white margin around the glyphs, since Phaser
- * folds padding into the measured box the frame is grown from.
+ * Counter plaque chips: ink type on a white 9-slice field in a leaf-green frame.
+ * {@link addSignText} returns the inner `Text`; the panel lives in a host
+ * {@link signContainer} that callers position via {@link setSignPosition}.
  */
 const ACCENT = "signAccent";
+const SIGN_HOST = "signHost";
+const SIGN_PLAQUE = "signPlaque";
 const PUMP_REGISTRY = "kindlingSignPlaquePump";
 
 export interface SignTextOptions extends UiTextOptions {
@@ -28,9 +21,10 @@ export interface SignTextOptions extends UiTextOptions {
 
 type SignPlaqueEntry = {
   text: Phaser.GameObjects.Text;
-  plaque: Phaser.GameObjects.Graphics;
+  host: Phaser.GameObjects.Container;
+  plaque: Phaser.GameObjects.NineSlice;
   scene: Phaser.Scene;
-  lastPaintKey: string;
+  lastLayoutKey: string;
   dirty: boolean;
 };
 
@@ -38,31 +32,22 @@ class SceneSignPlaquePump {
   private readonly scene: Phaser.Scene;
   private readonly entries = new Set<SignPlaqueEntry>();
   private hooked = false;
-  private anyDirty = false;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
   }
 
-  register(text: Phaser.GameObjects.Text, plaque: Phaser.GameObjects.Graphics): SignPlaqueEntry {
-    const entry: SignPlaqueEntry = {
-      text,
-      plaque,
-      scene: this.scene,
-      lastPaintKey: "",
-      dirty: true,
-    };
+  register(entry: SignPlaqueEntry): SignPlaqueEntry {
     this.entries.add(entry);
-    text.setData(PUMP_REGISTRY, entry);
-    this.hookText(text, entry);
+    entry.text.setData(PUMP_REGISTRY, entry);
+    this.hookText(entry.text, entry);
     this.ensureHook();
-    this.anyDirty = true;
+    entry.dirty = true;
     return entry;
   }
 
   markDirty(entry: SignPlaqueEntry): void {
     entry.dirty = true;
-    this.anyDirty = true;
   }
 
   unregister(entry: SignPlaqueEntry): void {
@@ -81,13 +66,10 @@ class SceneSignPlaquePump {
   }
 
   private onPreRender = (): void => {
-    let stillDirty = false;
     for (const entry of this.entries) {
       if (!entry.dirty) continue;
-      syncPlaque(entry);
-      if (entry.dirty) stillDirty = true;
+      layoutPlaque(entry);
     }
-    this.anyDirty = stillDirty;
   };
 
   private hookText(text: Phaser.GameObjects.Text, entry: SignPlaqueEntry): void {
@@ -98,53 +80,25 @@ class SceneSignPlaquePump {
       mark();
       return out;
     }) as typeof text.setText;
-    const rawSetPosition = text.setPosition.bind(text);
-    text.setPosition = ((x?: number, y?: number, z?: number, w?: number) => {
-      const out = rawSetPosition(x, y, z, w);
-      mark();
-      return out;
-    }) as typeof text.setPosition;
     const rawSetVisible = text.setVisible.bind(text);
     text.setVisible = ((value: boolean) => {
       const wasVisible = text.visible;
       const out = rawSetVisible(value);
       if (wasVisible !== value) {
-        entry.lastPaintKey = "";
-        if (value) syncPlaque(entry);
+        entry.lastLayoutKey = "";
+        entry.host.setVisible(value);
+        entry.plaque.setVisible(value);
+        if (value) layoutPlaque(entry);
       }
       mark();
       return out;
     }) as typeof text.setVisible;
-    const rawSetScale = text.setScale.bind(text);
-    text.setScale = ((x?: number, y?: number) => {
-      const out = rawSetScale(x, y);
-      mark();
-      return out;
-    }) as typeof text.setScale;
     const rawSetFontSize = text.setFontSize.bind(text);
     text.setFontSize = ((size: string | number) => {
       const out = rawSetFontSize(size);
       mark();
       return out;
     }) as typeof text.setFontSize;
-    const rawSetFixedSize = text.setFixedSize.bind(text);
-    text.setFixedSize = ((width: number, height: number) => {
-      const out = rawSetFixedSize(width, height);
-      mark();
-      return out;
-    }) as typeof text.setFixedSize;
-    const rawSetAlpha = text.setAlpha.bind(text);
-    text.setAlpha = ((value?: number) => {
-      const out = rawSetAlpha(value);
-      mark();
-      return out;
-    }) as typeof text.setAlpha;
-    const rawSetDepth = text.setDepth.bind(text);
-    text.setDepth = ((value: number) => {
-      const out = rawSetDepth(value);
-      mark();
-      return out;
-    }) as typeof text.setDepth;
     const rawSetOrigin = text.setOrigin.bind(text);
     text.setOrigin = ((x?: number, y?: number) => {
       const out = rawSetOrigin(x, y);
@@ -167,130 +121,65 @@ function entryFor(text: Phaser.GameObjects.Text): SignPlaqueEntry | undefined {
   return text.getData(PUMP_REGISTRY) as SignPlaqueEntry | undefined;
 }
 
-/**
- * Paint state for one plaque. Held on the text so an accent survives the text being
- * repositioned, re-wrapped or re-coloured by its scene.
- */
 function accentOf(text: Phaser.GameObjects.Text): number {
   const accent = text.getData(ACCENT) as number | undefined;
   return accent ?? SIGN_BORDER;
 }
 
-/**
- * The plaque's field: the text's measured box, placed against its own origin. Read off
- * the object rather than the constants it was built from — a clamp-fit text is
- * routinely smaller than the box it was authored with, and the frame has to sit on the
- * glyphs that actually rendered.
- */
-function fieldOf(text: Phaser.GameObjects.Text): { x: number; y: number; w: number; h: number } {
-  // Remeasure before painting — fitTypeToBox/setFontSize can land between PRE_RENDER passes.
+/** Host container for a sign chip — position this, not the inner Text alone. */
+export function signContainer(text: Phaser.GameObjects.Text): Phaser.GameObjects.Container {
+  return (text.getData(SIGN_HOST) as Phaser.GameObjects.Container | undefined) ?? text.parentContainer ?? text.scene.add.container(text.x, text.y);
+}
+
+/** Move a sign chip — updates the host container when present. */
+export function setSignPosition(text: Phaser.GameObjects.Text, x: number, y: number): void {
+  const host = text.getData(SIGN_HOST) as Phaser.GameObjects.Container | undefined;
+  if (host) host.setPosition(x, y);
+  else text.setPosition(x, y);
+}
+
+function layoutPlaque(entry: SignPlaqueEntry): void {
+  const { text, host, plaque } = entry;
+  const copy = String(text.text ?? "");
+  const show = text.visible && copy.trim().length > 0;
+  host.setVisible(show);
+  plaque.setVisible(show);
+  if (!show) {
+    entry.lastLayoutKey = `h:${accentOf(text)}`;
+    entry.dirty = false;
+    return;
+  }
+
   text.updateText();
-  const sx = text.parentContainer?.scaleX ?? 1;
-  const sy = text.parentContainer?.scaleY ?? 1;
-  const w = text.width * sx;
-  const h = text.height * sy;
-  return {
-    x: text.x - text.width * text.originX * sx,
-    y: text.y - text.height * text.originY * sy,
-    w,
-    h,
-  };
-}
+  const w = text.width;
+  const h = text.height;
+  const panelW = Math.max(8, w + SIGN_PAD_X * 2);
+  const panelH = Math.max(8, h + SIGN_PAD_Y * 2);
+  const accent = accentOf(text);
+  const tex = plaqueTextureForAccent(accent);
+  if (plaque.texture.key !== tex) plaque.setTexture(tex);
 
-/**
- * Keep the plaque in whatever container its text ended up in — the score pop and the
- * delivery phone both add their text to one after construction. Sharing the parent is
- * what lets the field be measured in the text's own coordinates below; a scene-level
- * plaque behind a container's text would be drawn under the entire container, which for
- * the phone means behind the chassis.
- */
-function reparent(
-  plaque: Phaser.GameObjects.Graphics,
-  text: Phaser.GameObjects.Text,
-  scene: Phaser.Scene,
-): void {
-  const parent = text.parentContainer;
-  // Explicit type argument: `moveBelow` infers both children from the first, and a
-  // Graphics and a Text are only siblings at the GameObject level.
-  const below = (): void => {
-    parent?.moveBelow<Phaser.GameObjects.GameObject>(plaque, text);
-  };
-  if (plaque.parentContainer === parent) {
-    below();
+  const key = [copy, w, h, text.originX, text.originY, accent, text.depth, tex].join(":");
+  if (key === entry.lastLayoutKey) {
+    entry.dirty = false;
     return;
   }
-  plaque.parentContainer?.remove(plaque);
-  if (!parent) {
-    scene.add.existing(plaque);
-    return;
-  }
-  parent.add(plaque);
-  below();
-}
+  entry.lastLayoutKey = key;
 
-function paint(plaque: Phaser.GameObjects.Graphics, text: Phaser.GameObjects.Text): void {
-  plaque.clear();
-  // A hidden text still reports bounds, so visibility has to be mirrored explicitly or
-  // the frame outlives the copy it belongs to.
-  plaque.setVisible(text.visible);
-  plaque.setAlpha(text.alpha);
-  // Depth is chained on after construction at most call sites, so it is read here rather
-  // than captured: the plaque only ever needs to be immediately under its own text.
+  const textX = -w * text.originX;
+  const textY = -h * text.originY;
+  text.setPosition(textX, textY);
+  plaque.setSize(panelW, panelH);
+  plaque.setPosition(textX - SIGN_PAD_X + panelW / 2, textY - SIGN_PAD_Y + panelH / 2);
+  plaque.setOrigin(0.5, 0.5);
   plaque.setDepth(text.depth - 0.5);
-  if (!text.visible) return;
-  const field = fieldOf(text);
-  // Position the Graphics at the field origin and draw rings locally. World-space fillRect
-  // on a scene-root plaque drifts from scrolled/zoomed text — Drive's camera follow showed
-  // the chip floating beside the copy.
-  plaque.setPosition(field.x, field.y);
-  const [edge, border, fieldRing] = signPlaqueRings({ x: 0, y: 0, w: field.w, h: field.h });
-  for (const ring of [edge!, { ...border!, color: accentOf(text) }, fieldRing!]) {
-    plaque.fillStyle(ring.color, 1);
-    plaque.fillRect(ring.x, ring.y, ring.w, ring.h);
-  }
-}
-
-function syncPlaque(entry: SignPlaqueEntry): void {
-  const { text, plaque, scene } = entry;
-  if (!text.visible) {
-    const hiddenKey = ["h", text.visible, text.alpha, accentOf(text), text.depth].join(":");
-    if (hiddenKey === entry.lastPaintKey) {
-      entry.dirty = false;
-      return;
-    }
-    entry.lastPaintKey = hiddenKey;
-    reparent(plaque, text, scene);
-    paint(plaque, text);
-    entry.dirty = false;
-    return;
-  }
-  const field = fieldOf(text);
-  const key = [
-    text.visible,
-    text.alpha,
-    accentOf(text),
-    field.x,
-    field.y,
-    field.w,
-    field.h,
-    text.depth,
-    text.scaleX,
-    text.scaleY,
-  ].join(":");
-  if (key === entry.lastPaintKey) {
-    entry.dirty = false;
-    return;
-  }
-  entry.lastPaintKey = key;
-  reparent(plaque, text, scene);
-  paint(plaque, text);
+  host.setDepth(text.depth);
   entry.dirty = false;
 }
 
 /**
- * A text box on a sign plaque. Returns the `Text` itself, so call sites keep chaining
- * `setOrigin` / `setDepth` / `setVisible` and keep calling `setText` as they did with a
- * background-coloured chip.
+ * A text box on a sign plaque. Returns the `Text` for copy/accent APIs; position
+ * the chip with {@link setSignPosition} / {@link signContainer}.
  */
 export function addSignText(
   scene: Phaser.Scene,
@@ -299,53 +188,68 @@ export function addSignText(
   content: string,
   options: SignTextOptions = {},
 ): Phaser.GameObjects.Text {
-  const { accent, ...style } = options;
-  const text = addUiText(scene, x, y, content, {
+  const { accent, padding: _pad, ...style } = options;
+  const host = scene.add.container(x, y);
+  const text = addUiText(scene, 0, 0, content, {
     ...style,
     color: style.color ?? Color.inkHex,
-    // Ink on white needs no outline, and a stroke would print inside the field.
     strokeThickness: style.strokeThickness ?? 0,
-    growBox: style.growBox ?? true,
+    growBox: false,
+    padding: undefined,
   });
+  text.setScrollFactor(0);
   if (accent !== undefined) text.setData(ACCENT, accent);
 
-  const plaque = scene.add.graphics();
+  const plaque = makePlaqueNineSlice(scene, SIGN_PAD_X * 2 + 8, SIGN_PAD_Y * 2 + 8, accent ?? SIGN_BORDER);
+  plaque.setScrollFactor(0);
+  host.add([plaque, text]);
+  host.setScrollFactor(0);
+  text.setData(SIGN_HOST, host);
+  text.setData(SIGN_PLAQUE, plaque);
+
+  const rawSetPosition = text.setPosition.bind(text);
+  text.setPosition = ((x?: number, y?: number, z?: number, w?: number) => {
+    if (x !== undefined && y !== undefined) host.setPosition(x, y);
+    return rawSetPosition(0, 0, z, w);
+  }) as typeof text.setPosition;
+
   const pump = pumpFor(scene);
-  const entry = pump.register(text, plaque);
+  const entry = pump.register({ text, host, plaque, scene, lastLayoutKey: "", dirty: true });
   text.once(Phaser.GameObjects.Events.DESTROY, () => {
     pump.unregister(entry);
-    plaque.destroy();
+    host.destroy();
   });
-  syncPlaque(entry);
+  layoutPlaque(entry);
   return text;
 }
 
-/**
- * Recolour one plaque's inner ring. This is how a text box carries urgency or "act on
- * me now" under a scheme where every field is the same white: the frame changes, the
- * copy stays ink, and the box never becomes a different box.
- */
 export function setSignAccent(text: Phaser.GameObjects.Text, accent: number = SIGN_BORDER): void {
   text.setData(ACCENT, accent);
   const entry = entryFor(text);
-  if (entry) pumpFor(text.scene).markDirty(entry);
+  if (entry) {
+    entry.lastLayoutKey = "";
+    pumpFor(text.scene).markDirty(entry);
+  }
 }
 
-/** Paint one sign plaque now — for camera-scrolled labels that move every frame. */
 export function syncSignPlaque(text: Phaser.GameObjects.Text): void {
   const entry = entryFor(text);
   if (!entry) return;
   entry.dirty = true;
-  syncPlaque(entry);
+  layoutPlaque(entry);
 }
 
-/**
- * Set sign copy and visibility together — never leave a plaque visible with `""`.
- * Syncs the field the same frame the glyphs change.
- */
 export function setSignCopy(text: Phaser.GameObjects.Text, copy: string): void {
   text.setText(copy);
   const show = copy.trim().length > 0;
   text.setVisible(show);
-  if (show) syncSignPlaque(text);
+  const entry = entryFor(text);
+  if (entry) {
+    entry.dirty = true;
+    if (show) layoutPlaque(entry);
+    else {
+      entry.host.setVisible(false);
+      entry.plaque.setVisible(false);
+    }
+  }
 }

@@ -81,8 +81,7 @@ describe("speech stays off the models it belongs to", () => {
     const sync = between(src, "private syncCustomers(", "private makeHotspots(", "syncCustomers");
     expect(sync, "uses side layout").toMatch(/layoutCustomerSpeech\(/);
     expect(sync, "gated while walking in").toMatch(/customerSpeechShows\(true\)/);
-    expect(sync, "refits before positioning").toMatch(/fitTypeToBox\(bubble/);
-    expect(sync, "anchors on layout centre").toMatch(/bubble\.setPosition\(layout\.x, layout\.y\)/);
+    expect(sync, "anchors on layout centre via host").toMatch(/setSignPosition\(bubble, layout\.x, layout\.y\)/);
     expect(sync, "no overhead band anchor").not.toMatch(/CUSTOMER_SPEECH_BASE/);
   });
 
@@ -92,15 +91,13 @@ describe("speech stays off the models it belongs to", () => {
     expect(sync, "feedback chip on visual").toMatch(/feedback\.setText\(note\)/);
   });
 
-  it("dirty-guards customer bubble setText, fitTypeToBox, applyPersonTexture, and speech layout", () => {
+  it("dirty-guards customer bubble setText, applyPersonTexture, and speech layout", () => {
     const sync = between(src, "private syncCustomers(", "private makeHotspots(", "syncCustomers");
     expect(sync, "layout keyed on order id + quantized x").toContain("lastCustomerLayoutKey");
     expect(sync, "layout keyed on order id + quantized x").toContain("Math.round(c.x)");
     expect(sync, "bubble setText guarded").toMatch(/if \(bubble\.text !== customer\.bubble\) bubble\.setText/);
-    expect(sync, "bubble fit guarded on layout width only").toMatch(
-      /layoutFitKey = String\(layout\.w\)[\s\S]*if \(layoutFitKey !== visual\.bubbleFitKey\)[\s\S]*fitTypeToBox\(bubble/,
-    );
-    expect(sync, "bubble fit key excludes copy").not.toMatch(/`\$\{customer\.bubble\}:\$\{layout\.w\}`/);
+    const make = between(src, "private makeCustomerVisual(", "return { sprite, bubble, feedback", "makeCustomerVisual");
+    expect(make, "fixed speech token at build").toMatch(/typeRole: "speech"/);
     expect(sync, "look guarded before applyPersonTexture").toMatch(
       /if \(visual\.look !== customer\.look\)[\s\S]*applyPersonTexture\(visual\.sprite, customer\.look\)/,
     );
