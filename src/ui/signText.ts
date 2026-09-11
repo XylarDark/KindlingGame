@@ -24,6 +24,17 @@ const PUMP_REGISTRY = "kindlingSignPlaquePump";
 export interface SignTextOptions extends UiTextOptions {
   /** Inner ring colour, for state the copy alone cannot carry. Defaults to leaf green. */
   accent?: number;
+  /** Override default {@link SIGN_PAD_X} for compact chips (drive callouts). */
+  padX?: number;
+  /** Override default {@link SIGN_PAD_Y} for compact chips (drive callouts). */
+  padY?: number;
+}
+
+const SIGN_PAD = "signPad";
+
+function signPads(text: Phaser.GameObjects.Text): { x: number; y: number } {
+  const custom = text.getData(SIGN_PAD) as { x: number; y: number } | undefined;
+  return custom ?? { x: SIGN_PAD_X, y: SIGN_PAD_Y };
 }
 
 type SignPlaqueEntry = {
@@ -188,8 +199,9 @@ function plaqueCenterFromGlyphs(
   panelW: number,
   panelH: number,
 ): { x: number; y: number } {
+  const pad = signPads(text);
   const { left, top } = glyphLocalBounds(text, w, h);
-  return { x: left - SIGN_PAD_X + panelW / 2, y: top - SIGN_PAD_Y + panelH / 2 };
+  return { x: left - pad.x + panelW / 2, y: top - pad.y + panelH / 2 };
 }
 
 /** Laid-out plaque bounds — pads and 9-slice included, not bare Text.displayHeight. */
@@ -261,8 +273,9 @@ function layoutPlaque(entry: SignPlaqueEntry): void {
   text.updateText();
   const w = text.width;
   const h = text.height;
-  const panelW = Math.max(8, w + SIGN_PAD_X * 2);
-  const panelH = Math.max(8, h + SIGN_PAD_Y * 2);
+  const pad = signPads(text);
+  const panelW = Math.max(8, w + pad.x * 2);
+  const panelH = Math.max(8, h + pad.y * 2);
   const accent = accentOf(text);
   const tex = plaqueTextureForAccent(accent);
   if (plaque.texture.key !== tex) plaque.setTexture(tex);
@@ -283,7 +296,7 @@ function layoutPlaque(entry: SignPlaqueEntry): void {
     throw new Error(`sign plaque layout: ${ink.reason} for "${copy.slice(0, 32)}"`);
   }
 
-  const key = [copy, w, h, text.originX, text.originY, accent, text.depth, tex].join(":");
+  const key = [copy, w, h, text.originX, text.originY, accent, text.depth, tex, pad.x, pad.y].join(":");
   if (key === entry.lastLayoutKey) {
     entry.dirty = false;
     return;
@@ -308,7 +321,7 @@ export function addSignText(
   content: string,
   options: SignTextOptions = {},
 ): Phaser.GameObjects.Text {
-  const { accent, padding: _pad, ...style } = options;
+  const { accent, padX, padY, padding: _pad, ...style } = options;
   const host = scene.add.container(x, y);
   const text = makeType(scene, 0, 0, content, {
     ...(style as TypeStyle),
@@ -318,6 +331,9 @@ export function addSignText(
     padding: undefined,
   });
   if (accent !== undefined) text.setData(ACCENT, accent);
+  if (padX !== undefined || padY !== undefined) {
+    text.setData(SIGN_PAD, { x: padX ?? SIGN_PAD_X, y: padY ?? SIGN_PAD_Y });
+  }
 
   const plaque = makePlaqueNineSlice(scene, SIGN_PAD_X * 2 + 8, SIGN_PAD_Y * 2 + 8, accent ?? SIGN_BORDER);
   host.add([plaque, text]);

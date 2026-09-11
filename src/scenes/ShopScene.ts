@@ -34,6 +34,7 @@ import {
   TV_BEZEL,
   TV_W,
   ceilingPots,
+  strainLabelPos,
   strainPos,
   strainSlotH,
   tabletLayout,
@@ -159,6 +160,8 @@ export class ShopScene extends Phaser.Scene {
   private tabletTicketId: string | null = null;
   private lastReceiptKey = "";
   private lastTvKey = "";
+  private lastShowKeyLeadBubble = false;
+  private lastShowDriverBubble = false;
   /** Ordered settled ids + quantized x — layoutCustomerSpeech only when this changes. */
   private lastCustomerLayoutKey = "";
   private customerLayoutById = new Map<string, ReturnType<typeof layoutCustomerSpeech>[number]>();
@@ -267,7 +270,7 @@ export class ShopScene extends Phaser.Scene {
       maxWidth: scaleMsgBox(340),
       maxHeight: scaleMsgBox(104),
     })
-      .setOrigin(0.5)
+      .setOrigin(0.5, 1)
       .setDepth(12)
       .setVisible(false);
 
@@ -335,9 +338,11 @@ export class ShopScene extends Phaser.Scene {
       const textDirty = this.keyLeadBubble.text !== callout;
       if (textDirty) this.keyLeadBubble.setText(callout);
       const bx = kx - 168;
+      const becameVisible = showKeyLeadBubble && !this.lastShowKeyLeadBubble;
       // Bubble follows a walking sprite — host x/y, not inner Text locals (9-slice host model).
-      if (textDirty || leadMoved) hangAboveHead(this.keyLeadBubble, this.keyLead, bx);
+      if (textDirty || leadMoved || becameVisible) hangAboveHead(this.keyLeadBubble, this.keyLead, bx);
     }
+    this.lastShowKeyLeadBubble = showKeyLeadBubble;
 
     const next = nextShopHint(snap);
     const pulse = 0.62 + 0.38 * (0.5 + 0.5 * Math.sin(snap.gameMs / 420));
@@ -351,8 +356,10 @@ export class ShopScene extends Phaser.Scene {
       const driverTextDirty = this.driverBubble.text !== driverLine;
       if (driverTextDirty) this.driverBubble.setText(driverLine);
       this.driverBubble.setAlpha(1);
-      if (driverTextDirty) hangAboveHead(this.driverBubble, this.driver, DRIVER.x - 24);
+      const becameVisible = showDriverBubble && !this.lastShowDriverBubble;
+      if (driverTextDirty || becameVisible) hangAboveHead(this.driverBubble, this.driver, DRIVER.x - 24);
     }
+    this.lastShowDriverBubble = showDriverBubble;
     if (highlightGo) {
       this.driver.setAlpha(pulse);
       this.driver.setTint(Color.flash);
@@ -752,17 +759,18 @@ export class ShopScene extends Phaser.Scene {
     const sim = getSim();
     this.skuById = new Map(sim.catalog.map((s) => [s.id, s]));
     sim.catalog.forEach((sku, i) => {
-      const p = strainPos(i);
+      const slot = strainPos(i);
+      const labelPos = strainLabelPos(i);
       const slotH = strainSlotH();
       const glassW = TV_W - TV_BEZEL * 2;
-      const screen = this.add.rectangle(p.x, p.y, glassW - 8, slotH - 4, sku.color, 0.35).setDepth(5);
+      const screen = this.add.rectangle(slot.x, slot.y, glassW - 8, slotH - 4, sku.color, 0.35).setDepth(5);
       enableItemHit(screen);
       this.wireShopTap(screen, 1, () => getSim().shopClick({ type: "strain", skuId: sku.id }));
       this.tvs.push(screen);
       this.jarSkus.push(sku.id);
       const maxW = glassW - 16;
       const maxH = slotH - 8;
-      const label = addUiText(this, p.x, p.y, sku.name, {
+      const label = addUiText(this, labelPos.x, labelPos.y, sku.name, {
         size: TV_LABEL_PX,
         color: Color.creamHex,
         align: "center",

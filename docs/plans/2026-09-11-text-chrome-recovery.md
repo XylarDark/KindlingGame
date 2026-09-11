@@ -76,4 +76,21 @@ PR A shipped in #54 (rails, sign ink contract, Settings centering). PR C (ID car
 
 ### Note
 
-PR A = #54, PR B = #55. PR D (pin sizes / menu boards / speech) remains out of scope.
+PR A = #54, PR B = #55. PR D (pin sizes / menu boards / speech) remains out of scope here.
+
+---
+
+## PR D — Size & clearance polish
+
+**Base:** `master` after PR C (#56 `80e76e2`)
+
+### Done criteria
+
+1. **Drive callouts hug copy** — pin/van/shop projected chips use baked pin/van heights (`DRIVE_PIN_TEX_H` / `DRIVE_VAN_TEX_H`), compact sign pads, and `scaleMsgBox` max widths so plaques are not oversized empty boxes.
+2. **Menu-board row text centred** — strain labels use `strainLabelPos` (+ `STRAIN_LABEL_OPTICAL_Y`) so cap-height type reads vertically centred in each TV row slot.
+3. **Shop speech stays off faces** — `CUSTOMER_SPEECH_GAP` increased; key-lead bubble is bottom-anchored (`setOrigin(0.5, 1)`) and re-hangs when the bubble becomes visible again so multi-line delivery copy clears the head.
+4. **Focused tests** — `hudDriveChip.test.ts`, `shopT0.test.ts` menu-row case, `shopSpeech.test.ts` gap/re-hang guards, `signText.test.ts` compact pad hook.
+
+### Note
+
+PR A = #54, PR B = #55, PR C = #56.

@@ -42,7 +42,17 @@ import { notePerfRawDelta } from "../ui/perfProbe";
 import { Color, MENU_TYPE_FIT, MSG_TYPE_FIT, scaleMsgBox, scaleMsgPx, Type } from "../ui/theme";
 import { typeRolePx } from "../ui/typeScale";
 import { worldToScreen } from "../ui/worldProject";
-import { PIN_CYCLE_MS } from "./driveConstants";
+import {
+  DRIVE_CHIP_GAP,
+  DRIVE_CHIP_PAD_X,
+  DRIVE_CHIP_PAD_Y,
+  DRIVE_PIN_MAX_W,
+  DRIVE_PIN_TEX_H,
+  DRIVE_SHOP_CAP_MAX_W,
+  DRIVE_VAN_MAX_W,
+  DRIVE_VAN_TEX_H,
+  PIN_CYCLE_MS,
+} from "./driveConstants";
 import { loadWorldScenes } from "./worldScenes";
 import {
   designHudInset,
@@ -66,11 +76,14 @@ const MAX_SIM_STEP_MS = 1_000;
 /** Order banner runs 25% over the ramp — read across the room, mid-task. */
 const hudToastPx = (): string => scaleMsgPx(20);
 const padLabelPx = (): string => scaleMsgPx(16.25);
-const DRIVE_PIN_H = 96;
-const DRIVE_VAN_H = 104;
-const DRIVE_CHIP_GAP = 14;
 /** Keep sign plaques fully inside the HUD camera — matches Door prompt dodge margin. */
 const SCREEN_CHIP_MARGIN = 12;
+
+const driveChipSignOpts = {
+  ...MSG_TYPE_FIT,
+  padX: DRIVE_CHIP_PAD_X,
+  padY: DRIVE_CHIP_PAD_Y,
+} as const;
 
 const RESULTS_W = 740;
 const RESULTS_H = 640;
@@ -168,6 +181,8 @@ export class HudScene extends Phaser.Scene {
       typeRole: "pin",
       align: "center",
       fontStyle: "700",
+      ...driveChipSignOpts,
+      maxWidth: scaleMsgBox(DRIVE_PIN_MAX_W),
     })
       .setOrigin(0.5, 1)
       .setDepth(21)
@@ -178,6 +193,8 @@ export class HudScene extends Phaser.Scene {
       align: "center",
       fontStyle: "600",
       noWrap: true,
+      ...driveChipSignOpts,
+      maxWidth: scaleMsgBox(DRIVE_VAN_MAX_W),
     })
       .setOrigin(0.5, 1)
       .setDepth(21)
@@ -187,6 +204,8 @@ export class HudScene extends Phaser.Scene {
       typeRole: "hudBody",
       fontStyle: "700",
       noWrap: true,
+      ...driveChipSignOpts,
+      maxWidth: scaleMsgBox(DRIVE_SHOP_CAP_MAX_W),
     })
       .setOrigin(0.5, 0)
       .setDepth(21)
@@ -548,7 +567,7 @@ export class HudScene extends Phaser.Scene {
         const flashPin = flashNext?.kind === "gpsPin";
         if (flashPin) setSignAccent(this.drivePinLabel, Color.lime);
         syncSignPlaque(this.drivePinLabel);
-        const anchor = worldToScreen(cam, x, y - pinBob - DRIVE_PIN_H - DRIVE_CHIP_GAP);
+        const anchor = worldToScreen(cam, x, y - pinBob - DRIVE_PIN_TEX_H - DRIVE_CHIP_GAP);
         const pinPos = clampSignHost(this.drivePinLabel, anchor.x, anchor.y, viewW, viewH, inset);
         setSignPosition(this.drivePinLabel, pinPos.x, pinPos.y);
       }
@@ -564,7 +583,7 @@ export class HudScene extends Phaser.Scene {
         setSignCopy(this.driveVanBanner, snap.toast);
       }
       syncSignPlaque(this.driveVanBanner);
-      const anchor = worldToScreen(cam, vehicle.x, vehicle.y - DRIVE_VAN_H / 2 - DRIVE_CHIP_GAP);
+      const anchor = worldToScreen(cam, vehicle.x, vehicle.y - DRIVE_VAN_TEX_H / 2 - DRIVE_CHIP_GAP);
       const vanPos = clampSignHost(this.driveVanBanner, anchor.x, anchor.y, viewW, viewH, inset);
       setSignPosition(this.driveVanBanner, vanPos.x, vanPos.y);
     } else {

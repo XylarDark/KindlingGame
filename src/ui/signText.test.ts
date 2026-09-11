@@ -97,7 +97,8 @@ describe("text boxes are all the counter plaque", () => {
   it("sizes the 9-slice from glyph bounds + SIGN_PAD, not Phaser Text padding", () => {
     expect(helper).toContain("SIGN_PAD_X");
     expect(helper).toContain("SIGN_PAD_Y");
-    expect(helper).toMatch(/panelW = Math\.max\(8, w \+ SIGN_PAD_X \* 2\)/);
+    expect(helper).toMatch(/panelW = Math\.max\(8, w \+ pad\.x \* 2\)/);
+    expect(helper).toContain("signPads(text)");
     expect(helper).toMatch(/padding: undefined/);
     expect(helper).toContain("glyphLocalBounds");
     expect(helper).toContain("plaqueCenterFromGlyphs");
@@ -141,6 +142,12 @@ describe("text boxes are all the counter plaque", () => {
     expect(helper).toContain("makePlaqueNineSlice");
     expect(helper).toContain("plaque.setSize");
     expect(helper).not.toContain("signPlaqueRings");
+  });
+
+  it("allows compact plaque pads on sign hosts", () => {
+    expect(helper).toContain("padX?: number");
+    expect(helper).toContain("signPads(text)");
+    expect(helper).toContain('text.setData(SIGN_PAD');
   });
 
   it("parents text + plaque in a host container", () => {
