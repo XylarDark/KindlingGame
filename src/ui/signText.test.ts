@@ -54,24 +54,27 @@ describe("text boxes are all the counter plaque", () => {
     expect(helper).toMatch(/text\.height \* text\.originY/);
   });
 
-  it("repaints before the frame is drawn, so a moved or rewritten box stays wrapped", () => {
+  it("repaints before the frame is drawn via one scene pump, not one listener per chip", () => {
     // Scenes set copy and position in `update`, every frame. PRE_RENDER is the last hook
     // before the draw, so the frame it paints is the one the text is about to render at.
     expect(helper).toContain("Phaser.Scenes.Events.PRE_RENDER");
+    expect(helper).toContain("SceneSignPlaquePump");
+    expect(helper).toContain("anyDirty");
+    expect(helper).not.toMatch(/scene\.events\.on\(Phaser\.Scenes\.Events\.PRE_RENDER, sync\)/);
     // A destroyed text (customer bubbles, score pops) must take its plaque and its
-    // listener with it, or the frame outlives the copy and the scene leaks a handler.
+    // registry entry with it, or the frame outlives the copy and the scene leaks work.
     expect(helper).toContain("Phaser.GameObjects.Events.DESTROY");
     expect(helper).toContain("plaque.destroy()");
   });
 
   it("skips plaque repaint when bounds and accent are unchanged", () => {
     expect(helper).toContain("lastPaintKey");
-    expect(helper).toContain("if (key === lastPaintKey) return");
+    expect(helper).toContain("if (key === entry.lastPaintKey)");
   });
 
   it("does not measure hidden chip bounds on PRE_RENDER", () => {
     expect(helper).toMatch(/if \(!text\.visible\)[\s\S]*hiddenKey/);
-    expect(helper).toMatch(/if \(!text\.visible\) return/);
+    expect(helper).toMatch(/if \(hiddenKey === entry\.lastPaintKey\)/);
   });
 
   it("follows its text into a container", () => {

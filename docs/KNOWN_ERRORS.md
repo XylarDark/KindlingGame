@@ -401,6 +401,38 @@ the thing it described.
 - **Fix:** store `lastSize` on the type box; when limits are unchanged, raster once at `lastSize` and skip the clamp loop unless the new string overflows or the ceiling still fits (slack to grow). `bindPolish` returns early on identical strings. Shop customer bubbles refit on layout width only. Hud cover/phone rely on bindPolish alone. Hidden plaque sync skips width/height measurement.
 - **Prevention:** `typekit.test.ts` asserts same-box string swaps stay ≤2 measure probes; `shopSpeech.test.ts` fit key excludes copy; `canReuseFitSize` unit tests in `typeFit.test.ts`.
 
+### A* open.sort hitch on Hit the road
+
+- **Date:** 2026-09-11
+- **Symptom:** tapping Hit the road / driver showed a post-input frame cliff unrelated to typekit — depart was smooth after idle shop but spiked on the first drive route build.
+- **Cause:** `findPath` sorted the open list every pop (`open.sort` + `shift`), used string tile keys, and `setVehiclePosition` called `refreshDriveRoute` on every van nudge. First depart from the shop paid full A* on the input stack with no session cache.
+- **Fix:** binary min-heap + numeric tile indices + closed `Uint8Array`; session path cache keyed by start|goal; `refreshDriveRoute` skips when `driveRouteDestKey` is unchanged; boot `warmDriveDeparturePaths()` precomputes shop→house stalls under the loading gate.
+- **Prevention:** `pathfinding.test.ts` forbids `open.sort` and asserts cache hits; `scenePerfGuards.test.ts` asserts `setVehiclePosition` does not call `refreshDriveRoute`.
+
+### Per-plaque PRE_RENDER listeners
+
+- **Date:** 2026-09-11
+- **Symptom:** shop/HUD frame cost scaled with customer bubble + toast + ID plaque count even when chips were hidden or unchanged — every label registered its own `PRE_RENDER` handler.
+- **Cause:** `addSignText` attached one `scene.events.on(PRE_RENDER, sync)` per text; Phaser dispatched N listeners every frame before any early-out.
+- **Fix:** `SceneSignPlaquePump` — one PRE_RENDER pump per scene, dirty-flagged from hooked `setText` / `setPosition` / `setVisible`; pump skips when `anyDirty` is false.
+- **Prevention:** `signText.test.ts` and `scenePerfGuards.test.ts` source-scan for the shared pump and absence of per-chip listeners.
+
+### trafficCars rebuilt every tickDrive slice and DriveScene frame
+
+- **Date:** 2026-09-11
+- **Symptom:** driving cost scaled with physics slices (50 ms steps) plus a duplicate list build in `DriveScene.update` every render frame.
+- **Cause:** `tickManualDrive` / `tickAutoDrive` called `trafficCars(...)` inside each catch-up slice; `DriveScene.update` called it again for sprites with the same `gameMs`.
+- **Fix:** `GameSim.trafficForDrive()` caches one list per `clock.gameMs`; tickDrive slices and DriveScene read the shared cache.
+- **Prevention:** `scenePerfGuards.test.ts` asserts DriveScene uses `trafficForDrive()` and not direct `trafficCars` in `update`.
+
+### Coarse DPR×3 text canvas upload on first show
+
+- **Date:** 2026-09-11
+- **Symptom:** after #39 removed clamp-fit search cost, first walk-in bubble, Grabbing… toast, and ID card fields still showed a one-frame upload hitch on phone PWAs (DPR 3).
+- **Cause:** `typeResolution` used full `devicePixelRatio` — a speech chip's first `updateText()` allocated a 3× backing store. Pooled customer bubbles and ID fields started empty, so boot did not pay the raster until gameplay.
+- **Fix:** cap final `typeResolution` at 3 on `(pointer: coarse)` (desktop keeps 4–8); boot-warm customer pool bubbles with sample copy under the loading gate; ID card template strings rasterize at Hud create.
+- **Prevention:** `typekit.test.ts` asserts coarse DPR 3 → resolution ≤3; shop pool `warmCustomerSpeech` guarded by boot warm tests.
+
 ---
 
 ## Related

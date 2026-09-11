@@ -1554,6 +1554,8 @@ describe("resetting the day returns a cold start", () => {
     "nameSeed", // a new day brings new customers, not yesterday's again
     "scoreFlashSeq", // monotonic UI event id the HUD dedupes against its last-seen id
     "sfxSeq", // likewise for the sound cue
+    "trafficCacheMs", // per-step drive cache — not shift state
+    "trafficCache",
   ]);
 
   /** Every own field of the sim, plus the clock, which lives behind a GameClock. */

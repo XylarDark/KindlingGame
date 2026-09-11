@@ -3,6 +3,8 @@ export const UI_FONT = 'Inter, "Segoe UI", "Helvetica Neue", Arial, sans-serif';
 
 const MIN_RES = 2;
 const MAX_RES = 8;
+/** Phone PWAs: cap backing store so DPR 3 does not upload a 6× canvas on first show. */
+const COARSE_MAX_RES = 3;
 
 export type TypeResolutionInput = {
   dpr?: number;
@@ -23,6 +25,11 @@ export function currentDpr(): number {
   return window.devicePixelRatio || 1;
 }
 
+export function isCoarsePointer(): boolean {
+  if (typeof globalThis.matchMedia !== "function") return false;
+  return globalThis.matchMedia("(pointer: coarse)").matches;
+}
+
 export function displayFit(scale?: ScaleFitInput): number {
   if (!scale) return 1;
   const gameW = scale.gameSize?.width || 1;
@@ -39,7 +46,9 @@ export function typeResolution(input: TypeResolutionInput = {}): number {
   const fit = input.fit ?? 1;
   const objectScale = Math.max(1, input.objectScale ?? 1);
   const needed = dpr * Math.max(fit, 1) * objectScale;
-  return Math.max(MIN_RES, Math.min(MAX_RES, Math.ceil(needed * 2)));
+  let res = Math.max(MIN_RES, Math.min(MAX_RES, Math.ceil(needed * 2)));
+  if (isCoarsePointer()) res = Math.min(res, COARSE_MAX_RES);
+  return res;
 }
 
 export function parseFontPx(size: string | number | undefined): number {

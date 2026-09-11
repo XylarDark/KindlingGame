@@ -11,6 +11,7 @@ import {
 } from "../art/dayNightPipeline";
 import { ceilingPots } from "../maps/shopT0";
 import { MS_PER_GAME_HOUR } from "../sim/constants";
+import { warmDriveDeparturePaths } from "../sim/driveRoute";
 import { skyAt } from "../sim/dayNight";
 import { installMusicUnlock, preloadMusic } from "../audio/music";
 import { prewarmCameraSfx } from "../audio/sfx";
@@ -259,6 +260,7 @@ export class BootScene extends Phaser.Scene {
         await this.waitFrames(1);
       }
       if (this.warmAborted || performance.now() >= deadline) return;
+      warmDriveDeparturePaths();
     }
     const scene = this.scene.get(key);
     const cam = scene?.cameras?.main;

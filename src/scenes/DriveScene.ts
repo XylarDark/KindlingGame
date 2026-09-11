@@ -195,7 +195,6 @@ export class DriveScene extends Phaser.Scene {
     const vehicle = mover?.vehicle ?? snap.vehicle;
     const driverOnFoot = mover?.driverOnFoot ?? snap.dropoff.driverOnFoot;
     const driver = mover?.driver ?? snap.dropoff.driver;
-    const renderGameMs = useInterp && mover ? mover.gameMs : snap.gameMs;
 
     this.vehicle.setPosition(vehicle.x, vehicle.y);
     this.vehicle.setAlpha(driverOnFoot ? 0.7 : 1);
@@ -203,11 +202,7 @@ export class DriveScene extends Phaser.Scene {
     this.lastX = vehicle.x;
     this.lastY = vehicle.y;
 
-    const traffic = trafficCars(renderGameMs, this.trafficLoops, {
-      x: vehicle.x,
-      y: vehicle.y,
-      heading: vehicle.heading,
-    });
+    const traffic = getSim().trafficForDrive();
     const frameMs = this.game.loop.delta;
     const turnT = 1 - Math.exp(-(frameMs / 1000) * 6);
     const seen = new Set<string>();

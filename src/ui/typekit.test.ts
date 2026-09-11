@@ -13,7 +13,7 @@ vi.mock("./viewFit", () => ({
   VIEWFIT_EVENT: "viewfit",
 }));
 
-import { capsTracking, isAllCaps, overlayStroke, parseFontPx, typeResolution } from "./typeMetrics";
+import { capsTracking, isAllCaps, isCoarsePointer, overlayStroke, parseFontPx, typeResolution } from "./typeMetrics";
 import { __devFitMeasureCount, fitTypeToBox } from "./typekit";
 
 const typekitSrc = readFileSync(new URL("./typekit.ts", import.meta.url), "utf8").replace(/\r\n/g, "\n");
@@ -99,6 +99,25 @@ describe("typeResolution", () => {
 
   it("caps at 8 so 64px display type does not allocate huge canvases", () => {
     expect(typeResolution({ dpr: 3, fit: 3, objectScale: 4 })).toBe(8);
+  });
+
+  it("caps resolution at 3 on coarse pointer so DPR 3 does not upload a 6× canvas", () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query.includes("coarse"),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+    expect(isCoarsePointer()).toBe(true);
+    expect(typeResolution({ dpr: 3, fit: 1, objectScale: 1 })).toBeLessThanOrEqual(3);
+    expect(typeResolution({ dpr: 3, fit: 1, objectScale: 1 })).toBe(3);
+    expect(typeResolution({ dpr: 2, fit: 1, objectScale: 1 })).toBeLessThanOrEqual(3);
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps desktop resolution at 4–8 for sharp type", () => {
+    expect(typeResolution({ dpr: 2, fit: 1, objectScale: 1 })).toBe(4);
+    expect(typeResolution({ dpr: 3, fit: 1, objectScale: 1 })).toBe(6);
   });
 });
 

@@ -19,10 +19,130 @@ import { Color } from "./theme";
  * folds padding into the measured box the frame is grown from.
  */
 const ACCENT = "signAccent";
+const PUMP_REGISTRY = "kindlingSignPlaquePump";
 
 export interface SignTextOptions extends UiTextOptions {
   /** Inner ring colour, for state the copy alone cannot carry. Defaults to leaf green. */
   accent?: number;
+}
+
+type SignPlaqueEntry = {
+  text: Phaser.GameObjects.Text;
+  plaque: Phaser.GameObjects.Graphics;
+  scene: Phaser.Scene;
+  lastPaintKey: string;
+  dirty: boolean;
+};
+
+class SceneSignPlaquePump {
+  private readonly scene: Phaser.Scene;
+  private readonly entries = new Set<SignPlaqueEntry>();
+  private hooked = false;
+  private anyDirty = false;
+
+  constructor(scene: Phaser.Scene) {
+    this.scene = scene;
+  }
+
+  register(text: Phaser.GameObjects.Text, plaque: Phaser.GameObjects.Graphics): SignPlaqueEntry {
+    const entry: SignPlaqueEntry = {
+      text,
+      plaque,
+      scene: this.scene,
+      lastPaintKey: "",
+      dirty: true,
+    };
+    this.entries.add(entry);
+    text.setData(PUMP_REGISTRY, entry);
+    this.hookText(text, entry);
+    this.ensureHook();
+    this.anyDirty = true;
+    return entry;
+  }
+
+  markDirty(entry: SignPlaqueEntry): void {
+    entry.dirty = true;
+    this.anyDirty = true;
+  }
+
+  unregister(entry: SignPlaqueEntry): void {
+    this.entries.delete(entry);
+    entry.text.data.remove(PUMP_REGISTRY);
+  }
+
+  private ensureHook(): void {
+    if (this.hooked) return;
+    this.hooked = true;
+    this.scene.events.on(Phaser.Scenes.Events.PRE_RENDER, this.onPreRender);
+    this.scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scene.events.off(Phaser.Scenes.Events.PRE_RENDER, this.onPreRender);
+      this.scene.registry.remove(PUMP_REGISTRY);
+    });
+  }
+
+  private onPreRender = (): void => {
+    if (!this.anyDirty) return;
+    let stillDirty = false;
+    for (const entry of this.entries) {
+      if (!entry.dirty) continue;
+      syncPlaque(entry);
+      if (entry.dirty) stillDirty = true;
+    }
+    this.anyDirty = stillDirty;
+  };
+
+  private hookText(text: Phaser.GameObjects.Text, entry: SignPlaqueEntry): void {
+    const mark = (): void => this.markDirty(entry);
+    const rawSetText = text.setText.bind(text);
+    text.setText = ((value: string | string[]) => {
+      const out = rawSetText(value);
+      mark();
+      return out;
+    }) as typeof text.setText;
+    const rawSetPosition = text.setPosition.bind(text);
+    text.setPosition = ((x?: number, y?: number, z?: number, w?: number) => {
+      const out = rawSetPosition(x, y, z, w);
+      mark();
+      return out;
+    }) as typeof text.setPosition;
+    const rawSetVisible = text.setVisible.bind(text);
+    text.setVisible = ((value: boolean) => {
+      const out = rawSetVisible(value);
+      mark();
+      return out;
+    }) as typeof text.setVisible;
+    const rawSetAlpha = text.setAlpha.bind(text);
+    text.setAlpha = ((value?: number) => {
+      const out = rawSetAlpha(value);
+      mark();
+      return out;
+    }) as typeof text.setAlpha;
+    const rawSetDepth = text.setDepth.bind(text);
+    text.setDepth = ((value: number) => {
+      const out = rawSetDepth(value);
+      mark();
+      return out;
+    }) as typeof text.setDepth;
+    const rawSetOrigin = text.setOrigin.bind(text);
+    text.setOrigin = ((x?: number, y?: number) => {
+      const out = rawSetOrigin(x, y);
+      mark();
+      return out;
+    }) as typeof text.setOrigin;
+  }
+}
+
+function pumpFor(scene: Phaser.Scene): SceneSignPlaquePump {
+  let pump = scene.registry.get(PUMP_REGISTRY) as SceneSignPlaquePump | undefined;
+  if (!pump) {
+    pump = new SceneSignPlaquePump(scene);
+    scene.registry.set(PUMP_REGISTRY, pump);
+  }
+  return pump;
+}
+
+function entryFor(text: Phaser.GameObjects.Text): SignPlaqueEntry | undefined {
+  return text.getData(PUMP_REGISTRY) as SignPlaqueEntry | undefined;
 }
 
 /**
@@ -100,6 +220,42 @@ function paint(plaque: Phaser.GameObjects.Graphics, text: Phaser.GameObjects.Tex
   }
 }
 
+function syncPlaque(entry: SignPlaqueEntry): void {
+  const { text, plaque, scene } = entry;
+  if (!text.visible) {
+    const hiddenKey = ["h", text.visible, text.alpha, accentOf(text), text.depth].join(":");
+    if (hiddenKey === entry.lastPaintKey) {
+      entry.dirty = false;
+      return;
+    }
+    entry.lastPaintKey = hiddenKey;
+    reparent(plaque, text, scene);
+    paint(plaque, text);
+    entry.dirty = false;
+    return;
+  }
+  const key = [
+    text.visible,
+    text.alpha,
+    accentOf(text),
+    text.x,
+    text.y,
+    text.width,
+    text.height,
+    text.originX,
+    text.originY,
+    text.depth,
+  ].join(":");
+  if (key === entry.lastPaintKey) {
+    entry.dirty = false;
+    return;
+  }
+  entry.lastPaintKey = key;
+  reparent(plaque, text, scene);
+  paint(plaque, text);
+  entry.dirty = false;
+}
+
 /**
  * A text box on a sign plaque. Returns the `Text` itself, so call sites keep chaining
  * `setOrigin` / `setDepth` / `setVisible` and keep calling `setText` as they did with a
@@ -123,41 +279,13 @@ export function addSignText(
   if (accent !== undefined) text.setData(ACCENT, accent);
 
   const plaque = scene.add.graphics();
-  let lastPaintKey = "";
-  const sync = (): void => {
-    if (!text.visible) {
-      const hiddenKey = ["h", text.visible, text.alpha, accentOf(text), text.depth].join(":");
-      if (hiddenKey === lastPaintKey) return;
-      lastPaintKey = hiddenKey;
-      reparent(plaque, text, scene);
-      paint(plaque, text);
-      return;
-    }
-    const key = [
-      text.visible,
-      text.alpha,
-      accentOf(text),
-      text.x,
-      text.y,
-      text.width,
-      text.height,
-      text.originX,
-      text.originY,
-      text.depth,
-    ].join(":");
-    if (key === lastPaintKey) return;
-    lastPaintKey = key;
-    reparent(plaque, text, scene);
-    paint(plaque, text);
-  };
-  // PRE_RENDER, not the scene's update: it is the last hook before the frame is drawn,
-  // so it sees the position and copy the scene just set rather than last frame's.
-  scene.events.on(Phaser.Scenes.Events.PRE_RENDER, sync);
+  const pump = pumpFor(scene);
+  const entry = pump.register(text, plaque);
   text.once(Phaser.GameObjects.Events.DESTROY, () => {
-    scene.events.off(Phaser.Scenes.Events.PRE_RENDER, sync);
+    pump.unregister(entry);
     plaque.destroy();
   });
-  sync();
+  syncPlaque(entry);
   return text;
 }
 
@@ -168,4 +296,6 @@ export function addSignText(
  */
 export function setSignAccent(text: Phaser.GameObjects.Text, accent: number = SIGN_BORDER): void {
   text.setData(ACCENT, accent);
+  const entry = entryFor(text);
+  if (entry) pumpFor(text.scene).markDirty(entry);
 }

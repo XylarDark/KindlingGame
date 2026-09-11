@@ -70,7 +70,7 @@ import {
   worldToTile,
   type HouseStop,
 } from "../maps/cityT0";
-import { cityTrafficLoops, driveSpeedForTraffic, trafficCars } from "../maps/traffic";
+import { cityTrafficLoops, driveSpeedForTraffic, trafficCars, type TrafficCarView } from "../maps/traffic";
 import { BACK_DOOR, customerSlotX, DOOR, KEYLEAD } from "../maps/shopT0";
 
 export type PlayerRole = "keyLead" | "driver";
@@ -278,6 +278,8 @@ export class GameSim {
   private nameSeed: number;
   private dropoff: DropoffState | null = null;
   private driveRoute: WorldPoint[] = [];
+  /** Cached destination — skip A* when the stall has not changed. */
+  private driveRouteDestKey = "";
   private driveWaypoint = 0;
   private driveArrived = false;
   private vehicleHeading = SHOP_PARK_HEADING;
@@ -298,6 +300,9 @@ export class GameSim {
   private customerBubbleCache = new Map<string, string>();
   private keyLeadCalloutKey = "";
   private keyLeadCalloutCache: string | null = null;
+  /** One traffic list per sim step — tickDrive slices and DriveScene share it. */
+  private trafficCacheMs = -1;
+  private trafficCache: TrafficCarView[] = [];
 
   constructor(options: SimOptions = {}) {
     const seed = options.seed ?? 1;
@@ -359,6 +364,7 @@ export class GameSim {
     this.input = { dx: 0, dy: 0 };
     this.driveArrived = true;
     this.driveRoute = [];
+    this.driveRouteDestKey = "";
     this.parkHeading = null;
     this.toast = "Shift over. See your results.";
     this.ordersNotice = null;
@@ -395,6 +401,7 @@ export class GameSim {
     this.vehicleHeading = SHOP_PARK_HEADING;
     this.parkHeading = null;
     this.driveRoute = [];
+    this.driveRouteDestKey = "";
     this.driveWaypoint = 0;
     this.driveArrived = false;
     this.orders = [];
@@ -592,7 +599,6 @@ export class GameSim {
     this.touch();
     this.vehicle.x = x;
     this.vehicle.y = y;
-    if (this.playerRole === "driver") this.refreshDriveRoute();
   }
 
   spawnOrder(type: OrderType, opts: { skuId?: string; destinationId?: string; ageOk?: boolean } = {}): Order {
@@ -1232,6 +1238,20 @@ export class GameSim {
     return this.driveRoute;
   }
 
+  /** Traffic car views for this sim step — reused across tickDrive slices and DriveScene. */
+  trafficForDrive(): readonly TrafficCarView[] {
+    const ms = this.clock.gameMs;
+    if (ms !== this.trafficCacheMs) {
+      this.trafficCacheMs = ms;
+      this.trafficCache = trafficCars(ms, cityTrafficLoops(), {
+        x: this.vehicle.x,
+        y: this.vehicle.y,
+        heading: this.vehicleHeading,
+      });
+    }
+    return this.trafficCache;
+  }
+
   private customerBubbleInputsKey(customer: CustomerState): string {
     const order = this.orderById(customer.orderId);
     if (!order) return "";
@@ -1296,16 +1316,27 @@ export class GameSim {
     return { stop: CITY.shopSpawn, street: CITY.shopLot.street, parking: CITY.shopLot.parking };
   }
 
+  private driveDestinationKey(): string {
+    const stopId = this.nextStopId();
+    if (stopId) return `house:${stopId}`;
+    if (this.playerRole === "driver") return "shop";
+    return "";
+  }
+
   private refreshDriveRoute(): void {
     const stall = this.driveTargetStall();
+    const destKey = stall ? this.driveDestinationKey() : "";
     // Pulling away cancels any turn still being made in the stall we are leaving.
     this.parkHeading = null;
     if (!stall) {
       this.driveRoute = [];
+      this.driveRouteDestKey = "";
       this.driveWaypoint = 0;
       this.driveArrived = false;
       return;
     }
+    if (destKey === this.driveRouteDestKey && this.driveRoute.length > 0) return;
+    this.driveRouteDestKey = destKey;
     const target = tileToWorld(stall.stop);
     const from = worldToTile(this.vehicle.x, this.vehicle.y);
     const start = CITY.walkable[from.r]?.[from.c] ? from : CITY.shopSpawn;
@@ -1340,11 +1371,7 @@ export class GameSim {
     const mag = Math.hypot(this.input.dx, this.input.dy) || 1;
     const ux = this.input.dx / mag;
     const uy = this.input.dy / mag;
-    const traffic = trafficCars(this.clock.gameMs, cityTrafficLoops(), {
-      x: this.vehicle.x,
-      y: this.vehicle.y,
-      heading: this.vehicleHeading,
-    });
+    const traffic = this.trafficForDrive();
     const speed = driveSpeedForTraffic(
       { x: this.vehicle.x, y: this.vehicle.y, heading: this.vehicleHeading },
       traffic,
@@ -1373,11 +1400,7 @@ export class GameSim {
 
     // Route points are already on walkable tiles (right-lane offset); trust the path.
     // Match a slower lead car's speed until it clears the lane ahead.
-    const traffic = trafficCars(this.clock.gameMs, cityTrafficLoops(), {
-      x: this.vehicle.x,
-      y: this.vehicle.y,
-      heading: this.vehicleHeading,
-    });
+    const traffic = this.trafficForDrive();
     // The waypoint the van is steering for, not the way it is pointing: a turn across the
     // road has to be seen before it is begun, and mid-turn the nose is still in the old lane.
     const aim = this.driveRoute[this.driveWaypoint];

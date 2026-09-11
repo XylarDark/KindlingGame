@@ -206,4 +206,35 @@ describe("scene perf guards", () => {
     expect(tick).toContain("patchSnapCacheFromTick");
     expect(tick).not.toMatch(/tick\(dtMs: number\): void \{\s*if \(this\.shiftEnded\) return;\s*this\.touch\(\)/);
   });
+
+  it("pathfinding uses a heap cache and setVehiclePosition does not repath", () => {
+    const path = read("src/sim/pathfinding.ts");
+    expect(path).toContain("class MinHeap");
+    expect(path).not.toContain("open.sort");
+    const sim = read("src/sim/gameSim.ts");
+    const setPos = sim.slice(sim.indexOf("setVehiclePosition(x: number"), sim.indexOf("spawnOrder(type:"));
+    expect(setPos).not.toContain("refreshDriveRoute");
+    expect(sim).toContain("driveRouteDestKey");
+  });
+
+  it("Boot pre-warms shop→house drive paths under the loading gate", () => {
+    const boot = read("src/scenes/BootScene.ts");
+    expect(boot).toContain("warmDriveDeparturePaths");
+  });
+
+  it("sign plaques share one PRE_RENDER pump per scene", () => {
+    const sign = read("src/ui/signText.ts");
+    expect(sign).toContain("SceneSignPlaquePump");
+    expect(sign).toContain("anyDirty");
+  });
+
+  it("Drive and tickDrive share one trafficCars list per sim step", () => {
+    const sim = read("src/sim/gameSim.ts");
+    expect(sim).toContain("trafficForDrive");
+    expect(sim).toContain("trafficCacheMs");
+    const drive = read("src/scenes/DriveScene.ts");
+    const update = drive.slice(drive.indexOf("update(): void"), drive.indexOf("private paintDayNight"));
+    expect(update).toContain("getSim().trafficForDrive()");
+    expect(update).not.toMatch(/trafficCars\(/);
+  });
 });

@@ -533,3 +533,16 @@ function nsPairContaining(c: number): { west: number; east: number } | null {
   if (isNSStreet(c) && isNSStreet(c - 1)) return { west: c - 1, east: c };
   return null;
 }
+
+/** Boot warm: shop→house depart paths are cache hits on first Hit the road tap. */
+export function warmDriveDeparturePaths(): void {
+  const walkable = CITY.walkable;
+  const start = CITY.shopSpawn;
+  for (const house of CITY.houses) {
+    approachToStall(walkable, start, {
+      stop: house.stop,
+      street: house.street,
+      parking: house.parking,
+    });
+  }
+}

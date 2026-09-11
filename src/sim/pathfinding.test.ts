@@ -1,8 +1,19 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { findPath } from "./pathfinding";
+import { clearPathCache, findPath } from "./pathfinding";
 import { CITY, houseById, pathToHouse, roadTextureKey } from "../maps/cityT0";
 
+const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
+const pathfindingSrc = readFileSync(join(root, "src/sim/pathfinding.ts"), "utf8").replace(/\r\n/g, "\n");
+
 describe("pathfinding", () => {
+  it("uses a binary heap — no open.sort per pop", () => {
+    expect(pathfindingSrc).toContain("class MinHeap");
+    expect(pathfindingSrc).not.toContain("open.sort");
+  });
+
   it("finds a trivial path", () => {
     const grid = [
       [true, true, true],
@@ -12,6 +23,16 @@ describe("pathfinding", () => {
     const path = findPath(grid, { c: 0, r: 0 }, { c: 2, r: 0 });
     expect(path[0]).toEqual({ c: 0, r: 0 });
     expect(path[path.length - 1]).toEqual({ c: 2, r: 0 });
+  });
+
+  it("caches shop→house paths for repeat lookups", () => {
+    clearPathCache();
+    const house = CITY.houses[0]!;
+    const first = findPath(CITY.walkable, CITY.shopSpawn, house.stop);
+    expect(first.length).toBeGreaterThan(1);
+    const second = findPath(CITY.walkable, CITY.shopSpawn, house.stop);
+    expect(second).toEqual(first);
+    clearPathCache();
   });
 
   it("builds a neighborhood with many reachable delivery addresses", () => {
