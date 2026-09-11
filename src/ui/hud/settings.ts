@@ -340,9 +340,6 @@ export class HudSettings {
     const captionHost = signContainer(this.cogCaption);
     // scrollFactor 0 on sign hosts skews input on RenderBudget-shrunk HUD cameras.
     captionHost.setScrollFactor(1);
-    this.cogCaption.setScrollFactor(1);
-    const captionPlaque = this.cogCaption.getData("signPlaque") as Phaser.GameObjects.NineSlice | undefined;
-    captionPlaque?.setScrollFactor(1);
     captionHost.on("pointerdown", toggleSettings);
     this.refreshMusicControls();
     this.refreshFullscreenControl();

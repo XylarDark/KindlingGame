@@ -38,6 +38,8 @@ describe("text boxes are all the counter plaque", () => {
     expect(helper).toContain("SIGN_PAD_Y");
     expect(helper).toMatch(/panelW = Math\.max\(8, w \+ SIGN_PAD_X \* 2\)/);
     expect(helper).toMatch(/padding: undefined/);
+    expect(helper).toContain("glyphLocalBounds");
+    expect(helper).toContain("plaqueCenterFromGlyphs");
   });
 
   it("repaints via one scene pump on copy/accent changes, not every frame for position", () => {
@@ -69,6 +71,9 @@ describe("text boxes are all the counter plaque", () => {
     expect(helper).toContain("export function setSignPosition");
     expect(helper).toContain("export function signContainer");
     expect(helper).toContain("export function syncSignHit");
+    expect(helper).toContain("export function signPlaqueExtents");
+    expect(helper).toContain("export function signYAbove");
+    expect(helper).toContain("export function signYFloor");
   });
 
   it("uses NineSlice panels instead of measured Graphics rings", () => {
@@ -90,6 +95,41 @@ describe("text boxes are all the counter plaque", () => {
     const layout = helper.slice(layoutStart, layoutEnd);
     expect(layout).toContain("setTextLocal(textX, textY)");
     expect(layout).not.toMatch(/text\.setPosition\(textX, textY\)/);
+  });
+
+  it("repairs inner locals even when lastLayoutKey is unchanged", () => {
+    const layoutStart = helper.indexOf("function layoutPlaque(entry: SignPlaqueEntry): void {");
+    if (layoutStart === -1) throw new Error("layoutPlaque not found");
+    const layoutEnd = helper.indexOf("\n}", layoutStart);
+    if (layoutEnd === -1) throw new Error("layoutPlaque end not found");
+    const layout = helper.slice(layoutStart, layoutEnd);
+    expect(layout).toContain("setTextLocal(textX, textY)");
+    expect(layout).toMatch(/setTextLocal\(textX, textY\)[\s\S]*if \(key === entry\.lastLayoutKey\)/);
+  });
+
+  it("patched setPosition moves the host only — never zeroes inner glyph locals", () => {
+    const addStart = helper.indexOf("export function addSignText(");
+    if (addStart === -1) throw new Error("addSignText not found");
+    const addEnd = helper.indexOf("\n}", helper.indexOf("layoutPlaque(entry);", addStart));
+    if (addEnd === -1) throw new Error("addSignText end not found");
+    const add = helper.slice(addStart, addEnd);
+    expect(add).toMatch(/host\.setPosition\(x, y\)/);
+    expect(add).not.toMatch(/rawSetPosition\(0,\s*0/);
+    expect(add).toContain("return text;");
+  });
+
+  it("sets scrollFactor on the host and syncs children from it — never mismatched", () => {
+    const addStart = helper.indexOf("export function addSignText(");
+    if (addStart === -1) throw new Error("addSignText not found");
+    const addEnd = helper.indexOf("\n}", helper.indexOf("layoutPlaque(entry);", addStart));
+    if (addEnd === -1) throw new Error("addSignText end not found");
+    const add = helper.slice(addStart, addEnd);
+    expect(add).toContain("host.setScrollFactor(0)");
+    expect(add).toContain("syncChildScrollFactors(host)");
+    expect(add).not.toMatch(/text\.setScrollFactor/);
+    expect(add).not.toMatch(/plaque\.setScrollFactor/);
+    expect(helper).toContain("syncChildScrollFactors(host)");
+    expect(add).toContain("makeType(scene, 0, 0, content");
   });
 });
 

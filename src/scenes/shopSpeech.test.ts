@@ -39,7 +39,8 @@ describe("speech stays off the models it belongs to", () => {
 
     const hang = between(src, "function hangAboveHead(", "\n}", "hangAboveHead");
     expect(hang, "uses modelHeadTop").toMatch(/modelHeadTop\(model\)/);
-    expect(hang, "subtracts the chip's own half-height").toMatch(/chip\.height \/ 2/);
+    expect(hang, "clears the head using plaque host bounds, not bare Text height").toMatch(/signYAbove\(chip, modelHeadTop\(model\), CUSTOMER_SPEECH_GAP\)/);
+    expect(hang, "does not ignore SIGN_PAD on the 9-slice").not.toMatch(/chip\.height \/ 2/);
     expect(hang, "leaves the standard daylight").toMatch(/CUSTOMER_SPEECH_GAP/);
     expect(hang, "does not walk the display tree").not.toMatch(/getBounds/);
     expect(hang, "takes explicit host x — inner Text x is local under 9-slice hosts").toMatch(

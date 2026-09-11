@@ -111,6 +111,23 @@ describe("doorstep prompt", () => {
     expect(fn).toContain("this.bag.input?.enabled");
     expect(fn).toContain("bagLeft");
     expect(fn).toContain("this.promptAnchorX");
+    expect(fn).toContain("dodgePromptX");
+  });
+
+  it("never anchors prompt Y off the bag — always clears both heads via plaque host", () => {
+    const sync = between(src, "const who = drop.customerName", "if (promptLine !== this.lastPrompt)", "sync prompt anchor");
+    expect(sync).not.toContain("promptAnchorY");
+    expect(sync).not.toContain("bag.displayHeight");
+    expect(sync).toMatch(/this\.promptAnchorX = nextHand \|\| nextPhoto \? this\.bag\.x : this\.customer\.x/);
+
+    const fn = between(src, "private placePrompt(", "\n  }", "placePrompt");
+    expect(fn).toContain("signPlaqueExtents");
+    expect(fn).toContain("plaque.bottomLocal");
+    expect(fn).toContain("plaque.topLocal");
+    expect(fn).toContain("spriteHeadTop(this.driver)");
+    expect(fn).toContain("spriteHeadTop(this.customer)");
+    expect(fn).not.toContain("prompt.displayHeight");
+    expect(fn).not.toContain("promptAnchorY");
   });
 
   it("keeps prompt chips compact with short copy", () => {
@@ -124,12 +141,12 @@ describe("doorstep prompt", () => {
     expect(constant("DOOR_CHIP_GAP")).toBe(36);
   });
 
-  it("still floors the chip against the top safe inset", () => {
+  it("still floors the chip against the top safe inset using plaque bounds", () => {
     // A taller chip pushes harder on this clamp; losing it puts the prompt under the
     // notch on a short viewport.
     const fn = between(src, "private placePrompt(", "\n  }", "placePrompt");
-    expect(fn).toContain("this.insetTop + this.prompt.displayHeight + DOOR_CHIP_GAP");
-    expect(fn).toContain("Math.max(floor,");
+    expect(fn).toContain("this.insetTop + DOOR_CHIP_GAP - plaque.topLocal");
+    expect(fn).toContain("Math.max(");
   });
 });
 

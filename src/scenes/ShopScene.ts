@@ -49,7 +49,7 @@ import { nextShopHint } from "../sim/tutorialHints";
 import { driverReadyCopy } from "../ui/copy";
 import { readyTally, receiptSlips } from "../ui/receipts";
 import { wireHover } from "../ui/chrome";
-import { addSignText, setSignAccent, setSignPosition } from "../ui/signText";
+import { addSignText, setSignAccent, setSignPosition, signYAbove } from "../ui/signText";
 import { addUiText } from "../ui/text";
 import {
   Color,
@@ -121,7 +121,7 @@ function modelHeadTop(model: Phaser.GameObjects.Image): number {
  * that showed. Recompute chip Y when text changes (height) or the model moves.
  */
 function hangAboveHead(chip: Phaser.GameObjects.Text, model: Phaser.GameObjects.Image, x: number): void {
-  setSignPosition(chip, x, modelHeadTop(model) - CUSTOMER_SPEECH_GAP - chip.height / 2);
+  setSignPosition(chip, x, signYAbove(chip, modelHeadTop(model), CUSTOMER_SPEECH_GAP));
 }
 
 export class ShopScene extends Phaser.Scene {
