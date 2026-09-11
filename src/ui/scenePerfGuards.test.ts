@@ -16,10 +16,10 @@ describe("scene perf guards", () => {
   it("Drive and Door skip PRE_RENDER / paint when inactive", () => {
     const drive = read("src/scenes/DriveScene.ts");
     const door = read("src/scenes/DoorScene.ts");
-    expect(drive).toContain("if (!this.sys.isActive()) return");
-    expect(drive).toMatch(/onPreRenderDayNight[\s\S]*if \(!this\.sys\.isActive\(\)\) return/);
+    expect(drive).toMatch(/if \(!this\.sys\.isActive\(\) \|\| this\.sys\.isSleeping\(\)\) return/);
+    expect(drive).toMatch(/onPreRenderDayNight[\s\S]*if \(!this\.sys\.isActive\(\) \|\| this\.sys\.isSleeping\(\)\) return/);
     expect(door).toContain("onPreRenderDayNight");
-    expect(door).toContain("if (!this.sys.isActive()) return");
+    expect(door).toMatch(/if \(!this\.sys\.isActive\(\) \|\| this\.sys\.isSleeping\(\)\) return/);
     const doorSync = door.slice(door.indexOf("private sync(snap"), door.indexOf("private paintDoorDayNight"));
     expect(doorSync).not.toContain("applyDayNight");
   });

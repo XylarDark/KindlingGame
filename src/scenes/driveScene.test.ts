@@ -28,7 +28,7 @@ describe("DriveScene grade throttle and dirty guards", () => {
 
   it("skips paintDayNight when inactive", () => {
     const paint = src.slice(src.indexOf("private paintDayNight"), src.indexOf("private paintNightGlow"));
-    expect(paint).toContain("if (!this.sys.isActive()) return");
+    expect(paint).toMatch(/if \(!this\.sys\.isActive\(\) \|\| this\.sys\.isSleeping\(\)\) return/);
   });
 
   it("removes PRE_RENDER day/night on SHUTDOWN", () => {
@@ -91,6 +91,6 @@ describe("DoorScene grade throttle", () => {
     const block = src.slice(src.indexOf("private paintDoorDayNight"), src.indexOf("function doorFlashPhase"));
     expect(block).toContain("shouldApplyGrade");
     expect(block).toContain("applyDayNight");
-    expect(block).toContain("if (!this.sys.isActive()) return");
+    expect(block).toMatch(/if \(!this\.sys\.isActive\(\) \|\| this\.sys\.isSleeping\(\)\) return/);
   });
 });

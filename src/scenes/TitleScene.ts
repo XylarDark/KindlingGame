@@ -18,6 +18,7 @@ import { HOWTO_STEPS, PAUSE_HINT, WELCOME_HINT, WELCOME_TITLE } from "../ui/copy
 import { setPwaIdle } from "../pwaUpdate";
 import { presentInstallCoach } from "../ui/installCoach";
 import { hideLoading, showLoading } from "../ui/loadingGate";
+import { loadWorldScenes } from "./worldScenes";
 import { getRenderBudget, syncSceneRenderCamera } from "../ui/renderBudget";
 import { SIGN_FRAME_W, signPlaqueRings } from "../ui/signPlaque";
 import { addUiText } from "../ui/text";
@@ -382,6 +383,7 @@ export class TitleScene extends Phaser.Scene {
       // Shop may have been paused mid-warm — recompile shop grades before play.
       showLoading({ mode: "boot", stage: "Shaders" });
       await this.warmShopPostFx();
+      await loadWorldScenes(this.game);
       for (const key of keys) {
         showLoading({ mode: "boot", stage: key === "drive" ? "Map" : "Door" });
         await this.warmAndSleepScene(key);

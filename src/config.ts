@@ -1,7 +1,5 @@
 import Phaser from "phaser";
 import { BootScene } from "./scenes/BootScene";
-import { DoorScene } from "./scenes/DoorScene";
-import { DriveScene } from "./scenes/DriveScene";
 import { HudScene } from "./scenes/HudScene";
 import { ShopScene } from "./scenes/ShopScene";
 import { TitleScene } from "./scenes/TitleScene";
@@ -44,5 +42,6 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
     // Desktop target; coarse phones override limit/target to 30 in main.ts.
     target: 60,
   },
-  scene: [BootScene, ShopScene, DriveScene, DoorScene, HudScene, TitleScene],
+  // Drive + Door load via loadWorldScenes() after Shop/Title warm — smaller first graph.
+  scene: [BootScene, ShopScene, HudScene, TitleScene],
 };

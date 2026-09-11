@@ -30,10 +30,12 @@ import { ackTap, releaseTapAck } from "../input/tapAck";
 import { advanceSimClock } from "../sim/kindlingClock";
 import { syncSceneRenderCamera, tickRenderBudget } from "../ui/renderBudget";
 import { updateFeelMeter } from "../ui/feelMeter";
+import { notePerfRawDelta } from "../ui/perfProbe";
 import { Color, MENU_TYPE_FIT, MSG_TYPE_FIT, scaleMsgBox, scaleMsgPx, Type } from "../ui/theme";
 import { typeRolePx } from "../ui/typeScale";
 import { worldToScreen } from "../ui/worldProject";
-import { PIN_CYCLE_MS } from "./DriveScene";
+import { PIN_CYCLE_MS } from "./driveConstants";
+import { loadWorldScenes } from "./worldScenes";
 import { designHudInset, HUD_TOUCH_MIN_DESIGN, readCssSafeArea, VIEWFIT_EVENT } from "../ui/viewFit";
 import { HudReadouts } from "../ui/hud/readouts";
 import { HudSettings } from "../ui/hud/settings";
@@ -242,6 +244,7 @@ export class HudScene extends Phaser.Scene {
     });
     const snap = sim.snapshot();
     tickRenderBudget(this.game.loop.actualFps, performance.now());
+    notePerfRawDelta(rawDelta);
     updateFeelMeter(this.game, { rawDeltaMs: rawDelta, sceneDeltaMs: delta });
     if (snap.shiftEnded !== this.pwaIdleShiftEnded) {
       this.pwaIdleShiftEnded = snap.shiftEnded;
@@ -573,7 +576,10 @@ export class HudScene extends Phaser.Scene {
 
   private syncDriveScene(snap: SimSnapshot): void {
     if (snap.playerRole !== "driver") {
-      this.lastDriveSceneKey = "";
+      if (this.lastDriveSceneKey !== "__shop__") {
+        this.lastDriveSceneKey = "__shop__";
+        this.ensureShopVisible();
+      }
       return;
     }
     const key = snap.dropoff.phase;
@@ -581,8 +587,10 @@ export class HudScene extends Phaser.Scene {
     this.lastDriveSceneKey = key;
     if (this.scene.isActive("shop") && !this.scene.isSleeping("shop")) this.scene.sleep("shop");
     if (snap.dropoff.phase === "atDoor") return;
-    if (this.scene.isSleeping("drive")) this.scene.wake("drive");
-    else if (!this.scene.isActive("drive")) this.scene.launch("drive");
+    void loadWorldScenes(this.game).then(() => {
+      if (this.scene.isSleeping("drive")) this.scene.wake("drive");
+      else if (!this.scene.isActive("drive")) this.scene.launch("drive");
+    });
   }
 
   private makeResults(): void {
@@ -780,8 +788,10 @@ export class HudScene extends Phaser.Scene {
       const doorUp = this.scene.isActive("door") && !this.scene.isSleeping("door");
       if (wantDoor && !doorUp) {
         this.scene.sleep("drive");
-        if (this.scene.isSleeping("door")) this.scene.wake("door");
-        else this.scene.launch("door");
+        void loadWorldScenes(this.game).then(() => {
+          if (this.scene.isSleeping("door")) this.scene.wake("door");
+          else if (!this.scene.isActive("door")) this.scene.launch("door");
+        });
       } else if (!wantDoor && doorUp) {
         this.scene.sleep("door");
         this.idWasShowing = false;
@@ -790,7 +800,9 @@ export class HudScene extends Phaser.Scene {
         this.idCard.idPanel.setVisible(false);
         this.idCard.idBg.disableInteractive();
         getSim().releaseDropoffConfirm();
-        if (snap.playerRole === "driver" && this.scene.isSleeping("drive")) this.scene.wake("drive");
+        if (snap.playerRole === "driver" && this.scene.isSleeping("drive")) {
+          void loadWorldScenes(this.game).then(() => this.scene.wake("drive"));
+        }
       }
     }
     const topMode: "id" | "play" | "hud" = wantDoor ? (showId ? "id" : "play") : "hud";
