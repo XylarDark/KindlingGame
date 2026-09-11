@@ -43,6 +43,32 @@
 
 Promo helpers: `?shot=drive|door`, `scripts/promo-capture.ts`, `scripts/phone-capture.ts`.
 
+### Runtime perf probe (`kindlingPerfProbe`)
+
+Measure one shop second (or any window) from an isolated capture lane — not vibes, counters:
+
+| Field | Source |
+|-------|--------|
+| `actualFps` | `game.loop.actualFps` |
+| `p95RawDeltaMs` | rolling p95 of `game.loop.rawDelta` (120 frames) |
+| `plaquePumpCount` | sign plaque `PRE_RENDER` relayouts (`signText` pump) |
+| `setTextCount` | hooked `Text.setText` on sign plaques |
+| `windowMs` | ms since last `reset()` |
+| `sceneKey` | first active, non-sleeping scene |
+
+Dev handle (after boot): `window.kindlingPerfProbe.reset()` then `window.kindlingPerfProbe.sample()`.
+
+Example one-second shop window via agent-shot:
+
+```text
+npx tsx scripts/agent-shot.ts --lane 3 --start-clicks 2 --ready-scene shop \
+  --step 'eval:window.kindlingPerfProbe.reset()' \
+  --step 'wait:1000' \
+  --step 'eval:JSON.stringify(window.kindlingPerfProbe.sample())'
+```
+
+Pair with `?meter=1` when you also want scene Δ, fixed-step backlog, and tier from `kindlingClock.stats()` / the feel overlay.
+
 ---
 
 ## 4. Evidence index
