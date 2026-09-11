@@ -54,12 +54,14 @@ describe("HUD sign attachment guards", () => {
 
   it("keeps the settings caption off the right edge and above the cog column", () => {
     const layout = between(settings, "layout(inset: SafeInset): void {", "\n  }", "settings layout");
+    expect(layout).toContain("hudSceneViewport");
     expect(layout).toContain("cogCaptionX");
     expect(layout).toContain("cogCaptionY");
     expect(layout).toContain("HUD_COG_CAPTION_BOX.w");
     expect(layout).toContain("Phaser.Math.Clamp");
     expect(layout).toMatch(/setSignPosition\(this\.cogCaption, cogCaptionX, cogCaptionY\)/);
     expect(layout).not.toContain("setSignPosition(this.cogCaption, 0, 0)");
+    expect(layout).not.toMatch(/GAME_WIDTH - inset\.right - HUD_COG_CAPTION_BOX/);
     const create = between(settings, "create(): void {", "\n  }", "settings create");
     expect(create).not.toMatch(/addSignText\([^,]+,\s*0,\s*0,\s*"Settings"/);
   });

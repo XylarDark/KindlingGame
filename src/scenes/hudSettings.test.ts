@@ -78,6 +78,15 @@ describe("settings cog panel", () => {
     expect(create).toMatch(/\.setDisplaySize\(cogSize, cogSize\)/);
   });
 
+  it("anchors settings chrome to the live HUD viewport when RenderBudget shrinks the buffer", () => {
+    const layout = between(settings, "layout(inset: SafeInset): void {", "\n  }", "settings layout");
+    expect(layout).toContain("hudSceneViewport(this.scene)");
+    expect(layout).toContain("syncViewportChrome(viewW, viewH)");
+    expect(layout).toMatch(/const cogX = viewW - 24 - inset\.right/);
+    expect(layout).toMatch(/const cogY = viewH - 20 - inset\.bottom/);
+    expect(layout).not.toMatch(/const cogX = GAME_WIDTH - 24 - inset\.right/);
+  });
+
   it("keeps a hud button's hit area on the box it paints", () => {
     const paint = between(chrome, "container.setSize(w, h);", "container.input!.cursor", "addHudButton paint");
     expect(paint).toContain("left + container.displayOriginX");

@@ -12,7 +12,7 @@ import { addUiText } from "../text";
 import { settingsGeom, type SettingsGeom } from "../settingsGeom";
 import { Color, HUD_TYPE_FIT, MENU_TYPE_FIT, scaleChromePx } from "../theme";
 import type { SafeInset } from "../viewFit";
-import { HUD_TOUCH_MIN_DESIGN } from "../viewFit";
+import { hudSceneViewport, HUD_TOUCH_MIN_DESIGN } from "../viewFit";
 import {
   HUD_COG_CAPTION_BOX,
   HUD_COG_CAPTION_PAD,
@@ -341,16 +341,18 @@ export class HudSettings {
   }
 
   layout(inset: SafeInset): void {
+    const { width: viewW, height: viewH } = hudSceneViewport(this.scene);
+    this.syncViewportChrome(viewW, viewH);
     const cogSize = HUD_TOUCH_MIN_DESIGN;
-    const cogX = GAME_WIDTH - 24 - inset.right;
-    const cogY = GAME_HEIGHT - 20 - inset.bottom;
+    const cogX = viewW - 24 - inset.right;
+    const cogY = viewH - 20 - inset.bottom;
     this.cog.setPosition(cogX, cogY);
     this.cog.setDisplaySize(cogSize, cogSize);
     syncItemHit(this.cog);
     const cogCaptionX = Phaser.Math.Clamp(
       cogX - cogSize / 2,
       inset.left + HUD_COG_CAPTION_BOX.w / 2 + 8,
-      GAME_WIDTH - inset.right - HUD_COG_CAPTION_BOX.w / 2 - 8,
+      viewW - inset.right - HUD_COG_CAPTION_BOX.w / 2 - 8,
     );
     const cogCaptionY = Math.max(inset.top + HUD_COG_CAPTION_BOX.h + 8, cogY - cogSize - 8);
     setSignPosition(this.cogCaption, cogCaptionX, cogCaptionY);
@@ -358,6 +360,15 @@ export class HudSettings {
     this.settingsPanel.setPosition(cogX - SETTINGS_W, panelTop);
     const volBounds = this.volumeTrack.getBounds();
     this.volumeTrackBounds = { left: volBounds.left, width: volBounds.width };
+  }
+
+  /** Dim spans the live HUD viewport — resize tracks RenderBudget demotion. */
+  private syncViewportChrome(viewW: number, viewH: number): void {
+    this.settingsDim.setSize(viewW, viewH).setPosition(viewW / 2, viewH / 2);
+    const input = this.settingsDim.input;
+    if (input?.hitArea && typeof (input.hitArea as Phaser.Geom.Rectangle).setTo === "function") {
+      (input.hitArea as Phaser.Geom.Rectangle).setTo(0, 0, viewW, viewH);
+    }
   }
 
   armSettingsDim(on: boolean): void {

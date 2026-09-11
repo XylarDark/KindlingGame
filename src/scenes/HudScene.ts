@@ -259,11 +259,8 @@ export class HudScene extends Phaser.Scene {
     this.readouts.layoutReadoutColumn(inset);
     this.readouts.placeReadouts();
     this.hudSettings.layout(inset);
-    const cogSize = HUD_TOUCH_MIN_DESIGN;
-    const cogX = GAME_WIDTH - 24 - inset.right;
-    const cogY = GAME_HEIGHT - 20 - inset.bottom;
-    const cogLeft = cogX - cogSize;
-    const cogTop = cogY - cogSize;
+    const cogLeft = this.hudSettings.cog.x - this.hudSettings.cog.displayWidth;
+    const cogTop = this.hudSettings.cog.y - this.hudSettings.cog.displayHeight;
     this.phoneWidget.layout(inset, cogLeft, cogTop);
     setSignPosition(this.toastText, GAME_WIDTH / 2 - 40, bottom);
     this.padCenter = { x: 196 + inset.left, y: GAME_HEIGHT - 220 - inset.bottom };

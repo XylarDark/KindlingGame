@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import {
@@ -15,6 +16,7 @@ import {
   cssPxFromDesign,
   cssPxToDesign,
   designHudInset,
+  hudSceneViewport,
   designLayoutInset,
   designSafeInset,
   displayScale,
@@ -227,5 +229,21 @@ describe("stageContainScale", () => {
     expect(getStageContainScale()).toBeCloseTo(0.42, 6);
     setStageContainScale(1);
     expect(getStageContainScale()).toBe(1);
+  });
+});
+
+describe("hudSceneViewport", () => {
+  it("reads the live camera size instead of design GAME_* constants", () => {
+    const viewFit = readFileSync(new URL("./viewFit.ts", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+    expect(viewFit).toContain("export function hudSceneViewport");
+    expect(viewFit).toContain("cam?.width ?? scene.scale.width ?? GAME_WIDTH");
+    const midW = Math.round(GAME_WIDTH * 0.85);
+    const scene = {
+      cameras: { main: { width: midW, height: Math.round(GAME_HEIGHT * 0.85) } },
+      scale: { width: midW, height: Math.round(GAME_HEIGHT * 0.85) },
+    };
+    const vp = hudSceneViewport(scene as never);
+    expect(vp.width).toBe(midW);
+    expect(vp.width).toBeLessThan(GAME_WIDTH);
   });
 });
