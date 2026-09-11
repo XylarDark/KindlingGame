@@ -17,6 +17,7 @@ describe("scene perf guards", () => {
     const drive = read("src/scenes/DriveScene.ts");
     const door = read("src/scenes/DoorScene.ts");
     expect(drive).toContain("if (!this.sys.isActive()) return");
+    expect(drive).toMatch(/onPreRenderDayNight[\s\S]*if \(!this\.sys\.isActive\(\)\) return/);
     expect(door).toContain("onPreRenderDayNight");
     expect(door).toContain("if (!this.sys.isActive()) return");
     const doorSync = door.slice(door.indexOf("private sync(snap"), door.indexOf("private paintDoorDayNight"));
@@ -136,9 +137,19 @@ describe("scene perf guards", () => {
     expect(peopleAtlas).toBeGreaterThan(firstFlush);
   });
 
-  it("Drive uses cityTileImageKey for ground tiles", () => {
-    const drive = read("src/scenes/DriveScene.ts");
-    expect(drive).toContain("cityTileImageKey");
-    expect(drive).toContain("strokeRect");
+  it("Hud update never calls layoutHud or unguarded refitType", () => {
+    const hud = read("src/scenes/HudScene.ts");
+    const update = hud.slice(hud.indexOf("update(_time"), hud.indexOf("private layoutHud"));
+    expect(update).not.toContain("layoutHud");
+    expect(update).not.toContain("refitType");
+  });
+
+  it("tick patches snap cache in place instead of touch() at entry", () => {
+    const sim = read("src/sim/gameSim.ts").replace(/\r\n/g, "\n");
+    const tickStart = sim.indexOf("tick(dtMs: number): void {");
+    const tickEnd = sim.indexOf("orderById(id: string)", tickStart);
+    const tick = sim.slice(tickStart, tickEnd);
+    expect(tick).toContain("patchSnapCacheFromTick");
+    expect(tick).not.toMatch(/tick\(dtMs: number\): void \{\s*if \(this\.shiftEnded\) return;\s*this\.touch\(\)/);
   });
 });

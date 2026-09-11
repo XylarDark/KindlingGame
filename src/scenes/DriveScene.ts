@@ -80,7 +80,10 @@ export class DriveScene extends Phaser.Scene {
   private lastLotGlowKey = "";
   private lastVanToast = "";
   private lastShopCaptionKey = "";
-  private onPreRenderDayNight = (): void => this.paintDayNight(getSim().snapshot());
+  private onPreRenderDayNight = (): void => {
+    if (!this.sys.isActive()) return;
+    this.paintDayNight(getSim().snapshot());
+  };
   private trafficLoops: TrafficLoop[] = [];
   private trafficSprites: Phaser.GameObjects.Image[] = [];
   private trafficAngles = new Map<string, number>();

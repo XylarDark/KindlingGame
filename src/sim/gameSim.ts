@@ -686,7 +686,6 @@ export class GameSim {
 
   tick(dtMs: number): void {
     if (this.shiftEnded) return;
-    this.touch();
     this.clock.tick(dtMs);
     if (this.clock.gameMs >= SHIFT_MS) {
       this.endShift();
@@ -713,6 +712,53 @@ export class GameSim {
     if (this.playerRole === "driver") this.tickCounterCover(dtMs);
     this.tickTimers();
     this.tickSpawns();
+    this.patchSnapCacheFromTick();
+  }
+
+  /**
+   * Motion during tick changes gameMs and entity positions every frame; rebuilding the
+   * full snapshot (customer bubbles, order views, …) on each tick was the fetch-walk stall.
+   * Patch the cache in place when it exists; discrete mutations still call touch().
+   */
+  private patchSnapCacheFromTick(): void {
+    const c = this.snapCache;
+    if (!c) return;
+    if (c.customers.length !== this.customers.length) {
+      this.touch();
+      return;
+    }
+    c.gameMs = this.clock.gameMs;
+    c.clockLabel = formatGameClock(this.clock.gameMs);
+    c.keyLead.x = this.keyLeadX;
+    c.keyLead.facing = this.keyLeadFacing;
+    c.keyLead.phase = this.keyLeadPhase;
+    c.keyLead.visible = this.keyLeadPhase !== "inBack";
+    c.handSkuId = this.handSkuId;
+    c.handSkuName = this.handSkuId ? (skuById(this.catalog, this.handSkuId)?.name ?? null) : null;
+    const selected = this.selectedOrderId ? this.orderById(this.selectedOrderId) : undefined;
+    c.awaitingBag =
+      !!selected &&
+      selected.type !== "inStore" &&
+      needsFetch(selected) &&
+      this.handSkuId === selected.skuId &&
+      this.keyLeadPhase === "idle";
+    c.keyLeadLine = this.keyLeadCallout(selected);
+    c.ordersNotice = this.playerRole === "keyLead" ? this.ordersNotice : null;
+    for (const src of this.customers) {
+      const dst = c.customers.find((v) => v.orderId === src.orderId);
+      if (!dst) {
+        this.touch();
+        return;
+      }
+      dst.x = src.x;
+    }
+    c.vehicle = { ...this.vehicle, heading: this.vehicleHeading };
+    c.autoDriving = this.playerRole === "driver" && this.dropoff?.phase !== "atDoor" && !this.driveArrived;
+    c.shopCover = this.shopCoverView();
+    c.dropoff = this.toDropoffView();
+    c.run = this.runSnapshot();
+    c.serveLine = this.serveLine();
+    c.driverLine = this.playerRole === "keyLead" ? this.driverLine : null;
   }
 
   orderById(id: string): Order | undefined {
@@ -1366,6 +1412,7 @@ export class GameSim {
           order.arriveAtGameMs = this.clock.gameMs;
           if (!this.selectedOrderId) this.selectedOrderId = order.id;
           this.clearCustomerFeedback(order.id);
+          this.touch();
         } else if (
           order?.type === "pickup" &&
           order.status === "readyForHandoff" &&
@@ -1378,6 +1425,7 @@ export class GameSim {
           } else {
             this.toast = `${order.customerName} is at the counter for pickup.`;
           }
+          this.touch();
         }
         continue;
       }
@@ -1499,6 +1547,7 @@ export class GameSim {
             } else {
               this.toast = `${order.customerName} is here for pickup.`;
             }
+            this.touch();
           }
         } else if (order.status === "readyForHandoff") {
           if (order.arriveAtGameMs === undefined) {
@@ -1916,6 +1965,7 @@ export class GameSim {
 
   private failOrder(order: Order, reason: string): void {
     if (this.shiftEnded) return;
+    this.touch();
     order.status = "failed";
     if (this.playerRole === "driver" && order.type !== "delivery") {
       this.coverLost += 1;

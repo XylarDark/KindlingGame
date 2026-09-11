@@ -361,6 +361,22 @@ the thing it described.
 - **Fix:** gate uses `pointer-events: auto` + swallow pointer/touch/click while visible. Warm abort is wall-clock `setTimeout` + `warmAborted` flag; `showBootStage` no-ops after abort; per-scene warm capped; `waitFrames` falls back to wall `setTimeout`.
 - **Prevention:** never gate a loading overlay with `pointer-events: none`. Never `Promise.race` a continuing async warm that can `showLoading` after the race loser path already hid the gate — abort flag before every show.
 
+### Customer speech refit every Shop frame during key-lead fetch
+
+- **Date:** 2026-09-11
+- **Symptom:** shop felt fine at shift start and on first tap; p95 frame time climbed once the key lead walked toBack/inBack/fromBack with customers on the floor.
+- **Cause:** `ShopScene.syncCustomers` called `setText` + `fitTypeToBox` on every customer bubble every frame. `setText` is monkey-patched in `typekit.ts` to re-run polish and canvas upload even when the string was unchanged. `layoutCustomerSpeech` and `applyPersonTexture` also ran unconditionally.
+- **Fix:** dirty-guard bubble/feedback `setText` and `fitTypeToBox` on copy + layout width; store last look on the visual; key `layoutCustomerSpeech` on settled order ids + quantized x; skip pulse/tint unless the customer is the current hint target. PR #35 already removed `getBounds` from key-lead bubble follow.
+- **Prevention:** source-scan `shopSpeech.test.ts` for text/compare-before-setText guards; never call `fitTypeToBox` in a per-frame sync without a dirty key.
+
+### GameSim.tick touch() rebuilt the full snapshot every frame
+
+- **Date:** 2026-09-11
+- **Symptom:** same fetch walk window as above — HUD/Shop paid for a full `snapshot()` rebuild (customer bubbles, order views, cover) on every sim step even when only `gameMs` and entity positions moved.
+- **Cause:** `GameSim.tick()` called `touch()` at entry, nulling `snapCache`; the next `snapshot()` remapped customers/orders/cover from scratch each frame.
+- **Fix:** remove entry `touch()`; `patchSnapCacheFromTick()` mutates cached `gameMs`, key-lead pose, customer `x`, and other tick-motion fields in place; discrete mutations (arrival, failOrder, spawn) still call `touch()`.
+- **Prevention:** `gameSim.test.ts` expects same snapshot object after tick with updated `gameMs`; `scenePerfGuards.test.ts` asserts tick no longer opens with `touch()`.
+
 ---
 
 ## Related

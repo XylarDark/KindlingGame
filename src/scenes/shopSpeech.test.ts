@@ -58,7 +58,7 @@ describe("speech stays off the models it belongs to", () => {
       /const textDirty = this\.keyLeadBubble\.text !== callout[\s\S]*if \(textDirty\) this\.keyLeadBubble\.setText\(callout\)/,
     );
     expect(sync, "driver text guarded").toMatch(
-      /if \(this\.driverBubble\.text !== driverLine\) this\.driverBubble\.setText\(driverLine\)/,
+      /const driverTextDirty = this\.driverBubble\.text !== driverLine[\s\S]*if \(driverTextDirty\) this\.driverBubble\.setText\(driverLine\)/,
     );
     expect(sync, "no unconditional key-lead setText").not.toMatch(/keyLeadBubble[\s\S]*?\.setText\(callout \?\? ""\)/);
     expect(sync, "hang key-lead only when shown").toMatch(/if \(showKeyLeadBubble\)/);
@@ -66,6 +66,7 @@ describe("speech stays off the models it belongs to", () => {
     expect(sync, "key-lead position quantized").toMatch(/Math\.round\(this\.keyLead\.x\) !== Math\.round\(kx\)/);
     expect(sync, "bubble X quantized").toMatch(/Math\.round\(this\.keyLeadBubble\.x\) !== Math\.round\(bx\)/);
     expect(sync, "bubble Y only when lead moved or copy changed").toMatch(/if \(textDirty \|\| leadMoved\)/);
+    expect(sync, "driver bubble Y only when copy changes").toMatch(/if \(driverTextDirty\) hangAboveHead\(this\.driverBubble/);
   });
 
   it("places customer chips beside settled speakers via layoutCustomerSpeech", () => {
@@ -81,6 +82,29 @@ describe("speech stays off the models it belongs to", () => {
     const sync = between(src, "private syncCustomers(", "private makeHotspots(", "syncCustomers");
     expect(sync, "reads feedback field").toMatch(/customer\.feedback/);
     expect(sync, "feedback chip on visual").toMatch(/feedback\.setText\(note\)/);
+  });
+
+  it("dirty-guards customer bubble setText, fitTypeToBox, applyPersonTexture, and speech layout", () => {
+    const sync = between(src, "private syncCustomers(", "private makeHotspots(", "syncCustomers");
+    expect(sync, "layout keyed on order id + quantized x").toContain("lastCustomerLayoutKey");
+    expect(sync, "layout keyed on order id + quantized x").toContain("Math.round(c.x)");
+    expect(sync, "bubble setText guarded").toMatch(/if \(bubble\.text !== customer\.bubble\) bubble\.setText/);
+    expect(sync, "bubble fit guarded").toMatch(/if \(fitKey !== visual\.bubbleFitKey\)[\s\S]*fitTypeToBox\(bubble/);
+    expect(sync, "look guarded before applyPersonTexture").toMatch(
+      /if \(visual\.look !== customer\.look\)[\s\S]*applyPersonTexture\(visual\.sprite, customer\.look\)/,
+    );
+    expect(sync, "pulse/tint only when focused").toMatch(/if \(focus\)[\s\S]*setTint\(Color\.flash\)/);
+    expect(sync, "hide bubble with setVisible").toMatch(/bubble\.setVisible\(false\)/);
+    expect(sync, "no unconditional applyPersonTexture in else branch").not.toMatch(
+      /\} else \{\s*applyPersonTexture/,
+    );
+  });
+
+  it("shop sync hot path never rebakes typekit or render scale", () => {
+    const sync = between(src, "private sync(snap: SimSnapshot)", "const packNext", "shop sync");
+    expect(sync).not.toContain("bakeStaticShop");
+    expect(sync).not.toContain("applyRenderScale");
+    expect(sync).not.toContain("refreshTypekit");
   });
 });
 
