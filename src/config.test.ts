@@ -24,25 +24,25 @@ describe("game scale config", () => {
     expect(src).toContain("HUD_BUTTON_MIN_H = HUD_TOUCH_MIN_DESIGN");
   });
 
-  it("sizes a height-filled 16:9 stage with Kindling side rails (no fill-stretch)", () => {
+  it("sizes a height-filled 16:9 stage without branded side rails (no fill-stretch)", () => {
     const html = readFileSync(join(root, "index.html"), "utf8");
     expect(html).toContain("object-fit: contain");
     expect(html).not.toContain("object-fit: fill");
-    expect(html).toContain("kindling-rail");
-    expect(html).toContain('id="rail-left"');
-    expect(html).toContain('id="rail-right"');
+    expect(html).not.toContain("kindling-rail");
+    expect(html).not.toContain('id="rail-left"');
+    expect(html).not.toContain('id="rail-right"');
     expect(html).toContain("viewport-fit=cover");
     expect(html).toContain("100dvh");
     expect(html).toContain("no-cache, no-store, must-revalidate");
     expect(html).toMatch(/#kindling-shell \{[\s\S]*?overflow:\s*hidden/);
   });
 
-  it("paints OS chrome as sky, keeping leaf on the side rails", () => {
+  it("paints OS chrome as sky theme (no side rail chrome)", () => {
     const html = readFileSync(join(root, "index.html"), "utf8").replace(/\r\n/g, "\n");
     const manifest = readFileSync(join(root, "public/manifest.webmanifest"), "utf8");
     const config = readFileSync(join(root, "src/config.ts"), "utf8");
     expect(html).toContain('name="theme-color" content="#1b2238"');
-    expect(html).toMatch(/\.kindling-rail \{[\s\S]*?background: #3d6a44/);
+    expect(html).not.toContain("kindling-rail");
     const bodyRule = /html,\s*body \{[^}]+\}/.exec(html);
     if (!bodyRule) throw new Error("html, body rule missing");
     expect(bodyRule[0]).toContain("background: #1b2238");

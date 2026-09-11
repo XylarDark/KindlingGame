@@ -90,8 +90,10 @@ describe("doorstep prompt", () => {
   it("seeds the prompt at 25px through scaleMsgPx, not the generic hudBody role", () => {
     const box = between(src, "this.prompt = addSignText(", ".setOrigin(0.5, 1)", "prompt box");
     expect(box).toContain("doorPromptPx()");
-    expect(box).toContain("scaleMsgBox(720)");
-    expect(box).toContain("scaleMsgBox(113)");
+    expect(box).toContain("DOOR_PROMPT_MAX_W");
+    expect(box).toContain("DOOR_PROMPT_MAX_H");
+    expect(box).toContain("scaleMsgBox(DOOR_PROMPT_MAX_W)");
+    expect(box).toContain("scaleMsgBox(DOOR_PROMPT_MAX_H)");
     expect(box).not.toContain('typeRole: "hudBody"');
   });
 
@@ -108,6 +110,14 @@ describe("doorstep prompt", () => {
     const fn = between(src, "private placePrompt(", "\n  }", "placePrompt");
     expect(fn).toContain("this.bag.input?.enabled");
     expect(fn).toContain("bagLeft");
+    expect(fn).toContain("this.promptAnchorX");
+  });
+
+  it("keeps prompt chips compact with short copy", () => {
+    expect(src).toContain("Photo — tap bag.");
+    expect(src).not.toContain("Tap the bag in their hands");
+    expect(constant("DOOR_PROMPT_MAX_W")).toBeGreaterThanOrEqual(280);
+    expect(constant("DOOR_PROMPT_MAX_W")).toBeLessThanOrEqual(400);
   });
 
   it("lifts the prompt farther above the customer head", () => {

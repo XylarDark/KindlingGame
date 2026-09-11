@@ -5,7 +5,6 @@ import {
   GAME_ASPECT,
   notifyViewfit,
   phaserDisplayScale,
-  RAIL_MIN_CSS_PX,
   readCssSafeArea,
   setStageContainScale,
   setStageFrame,
@@ -61,42 +60,15 @@ export function applyCanvasDisplayScale(game: Phaser.Game): void {
   game.scale.displayScale.set(scale.x, scale.y);
 }
 
-function layoutRails(
-  leftRail: HTMLElement | null,
-  rightRail: HTMLElement | null,
-  railLeft: number,
-  railRight: number,
-  viewH: number,
-): void {
-  const showLeft = railLeft >= RAIL_MIN_CSS_PX;
-  const showRight = railRight >= RAIL_MIN_CSS_PX;
-  if (leftRail) {
-    leftRail.hidden = !showLeft;
-    leftRail.style.width = `${Math.max(0, Math.round(railLeft))}px`;
-    leftRail.style.height = `${Math.round(viewH)}px`;
-    leftRail.style.top = "0px";
-    leftRail.style.left = "0px";
-  }
-  if (rightRail) {
-    rightRail.hidden = !showRight;
-    rightRail.style.width = `${Math.max(0, Math.round(railRight))}px`;
-    rightRail.style.height = `${Math.round(viewH)}px`;
-    rightRail.style.top = "0px";
-    rightRail.style.right = "0px";
-  }
-}
-
 /**
  * Layout the 16:9 playfield.
- * Phones (coarse): height-fill with side rails / side crop — no top letterbox.
+ * Phones (coarse): height-fill with side crop — shell sky fills pillar gaps, no branded rails.
  * Desktop / IDE panes (fine): classic contain so the full stage stays visible.
  */
 export function installMobileShell(game: Phaser.Game): void {
   const shell = document.getElementById("kindling-shell");
   const root = document.getElementById("game-root");
   const gate = document.getElementById("rotate-gate");
-  const leftRail = document.getElementById("rail-left");
-  const rightRail = document.getElementById("rail-right");
   if (!root) return;
 
   const coarse = () => globalThis.matchMedia?.("(pointer: coarse)")?.matches ?? false;
@@ -129,8 +101,6 @@ export function installMobileShell(game: Phaser.Game): void {
     root.style.left = `${sl}px`;
     root.style.top = `${st}px`;
     root.style.transform = "";
-
-    layoutRails(leftRail, rightRail, packed.railLeft, packed.railRight, height);
 
     if (gate) {
       const portrait = isPortraitPhone(width, height, coarse());
