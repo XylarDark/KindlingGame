@@ -32,11 +32,16 @@ function between(text: string, start: string, end: string, what: string): string
 }
 
 describe("speech stays off the models it belongs to", () => {
-  it("hangs a chip off its own rendered height, not a fixed centre offset", () => {
+  it("hangs a chip off displayHeight/origin, not getBounds per frame", () => {
+    const headTop = between(src, "function modelHeadTop(", "\n}", "modelHeadTop");
+    expect(headTop, "derives top from origin and displayHeight").toMatch(/displayHeight \* model\.originY/);
+    expect(headTop, "does not walk the display tree").not.toMatch(/getBounds/);
+
     const hang = between(src, "function hangAboveHead(", "\n}", "hangAboveHead");
-    expect(hang, "reads the model's top edge").toMatch(/model\.getBounds\(\)\.y/);
+    expect(hang, "uses modelHeadTop").toMatch(/modelHeadTop\(model\)/);
     expect(hang, "subtracts the chip's own half-height").toMatch(/chip\.height \/ 2/);
     expect(hang, "leaves the standard daylight").toMatch(/CUSTOMER_SPEECH_GAP/);
+    expect(hang, "does not walk the display tree").not.toMatch(/getBounds/);
 
     for (const speaker of ["keyLeadBubble", "driverBubble"]) {
       expect(src, `${speaker} is hung, not offset`).toMatch(
@@ -44,12 +49,13 @@ describe("speech stays off the models it belongs to", () => {
       );
     }
     expect(src, "no fixed head offsets left in sync").not.toMatch(/setPosition\([^)]*PERSON_DISPLAY_H - \d+\)/);
+    expect(src, "Shop sync never calls getBounds").not.toMatch(/getBounds\(\)/);
   });
 
   it("dirty-guards key-lead and driver bubble setText so fetch walk is not a refit every frame", () => {
     const sync = between(src, "private sync(snap: SimSnapshot)", "const packNext", "shop sync");
     expect(sync, "key-lead text guarded").toMatch(
-      /if \(this\.keyLeadBubble\.text !== callout\) this\.keyLeadBubble\.setText\(callout\)/,
+      /const textDirty = this\.keyLeadBubble\.text !== callout[\s\S]*if \(textDirty\) this\.keyLeadBubble\.setText\(callout\)/,
     );
     expect(sync, "driver text guarded").toMatch(
       /if \(this\.driverBubble\.text !== driverLine\) this\.driverBubble\.setText\(driverLine\)/,
@@ -57,6 +63,9 @@ describe("speech stays off the models it belongs to", () => {
     expect(sync, "no unconditional key-lead setText").not.toMatch(/keyLeadBubble[\s\S]*?\.setText\(callout \?\? ""\)/);
     expect(sync, "hang key-lead only when shown").toMatch(/if \(showKeyLeadBubble\)/);
     expect(sync, "hang driver only when shown").toMatch(/if \(showDriverBubble\)/);
+    expect(sync, "key-lead position quantized").toMatch(/Math\.round\(this\.keyLead\.x\) !== Math\.round\(kx\)/);
+    expect(sync, "bubble X quantized").toMatch(/Math\.round\(this\.keyLeadBubble\.x\) !== Math\.round\(bx\)/);
+    expect(sync, "bubble Y only when lead moved or copy changed").toMatch(/if \(textDirty \|\| leadMoved\)/);
   });
 
   it("places customer chips beside settled speakers via layoutCustomerSpeech", () => {
