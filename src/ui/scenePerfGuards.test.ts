@@ -165,7 +165,7 @@ describe("scene perf guards", () => {
     const cover = hud.slice(hud.indexOf("private paintCover"), hud.indexOf("private tutorialFlashHint"));
     expect(cover).not.toContain("setPosition");
     const layout = hud.slice(hud.indexOf("private layoutHud"), hud.indexOf("private placeReadouts"));
-    expect(layout).toContain("coverText.setPosition");
+    expect(layout).toContain("setSignPosition(this.coverText");
   });
 
   it("Drive PRE_RENDER grades from gameMs and culls traffic before transforms", () => {

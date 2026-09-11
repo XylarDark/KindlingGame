@@ -57,10 +57,14 @@ import {
   HUD_SCORE_PX,
   HUD_TYPE_FIT,
   MENU_TYPE_FIT,
+  MSG_TYPE_FIT,
   scaleChromePx,
+  scaleMsgBox,
+  scaleMsgPad,
+  scaleMsgPx,
   Type,
 } from "../ui/theme";
-import { typeClockPx, typeRolePx } from "../ui/typeScale";
+import { typeRolePx } from "../ui/typeScale";
 import { worldToScreen } from "../ui/worldProject";
 import { PIN_CYCLE_MS } from "./DriveScene";
 import { parseFontPx, retypeSize } from "../ui/typekit";
@@ -72,6 +76,9 @@ import { designHudInset, HUD_TOUCH_MIN_DESIGN, readCssSafeArea, VIEWFIT_EVENT } 
  */
 const MAX_SIM_STEP_MS = 1_000;
 const HUD_CAPTION_PX = 18;
+/** Order banner runs 25% over the ramp — read across the room, mid-task. */
+const hudToastPx = (): string => scaleMsgPx(20);
+const padLabelPx = (): string => scaleMsgPx(16.25);
 const DRIVE_PIN_H = 96;
 const DRIVE_VAN_H = 104;
 const DRIVE_CHIP_GAP = 14;
@@ -368,12 +375,10 @@ export class HudScene extends Phaser.Scene {
     // Readouts sit over bright shop walls AND dark night streets, so contrast comes
     // from an ink outline on the glyphs rather than a chip behind them.
     this.scoreText = addUiText(this, 0, 0, "", {
-      size: typeRolePx("hudTitle"),
-      typeRole: "hudTitle",
+      size: scaleChromePx(HUD_SCORE_PX),
       color: Color.creamHex,
       fontStyle: "700",
       align: "right",
-      noWrap: true,
       ...HUD_TYPE_FIT,
       maxWidth: 360,
       maxHeight: 68,
@@ -387,13 +392,11 @@ export class HudScene extends Phaser.Scene {
     // value's height and wide enough for tracked caps at 44px (164px of glyphs), so
     // clamp-fit leaves the seed alone at the size it was authored for.
     this.scoreCaption = addUiText(this, 0, 0, "SCORE", {
-      size: typeRolePx("hudTitle"),
-      typeRole: "hudTitle",
+      size: scaleChromePx(HUD_SCORE_PX),
       color: Color.creamHex,
       fontStyle: "700",
       align: "right",
       letterSpacing: 2,
-      noWrap: true,
       ...HUD_TYPE_FIT,
       maxWidth: 220,
       maxHeight: 68,
@@ -406,11 +409,9 @@ export class HudScene extends Phaser.Scene {
     this.warmScorePopPool();
 
     this.clockText = addUiText(this, 0, 0, "", {
-      size: typeClockPx(),
-      typeRole: "hudTitle",
+      size: scaleChromePx(HUD_READOUT_PX),
       color: Color.creamHex,
       fontStyle: "700",
-      noWrap: true,
       ...HUD_TYPE_FIT,
       maxWidth: 360,
       maxHeight: 62,
@@ -438,12 +439,14 @@ export class HudScene extends Phaser.Scene {
       maxHeight: PHONE_HEADER_H,
     }).setOrigin(0.5);
     this.phoneStatus = addSignText(this, 0, PHONE_APP.y + PHONE_APP.h - PHONE_STATUS_H / 2, "Tap to call", {
-      size: typeRolePx("hudBody"),
-      typeRole: "hudBody",
+      size: PHONE_STATUS_PX,
       fontStyle: "600",
       align: "center",
       lineSpacing: 2,
       noWrap: true,
+      ...HUD_TYPE_FIT,
+      maxWidth: PHONE_APP.w - 12,
+      maxHeight: PHONE_STATUS_H,
     }).setOrigin(0.5);
     const phoneStatusHost = signContainer(this.phoneStatus);
     // Hit area is the chassis: the transparent button margin must not take taps.
@@ -473,31 +476,36 @@ export class HudScene extends Phaser.Scene {
     this.paintPhoneChrome();
 
     this.toastText = addSignText(this, GAME_WIDTH / 2, GAME_HEIGHT - 36, "", {
-      size: typeRolePx("hudBody"),
-      typeRole: "hudBody",
+      size: hudToastPx(),
       align: "center",
       fontStyle: "600",
-      maxWidth: 900,
+      ...MSG_TYPE_FIT,
+      maxWidth: scaleMsgBox(900),
+      maxHeight: scaleMsgBox(80),
     })
       .setOrigin(0.5, 1)
       .setDepth(20);
 
     // Out on the road the shop is off-screen, so the counter reports in under the score.
     this.coverText = addSignText(this, 0, 0, "", {
-      size: typeRolePx("hudBody"),
-      typeRole: "hudBody",
+      size: scaleMsgPx(13),
       fontStyle: "600",
       noWrap: true,
+      ...MSG_TYPE_FIT,
+      maxWidth: scaleMsgBox(280),
+      maxHeight: scaleMsgBox(40),
     })
       .setOrigin(0, 0)
       .setDepth(20)
       .setVisible(false);
 
     this.doorTitleText = addSignText(this, 0, 0, "", {
-      size: typeRolePx("hudBody"),
-      typeRole: "hudBody",
+      size: scaleMsgPx(16),
       fontStyle: "700",
       noWrap: true,
+      ...MSG_TYPE_FIT,
+      maxWidth: scaleMsgBox(900),
+      maxHeight: scaleMsgBox(48),
     })
       .setOrigin(0, 0.5)
       .setDepth(20)
@@ -548,9 +556,11 @@ export class HudScene extends Phaser.Scene {
     this.drawPad();
     this.padKnob = this.add.circle(this.padCenter.x, this.padCenter.y, 40, Color.cream, 0.92).setDepth(20);
     this.padLabel = addSignText(this, this.padCenter.x, this.padCenter.y - 128, "Heading to stop…", {
-      size: typeRolePx("hudBody"),
-      typeRole: "hudBody",
+      size: padLabelPx(),
       fontStyle: "600",
+      ...MSG_TYPE_FIT,
+      maxWidth: scaleMsgBox(300),
+      maxHeight: scaleMsgBox(50),
     })
       .setOrigin(0.5, 1)
       .setDepth(20);
@@ -850,8 +860,8 @@ export class HudScene extends Phaser.Scene {
     const right = GAME_WIDTH - 28 - inset.right;
     const bottom = GAME_HEIGHT - 40 - inset.bottom;
     this.readoutCorner = { left, right, top: HUD_CORNER_TOP + inset.top };
-    this.coverText.setPosition(left, this.readoutCorner.top + 40);
-    this.doorTitleText.setPosition(left, this.readoutCorner.top + 44);
+    setSignPosition(this.coverText, left, this.readoutCorner.top + 40);
+    setSignPosition(this.doorTitleText, left, this.readoutCorner.top + 44);
     this.placeReadouts();
     const cogSize = HUD_TOUCH_MIN_DESIGN;
     const cogX = GAME_WIDTH - 24 - inset.right;
@@ -859,7 +869,7 @@ export class HudScene extends Phaser.Scene {
     this.cog.setPosition(cogX, cogY);
     this.cog.setDisplaySize(cogSize, cogSize);
     syncItemHit(this.cog);
-    this.cogCaption.setPosition(cogX - cogSize / 2, cogY - cogSize - 8);
+    setSignPosition(this.cogCaption, cogX - cogSize / 2, cogY - cogSize - 8);
     const panelTop = Math.max(inset.top, cogY - cogSize - 32 - this.settingsBox.h);
     this.settingsPanel.setPosition(cogX - SETTINGS_W, panelTop);
 
@@ -873,12 +883,12 @@ export class HudScene extends Phaser.Scene {
     // put a visible 14px more air there than PHONE_COG_GAP asks for.
     this.phone.setPosition(phoneRight - PHONE_CHASSIS.w * 0.5, phoneBottom - PHONE_CHASSIS.h * 0.5);
     // Toast stays clear of the cog column.
-    this.toastText.setPosition(GAME_WIDTH / 2 - 40, bottom);
+    setSignPosition(this.toastText, GAME_WIDTH / 2 - 40, bottom);
     this.padCenter = { x: 196 + inset.left, y: GAME_HEIGHT - 220 - inset.bottom };
     this.lastPadFlash = null;
     this.drawPad();
     this.padKnob.setPosition(this.padCenter.x, this.padCenter.y);
-    this.padLabel.setPosition(this.padCenter.x, this.padCenter.y - 128);
+    setSignPosition(this.padLabel, this.padCenter.x, this.padCenter.y - 128);
     const volBounds = this.volumeTrack.getBounds();
     this.volumeTrackBounds = { left: volBounds.left, width: volBounds.width };
   }

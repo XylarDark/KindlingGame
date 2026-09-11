@@ -76,11 +76,7 @@ const boxOf = (block: string, what: string): { w: number; h: number } => {
   if (mw?.[1] && mh?.[1]) {
     return { w: Number(mw[1]), h: Number(mh[1]) };
   }
-  // Fixed role tokens — no clamp box; use the prior measured footprint caps.
-  if (block.includes('typeRole: "hudTitle"')) {
-    return { w: 360, h: 68 };
-  }
-  throw new Error(`${what}: no maxWidth/maxHeight or typeRole footprint`);
+  throw new Error(`${what}: no maxWidth/maxHeight`);
 };
 
 const scoreBox = boxOf(scoreBlock, "score value");
@@ -161,9 +157,8 @@ describe("ORDERS against the counter readouts", () => {
     // bounded-box argument above would still hold, but only by luck of the direction.
     expect(placeReadouts).toContain("this.scoreText.setOrigin(1, 0.5).setPosition(signLeft, COUNTER_SIGN.y)");
     expect(placeReadouts).toContain("signLeft - valueW - HUD_SCORE_GAP");
-    // Fixed hudTitle token — footprint cap from layout audit, not clamp-fit box.
     expect(scoreBox.w).toBeGreaterThan(0);
-    expect(scoreBlock).toContain('typeRole: "hudTitle"');
+    expect(scoreBlock).toContain("scaleChromePx(HUD_SCORE_PX)");
   });
 
   it("keeps the clock clear of the tablet too, since that readout grows toward it", () => {
@@ -183,8 +178,7 @@ describe("ORDERS against the counter readouts", () => {
 
 describe("SCORE caption type size", () => {
   it("is seeded at the value's step, not a caption step of its own", () => {
-    expect(captionBlock).toContain('typeRole: "hudTitle"');
-    expect(captionBlock).toContain('typeRolePx("hudTitle")');
+    expect(captionBlock).toContain("scaleChromePx(HUD_SCORE_PX)");
     // Measured in-browser at 1920x1080: "SCORE" renders 164x59 at 44px with its
     // tracking. Clamp-fit will drop a box under that, so the caption would quietly
     // hand back a smaller caption and the sizes would stop matching — which is the
@@ -210,8 +204,7 @@ describe("ORDERS type size", () => {
     expect(hud).toMatch(/HUD_SCORE_PX/);
     expect(shop).toMatch(/import \{[\s\S]*HUD_SCORE_PX[\s\S]*\} from "\.\.\/ui\/theme"/);
     expect(shop).toContain("const TABLET_LABEL_PX = HUD_SCORE_PX;");
-    expect(ordersBlock).toContain('typeRole: "hudTitle"');
-    expect(ordersBlock).toContain('typeRolePx("hudTitle")');
+    expect(ordersBlock).toContain("scaleChromePx(TABLET_LABEL_PX)");
   });
 
   it("gives the label the whole tablet screen bar a hairline, because the seed will not fit", () => {
