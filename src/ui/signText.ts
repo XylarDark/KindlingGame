@@ -125,6 +125,14 @@ export function addSignText(
   const plaque = scene.add.graphics();
   let lastPaintKey = "";
   const sync = (): void => {
+    if (!text.visible) {
+      const hiddenKey = ["h", text.visible, text.alpha, accentOf(text), text.depth].join(":");
+      if (hiddenKey === lastPaintKey) return;
+      lastPaintKey = hiddenKey;
+      reparent(plaque, text, scene);
+      paint(plaque, text);
+      return;
+    }
     const key = [
       text.visible,
       text.alpha,

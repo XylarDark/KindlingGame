@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { MARK } from "./copy";
 import { TYPE_MIN_FIT_PX, Type, designPxForMinCss } from "./theme";
-import { clampFitSize, typeFitRange, type SizeMeasure } from "./typeFit";
+import { canReuseFitSize, clampFitSize, typeFitRange, type SizeMeasure } from "./typeFit";
 import {
   capsTracking,
   currentDpr,
@@ -34,7 +34,20 @@ type TypeBox = {
   /** Plaque / chip may grow with the glyphs instead of clipping at the floor. */
   growBox?: boolean;
   overflow?: boolean;
+  /** Last clamp-fit result — cheap path reuses when box limits are unchanged. */
+  lastSize?: number;
 };
+
+/** DEV-only: raster probes inside the current fitTypeToBox call. */
+let devFitMeasureCount = 0;
+
+export function __devResetFitMeasureCount(): void {
+  devFitMeasureCount = 0;
+}
+
+export function __devFitMeasureCount(): number {
+  return devFitMeasureCount;
+}
 
 function enableCanvasSmoothing(text: Phaser.GameObjects.Text): void {
   const ctx = text.context;
@@ -85,12 +98,29 @@ function padExtents(text: Phaser.GameObjects.Text): { x: number; y: number } {
  * box has slack, and shrink when copy is long. Never bitmap-scale (that pixelates).
  * Wrap width is padded conservatively so letter-spacing cannot spill past the box.
  */
+function boxLimitsMatch(
+  box: TypeBox,
+  widthLimit: number | undefined,
+  heightLimit: number | undefined,
+  floor: number,
+  basePx: number,
+): boolean {
+  return (
+    box.lastSize !== undefined &&
+    box.maxWidth === widthLimit &&
+    box.maxHeight === heightLimit &&
+    box.minPx === floor &&
+    box.basePx === basePx
+  );
+}
+
 export function fitTypeToBox(
   text: Phaser.GameObjects.Text,
   maxWidth?: number,
   maxHeight?: number,
   minPx = MIN_FIT_PX,
 ): Phaser.GameObjects.Text {
+  if (import.meta.env.DEV) devFitMeasureCount = 0;
   text.setScale(1);
   const box: TypeBox = text.getData(TYPEKIT_BOX) ?? {};
   const basePx = box.basePx ?? parseFontPx(text.style.fontSize);
@@ -110,8 +140,10 @@ export function fitTypeToBox(
   const heightLimit = maxHeight ?? box.maxHeight;
   const noWrap = box.noWrap ?? false;
   const growBox = box.growBox ?? false;
+  const fitBox = { width: widthLimit, height: heightLimit };
 
   const applySize = (size: number): SizeMeasure => {
+    if (import.meta.env.DEV) devFitMeasureCount++;
     text.setFontSize(size);
     applyTracking(text, text.text, text.getData("typekitTracking"));
     const pad = padExtents(text);
@@ -128,8 +160,20 @@ export function fitTypeToBox(
     return { width: text.width, height: text.height };
   };
 
-  const fitted = clampFitSize(applySize, floor, ceiling, { width: widthLimit, height: heightLimit });
-  applySize(fitted.size);
+  let fitted: ReturnType<typeof clampFitSize>;
+  const lastSize = box.lastSize;
+  if (lastSize !== undefined && boxLimitsMatch(box, widthLimit, heightLimit, floor, basePx)) {
+    if (canReuseFitSize(applySize, lastSize, ceiling, fitBox)) {
+      fitted = { size: lastSize, overflow: box.overflow ?? false, clip: false };
+    } else {
+      fitted = clampFitSize(applySize, floor, ceiling, fitBox);
+      applySize(fitted.size);
+    }
+  } else {
+    fitted = clampFitSize(applySize, floor, ceiling, fitBox);
+    applySize(fitted.size);
+  }
+
   if (fitted.clip && !growBox) {
     const clipW = widthLimit && widthLimit > 0 ? widthLimit : text.width;
     const clipH = heightLimit && heightLimit > 0 ? heightLimit : text.height;
@@ -159,6 +203,7 @@ export function fitTypeToBox(
     noWrap,
     growBox,
     overflow: fitted.overflow,
+    lastSize: fitted.size,
   } satisfies TypeBox);
   return polishText(text, text.scene);
 }
@@ -195,8 +240,9 @@ function refitStoredBox(text: Phaser.GameObjects.Text): void {
 function bindPolish(text: Phaser.GameObjects.Text, scene: Phaser.Scene, explicitTracking?: number): void {
   const raw = text.setText.bind(text);
   text.setText = ((value: string | string[]) => {
-    raw(value);
     const content = Array.isArray(value) ? value.join("\n") : value;
+    if (content === text.text) return text;
+    raw(value);
     applyTracking(text, content, explicitTracking);
     polishText(text, scene);
     refitStoredBox(text);

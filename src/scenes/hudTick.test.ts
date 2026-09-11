@@ -45,18 +45,19 @@ describe("HudScene fixed-step wall-clock sim tick", () => {
 });
 
 describe("HudScene paint dirty guards", () => {
-  it("dirty-guards clock/score/toast setText and phone refit", () => {
+  it("dirty-guards clock/score/toast setText and relies on bindPolish for phone refit", () => {
     const src = read("HudScene.ts");
     expect(src).toContain("lastClockLabel");
     expect(src).toContain("if (snap.clockLabel !== this.lastClockLabel)");
     expect(src).toContain("if (scoreResized) this.scoreText.setText(scoreLabel)");
     expect(src).toContain("lastToast");
     expect(src).toContain("lastPhoneLine");
-    expect(src).toContain("refitType(this.phoneStatus)");
-    // refit only inside phoneLine change guard
     const phone = src.slice(src.indexOf("const phoneLine"), src.indexOf("const showId"));
     expect(phone).toContain("if (phoneLine !== this.lastPhoneLine)");
-    expect(phone).toMatch(/if \(phoneLine !== this\.lastPhoneLine\)[\s\S]*refitType\(this\.phoneStatus\)/);
+    expect(phone).toMatch(/setPadding\(10, 6, 10, 6\)[\s\S]*phoneStatus\.setText\(phoneLine\)/);
+    expect(phone).not.toContain("refitType(this.phoneStatus)");
+    const cover = src.slice(src.indexOf("private paintCover"), src.indexOf("private tutorialFlashHint"));
+    expect(cover).not.toContain("refitType(this.coverText)");
   });
 
   it("caches tutorial hints and music sync on sky band", () => {

@@ -60,6 +60,22 @@ export function typeFitRange(input: TypeFitRangeInput): { floor: number; ceiling
  * If the floor itself does not fit, searches below it so glyphs stay in the box
  * (overflow=true). clip=true only when even 1px sticks out.
  */
+/**
+ * True when {@link lastSize} still fits and the ceiling does not — so a string-only
+ * change can reuse one raster instead of walking the full clamp loop.
+ */
+export function canReuseFitSize(
+  measure: (px: number) => SizeMeasure,
+  lastSize: number,
+  ceiling: number,
+  box: FitBox,
+): boolean {
+  if (!fitsBox(measure(lastSize), box)) return false;
+  if (lastSize < ceiling && fitsBox(measure(ceiling), box)) return false;
+  if (lastSize < ceiling) measure(lastSize);
+  return true;
+}
+
 export function clampFitSize(
   measure: (px: number) => SizeMeasure,
   floor: number,

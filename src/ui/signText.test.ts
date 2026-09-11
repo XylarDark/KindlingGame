@@ -69,6 +69,11 @@ describe("text boxes are all the counter plaque", () => {
     expect(helper).toContain("if (key === lastPaintKey) return");
   });
 
+  it("does not measure hidden chip bounds on PRE_RENDER", () => {
+    expect(helper).toMatch(/if \(!text\.visible\)[\s\S]*hiddenKey/);
+    expect(helper).toMatch(/if \(!text\.visible\) return/);
+  });
+
   it("follows its text into a container", () => {
     // The score pop and the delivery phone both add their text to a container after it
     // is built. A scene-level plaque would be drawn under the whole container — behind
