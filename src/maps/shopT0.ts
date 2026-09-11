@@ -120,7 +120,7 @@ export const BENCH = {
  */
 export const CUSTOMER_SPEECH_H = 83;
 /** Daylight between stacked speech / feedback chips, and above a model's head when hanging. */
-export const CUSTOMER_SPEECH_GAP = 10;
+export const CUSTOMER_SPEECH_GAP = 14;
 /** Horizontal gap from the customer's body edge to the near edge of their chip. */
 export const CUSTOMER_SPEECH_SIDE_GAP = 12;
 /** Hair sits this far below the counter front so heads stay fully visible. */
@@ -396,6 +396,17 @@ export function strainPos(index: number): { x: number; y: number } {
   const slotH = strainSlotH();
   const blockTop = p.y - TV_H / 2 + TV_BEZEL;
   return { x: p.x, y: blockTop + slot * slotH + slotH / 2 };
+}
+
+/**
+ * Menu-row label anchor — {@link strainPos} plus a small downward nudge so cap-height
+ * type reads centred inside each coloured strain slot (centre origin sits visually high).
+ */
+export const STRAIN_LABEL_OPTICAL_Y = 3;
+
+export function strainLabelPos(index: number): { x: number; y: number } {
+  const p = strainPos(index);
+  return { x: p.x, y: p.y + STRAIN_LABEL_OPTICAL_Y };
 }
 
 /** Five cans, even gaps across the ceiling band. Not locked to TV centers. */

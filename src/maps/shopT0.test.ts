@@ -18,6 +18,9 @@ import {
   customerSlotX,
   customerSpeechShows,
   customerSpeechWidth,
+  STRAIN_LABEL_OPTICAL_Y,
+  strainLabelPos,
+  strainPos,
   PERSON_DISPLAY_H,
   PERSON_DISPLAY_MAX_H,
   customerFeetY,
@@ -158,6 +161,17 @@ describe("customer standing slots", () => {
       expect(span(i).left, `slot ${i} clears the sandwich board`).toBeGreaterThan(CUSTOMER_BUBBLE_MIN_X - PERSON_DISPLAY_W);
       expect(span(i).right, `slot ${i} stays on screen`).toBeLessThan(GAME_WIDTH - 24);
     }
+  });
+});
+
+describe("menu board strain rows", () => {
+  it("nudges row labels down for optical centre inside each slot", () => {
+    expect(STRAIN_LABEL_OPTICAL_Y).toBeGreaterThan(0);
+    expect(STRAIN_LABEL_OPTICAL_Y).toBeLessThanOrEqual(6);
+    const label = strainLabelPos(0);
+    const slot = strainPos(0);
+    expect(label.x).toBe(slot.x);
+    expect(label.y).toBe(slot.y + STRAIN_LABEL_OPTICAL_Y);
   });
 });
 

@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   CUSTOMER_BUBBLE_MAX_X,
   CUSTOMER_BUBBLE_MIN_X,
+  CUSTOMER_SPEECH_GAP,
   CUSTOMER_SPEECH_H,
   CUSTOMER_SPEECH_MIN_W,
   CUSTOMER_SLOT_PITCH,
@@ -54,6 +55,9 @@ describe("speech stays off the models it belongs to", () => {
         new RegExp(`hangAboveHead\\(this\\.${speaker}`),
       );
     }
+    expect(src, "key-lead bubble bottom-anchored like door/drive chips").toMatch(
+      /keyLeadBubble = addSignText[\s\S]*?\.setOrigin\(0\.5, 1\)/,
+    );
     expect(src, "no fixed head offsets left in sync").not.toMatch(/setPosition\([^)]*PERSON_DISPLAY_H - \d+\)/);
     expect(src, "Shop sync never calls getBounds").not.toMatch(/getBounds\(\)/);
   });
@@ -71,11 +75,13 @@ describe("speech stays off the models it belongs to", () => {
     expect(sync, "hang driver only when shown").toMatch(/if \(showDriverBubble\)/);
     expect(sync, "key-lead position quantized").toMatch(/Math\.round\(this\.keyLead\.x\) !== Math\.round\(kx\)/);
     expect(sync, "bubble host follows lead with explicit bx").toMatch(
-      /if \(textDirty \|\| leadMoved\) hangAboveHead\(this\.keyLeadBubble, this\.keyLead, bx\)/,
+      /if \(textDirty \|\| leadMoved \|\| becameVisible\) hangAboveHead\(this\.keyLeadBubble, this\.keyLead, bx\)/,
     );
-    expect(sync, "driver bubble Y only when copy changes").toMatch(
-      /if \(driverTextDirty\) hangAboveHead\(this\.driverBubble, this\.driver, DRIVER\.x - 24\)/,
+    expect(sync, "driver bubble Y when copy changes or bubble re-shows").toMatch(
+      /if \(driverTextDirty \|\| becameVisible\) hangAboveHead\(this\.driverBubble, this\.driver, DRIVER\.x - 24\)/,
     );
+    expect(sync, "tracks key-lead bubble visibility for re-hang").toContain("lastShowKeyLeadBubble");
+    expect(sync, "tracks driver bubble visibility for re-hang").toContain("lastShowDriverBubble");
     expect(src, "target callout uses setSignPosition").toMatch(
       /setSignPosition\(this\.targetCallout, p\.x, p\.y - strainSlotH\(\) \/ 2 - 6\)/,
     );
@@ -164,6 +170,18 @@ describe("side speech collision layout", () => {
   it("keeps chip height within the side stack budget", () => {
     expect(CUSTOMER_SPEECH_H).toBeGreaterThanOrEqual(48);
     expect(CUSTOMER_SPEECH_MIN_W).toBeGreaterThanOrEqual(100);
+  });
+
+  it("leaves more daylight above heads than the old 10px band", () => {
+    expect(CUSTOMER_SPEECH_GAP).toBeGreaterThanOrEqual(14);
+  });
+});
+
+describe("menu board row labels", () => {
+  it("places strain copy on the optical-centre anchor", () => {
+    const hotspots = between(src, "private makeHotspots(", "\n}\n", "makeHotspots");
+    expect(hotspots).toContain("strainLabelPos(i)");
+    expect(hotspots).toContain("strainPos(i)");
   });
 });
 
