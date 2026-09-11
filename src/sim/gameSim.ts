@@ -722,6 +722,14 @@ export class GameSim {
       });
       this.dropoffGate = gateTick.gate;
       if (gateTick.swallowQueued) this.queuedInteract = false;
+      if (
+        this.dropoffConfirmHeld &&
+        this.dropoffGate &&
+        !this.queuedInteract &&
+        this.clock.gameMs >= this.dropoffGate.readyAt + NPC_INTERACT_COOLDOWN_MS
+      ) {
+        this.releaseDropoffConfirm();
+      }
     }
     if (this.queuedInteract) {
       this.queuedInteract = false;
@@ -1811,6 +1819,7 @@ export class GameSim {
       }
       d.idChecked = true;
       this.toast = `ID checks out — 19+. Hand ${order.customerName} the bag.`;
+      this.releaseDropoffConfirm();
       // Full cooldown so the ID tap cannot click through into bag/photo.
       this.armDropoffInteract(NPC_INTERACT_COOLDOWN_MS);
       return;
@@ -1822,6 +1831,7 @@ export class GameSim {
       return;
     }
     if (!d.photoTaken) {
+      if (!d.bagHanded) return;
       d.photoTaken = true;
       this.complete(order);
       this.runOrderIds = this.runOrderIds.filter((id) => id !== order.id);
@@ -2026,6 +2036,9 @@ export class GameSim {
 
   private complete(order: Order): void {
     if (this.shiftEnded) return;
+    if (order.type === "delivery" && this.dropoff) {
+      if (!this.dropoff.bagHanded || !this.dropoff.photoTaken) return;
+    }
     this.touch();
     order.status = "completed";
     if (order.type === "delivery") order.late = isDeliveryLate(order, this.clock.gameMs);

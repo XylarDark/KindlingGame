@@ -338,3 +338,14 @@ export function syncSignPlaque(text: Phaser.GameObjects.Text): void {
   entry.dirty = true;
   syncPlaque(entry);
 }
+
+/**
+ * Set sign copy and visibility together — never leave a plaque visible with `""`.
+ * Syncs the field the same frame the glyphs change.
+ */
+export function setSignCopy(text: Phaser.GameObjects.Text, copy: string): void {
+  text.setText(copy);
+  const show = copy.trim().length > 0;
+  text.setVisible(show);
+  if (show) syncSignPlaque(text);
+}

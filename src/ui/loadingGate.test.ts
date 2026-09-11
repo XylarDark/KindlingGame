@@ -61,11 +61,12 @@ describe("loading gate wiring", () => {
     expect(src).toContain("CUSTOMER_VISUAL_MAX");
   });
 
-  it("DoorScene dirty-guards houseLabel setText and fitTypeToWidth", () => {
+  it("DoorScene dirty-guards prompt setText via setSignCopy", () => {
     const src = read("src/scenes/DoorScene.ts");
-    expect(src).toContain("lastHouseTitle");
-    expect(src).toContain("if (title !== this.lastHouseTitle)");
-    expect(src).toContain("fitTypeToWidth(this.houseLabel, 1200)");
+    expect(src).toContain("lastPrompt");
+    expect(src).toContain("if (promptLine !== this.lastPrompt)");
+    expect(src).toContain("setSignCopy(this.prompt");
+    expect(src).not.toContain("houseLabel");
   });
 
   it("idle activate shows Updating before skipWaiting + reload", () => {

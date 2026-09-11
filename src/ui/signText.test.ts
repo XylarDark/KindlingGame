@@ -90,6 +90,12 @@ describe("text boxes are all the counter plaque", () => {
     expect(helper).toContain("export function syncSignPlaque");
   });
 
+  it("exposes setSignCopy so plaques hide when copy is empty", () => {
+    expect(helper).toContain("export function setSignCopy");
+    expect(helper).toMatch(/copy\.trim\(\)\.length > 0/);
+    expect(helper).toMatch(/if \(show\) syncSignPlaque\(text\)/);
+  });
+
   it("positions the plaque at the field origin and draws rings locally", () => {
     expect(helper).toMatch(/plaque\.setPosition\(field\.x, field\.y\)/);
     expect(helper).toMatch(/signPlaqueRings\(\{ x: 0, y: 0, w: field\.w, h: field\.h \}\)/);
