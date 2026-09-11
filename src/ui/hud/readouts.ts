@@ -234,7 +234,12 @@ export class HudReadouts {
   ): void {
     const cover = snap.shopCover;
     const show =
-      cover.active && !atDoor && !settingsOpen && !resultsVisible && !snap.dropoff.idCard;
+      cover.active &&
+      snap.playerRole === "keyLead" &&
+      !atDoor &&
+      !settingsOpen &&
+      !resultsVisible &&
+      !snap.dropoff.idCard;
     this.coverText.setVisible(show);
     if (!show) return;
     const tally = [

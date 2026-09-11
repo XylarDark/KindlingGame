@@ -44,3 +44,20 @@ Fix Settings caption so it looks centered in its plaque (shot showed top-heavy).
 
 - `npm run typecheck` + `npm test`
 - Captures: phone-ish height-fill with rails; Settings caption centered; shop SCORE still OK
+
+---
+
+## PR B — Drive scene chrome (shipped separately)
+
+**Base:** `master` after PR A (#54 `fbb0a6e`)
+
+### Done criteria
+
+1. **SCORE stays on Drive** — corner readouts unchanged; door/ID still hide via `paintReadoutChrome`.
+2. **COUNTER / shop cover hidden on Drive** — `paintCover` gates on `playerRole === "keyLead"` so shop cover chrome is shop-only.
+3. **Auto nudge pad label fully on-screen** — `clampSignHost` + `placePadLabel` keep the “Auto · nudge pad” plaque inside the HUD viewport; drive pin/van/shop callouts use the same clamp after world projection.
+4. **Focused test** — `hudTick.test.ts` fails if cover paints outside shop or drive labels drop the clamp.
+
+### Note
+
+PR A shipped in #54 (rails, sign ink contract, Settings centering). PR C (ID card header) and PR D (pin sizes / menu boards) remain out of scope here.
