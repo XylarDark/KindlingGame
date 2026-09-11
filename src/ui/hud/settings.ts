@@ -314,6 +314,7 @@ export class HudSettings {
       .image(cogX, cogY, "tex-cog")
       .setOrigin(1, 1)
       .setDisplaySize(cogSize, cogSize)
+      .setScrollFactor(0)
       .setDepth(42);
     enableItemHit(this.cog);
     const toggleSettings = (p: Phaser.Input.Pointer): void => {
