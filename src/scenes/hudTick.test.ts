@@ -7,15 +7,19 @@ const here = dirname(fileURLToPath(import.meta.url));
 const read = (rel: string): string => readFileSync(join(here, rel), "utf8").replace(/\r\n/g, "\n");
 
 describe("HudScene fixed-step wall-clock sim tick", () => {
-  it("advances sim through kindlingClock with scene delta (not loop.rawDelta under fps.limit)", () => {
+  it("advances sim through kindlingClock with scene delta for both clock modes", () => {
     const src = read("HudScene.ts");
     expect(src).toContain("advanceSimClock");
     expect(src).toContain("const frameMs = delta");
+    expect(src).toMatch(/frameMs[,\s]/);
     expect(src).not.toMatch(/fixedRaw\s*\?\s*rawDelta/);
+    expect(src).not.toMatch(/getClockMode\(\)\s*===\s*"fixedRaw"\s*\?\s*rawDelta/);
     expect(src).not.toMatch(/sim\.tick\(Math\.min\(Math\.max\(0, delta\), MAX_SIM_STEP_MS\)\)/);
   });
 
-  it("defaults smooth with smoothStep on; fixedRaw opt-in via clock mode", () => {
+  it("defaults smooth with smoothStep on at boot; fixedRaw opt-in via clock mode", () => {
+    const config = read("../config.ts");
+    expect(config).toContain("smoothStep: false");
     const main = read("../main.ts");
     expect(main).toContain("wantsSmoothStep(clockMode)");
     expect(main).toContain("resolveClockMode()");
@@ -36,6 +40,7 @@ describe("HudScene fixed-step wall-clock sim tick", () => {
   it("exposes feel meter hook from Hud update", () => {
     const src = read("HudScene.ts");
     expect(src).toContain("updateFeelMeter");
+    expect(src).toContain("sceneDeltaMs: delta");
   });
 });
 

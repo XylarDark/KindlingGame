@@ -751,7 +751,7 @@ export class HudScene extends Phaser.Scene {
       sim.setPlayerInput(0, 0);
     }
     const rawDelta = this.game.loop.rawDelta;
-    // fixedRaw: scene delta is wall-clock between steps (see kindlingClock.ts); loop.rawDelta is wrong under fps.limit.
+    // Both modes: scene delta = time between game steps (not loop.rawDelta under fps.limit).
     const frameMs = delta;
     advanceSimClock({
       frameMs,
@@ -760,7 +760,7 @@ export class HudScene extends Phaser.Scene {
     });
     const snap = sim.snapshot();
     tickRenderBudget(this.game.loop.actualFps, performance.now());
-    updateFeelMeter(this.game, rawDelta);
+    updateFeelMeter(this.game, { rawDeltaMs: rawDelta, sceneDeltaMs: delta });
     // Title / shift-ended only — calling every frame was a pointless hop (diag #11).
     if (snap.shiftEnded !== this.pwaIdleShiftEnded) {
       this.pwaIdleShiftEnded = snap.shiftEnded;

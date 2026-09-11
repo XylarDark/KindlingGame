@@ -36,6 +36,24 @@ describe("kindlingClock fixed timestep", () => {
     expect(getClockAlpha()).toBeGreaterThanOrEqual(0);
   });
 
+  it("runs two 60 Hz steps per ~33 ms coarse 30fps frame", () => {
+    let ticks = 0;
+    const sim = GameSim.create({ seed: 1, autoSpawn: false });
+    const frameMs = 1000 / 30;
+    const result = advanceSimClock({
+      frameMs,
+      tick: (dt) => {
+        ticks += 1;
+        sim.tick(dt);
+      },
+      snapshot: () => sim.snapshot(),
+    });
+    expect(result.steps).toBe(2);
+    expect(ticks).toBe(2);
+    expect(getClockStats().lastFrameMs).toBeCloseTo(frameMs, 4);
+    expect(getClockStats().backlogMs).toBeLessThan(FIXED_STEP_MS);
+  });
+
   it("caps steps per frame to avoid spiral of death", () => {
     let ticks = 0;
     const sim = GameSim.create({ seed: 1, autoSpawn: false });

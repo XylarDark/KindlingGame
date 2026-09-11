@@ -6,7 +6,7 @@
 
 **Read with:** [guides/smooth-2d-runtime.md](../guides/smooth-2d-runtime.md), [plans/2026-09-10-density-first-budget.md](2026-09-10-density-first-budget.md), [PR #29](https://github.com/XylarDark/KindlingGame/pull/29) (session scale lock / click-lag root cause).
 
-**Implementation (PR #32):** fixed-step + interpolation + feel meter + `fixedRaw` default landed in code; phone field validation (Phases 2, 3 exit gates) still open.
+**Implementation (PR #32 + clock stabilization):** fixed-step + interpolation + feel meter landed; default clock is **`smooth`** until meter evidence on an installed PWA says otherwise; `?clock=fixedRaw` opt-in uses scene `delta` (not `rawDelta`) under `fps.limit: 30`. Phone field validation (Phases 2, 3 exit gates) still open.
 
 ---
 
@@ -15,8 +15,8 @@
 **Success is responsive + smooth end-to-end — not “sim clock matches wall” alone.**
 
 - Do **not** treat rawDelta / fixed-step as a fix for “feels laggy” without overlay evidence on an installed phone PWA.
-- **Ship default (PR #32):** `kindlingClock` mode **`fixedRaw`** — 60 Hz fixed sim steps fed by `game.loop.rawDelta`, render interpolation on Drive movers, `fps.smoothStep: false`.
-- **Fallback:** `?clock=smooth` or `localStorage kindlingClock.mode=smooth` restores PR #30 smoothed-delta feel without rebuild.
+- **Ship default:** `kindlingClock` mode **`smooth`** — one variable tick per scene update from Phaser smoothed `delta`, `fps.smoothStep: true` on coarse/fine per boot wiring in `main.ts`.
+- **Opt-in fixed timestep:** `?clock=fixedRaw` or `localStorage kindlingClock.mode=fixedRaw` — 60 Hz accumulator fed by **scene `delta`** (time between game steps, ~33 ms at 30 fps limit), Drive render interpolation, `fps.smoothStep: false`.
 - **Diagnose:** `?meter=1` (or `localStorage kindlingMeter=1`) — on-screen fps, p95 frame ms, fixed-step backlog, tier, resize count.
 
 ---
@@ -104,7 +104,7 @@ Arc complete when every gate passes on an **installed** phone PWA (not IDE-pane-
 ### Shipped model
 
 1. **Fixed sim step** — `FIXED_STEP_MS = 1000/60` (~16.667 ms); sim always advances in 60 Hz steps.
-2. **Accumulator** — `fixedRaw` mode adds `game.loop.rawDelta` each frame; `while (acc >= FIXED_STEP_MS)` with **max 5 steps/frame** spiral guard.
+2. **Accumulator** — `fixedRaw` mode adds scene `update` **delta** each frame (not `game.loop.rawDelta` — under `fps.limit: 30` rawDelta stays ~16 ms while scene steps run ~33 ms apart); `while (acc >= FIXED_STEP_MS)` with **max 5 steps/frame** spiral guard.
 3. **Render interpolation** — `SimInterpolator` prev/current; Drive lerps vehicle, walker, camera, traffic `gameMs` at `alpha = backlog / FIXED_STEP_MS`.
 4. **Input sampling** — pointer/keyboard read at frame start in Hud; applied before fixed steps in the same frame.
 
@@ -121,7 +121,7 @@ Shop/Door movers (static bakes), Drive customer doorstep sprite, pin/chip text, 
 
 ## Phase 2 — Honest phone frame budget
 
-**Problem:** wall-clock sim ([`HudScene`](../../src/scenes/HudScene.ts) `game.loop.rawDelta` capped at [`MAX_SIM_STEP_MS`](../../src/scenes/HudScene.ts)) **exposed** GPU fill-rate debt ([KNOWN_ERRORS](../KNOWN_ERRORS.md) DayNight entry). Smoothness requires an honest budget per frame, not chasing 60 Hz on phones.
+**Problem:** uncapped variable sim dt **exposed** GPU fill-rate debt ([KNOWN_ERRORS](../KNOWN_ERRORS.md) DayNight entry). Smoothness requires an honest budget per frame, not chasing 60 Hz on phones.
 
 ### Targets (coarse / installed PWA)
 
@@ -203,30 +203,32 @@ Demotion to low **0.65** is a **session-start or boot** choice on phones once Ph
 
 ---
 
-## Phase 5 — RawDelta / fixedRaw ship decision
+## Phase 5 — Clock mode ship decision
 
-**Shipped default (PR #32):** `fixedRaw` — wall-clock accumulator + 60 Hz fixed steps + Drive interpolation. Not a bare rawDelta flip: sim never uses variable per-frame dt directly.
+**Shipped default:** `smooth` — consistent motion on coarse phones until meter evidence on an installed PWA says otherwise. `fixedRaw` remains a query/localStorage opt-in for field A/B.
 
-### Fallback flag
+### Config truth table
 
-| Mode | Query / storage | Sim | `smoothStep` |
-|------|-----------------|-----|--------------|
-| **`fixedRaw`** (default) | — or `kindlingClock.mode=fixedRaw` | `advanceSimClock` + `rawDelta` | `false` |
-| **`smooth`** (fallback) | `?clock=smooth` | once per frame, scene `delta` | `true` |
+| Mode | Query / storage | `smoothStep` | `frameMs` input | Sim |
+|------|-----------------|--------------|-----------------|-----|
+| **`smooth`** (default) | — or `kindlingClock.mode=smooth` | `true` | scene `delta` | one variable tick per update |
+| **`fixedRaw`** (opt-in) | `?clock=fixedRaw` | `false` | scene `delta` | 60 Hz accumulator, max 5 steps/frame, Drive lerp |
+
+**Critical:** Hud `update` passes **`delta`** to `advanceSimClock({ frameMs })` in both modes. Do **not** feed `game.loop.rawDelta` — under `fps.limit: 30`, rawDelta stays ~16 ms (RAF cadence) while scene `update` runs ~33 ms apart; rawDelta-fed steps run at half real-time.
 
 Per-step cap: [`MAX_SIM_STEP_MS`](../../src/scenes/HudScene.ts) (1000 ms — do not tighten to 100 ms).
 
 ### Field A/B (still open)
 
-1. Cohort A: `?clock=smooth` (PR #30 feel).
-2. Cohort B: default `fixedRaw` with meter on.
-3. Compare via `?meter=1`: p95 frame ms, backlog, resize×, subjective stalls.
-4. Revert default to `smooth` only if phone evidence demands it — fallback stays one flag flip either way.
+1. Cohort A: default `smooth` with meter on.
+2. Cohort B: `?clock=fixedRaw` on the same device/session.
+3. Compare via `?meter=1`: p95 frame ms, `rawΔ` vs `sceneΔ`, fixedSteps, backlog, resize×, subjective stalls.
+4. Flip default only with installed-PWA meter evidence — opt-in stays one flag flip either way.
 
 ### Guards
 
-- [`hudTick.test.ts`](../../src/scenes/hudTick.test.ts) — documents `fixedRaw` default and `advanceSimClock` wiring.
-- Never tick sim from scene `delta` alone in `fixedRaw` mode.
+- [`hudTick.test.ts`](../../src/scenes/hudTick.test.ts) — documents `smooth` default and forbids rawDelta as sim dt.
+- [`kindlingClock.test.ts`](../../src/sim/kindlingClock.test.ts) — `frameMs = 1000/30` yields **2** fixed steps; `1000/60` yields **1**.
 - Do not re-enable `smoothStep` as a substitute for GPU budget work.
 
 ---
@@ -262,6 +264,6 @@ Phases 0 + 1 + 3-minimum landed in PR #32. Remaining: Phase 2 phone budget proof
 
 ## Open questions
 
-1. **Field validation** — does `fixedRaw` beat `?clock=smooth` on Luke's phone PWA with meter evidence?
+1. **Field validation** — does `?clock=fixedRaw` beat default `smooth` on Luke's phone PWA with meter evidence?
 2. **Session-locked low tier** — if mid 0.85 still misses p95 on oldest supported phone, boot at low 0.65 without mid-session demotion?
 3. **Overlay in production** — keep `?meter=1` dev-only or ship as beta flag on installed PWA?
