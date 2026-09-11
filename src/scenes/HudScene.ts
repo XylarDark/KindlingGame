@@ -45,7 +45,7 @@ import {
   scaleMsgPx,
   Type,
 } from "../ui/theme";
-import { parseFontPx, refitType, retypeSize } from "../ui/typekit";
+import { parseFontPx, retypeSize } from "../ui/typekit";
 import { designHudInset, HUD_TOUCH_MIN_DESIGN, readCssSafeArea, VIEWFIT_EVENT } from "../ui/viewFit";
 
 /** Readouts sit either side of the counter sign, 10% over the display ramp. */
@@ -924,9 +924,8 @@ export class HudScene extends Phaser.Scene {
       const accentKey = cue ? "lime" : drop.phase === "calling" ? "leaf" : "none";
       if (phoneLine !== this.lastPhoneLine) {
         this.lastPhoneLine = phoneLine;
-        this.phoneStatus.setText(phoneLine);
         this.phoneStatus.setPadding(10, 6, 10, 6);
-        refitType(this.phoneStatus);
+        this.phoneStatus.setText(phoneLine);
       }
       if (accentKey !== this.lastPhoneAccentKey) {
         this.lastPhoneAccentKey = accentKey;
@@ -1077,7 +1076,6 @@ export class HudScene extends Phaser.Scene {
     const line = `COUNTER  ·  ${cover.line}${tally ? `  ·  ${tally}` : ""}`;
     if (this.coverText.text !== line) {
       this.coverText.setText(line);
-      refitType(this.coverText);
     }
   }
 

@@ -393,6 +393,14 @@ the thing it described.
 - **Fix:** drop entry `touch()`; make `setOrdersNotice` / feedback / callout setters and discrete mutation paths call `touch()` only when exposed snapshot fields actually change.
 - **Prevention:** `gameSim.test.ts` same-ticket re-tap and repeated bag-rack no-op keep order count/phase stable and preserve the snap cache when the notice is unchanged.
 
+### Typekit clamp-fit hitch on interaction strings
+
+- **Date:** 2026-09-11
+- **Symptom:** after #35–#38, shop taps (tablet, strain, bag, walk-in bubble) still showed a p95 frame cliff vs idle — one heavy frame on the same turn as the tap.
+- **Cause:** `bindPolish` wrapped every `setText` with `fitTypeToBox`, which walks font sizes from ceiling down; each probe calls `updateText()` (full canvas raster + GPU upload). Call sites such as `ShopScene.syncCustomers` also called `fitTypeToBox` after `setText` when copy changed, paying the search twice. `addSignText` PRE_RENDER repainted plaques from measured bounds even for hidden chips.
+- **Fix:** store `lastSize` on the type box; when limits are unchanged, raster once at `lastSize` and skip the clamp loop unless the new string overflows or the ceiling still fits (slack to grow). `bindPolish` returns early on identical strings. Shop customer bubbles refit on layout width only. Hud cover/phone rely on bindPolish alone. Hidden plaque sync skips width/height measurement.
+- **Prevention:** `typekit.test.ts` asserts same-box string swaps stay ≤2 measure probes; `shopSpeech.test.ts` fit key excludes copy; `canReuseFitSize` unit tests in `typeFit.test.ts`.
+
 ---
 
 ## Related

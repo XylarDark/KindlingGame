@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clampFitSize, fitsBox, typeFitRange } from "./typeFit";
+import { canReuseFitSize, clampFitSize, fitsBox, typeFitRange } from "./typeFit";
 
 describe("typeFitRange", () => {
   it("uses the authored seed as the ceiling when no CSS cap is higher", () => {
@@ -27,6 +27,26 @@ describe("fitsBox", () => {
     expect(fitsBox({ width: 400, height: 80 }, {})).toBe(true);
     expect(fitsBox({ width: 400, height: 80 }, { width: 200 })).toBe(false);
     expect(fitsBox({ width: 100, height: 80 }, { height: 40 })).toBe(false);
+  });
+});
+
+describe("canReuseFitSize", () => {
+  const widthOf = (factor: number) => (px: number) => ({ width: px * factor, height: px });
+  const box = { width: 160, height: 80 };
+
+  it("reuses when last size still fits and the ceiling does not", () => {
+    const measure = widthOf(10);
+    expect(canReuseFitSize(measure, 16, 24, box)).toBe(true);
+  });
+
+  it("refits when last size overflows the box", () => {
+    const measure = widthOf(10);
+    expect(canReuseFitSize(measure, 20, 24, box)).toBe(false);
+  });
+
+  it("refits when the ceiling still fits so type can grow", () => {
+    const measure = widthOf(4);
+    expect(canReuseFitSize(measure, 16, 24, box)).toBe(false);
   });
 });
 

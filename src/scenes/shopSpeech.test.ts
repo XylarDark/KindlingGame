@@ -89,7 +89,10 @@ describe("speech stays off the models it belongs to", () => {
     expect(sync, "layout keyed on order id + quantized x").toContain("lastCustomerLayoutKey");
     expect(sync, "layout keyed on order id + quantized x").toContain("Math.round(c.x)");
     expect(sync, "bubble setText guarded").toMatch(/if \(bubble\.text !== customer\.bubble\) bubble\.setText/);
-    expect(sync, "bubble fit guarded").toMatch(/if \(fitKey !== visual\.bubbleFitKey\)[\s\S]*fitTypeToBox\(bubble/);
+    expect(sync, "bubble fit guarded on layout width only").toMatch(
+      /layoutFitKey = String\(layout\.w\)[\s\S]*if \(layoutFitKey !== visual\.bubbleFitKey\)[\s\S]*fitTypeToBox\(bubble/,
+    );
+    expect(sync, "bubble fit key excludes copy").not.toMatch(/`\$\{customer\.bubble\}:\$\{layout\.w\}`/);
     expect(sync, "look guarded before applyPersonTexture").toMatch(
       /if \(visual\.look !== customer\.look\)[\s\S]*applyPersonTexture\(visual\.sprite, customer\.look\)/,
     );

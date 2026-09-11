@@ -707,10 +707,10 @@ export class ShopScene extends Phaser.Scene {
       const layout = this.customerLayoutById.get(customer.orderId);
       if (layout && customer.bubble) {
         bubble.setAlpha(1).setVisible(true);
-        const fitKey = `${customer.bubble}:${layout.w}`;
+        const layoutFitKey = String(layout.w);
         if (bubble.text !== customer.bubble) bubble.setText(customer.bubble);
-        if (fitKey !== visual.bubbleFitKey) {
-          visual.bubbleFitKey = fitKey;
+        if (layoutFitKey !== visual.bubbleFitKey) {
+          visual.bubbleFitKey = layoutFitKey;
           fitTypeToBox(bubble, layout.w, CUSTOMER_SPEECH_H);
         }
         bubble.setPosition(layout.x, layout.y);
@@ -722,10 +722,10 @@ export class ShopScene extends Phaser.Scene {
       const note = customer.feedback;
       if (layout && note) {
         feedback.setVisible(true);
-        const fitKey = `${note}:${layout.w}`;
+        const layoutFitKey = String(layout.w);
         if (feedback.text !== note) feedback.setText(note);
-        if (fitKey !== visual.feedbackFitKey) {
-          visual.feedbackFitKey = fitKey;
+        if (layoutFitKey !== visual.feedbackFitKey) {
+          visual.feedbackFitKey = layoutFitKey;
           fitTypeToBox(feedback, layout.w, feedbackH());
         }
         feedback.setPosition(layout.x, layout.y + layout.h / 2 + CUSTOMER_SPEECH_GAP + feedback.height / 2);
