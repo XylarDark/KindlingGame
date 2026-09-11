@@ -579,8 +579,20 @@ export class ShopScene extends Phaser.Scene {
 
   private warmCustomerPool(): void {
     for (let i = 0; i < CUSTOMER_VISUAL_POOL; i++) {
-      this.customerPool.push(this.makeCustomerVisual());
+      const visual = this.makeCustomerVisual();
+      this.warmCustomerSpeech(visual);
+      this.customerPool.push(visual);
     }
+  }
+
+  /** Boot warm under the loading gate — first walk-in must not raster + plaque on one frame. */
+  private warmCustomerSpeech(visual: CustomerVisual): void {
+    visual.bubble.setText("Welcome in!");
+    visual.feedback.setText("Thanks!");
+    visual.bubble.setVisible(true);
+    visual.feedback.setVisible(true);
+    visual.bubble.setVisible(false);
+    visual.feedback.setVisible(false);
   }
 
   private makeCustomerVisual(): CustomerVisual {

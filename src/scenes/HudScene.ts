@@ -684,6 +684,12 @@ export class HudScene extends Phaser.Scene {
     const sigTop = photoTop + ID_PHOTO_H + 14;
     sigLabel.setPosition(photoX, sigTop + 44);
 
+    // Boot warm: template raster so first doorstep ID only swaps name/dob/number.
+    this.idName.setText("SAMPLE CUSTOMER");
+    this.idDob.setText("JAN 01 2000   ·   19+");
+    this.idNumber.setText("K-0000-00");
+    this.idExpiry.setText("EXP 01/30");
+
     this.idPanel = this.add.container(GAME_WIDTH / 2, GAME_HEIGHT / 2, [
       this.idFlashRing,
       this.idBg,

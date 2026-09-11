@@ -3,6 +3,7 @@ import { doorGrade, driveGrade, shopGrade } from "../art/dayNightGrade";
 import { DOORSTEP_PORCH } from "../art/doorstep";
 import { applyDayNight, attachDayNight, dayNightFrom, detachDayNight } from "../art/dayNightPipeline";
 import { MS_PER_GAME_HOUR } from "../sim/constants";
+import { warmDriveDeparturePaths } from "../sim/driveRoute";
 import { skyAt } from "../sim/dayNight";
 import { startSessionMusic, unlockAudio } from "../audio/music";
 import { COUNTER_SIGN, ceilingPots } from "../maps/shopT0";
@@ -419,6 +420,7 @@ export class TitleScene extends Phaser.Scene {
         await this.waitFrames(1);
       }
       if (performance.now() >= deadline) return;
+      warmDriveDeparturePaths();
     }
     const scene = this.scene.get(key);
     const cam = scene?.cameras?.main;
