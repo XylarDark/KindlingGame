@@ -17,7 +17,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 /** core.autocrlf is true here, so a checkout delivers CRLF — normalise before matching. */
 const read = (rel: string): string => readFileSync(join(here, rel), "utf8").replace(/\r\n/g, "\n");
 
-const hud = read("HudScene.ts");
+const readouts = read("../ui/hud/readouts.ts");
+const constants = read("../ui/hud/constants.ts");
 const shop = read("ShopScene.ts");
 
 function between(text: string, start: string, end: string, what: string): string {
@@ -60,14 +61,14 @@ const union = (rects: readonly Rect[]): Rect => ({
   bottom: Math.max(...rects.map((r) => r.bottom)),
 });
 
-const SIGN_GAP = number(hud, /const HUD_SIGN_GAP = (\d+);/, "HUD_SIGN_GAP");
-const SCORE_GAP = number(hud, /const HUD_SCORE_GAP = (\d+);/, "HUD_SCORE_GAP");
+const SIGN_GAP = number(constants, /export const HUD_SIGN_GAP = (\d+);/, "HUD_SIGN_GAP");
+const SCORE_GAP = number(constants, /export const HUD_SCORE_GAP = (\d+);/, "HUD_SCORE_GAP");
 
-const scoreBlock = between(hud, "this.scoreText = addUiText(", "})", "score value style");
-const captionBlock = between(hud, 'this.scoreCaption = addUiText(this, 0, 0, "SCORE"', "})", "SCORE caption style");
-const clockBlock = between(hud, "this.clockText = addUiText(", "})", "clock style");
-const popBlock = between(hud, "private warmScorePopPool(", "\n  }", "warmScorePopPool");
-const placeReadouts = between(hud, "private placeReadouts(", "\n  }", "placeReadouts");
+const scoreBlock = between(readouts, "this.scoreText = addUiText(this.scene, 0, 0, \"\", {", "})", "score value style");
+const captionBlock = between(readouts, 'this.scoreCaption = addUiText(this.scene, 0, 0, "SCORE"', "})", "SCORE caption style");
+const clockBlock = between(readouts, "this.clockText = addUiText(this.scene, 0, 0, \"\", {", "})", "clock style");
+const popBlock = between(readouts, "warmScorePopPool(): void {", "\n  }", "warmScorePopPool");
+const placeReadouts = between(readouts, "placeReadouts(): void {", "\n  }", "placeReadouts");
 const ordersBlock = between(shop, "this.tabletLabel = addUiText(", ".setOrigin(0.5)", "ORDERS style");
 
 const boxOf = (block: string, what: string): { w: number; h: number } => {
@@ -84,7 +85,7 @@ const captionBox = boxOf(captionBlock, "SCORE caption");
 const clockBox = boxOf(clockBlock, "clock");
 const popBox = boxOf(popBlock, "score pop");
 const POP_LIFT = number(placeReadouts, /scorePopLayer\.setPosition\(signLeft, y - (\d+)\)/, "pop lift");
-const popTween = between(hud, "private spawnScorePop(", "\n  }", "spawnScorePop");
+const popTween = between(readouts, "spawnScorePop(delta: number): void {", "\n  }", "spawnScorePop");
 const POP_RISE = number(popTween, /y: \{ from: 0, to: -(\d+) \}/, "pop rise");
 const ORDERS_INSET = number(shop, /const TABLET_LABEL_INSET = (\d+);/, "TABLET_LABEL_INSET");
 
@@ -192,7 +193,7 @@ describe("SCORE caption type size", () => {
     // A score long enough to shrink inside its own box would leave a seed-sized caption
     // beside a smaller number. The match is made against what the value renders at, and
     // it has to happen before anything is measured off the caption's width.
-    expect(hud).toContain("private matchCaptionToValue()");
+    expect(readouts).toContain("matchCaptionToValue(): void");
     expect(placeReadouts).toContain("this.matchCaptionToValue();");
     expect(placeReadouts.indexOf("matchCaptionToValue")).toBeLessThan(
       placeReadouts.indexOf("this.scoreText.width"),
@@ -202,7 +203,7 @@ describe("SCORE caption type size", () => {
 
 describe("ORDERS type size", () => {
   it("is seeded from the score's own constant rather than a copy of the number", () => {
-    expect(hud).toMatch(/HUD_SCORE_PX/);
+    expect(readouts).toMatch(/HUD_SCORE_PX/);
     expect(shop).toMatch(/import \{[\s\S]*HUD_SCORE_PX[\s\S]*\} from "\.\.\/ui\/theme"/);
     expect(shop).toContain("const TABLET_LABEL_PX = HUD_SCORE_PX;");
     expect(ordersBlock).toContain("scaleChromePx(TABLET_LABEL_PX)");

@@ -47,19 +47,20 @@ describe("HudScene fixed-step wall-clock sim tick", () => {
 describe("HudScene paint dirty guards", () => {
   it("dirty-guards clock/score/toast setText and relies on bindPolish for phone refit", () => {
     const src = read("HudScene.ts");
+    const phone = read("../ui/hud/phone.ts");
+    const readouts = read("../ui/hud/readouts.ts");
     expect(src).toContain("lastClockLabel");
     expect(src).toContain("if (snap.clockLabel !== this.lastClockLabel)");
-    expect(src).toContain("if (scoreResized) this.scoreText.setText(scoreLabel)");
+    expect(src).toContain("if (scoreResized) this.readouts.scoreText.setText(scoreLabel)");
     expect(src).toContain("lastToast");
-    expect(src).toContain("lastPhoneLine");
-    const phone = src.slice(src.indexOf("const phoneLine"), src.indexOf("const showId"));
+    expect(phone).toContain("lastPhoneLine");
     expect(phone).toContain("if (phoneLine !== this.lastPhoneLine)");
     expect(phone).toMatch(/setPadding\(10, 6, 10, 6\)[\s\S]*phoneStatus\.setText\(phoneLine\)/);
     expect(phone).not.toContain("refitType(this.phoneStatus)");
-    const cover = src.slice(src.indexOf("private paintCover"), src.indexOf("private tutorialFlashHint"));
+    const cover = readouts.slice(readouts.indexOf("paintCover("), readouts.indexOf("coverMaxWidth(): number"));
     expect(cover).not.toContain("refitType(this.coverText)");
-    expect(cover).toContain("clipCoverLine");
-    expect(cover).toContain("coverMaxWidth");
+    expect(readouts).toContain("clipCoverLine");
+    expect(readouts).toContain("coverMaxWidth");
     expect(src).toContain("paintDoorTitle");
     expect(src).toContain("releaseDropoffConfirm()");
   });
@@ -80,12 +81,13 @@ describe("HudScene paint dirty guards", () => {
 
   it("hides score/clock/cog at door and during ID inspect", () => {
     const src = read("HudScene.ts");
+    const readouts = read("../ui/hud/readouts.ts");
     expect(src).toContain("paintReadoutChrome");
-    const fn = src.slice(src.indexOf("private paintReadoutChrome"), src.indexOf("private syncShopVisibility"));
+    const fn = readouts.slice(readouts.indexOf("paintReadoutChrome("), readouts.indexOf("paintDoorTitle("));
     expect(fn).toMatch(/atDoor \|\| showId/);
     expect(fn).toContain("this.scoreText.setVisible(!hide)");
     expect(fn).toContain("this.clockText.setVisible(!hide)");
-    expect(fn).toContain("this.cog.setVisible(!hide)");
+    expect(fn).toContain("chrome.cog.setVisible(!hide)");
   });
 
   it("hides the shop scene while driving so ORDERS cannot leak into Door", () => {

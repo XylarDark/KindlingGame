@@ -242,7 +242,7 @@ describe("wiring", () => {
   });
 
   it("HudScene Settings re-opens the install coach", () => {
-    const src = read("../scenes/HudScene.ts");
+    const src = read("../ui/hud/settings.ts");
     expect(src).toContain("Install for full screen");
     expect(src).toContain("openInstallCoachFromSettings");
   });
