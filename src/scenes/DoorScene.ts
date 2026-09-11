@@ -18,7 +18,7 @@ import { getSim } from "../session";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import { skyAt, skyVisualDirtyKey } from "../sim/dayNight";
 import type { SimSnapshot } from "../sim/gameSim";
-import { addSignText, setSignCopy, setSignPosition } from "../ui/signText";
+import { addSignText, setSignCopy, setSignPosition, signPlaqueExtents } from "../ui/signText";
 import { Color, MSG_TYPE_FIT, scaleMsgBox, scaleMsgPx } from "../ui/theme";
 import { designHudInset, HUD_TOUCH_MIN_DESIGN, readCssSafeArea, VIEWFIT_EVENT } from "../ui/viewFit";
 
@@ -82,9 +82,8 @@ export class DoorScene extends Phaser.Scene {
   private lastSkyKey = "";
   private lastBagHanded: boolean | null = null;
   private lastPrompt = "";
-  /** Updated each sync so placePrompt can anchor off bag or customer head. */
+  /** Horizontal anchor for the prompt — bag mid on hand/photo, customer on ask-ID. */
   private promptAnchorX = CUSTOMER_X;
-  private promptAnchorY = 0;
   private lighting?: DayNightPipeline;
   private lastGradeKey = "";
   private lastGradeMs = -1e9;
@@ -171,13 +170,13 @@ export class DoorScene extends Phaser.Scene {
   }
 
   /**
-   * Prompt bottom edge sits a gap above the customer's head, derived from the sprite's
-   * own `displayHeight` so it tracks any change to PEOPLE_SCALE, and floored so a chip
-   * that wraps to two lines cannot climb into the top safe inset. Cheap enough to run
-   * every frame — the sentence changes width as the action changes.
+   * Prompt sits above both people, measured from the plaque host (pads + 9-slice), and
+   * dodges the bag and character AABBs on X. Cheap enough to run every frame — copy
+   * width changes as the action changes.
    */
   private placePrompt(): void {
-    const half = this.prompt.displayWidth / 2 + DOOR_CHIP_MARGIN;
+    const plaque = signPlaqueExtents(this.prompt);
+    const half = plaque.panelW / 2 + DOOR_CHIP_MARGIN;
     let x = Phaser.Math.Clamp(this.promptAnchorX, half, GAME_WIDTH - half);
     if (this.bag.visible && this.bag.input?.enabled) {
       const bagHalf = this.bag.displayWidth * 0.5 + DOOR_CHIP_MARGIN;
@@ -188,8 +187,12 @@ export class DoorScene extends Phaser.Scene {
         x = Phaser.Math.Clamp(x, half, GAME_WIDTH - half);
       }
     }
-    const floor = this.insetTop + this.prompt.displayHeight + DOOR_CHIP_GAP;
-    setSignPosition(this.prompt, x, Math.max(floor, this.promptAnchorY - DOOR_CHIP_GAP));
+    const headTop = Math.min(spriteHeadTop(this.driver), spriteHeadTop(this.customer));
+    const yFloor = this.insetTop + DOOR_CHIP_GAP - plaque.topLocal;
+    const yAbove = headTop - DOOR_CHIP_GAP - plaque.bottomLocal;
+    let y = Math.max(yFloor, yAbove);
+    x = dodgePromptX(x, y, plaque, half, [this.driver, this.customer, this.bag]);
+    setSignPosition(this.prompt, x, y);
   }
 
   update(): void {
@@ -272,14 +275,7 @@ export class DoorScene extends Phaser.Scene {
     if (canBag && !this.bag.input) enableWideHit(this.bag, BAG_HIT_PAD);
 
     const who = drop.customerName ?? "the customer";
-    const headTop = this.customer.y - this.customer.displayHeight * this.customer.originY;
-    if (nextHand || nextPhoto) {
-      this.promptAnchorX = this.bag.x;
-      this.promptAnchorY = this.bag.y - this.bag.displayHeight * 0.35;
-    } else {
-      this.promptAnchorX = this.customer.x;
-      this.promptAnchorY = headTop;
-    }
+    this.promptAnchorX = nextHand || nextPhoto ? this.bag.x : this.customer.x;
     const promptLine = nextAsk
       ? `Tap ${who} for ID.`
       : nextHand
@@ -375,6 +371,56 @@ function enableWideHit(obj: Phaser.GameObjects.Image, pad: number): void {
 }
 
 /** Toggle hit without tearing down listeners every frame (bag/photo after ID). */
+function spriteHeadTop(model: Phaser.GameObjects.Image): number {
+  return model.y - model.displayHeight * model.originY;
+}
+
+type Aabb = { left: number; right: number; top: number; bottom: number };
+
+function spriteAabb(img: Phaser.GameObjects.Image): Aabb {
+  const w = img.displayWidth;
+  const h = img.displayHeight;
+  const left = img.x - w * img.originX;
+  const top = img.y - h * img.originY;
+  return { left, right: left + w, top, bottom: top + h };
+}
+
+function chipAabb(x: number, y: number, plaque: ReturnType<typeof signPlaqueExtents>): Aabb {
+  return {
+    left: x - plaque.panelW / 2,
+    right: x + plaque.panelW / 2,
+    top: y + plaque.topLocal,
+    bottom: y + plaque.bottomLocal,
+  };
+}
+
+function aabbOverlap(a: Aabb, b: Aabb): boolean {
+  return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+}
+
+/** Nudge the prompt sideways until its plaque clears character and bag sprites. */
+function dodgePromptX(
+  x: number,
+  y: number,
+  plaque: ReturnType<typeof signPlaqueExtents>,
+  half: number,
+  sprites: Phaser.GameObjects.Image[],
+): number {
+  const chip = chipAabb(x, y, plaque);
+  for (const sprite of sprites) {
+    if (!sprite.visible) continue;
+    const body = spriteAabb(sprite);
+    if (!aabbOverlap(chip, body)) continue;
+    const left = body.left - half - 8;
+    const right = body.right + half + 8;
+    x = x <= sprite.x ? left : right;
+    x = Phaser.Math.Clamp(x, half, GAME_WIDTH - half);
+    chip.left = x - plaque.panelW / 2;
+    chip.right = x + plaque.panelW / 2;
+  }
+  return x;
+}
+
 function armHit(obj: Phaser.GameObjects.Image, on: boolean, pad: number): void {
   if (on) {
     if (!obj.input) enableWideHit(obj, pad);

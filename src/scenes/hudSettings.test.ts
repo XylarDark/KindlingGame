@@ -77,6 +77,8 @@ describe("settings cog panel", () => {
     expect(create).not.toContain("this.cog.on(\"pointerdown\"");
     expect(create).toContain("signContainer(this.cogCaption)");
     expect(create).toContain("captionHost.setScrollFactor(1)");
+    expect(create).not.toContain("this.cogCaption.setScrollFactor");
+    expect(create).not.toContain("captionPlaque?.setScrollFactor");
     expect(create).toMatch(/\.setDisplaySize\(cogSize, cogSize\)/);
   });
 

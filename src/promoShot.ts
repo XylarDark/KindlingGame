@@ -4,6 +4,19 @@ import type { GameSim } from "./sim/gameSim";
 
 export type PromoShot = "drive" | "door";
 
+/** `?doorstep=ask|check|hand|photo` stops the porch seed at that dropoff step. */
+export type DoorstepShot = "ask" | "check" | "hand" | "photo";
+
+export function doorstepQuery(): DoorstepShot | null {
+  try {
+    const q = new URLSearchParams(globalThis.location?.search ?? "").get("doorstep");
+    if (q === "ask" || q === "check" || q === "hand" || q === "photo") return q;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
 /** `?shot=drive` (or map) / `?shot=door` (or id) for promo stills. */
 export function shotQuery(): PromoShot | null {
   try {
@@ -90,6 +103,14 @@ export function applyPromoShot(sim: GameSim): void {
   sim.tick(32);
   sim.interact();
   sim.tick(CALL_CONNECT_MS + 32);
+  const step = doorstepQuery();
+  if (step === "ask") return;
+  sim.interact();
+  sim.tick(NPC_INTERACT_COOLDOWN_MS + 16);
+  if (step === "check" || step === null) return;
+  sim.interact();
+  sim.tick(NPC_INTERACT_COOLDOWN_MS + 16);
+  if (step === "hand") return;
   sim.interact();
   sim.tick(NPC_INTERACT_COOLDOWN_MS + 16);
 }

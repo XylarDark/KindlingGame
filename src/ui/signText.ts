@@ -2,7 +2,8 @@ import Phaser from "phaser";
 import { notePerfPlaquePump, notePerfSetText } from "./perfProbe";
 import { SIGN_BORDER, SIGN_PAD_X, SIGN_PAD_Y } from "./signPlaque";
 import { makePlaqueNineSlice, plaqueTextureForAccent } from "./signPlaqueNine";
-import { addUiText, type UiTextOptions } from "./text";
+import { makeType, type TypeStyle } from "./typekit";
+import type { UiTextOptions } from "./text";
 import { Color } from "./theme";
 
 /**
@@ -132,6 +133,17 @@ function accentOf(text: Phaser.GameObjects.Text): number {
   return accent ?? SIGN_BORDER;
 }
 
+/** Keep plaque + glyph scroll matched to the host — mismatched factors split the chip. */
+function syncChildScrollFactors(host: Phaser.GameObjects.Container): void {
+  const sx = host.scrollFactorX;
+  const sy = host.scrollFactorY;
+  for (const child of host.list) {
+    if ("setScrollFactor" in child && typeof child.setScrollFactor === "function") {
+      child.setScrollFactor(sx, sy);
+    }
+  }
+}
+
 /** Host container for a sign chip — position this, not the inner Text alone. */
 export function signContainer(text: Phaser.GameObjects.Text): Phaser.GameObjects.Container {
   return (text.getData(SIGN_HOST) as Phaser.GameObjects.Container | undefined) ?? text.parentContainer ?? text.scene.add.container(text.x, text.y);
@@ -148,6 +160,62 @@ export function setSignPosition(text: Phaser.GameObjects.Text, x: number, y: num
   const host = text.getData(SIGN_HOST) as Phaser.GameObjects.Container | undefined;
   if (host) host.setPosition(x, y);
   else text.setPosition(x, y);
+}
+
+/** Plaque panel size and local Y edges relative to the sign host origin. */
+export interface SignPlaqueExtents {
+  panelW: number;
+  panelH: number;
+  topLocal: number;
+  bottomLocal: number;
+}
+
+function glyphLocalBounds(text: Phaser.GameObjects.Text, w: number, h: number): { left: number; top: number } {
+  const textX = -w * text.originX;
+  const textY = -h * text.originY;
+  return { left: textX - w * text.originX, top: textY - h * text.originY };
+}
+
+function plaqueCenterFromGlyphs(
+  text: Phaser.GameObjects.Text,
+  w: number,
+  h: number,
+  panelW: number,
+  panelH: number,
+): { x: number; y: number } {
+  const { left, top } = glyphLocalBounds(text, w, h);
+  return { x: left - SIGN_PAD_X + panelW / 2, y: top - SIGN_PAD_Y + panelH / 2 };
+}
+
+/** Laid-out plaque bounds — pads and 9-slice included, not bare Text.displayHeight. */
+export function signPlaqueExtents(text: Phaser.GameObjects.Text): SignPlaqueExtents {
+  syncSignPlaque(text);
+  const plaque = text.getData(SIGN_PLAQUE) as Phaser.GameObjects.NineSlice | undefined;
+  const w = text.width;
+  const h = text.height;
+  if (!plaque) {
+    const { top } = glyphLocalBounds(text, w, h);
+    return { panelW: w, panelH: h, topLocal: top, bottomLocal: top + h };
+  }
+  const panelH = plaque.height;
+  const panelW = plaque.width;
+  const center = plaqueCenterFromGlyphs(text, w, h, panelW, panelH);
+  return {
+    panelW,
+    panelH,
+    topLocal: center.y - panelH / 2,
+    bottomLocal: center.y + panelH / 2,
+  };
+}
+
+/** Host Y so the plaque's lowest pixel sits `gap` px above `ceilingY` (smaller y = higher). */
+export function signYAbove(text: Phaser.GameObjects.Text, ceilingY: number, gap: number): number {
+  return ceilingY - gap - signPlaqueExtents(text).bottomLocal;
+}
+
+/** Host Y so the plaque's top pixel sits at least `gap` px below `floorY`. */
+export function signYFloor(text: Phaser.GameObjects.Text, floorY: number, gap: number): number {
+  return floorY + gap - signPlaqueExtents(text).topLocal;
 }
 
 /** Hit-test the plaque host, not inner Text at local glyph offsets. */
@@ -194,6 +262,14 @@ function layoutPlaque(entry: SignPlaqueEntry): void {
   const tex = plaqueTextureForAccent(accent);
   if (plaque.texture.key !== tex) plaque.setTexture(tex);
 
+  const textX = -w * text.originX;
+  const textY = -h * text.originY;
+  const plaqueCenter = plaqueCenterFromGlyphs(text, w, h, panelW, panelH);
+  // Always repair inner layout — patched setPosition must not leave glyphs orphaned at (0,0).
+  entry.setTextLocal(textX, textY);
+  plaque.setPosition(plaqueCenter.x, plaqueCenter.y);
+  syncChildScrollFactors(host);
+
   const key = [copy, w, h, text.originX, text.originY, accent, text.depth, tex].join(":");
   if (key === entry.lastLayoutKey) {
     entry.dirty = false;
@@ -201,11 +277,7 @@ function layoutPlaque(entry: SignPlaqueEntry): void {
   }
   entry.lastLayoutKey = key;
 
-  const textX = -w * text.originX;
-  const textY = -h * text.originY;
-  entry.setTextLocal(textX, textY);
   plaque.setSize(panelW, panelH);
-  plaque.setPosition(textX - SIGN_PAD_X + panelW / 2, textY - SIGN_PAD_Y + panelH / 2);
   plaque.setOrigin(0.5, 0.5);
   plaque.setDepth(text.depth - 0.5);
   host.setDepth(text.depth);
@@ -225,20 +297,19 @@ export function addSignText(
 ): Phaser.GameObjects.Text {
   const { accent, padding: _pad, ...style } = options;
   const host = scene.add.container(x, y);
-  const text = addUiText(scene, 0, 0, content, {
-    ...style,
+  const text = makeType(scene, 0, 0, content, {
+    ...(style as TypeStyle),
     color: style.color ?? Color.inkHex,
     strokeThickness: style.strokeThickness ?? 0,
     growBox: false,
     padding: undefined,
   });
-  text.setScrollFactor(0);
   if (accent !== undefined) text.setData(ACCENT, accent);
 
   const plaque = makePlaqueNineSlice(scene, SIGN_PAD_X * 2 + 8, SIGN_PAD_Y * 2 + 8, accent ?? SIGN_BORDER);
-  plaque.setScrollFactor(0);
   host.add([plaque, text]);
   host.setScrollFactor(0);
+  syncChildScrollFactors(host);
   text.setData(SIGN_HOST, host);
   text.setData(SIGN_PLAQUE, plaque);
 
@@ -246,9 +317,9 @@ export function addSignText(
   const setTextLocal = (x: number, y: number): void => {
     rawSetPosition(x, y);
   };
-  text.setPosition = ((x?: number, y?: number, z?: number, w?: number) => {
+  text.setPosition = ((x?: number, y?: number, _z?: number, _w?: number) => {
     if (x !== undefined && y !== undefined) host.setPosition(x, y);
-    return rawSetPosition(0, 0, z, w);
+    return text;
   }) as typeof text.setPosition;
 
   const pump = pumpFor(scene);
