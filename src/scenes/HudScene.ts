@@ -30,7 +30,7 @@ import { addSignText, setSignAccent } from "../ui/signText";
 import { addUiText } from "../ui/text";
 import { settingsGeom, type SettingsGeom } from "../ui/settingsGeom";
 import { ackTap, releaseTapAck } from "../input/tapAck";
-import { advanceSimClock, getClockMode } from "../sim/kindlingClock";
+import { advanceSimClock } from "../sim/kindlingClock";
 import { syncSceneRenderCamera, tickRenderBudget } from "../ui/renderBudget";
 import { updateFeelMeter } from "../ui/feelMeter";
 import {
@@ -751,7 +751,8 @@ export class HudScene extends Phaser.Scene {
       sim.setPlayerInput(0, 0);
     }
     const rawDelta = this.game.loop.rawDelta;
-    const frameMs = getClockMode() === "fixedRaw" ? rawDelta : delta;
+    // fixedRaw: scene delta is wall-clock between steps (see kindlingClock.ts); loop.rawDelta is wrong under fps.limit.
+    const frameMs = delta;
     advanceSimClock({
       frameMs,
       tick: (dt) => sim.tick(Math.min(Math.max(0, dt), MAX_SIM_STEP_MS)),

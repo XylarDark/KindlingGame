@@ -80,4 +80,39 @@ describe("kindlingClock fixed timestep", () => {
     const ip = getSimInterpolator();
     expect(ip.current.gameMs).toBeGreaterThan(0);
   });
+
+  it("keeps sim wall time at ~30 fps when frameMs matches scene delta (~33 ms)", () => {
+    const frameMs = 1000 / 30;
+    let total = 0;
+    const sim = GameSim.create({ seed: 1, autoSpawn: false });
+    for (let i = 0; i < 30; i += 1) {
+      advanceSimClock({
+        frameMs,
+        tick: (dt) => {
+          total += dt;
+          sim.tick(dt);
+        },
+        snapshot: () => sim.snapshot(),
+      });
+    }
+    expect(total).toBeGreaterThan(950);
+    expect(total).toBeLessThan(1050);
+  });
+
+  it("under-advances when frameMs wrongly uses RAF rawDelta (~16 ms) at 30 fps", () => {
+    const wrongFrameMs = FIXED_STEP_MS;
+    let total = 0;
+    const sim = GameSim.create({ seed: 1, autoSpawn: false });
+    for (let i = 0; i < 30; i += 1) {
+      advanceSimClock({
+        frameMs: wrongFrameMs,
+        tick: (dt) => {
+          total += dt;
+          sim.tick(dt);
+        },
+        snapshot: () => sim.snapshot(),
+      });
+    }
+    expect(total).toBeLessThan(550);
+  });
 });

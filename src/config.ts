@@ -41,8 +41,8 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   input: {
     activePointers: 3,
   },
-  // fixedRaw (default): sim uses wall-clock fixed steps; smoothStep off.
-  // smooth fallback (?clock=smooth): Phaser smoothed delta + smoothStep on.
+  // smooth (default): Phaser smoothed delta + smoothStep on.
+  // fixedRaw opt-in (?clock=fixedRaw): wall-clock fixed steps; smoothStep off.
   fps: {
     smoothStep: false,
     // Desktop target; coarse phones override limit/target to 30 in main.ts.
