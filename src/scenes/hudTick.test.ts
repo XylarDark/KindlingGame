@@ -99,8 +99,8 @@ describe("HudScene paint dirty guards", () => {
     const place = between(readouts, "placeReadouts(): void {", "matchCaptionToValue(): void {", "placeReadouts");
     expect(place).toContain("readoutsAtDoor");
     expect(place).toMatch(/readoutsAtDoor[\s\S]*hudSceneViewport/);
-    expect(place).toMatch(/readoutsAtDoor[\s\S]*rowRight - rowW/);
-    expect(place).toMatch(/readoutsAtDoor[\s\S]*this\.clockText\.setOrigin\(0, 0\.5\)/);
+    expect(place).toMatch(/readoutsAtDoor[\s\S]*this\.scoreCaption\.setOrigin\(0, 0\.5\)\.setPosition\(left, top\)/);
+    expect(place).toMatch(/readoutsAtDoor[\s\S]*this\.clockText\.setOrigin\(1, 0\.5\)\.setPosition\(clockEdge, top\)/);
     expect(src).toContain("resetReadoutChromeCache");
   });
 

@@ -13,7 +13,7 @@ export const SLOT_GUTTER = 12;
  *
  * | id            | Anchor                         | Who |
  * |---------------|--------------------------------|-----|
- * | scoreClock    | COUNTER_SIGN in shop; top-left on drive; top-right at door | SCORE caption + value + clock |
+ * | scoreClock    | COUNTER_SIGN in shop; top-left on drive; SCORE TL + clock TR at door | SCORE caption + value + clock |
  * | cover         | Under scoreClock, maxWidth capped from shop mark | shopCover while keyLead in shop |
  * | doorTitle     | Top-center safe inset for whole door visit | Orange stop line on HUD |
  * | toast         | Top-center safe inset | Instruction / status line |

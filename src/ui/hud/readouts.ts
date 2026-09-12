@@ -75,7 +75,7 @@ export class HudReadouts {
 
   private captionPx = HUD_SCORE_PX;
   readoutsInShop = true;
-  /** Driver at the doorstep — SCORE + clock pin top-right; orange status top-center. */
+  /** Driver at the doorstep — SCORE top-left, clock top-right; orange status top-center. */
   readoutsAtDoor = false;
   readoutCorner: ReadoutCorner = { left: 28, right: GAME_WIDTH - 28, top: HUD_CORNER_TOP };
   private lastDoorTitle = "";
@@ -191,16 +191,12 @@ export class HudReadouts {
       const inset = designHudInset(readCssSafeArea(document.getElementById("game-root")));
       const { width: viewW } = hudSceneViewport(this.scene);
       const top = this.readoutCorner.top;
-      const rowRight = viewW - inset.right - SLOT_GUTTER - 4;
-      const clockW = this.clockText.width;
-      const rowW = captionW + HUD_SCORE_GAP + valueW + HUD_SCORE_GAP + clockW;
-      let x = rowRight - rowW;
-      this.scoreCaption.setOrigin(0, 0.5).setPosition(x, top);
-      x += captionW + HUD_SCORE_GAP;
-      this.scoreText.setOrigin(0, 0.5).setPosition(x, top);
-      x += valueW + HUD_SCORE_GAP;
-      this.clockText.setOrigin(0, 0.5).setPosition(x, top);
-      this.scorePopLayer.setPosition(rowRight - clockW - HUD_SCORE_GAP - valueW / 2, top - 46);
+      const left = inset.left + SLOT_GUTTER;
+      const clockEdge = viewW - inset.right - SLOT_GUTTER - 4;
+      this.scoreCaption.setOrigin(0, 0.5).setPosition(left, top);
+      this.scoreText.setOrigin(0, 0.5).setPosition(left + captionW + HUD_SCORE_GAP, top);
+      this.clockText.setOrigin(1, 0.5).setPosition(clockEdge, top);
+      this.scorePopLayer.setPosition(left + captionW + HUD_SCORE_GAP + valueW / 2, top - 46);
       return;
     }
     if (this.readoutsInShop) {
@@ -240,7 +236,7 @@ export class HudReadouts {
   }
 
   paintReadoutChrome(atDoor: boolean, showId: boolean, chrome: HudReadoutsChrome): void {
-    // Door/ID: Luke wants SCORE + clock visible top-right for the whole porch visit.
+    // Door/ID: SCORE top-left and clock top-right for the whole porch visit.
     const hide = !atDoor && showId;
     const readoutDepth = atDoor ? HUD_DOOR_READOUT_DEPTH : HUD_READOUT_DEPTH;
     this.scoreText.setDepth(readoutDepth);
@@ -397,11 +393,7 @@ export class HudReadouts {
       const centerY = this.readoutCorner.top + SLOT_GUTTER + plaque.panelH / 2;
       let centerX = placer.viewW / 2;
       if (this.scoreText.visible) {
-        const scoreLeft = Math.min(
-          textInkAabb(this.scoreCaption).left,
-          textInkAabb(this.scoreText).left,
-          textInkAabb(this.clockText).left,
-        );
+        const scoreLeft = Math.min(textInkAabb(this.scoreCaption).left, textInkAabb(this.scoreText).left);
         const halfW = plaque.panelW / 2;
         const maxCenter = scoreLeft - CHIP_GAP - halfW;
         if (centerX + halfW > scoreLeft - CHIP_GAP) {

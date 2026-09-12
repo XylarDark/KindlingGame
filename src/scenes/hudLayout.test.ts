@@ -130,14 +130,15 @@ describe("HUD chip resolver wiring", () => {
     expect(settings).not.toContain("unionAabb");
   });
 
-  it("places drive SCORE row top-left and door SCORE row top-right", () => {
+  it("places drive SCORE row top-left and door SCORE left / clock right", () => {
     const column = between(readouts, "layoutReadoutColumn(inset: SafeInset): void {", "\n  }", "layoutReadoutColumn");
     expect(column).toContain("SLOT_GUTTER");
     const place = between(readouts, "placeReadouts(): void {", "\n  }", "placeReadouts");
     expect(place).toMatch(/readoutsInShop[\s\S]*counterSignReadoutAnchors/);
     expect(place).toMatch(/this\.clockText\.setOrigin\(0, 0\.5\)\.setPosition\(clockX, top\)/);
     expect(place).toMatch(/readoutsAtDoor[\s\S]*hudSceneViewport/);
-    expect(place).toMatch(/readoutsAtDoor[\s\S]*this\.clockText\.setOrigin\(0, 0\.5\)\.setPosition\(x, top\)/);
+    expect(place).toMatch(/readoutsAtDoor[\s\S]*this\.scoreCaption\.setOrigin\(0, 0\.5\)\.setPosition\(left, top\)/);
+    expect(place).toMatch(/readoutsAtDoor[\s\S]*this\.clockText\.setOrigin\(1, 0\.5\)\.setPosition\(clockEdge, top\)/);
   });
 
   it("resolves doorTitle top-center for the whole door visit", () => {
