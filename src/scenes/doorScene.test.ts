@@ -110,7 +110,7 @@ describe("doorstep prompt", () => {
 
   it("resolves the prompt through placeChip after anchor geometry", () => {
     const fn = between(src, "private placePrompt(", "\n  }", "placePrompt");
-    expect(fn).toContain("resolveDoorPrompt(x, y)");
+    expect(fn).toContain("resolveDoorPrompt(x, preferred.y)");
     const resolve = between(src, "private resolveDoorPrompt(", "\n  }", "resolveDoorPrompt");
     expect(resolve).toContain("placeChip(placer, \"doorPrompt\"");
   });
