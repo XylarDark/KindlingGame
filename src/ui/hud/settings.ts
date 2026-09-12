@@ -12,7 +12,7 @@ import {
   signContainer,
   signHostPosition,
   signPlaqueExtents,
-  signYAbove,
+  signYFloor,
   syncSignHit,
   syncSignPlaque,
 } from "../signText";
@@ -382,10 +382,11 @@ export class HudSettings {
       this.cog.setPosition(cogX, cogY);
       this.cogHit.setPosition(cogX - cogSize / 2, cogY - cogSize / 2);
     }
-    const cogTop = cogY - cogSize;
+    const cogBottom = cogY;
     const extents = signPlaqueExtents(this.cogCaption);
     const minCenterY = inset.top + extents.panelH / 2 + 8;
-    const cogCaptionY = Math.max(minCenterY, signYAbove(this.cogCaption, cogTop, 8));
+    const maxCenterY = viewH - inset.bottom - extents.panelH / 2 - 8;
+    const cogCaptionY = Phaser.Math.Clamp(signYFloor(this.cogCaption, cogBottom, 8), minCenterY, maxCenterY);
     setSignPosition(this.cogCaption, cogCaptionX, cogCaptionY);
     syncSignHit(this.cogCaption);
     const panelTop = Math.max(inset.top, cogY - cogSize - 32 - this.settingsBox.h);

@@ -82,6 +82,13 @@ describe("settings cog panel", () => {
     expect(create).toMatch(/\.setDisplaySize\(cogSize, cogSize\)/);
   });
 
+  it("hangs the cog caption below the gear bottom via signYFloor", () => {
+    const layout = between(settings, "layout(inset: SafeInset): void {", "\n  }", "settings layout");
+    expect(layout).toContain("signYFloor(this.cogCaption, cogBottom, 8)");
+    expect(layout).toContain("const cogBottom = cogY");
+    expect(layout).not.toContain("signYAbove(this.cogCaption");
+  });
+
   it("anchors settings chrome to the live HUD viewport and syncs caption hit on the plaque host", () => {
     const layout = between(settings, "layout(inset: SafeInset): void {", "\n  }", "settings layout");
     expect(layout).toContain("hudSceneViewport(this.scene)");

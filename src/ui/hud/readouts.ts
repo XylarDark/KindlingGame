@@ -303,23 +303,26 @@ export class HudReadouts {
     let label = this.scorePopFree.pop();
     if (!label) {
       label = this.scorePopPool[0]!;
-      this.scene.tweens.killTweensOf(label);
+      this.scene.tweens.killTweensOf(signContainer(label));
       const idx = this.scorePopFree.indexOf(label);
       if (idx >= 0) this.scorePopFree.splice(idx, 1);
     }
     const positive = delta >= 0;
+    const host = signContainer(label);
     label
       .setOrigin(besideActor ? 0 : this.readoutsInShop ? 1 : 0, 0.5)
       .setVisible(true)
-      .setAlpha(1)
-      .setY(0);
+      .setAlpha(1);
+    host.setY(0).setAlpha(1).setVisible(true);
     label.setText(positive ? `+${delta}` : String(delta));
     setSignAccent(label, positive ? Color.leafBright : Color.danger);
     return label;
   }
 
   releaseScorePop(label: Phaser.GameObjects.Text): void {
-    this.scene.tweens.killTweensOf(label);
+    const host = signContainer(label);
+    this.scene.tweens.killTweensOf(host);
+    host.setVisible(false).setAlpha(0).setY(0);
     label.setVisible(false).setAlpha(0).setText("");
     if (!this.scorePopFree.includes(label)) this.scorePopFree.push(label);
   }
@@ -352,8 +355,9 @@ export class HudReadouts {
       duration: 280,
       ease: "Back.easeOut",
     });
+    const popHost = signContainer(label);
     this.scene.tweens.add({
-      targets: label,
+      targets: popHost,
       y: { from: 0, to: -56 },
       alpha: { from: 1, to: 0 },
       duration: 900,

@@ -573,10 +573,13 @@ export class ShopScene extends Phaser.Scene {
     // screen minus 16, which would have quietly undone TABLET_LABEL_INSET.
     this.tabletLabel.setAlpha(1);
     this.tabletLabel.setColor(Color.creamHex);
+    const badgeInset = 6;
+    setSignPosition(this.queueBadge, tab.left + tab.w - badgeInset, tab.top + badgeInset);
     this.queueBadge.setVisible(count > 1);
     if (this.queueBadge.visible && this.queueBadge.text !== String(count)) {
       this.queueBadge.setText(String(count));
     }
+    syncSignPlaque(this.queueBadge);
   }
 
   /**

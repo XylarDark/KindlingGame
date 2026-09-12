@@ -226,6 +226,12 @@ describe("ORDERS queue badge", () => {
     expect(badgeBlock).toMatch(/\.setOrigin\(1,\s*0\)/);
     expect(badgeBlock).not.toMatch(/\.setOrigin\(0\.5\)/);
   });
+
+  it("reapplies badge position on syncTablet so layout cannot drift", () => {
+    const sync = between(shop, "private syncTablet(snap: SimSnapshot, pulse: number, flash: boolean): void {", "\n  }", "syncTablet");
+    expect(sync).toContain("setSignPosition(this.queueBadge, tab.left + tab.w - badgeInset, tab.top + badgeInset)");
+    expect(sync).toContain("syncSignPlaque(this.queueBadge)");
+  });
 });
 
 describe("ORDERS type size", () => {
