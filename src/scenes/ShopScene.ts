@@ -20,6 +20,7 @@ import {
   layoutCustomerSpeech,
   DRIVER,
   KEYLEAD,
+  keyLeadSlotHeadTop,
   TV_GRID_LEFT,
   TV_GRID_TOP,
   TV_GRID_W,
@@ -136,7 +137,7 @@ function speechPlaqueAboveHead(
   return { x: centerX, y: hostY + mid.midY };
 }
 
-/** Key-lead speech fits in the vertical band between head top and the TV row. */
+/** Key-lead speech fits in the vertical band between slot head top and the TV row. */
 function leadSpeechPlaqueCenter(
   chip: Phaser.GameObjects.Text,
   centerX: number,
@@ -393,8 +394,8 @@ export class ShopScene extends Phaser.Scene {
       if (textDirty || becameVisible || sizeDirty) {
         const lead = leadSpeechPlaqueCenter(
           this.keyLeadBubble,
-          kx,
-          modelHeadTop(this.keyLead),
+          KEYLEAD.x,
+          keyLeadSlotHeadTop(),
           TV_GRID_TOP + TV_H,
         );
         setSignPlaqueCenter(this.keyLeadBubble, lead.x, lead.y);
@@ -558,8 +559,8 @@ export class ShopScene extends Phaser.Scene {
     if (this.keyLeadBubble.visible) {
       const lead = leadSpeechPlaqueCenter(
         this.keyLeadBubble,
-        this.keyLead.x,
-        modelHeadTop(this.keyLead),
+        KEYLEAD.x,
+        keyLeadSlotHeadTop(),
         TV_GRID_TOP + TV_H,
       );
       this.placeShopChip(
