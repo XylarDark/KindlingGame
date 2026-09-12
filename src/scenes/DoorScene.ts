@@ -20,10 +20,17 @@ import { skyAt, skyVisualDirtyKey } from "../sim/dayNight";
 import type { SimSnapshot } from "../sim/gameSim";
 import { layoutDebugEnabled, paintLayoutDebug, type LayoutDebugLayer } from "../ui/layoutDebug";
 import { aboveHeadBand, plaqueAabbFromCenter } from "../ui/plaquePlacement";
-import { modelHeadTop, speechPlaqueAboveHead } from "../ui/plaquePlacementPhaser";
-import { addSignText, setSignCopy, signPlaqueCenterWorld, signPlaqueExtents, syncSignPlaque } from "../ui/signText";
-import { beginChipFrame, placeChip } from "../ui/hud/placeChips";
-import { chipPriority } from "../ui/hud/slots";
+import { speechPlaqueAboveHead, standingPersonHeadTop } from "../ui/plaquePlacementPhaser";
+import {
+  addSignText,
+  setSignCopy,
+  setSignPlaqueCenter,
+  signPlaqueCenterWorld,
+  signPlaqueExtents,
+  syncSignPlaque,
+} from "../ui/signText";
+import { ChipPlacer, placeChip } from "../ui/hud/placeChips";
+import { chipPriority, chipSafeRect } from "../ui/hud/slots";
 import { Color } from "../ui/theme";
 import { typeRoleBox, typeRolePx } from "../ui/typeScale";
 import { designHudInset, HUD_TOUCH_MIN_DESIGN, readCssSafeArea, VIEWFIT_EVENT } from "../ui/viewFit";
@@ -44,7 +51,7 @@ const DOOR_PROMPT_MAX_W = 480;
 /** Two wrapped lines at the door prompt seed (hudTitle) with default pad. */
 const DOOR_PROMPT_MAX_H = 120;
 /** Clearance between customer head top and prompt plaque bottom. */
-const DOOR_HEAD_GAP = 48;
+const DOOR_HEAD_GAP = 88;
 /** Renders above flashing customer (11) and bag (12) during ask/hand steps. */
 const DOOR_PROMPT_DEPTH = 14;
 
@@ -178,7 +185,7 @@ export class DoorScene extends Phaser.Scene {
   /** Door action plaques hug copy and sit above the customer's head. */
   private placePrompt(): void {
     syncSignPlaque(this.prompt);
-    const headTop = modelHeadTop(this.customer);
+    const headTop = standingPersonHeadTop(this.customer);
     const preferred = speechPlaqueAboveHead(this.prompt, this.customer.x, headTop, DOOR_HEAD_GAP);
     const plaque = signPlaqueExtents(this.prompt);
     const half = plaque.panelW / 2 + DOOR_CHIP_MARGIN;
@@ -187,17 +194,19 @@ export class DoorScene extends Phaser.Scene {
   }
 
   private resolveDoorPrompt(preferredX: number, preferredY: number): void {
-    const inset = designHudInset(readCssSafeArea(document.getElementById("game-root")));
-    const placer = beginChipFrame(this.game, inset, GAME_WIDTH, GAME_HEIGHT);
     if (!String(this.prompt.text ?? "").trim()) return;
-    placeChip(placer, "doorPrompt", this.prompt, preferredX, preferredY, chipPriority("doorPrompt"), true);
+    const inset = designHudInset(readCssSafeArea(document.getElementById("game-root")));
+    // Isolated placer — sharing the HUD frame let unrelated chips nudge the prompt downward.
+    const placer = new ChipPlacer(chipSafeRect(inset, GAME_WIDTH, GAME_HEIGHT), GAME_WIDTH, GAME_HEIGHT);
+    const ok = placeChip(placer, "doorPrompt", this.prompt, preferredX, preferredY, chipPriority("doorPrompt"), true);
+    if (!ok) setSignPlaqueCenter(this.prompt, preferredX, preferredY);
     this.paintDoorLayoutDebug();
   }
 
   /** `?layoutDebug=1` — above-head band + landed prompt AABB. */
   private paintDoorLayoutDebug(): void {
     if (!this.layoutDebugGfx) return;
-    const headTop = modelHeadTop(this.customer);
+    const headTop = standingPersonHeadTop(this.customer);
     const band = aboveHeadBand(headTop, DOOR_HEAD_GAP);
     const layers: LayoutDebugLayer[] = [
       {

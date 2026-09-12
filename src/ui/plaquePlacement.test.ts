@@ -128,15 +128,18 @@ describe("shop capture seed geometry", () => {
 describe("door prompt placement contract", () => {
   const doorSrc = readScene("../scenes/DoorScene.ts");
   const readoutsSrc = readScene("../ui/hud/readouts.ts");
-  const DOOR_HEAD_GAP = 48;
+  const DOOR_HEAD_GAP = 88;
   const CUSTOMER_X = 960 + 200;
-  const headTop = 720;
+  /** Door floor feet + 8 — matches DoorScene floorY seed. */
+  const DOOR_FLOOR_Y = 838;
+  const headTop = DOOR_FLOOR_Y - 335;
 
   it("preferred door prompt center sits above the customer head", () => {
     const plaque = mockSpeechPlaque(440, 88);
     const center = speechPlaqueCenterAboveHead(plaque, CUSTOMER_X, headTop, DOOR_HEAD_GAP);
     const aabb = plaqueAabbFromCenter(center.x, center.y, plaque);
     assertPlacement(aboveHead(aabb, headTop, DOOR_HEAD_GAP), "door prompt");
+    expect(aabb.bottom).toBeLessThanOrEqual(headTop - DOOR_HEAD_GAP + 1);
   });
 
   it("door scene still resolves through placeChip after anchor geometry", () => {

@@ -113,6 +113,7 @@ describe("doorstep prompt", () => {
     const fn = between(src, "private placePrompt(", "\n  }", "placePrompt");
     expect(fn).toContain("resolveDoorPrompt(x, preferred.y)");
     const resolve = between(src, "private resolveDoorPrompt(", "\n  }", "resolveDoorPrompt");
+    expect(resolve).toContain("new ChipPlacer");
     expect(resolve).toContain("placeChip(placer, \"doorPrompt\"");
   });
 
@@ -131,7 +132,7 @@ describe("doorstep prompt", () => {
   it("pins the prompt above the customer head with headHang", () => {
     const fn = between(src, "private placePrompt(", "\n  }", "placePrompt");
     expect(fn).toContain("speechPlaqueAboveHead(this.prompt, this.customer.x, headTop, DOOR_HEAD_GAP)");
-    expect(fn).toContain("modelHeadTop(this.customer)");
+    expect(fn).toContain("standingPersonHeadTop(this.customer)");
     expect(src).toContain(".setDepth(DOOR_PROMPT_DEPTH)");
     expect(fn).toContain("this.customer.x");
     expect(fn).not.toContain("GAME_WIDTH / 2");
@@ -159,9 +160,10 @@ describe("doorstep prompt", () => {
     expect(constant("DOOR_CHIP_GAP")).toBe(36);
   });
 
-  it("derives headTop through plaquePlacementPhaser", () => {
+  it("derives headTop through standingPersonHeadTop (tallest hat frame)", () => {
     expect(src).toContain('from "../ui/plaquePlacementPhaser"');
-    expect(src).toContain("modelHeadTop(this.customer)");
+    expect(src).toContain("standingPersonHeadTop(this.customer)");
+    expect(src).toContain("setSignPlaqueCenter(this.prompt, preferredX, preferredY)");
   });
 });
 

@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { PERSON_DISPLAY_MAX_H } from "../maps/shopT0";
 import type { ChipAabb } from "./hud/chipCollision";
 import { leadSpeechPlaqueCenterFromExtents } from "./plaquePlacement";
 import { signPlaqueExtents, signPlaqueMid, signYAbove, syncSignPlaque } from "./signText";
@@ -32,6 +33,15 @@ export function leadSpeechPlaqueCenter(
 /** Bottom-anchored person sprite head top without getBounds(). */
 export function modelHeadTop(model: Phaser.GameObjects.Image): number {
   return model.y - model.displayHeight * model.originY;
+}
+
+/**
+ * Head-clearance line for bottom-anchored standing people at {@link PEOPLE_SCALE}.
+ * Uses the tallest hat frame — live {@link modelHeadTop} shrinks on short frames and
+ * lets door/shop speech chips drift onto faces.
+ */
+export function standingPersonHeadTop(model: Phaser.GameObjects.Image): number {
+  return model.y - PERSON_DISPLAY_MAX_H * model.originY;
 }
 
 /** Bottom-anchored sprite body AABB without getBounds(). */
