@@ -8,30 +8,28 @@ const here = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(here, "TitleScene.ts"), "utf8").replace(/\r\n/g, "\n");
 
 describe("title welcome / howto intro scale", () => {
-  it("exports a dedicated 2× intro scale for welcome and howto", () => {
-    expect(src).toContain("export const TITLE_INTRO_SCALE = 2.0");
-  });
-
-  it("scales welcome type from the pre-bump baselines by TITLE_INTRO_SCALE", () => {
-    expect(src).toContain("WELCOME_TITLE_BASE_PX = 36.3");
-    expect(src).toContain("WELCOME_HINT_BASE_PX = 21.8");
-    expect(src).toContain("introPx(WELCOME_TITLE_BASE_PX)");
-    expect(src).toContain("introPx(WELCOME_HINT_BASE_PX)");
-    // Hardcoded pre-bump sizes must not remain as final font sizes.
+  it("uses baked TYPE_INTRO tokens from typeScale, not TITLE_INTRO_SCALE", () => {
+    expect(src).toContain("TYPE_INTRO");
+    expect(src).toContain("typeIntroPx");
+    expect(src).toContain("typeIntroN");
+    expect(src).not.toContain("TITLE_INTRO_SCALE");
     expect(src).not.toMatch(/size: "36\.3px"/);
     expect(src).not.toMatch(/size: "21\.8px"/);
   });
 
+  it("sizes welcome copy from TYPE_INTRO welcome tokens", () => {
+    expect(src).toContain("typeIntroPx(TYPE_INTRO.welcomeTitle)");
+    expect(src).toContain("typeIntroPx(TYPE_INTRO.welcomeHint)");
+  });
+
   it("grows howto card type and boxes through intro helpers", () => {
-    expect(src).toContain("introPx(20)");
-    expect(src).toContain("introPx(16)");
-    expect(src).toContain("introN(216)");
-    expect(src).toContain("labelMaxHeight: introN(36)");
+    expect(src).toContain("typeIntroPx(TYPE_INTRO.howtoHeading)");
+    expect(src).toContain("typeIntroPx(TYPE_INTRO.howtoBody)");
+    expect(src).toContain("typeIntroN(216)");
+    expect(src).toContain("labelMaxHeight: typeIntroN(36)");
   });
 
   it("keeps three howto cards inside the 1920 design width", () => {
-    // Width is derived from GAME_WIDTH minus side/gap — not a blind 1.5× of 440
-    // which would overflow (440*1.5*3 + gaps > 1920).
     expect(src).toContain("Math.floor((GAME_WIDTH - side * 2 - gap * 2) / 3)");
     expect(src).not.toContain("const cardW = 440");
   });
@@ -73,8 +71,10 @@ describe("title how-to start flow", () => {
     expect(src).toContain("setTitleHtmlInputPassThrough(false)");
   });
 
-  it("hides HUD chrome under the title overlay", () => {
+  it("hides HUD chrome under the title overlay and during how-to", () => {
     expect(src).toContain('this.scene.setVisible(false, "hud")');
     expect(src).toContain('this.scene.setVisible(true, "hud")');
+    const howto = src.slice(src.indexOf("private drawHowTo"), src.indexOf("private async finishDeferredWarm"));
+    expect(howto).toContain('this.scene.setVisible(false, "hud")');
   });
 });

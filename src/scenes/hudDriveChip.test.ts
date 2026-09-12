@@ -36,11 +36,10 @@ describe("drive HUD callout sizing", () => {
     const callouts = hud.slice(hud.indexOf("private paintDriveCallouts"), hud.indexOf("private tutorialFlashHint"));
     expect(callouts).toContain("DRIVE_PIN_TEX_H");
     expect(callouts).toContain("DRIVE_VAN_TEX_H");
-    expect(create).toContain("scaleMsgBox(DRIVE_PIN_MAX_W)");
-    expect(create).toContain("scaleMsgBox(DRIVE_VAN_MAX_W)");
-    expect(create).toContain("scaleMsgBox(DRIVE_SHOP_CAP_MAX_W)");
+    expect(create).toContain('typeRoleBox(DRIVE_PIN_MAX_W, "hudBody")');
+    expect(create).toContain('typeRoleBox(DRIVE_VAN_MAX_W, "hudBody")');
+    expect(create).toContain('typeRoleBox(DRIVE_SHOP_CAP_MAX_W, "hudBody")');
     expect(create).toContain("...driveChipSignOpts");
-    expect(hud).toContain("padX: DRIVE_CHIP_PAD_X");
-    expect(hud).toContain("padY: DRIVE_CHIP_PAD_Y");
+    expect(hud).toContain('padVariant: "compact"');
   });
 });

@@ -39,13 +39,11 @@ import { advanceSimClock } from "../sim/kindlingClock";
 import { onRenderBudgetChange, syncSceneRenderCamera, tickRenderBudget } from "../ui/renderBudget";
 import { updateFeelMeter } from "../ui/feelMeter";
 import { notePerfRawDelta } from "../ui/perfProbe";
-import { Color, MENU_TYPE_FIT, MSG_TYPE_FIT, scaleMsgBox, scaleMsgPx, Type } from "../ui/theme";
-import { typeRolePx } from "../ui/typeScale";
+import { Color, MENU_TYPE_FIT, Type } from "../ui/theme";
+import { typeRoleBox, typeRolePx } from "../ui/typeScale";
 import { worldToScreen } from "../ui/worldProject";
 import {
   DRIVE_CHIP_GAP,
-  DRIVE_CHIP_PAD_X,
-  DRIVE_CHIP_PAD_Y,
   DRIVE_PIN_MAX_W,
   DRIVE_PIN_TEX_H,
   DRIVE_SHOP_CAP_MAX_W,
@@ -73,16 +71,11 @@ import { ID_DENY_INK, ID_OK_INK, ID_PHOTO_H, ID_PHOTO_W } from "../ui/hud/consta
  * Smoothed delta already softens hitch frames; this only bounds tab-away gaps.
  */
 const MAX_SIM_STEP_MS = 1_000;
-/** Order banner runs 25% over the ramp — read across the room, mid-task. */
-const hudToastPx = (): string => scaleMsgPx(20);
-const padLabelPx = (): string => scaleMsgPx(16.25);
 /** Keep sign plaques fully inside the HUD camera — matches Door prompt dodge margin. */
 const SCREEN_CHIP_MARGIN = 12;
 
 const driveChipSignOpts = {
-  ...MSG_TYPE_FIT,
-  padX: DRIVE_CHIP_PAD_X,
-  padY: DRIVE_CHIP_PAD_Y,
+  padVariant: "compact" as const,
 } as const;
 
 const RESULTS_W = 740;
@@ -165,24 +158,24 @@ export class HudScene extends Phaser.Scene {
     this.hudSettings.create();
 
     this.toastText = addSignText(this, GAME_WIDTH / 2, GAME_HEIGHT - 36, "", {
-      size: hudToastPx(),
+      size: typeRolePx("hudBody"),
+      typeRole: "hudBody",
       align: "center",
       fontStyle: "600",
-      ...MSG_TYPE_FIT,
-      maxWidth: scaleMsgBox(900),
-      maxHeight: scaleMsgBox(80),
+      maxWidth: typeRoleBox(900, "hudBody"),
+      maxHeight: typeRoleBox(80, "hudBody"),
     })
       .setOrigin(0.5, 1)
       .setDepth(20);
 
     this.driveShopCenter = lotCenter(CITY.shopLot.origin, CITY.shopLot.w, CITY.shopLot.h);
     this.drivePinLabel = addSignText(this, 0, 0, "", {
-      size: typeRolePx("pin"),
-      typeRole: "pin",
+      size: typeRolePx("hudBody"),
+      typeRole: "hudBody",
       align: "center",
       fontStyle: "700",
       ...driveChipSignOpts,
-      maxWidth: scaleMsgBox(DRIVE_PIN_MAX_W),
+      maxWidth: typeRoleBox(DRIVE_PIN_MAX_W, "hudBody"),
     })
       .setOrigin(0.5, 1)
       .setDepth(21)
@@ -194,7 +187,7 @@ export class HudScene extends Phaser.Scene {
       fontStyle: "600",
       noWrap: true,
       ...driveChipSignOpts,
-      maxWidth: scaleMsgBox(DRIVE_VAN_MAX_W),
+      maxWidth: typeRoleBox(DRIVE_VAN_MAX_W, "hudBody"),
     })
       .setOrigin(0.5, 1)
       .setDepth(21)
@@ -205,7 +198,7 @@ export class HudScene extends Phaser.Scene {
       fontStyle: "700",
       noWrap: true,
       ...driveChipSignOpts,
-      maxWidth: scaleMsgBox(DRIVE_SHOP_CAP_MAX_W),
+      maxWidth: typeRoleBox(DRIVE_SHOP_CAP_MAX_W, "hudBody"),
     })
       .setOrigin(0.5, 0)
       .setDepth(21)
@@ -217,11 +210,11 @@ export class HudScene extends Phaser.Scene {
     this.drawPad();
     this.padKnob = this.add.circle(this.padCenter.x, this.padCenter.y, 40, Color.cream, 0.92).setDepth(20);
     this.padLabel = addSignText(this, this.padCenter.x, this.padCenter.y - 128, "Heading to stop…", {
-      size: padLabelPx(),
+      size: typeRolePx("hudBody"),
+      typeRole: "hudBody",
       fontStyle: "600",
-      ...MSG_TYPE_FIT,
-      maxWidth: scaleMsgBox(300),
-      maxHeight: scaleMsgBox(50),
+      maxWidth: typeRoleBox(300, "hudBody"),
+      maxHeight: typeRoleBox(50, "hudBody"),
     })
       .setOrigin(0.5, 1)
       .setDepth(20);

@@ -25,28 +25,11 @@ import { addUiText } from "../ui/text";
 import { setTitleHtmlInputPassThrough } from "../ui/titleHtmlInput";
 import { Color, MENU_TYPE_FIT, Type } from "../ui/theme";
 import { fitTypeToWidth } from "../ui/typekit";
+import { TYPE_INTRO, typeIntroN, typeIntroPx } from "../ui/typeScale";
 import { designHudInset, readCssSafeArea, VIEWFIT_EVENT } from "../ui/viewFit";
 
-/**
- * Welcome + how-to: dedicated 2× readability bump in design space.
- * Separate from MSG_SCALE / MOBILE_TEXT_SCALE — those screens are the first read.
- */
-export const TITLE_INTRO_SCALE = 2.0;
-
-/** Pre-bump welcome sizes (kept as the 1.0 baseline for the intro scale). */
-const WELCOME_TITLE_BASE_PX = 36.3;
-const WELCOME_HINT_BASE_PX = 21.8;
-
-function introPx(basePx: number): string {
-  return `${Math.round(basePx * TITLE_INTRO_SCALE * 10) / 10}px`;
-}
-
-function introN(n: number): number {
-  return Math.round(n * TITLE_INTRO_SCALE);
-}
-
 /** How-to stack lift so the tap hint clears the counter sign behind it. */
-const HOWTO_LIFT = introN(44);
+const HOWTO_LIFT = TYPE_INTRO.cardLift;
 /** Gap from the design edge to the pause plaque's frame, before safe insets. */
 const PAUSE_MARGIN = 48;
 
@@ -188,16 +171,16 @@ export class TitleScene extends Phaser.Scene {
 
   private drawWelcome(): void {
     // Width capped so a 1.5× card still clears the design edges with cream margin.
-    const cardW = Math.min(introN(920), GAME_WIDTH - 80);
-    const cardH = introN(216);
+    const cardW = Math.min(typeIntroN(920), GAME_WIDTH - 80);
+    const cardH = typeIntroN(216);
     const x = Math.floor((GAME_WIDTH - cardW) / 2);
     const y = Math.floor((GAME_HEIGHT - cardH) / 2);
-    const padX = introN(48);
+    const padX = typeIntroN(48);
     const innerW = cardW - padX * 2;
 
     this.welcomeLayer.push(
       addPanel(this, x, y, cardW, cardH, {
-        radius: introN(6),
+        radius: typeIntroN(6),
         alpha: 1,
         fill: Color.card,
         stroke: Color.woodTrim,
@@ -206,37 +189,37 @@ export class TitleScene extends Phaser.Scene {
     );
 
     const accent = this.add.graphics().setDepth(42);
-    const accentW = introN(8);
+    const accentW = typeIntroN(8);
     accent.fillStyle(Color.leaf, 1);
-    accent.fillRoundedRect(x + introN(10), y + introN(14), accentW, cardH - introN(28), introN(4));
+    accent.fillRoundedRect(x + typeIntroN(10), y + typeIntroN(14), accentW, cardH - typeIntroN(28), typeIntroN(4));
     accent.fillStyle(Color.lime, 0.55);
-    accent.fillRoundedRect(x + introN(12), y + introN(18), introN(4), cardH - introN(36), introN(2));
+    accent.fillRoundedRect(x + typeIntroN(12), y + typeIntroN(18), typeIntroN(4), cardH - typeIntroN(36), typeIntroN(2));
     this.welcomeLayer.push(accent);
 
     this.welcomeLayer.push(
-      addUiText(this, GAME_WIDTH / 2 + introN(8), y + Math.round(cardH * 0.33), WELCOME_TITLE, {
-        size: introPx(WELCOME_TITLE_BASE_PX),
+      addUiText(this, GAME_WIDTH / 2 + typeIntroN(8), y + Math.round(cardH * 0.33), WELCOME_TITLE, {
+        size: typeIntroPx(TYPE_INTRO.welcomeTitle),
         color: Color.inkHex,
         fontStyle: "700",
         align: "center",
         strokeThickness: 0,
         ...MENU_TYPE_FIT,
         maxWidth: innerW,
-        maxHeight: introN(56),
+        maxHeight: typeIntroN(56),
       })
         .setOrigin(0.5, 0.5)
         .setDepth(42),
     );
     this.welcomeLayer.push(
-      addUiText(this, GAME_WIDTH / 2 + introN(8), y + Math.round(cardH * 0.67), WELCOME_HINT, {
-        size: introPx(WELCOME_HINT_BASE_PX),
+      addUiText(this, GAME_WIDTH / 2 + typeIntroN(8), y + Math.round(cardH * 0.67), WELCOME_HINT, {
+        size: typeIntroPx(TYPE_INTRO.welcomeHint),
         color: Color.inkHex,
         fontStyle: "600",
         align: "center",
         strokeThickness: 0,
         ...MENU_TYPE_FIT,
         maxWidth: innerW,
-        maxHeight: introN(60),
+        maxHeight: typeIntroN(60),
       })
         .setOrigin(0.5, 0.5)
         .setDepth(42),
@@ -249,31 +232,32 @@ export class TitleScene extends Phaser.Scene {
   }
 
   private drawHowTo(): void {
+    this.scene.setVisible(false, "hud");
     // Three cards must fit 1920 wide — width uses leftover after side margins + gaps,
-    // while type/height take the full intro scale bump so nothing clips at 16:9 contain.
+    // while type/height use baked intro tokens so nothing clips at 16:9 contain.
     const side = 36;
-    const gap = Math.max(20, introN(20));
+    const gap = Math.max(20, typeIntroN(20));
     const cardW = Math.floor((GAME_WIDTH - side * 2 - gap * 2) / 3);
-    const cardH = introN(216);
+    const cardH = typeIntroN(216);
     const rowW = cardW * 3 + gap * 2;
-    const btnH = Math.max(HUD_BUTTON_MIN_H + introN(28), introN(HUD_BUTTON_MIN_H));
-    const stackGap = introN(18);
+    const btnH = Math.max(HUD_BUTTON_MIN_H + typeIntroN(28), typeIntroN(HUD_BUTTON_MIN_H));
+    const stackGap = typeIntroN(18);
     const blockH = cardH + stackGap + btnH;
     const startX = Math.floor((GAME_WIDTH - rowW) / 2);
     // Sit the stack above dead centre so the tap hint clears the counter sign.
     const cardY = Math.floor((GAME_HEIGHT - blockH) / 2) - HOWTO_LIFT;
-    const bodyTop = introN(92);
-    const bodyH = cardH - bodyTop - introN(18);
-    const headingSize = introPx(20);
-    const bodySize = introPx(16);
-    const badgeR = introN(18);
+    const bodyTop = typeIntroN(92);
+    const bodyH = cardH - bodyTop - typeIntroN(18);
+    const headingSize = typeIntroPx(TYPE_INTRO.howtoHeading);
+    const bodySize = typeIntroPx(TYPE_INTRO.howtoBody);
+    const badgeR = typeIntroN(18);
 
     HOWTO_STEPS.forEach((step, i) => {
       const x = startX + i * (cardW + gap);
       const cx = x + cardW / 2;
 
       addPanel(this, x, cardY, cardW, cardH, {
-        radius: introN(6),
+        radius: typeIntroN(6),
         alpha: 1,
         fill: Color.card,
         stroke: Color.woodTrim,
@@ -282,36 +266,36 @@ export class TitleScene extends Phaser.Scene {
 
       const band = this.add.graphics().setDepth(42);
       band.fillStyle(Color.leaf, 1);
-      band.fillRoundedRect(x + introN(12), cardY + introN(12), cardW - introN(24), introN(6), introN(3));
+      band.fillRoundedRect(x + typeIntroN(12), cardY + typeIntroN(12), cardW - typeIntroN(24), typeIntroN(6), typeIntroN(3));
       band.fillStyle(Color.lime, 0.45);
-      band.fillRoundedRect(x + introN(14), cardY + introN(13), cardW - introN(28), introN(3), introN(2));
+      band.fillRoundedRect(x + typeIntroN(14), cardY + typeIntroN(13), cardW - typeIntroN(28), typeIntroN(3), typeIntroN(2));
 
       const badge = this.add.graphics().setDepth(42);
       badge.fillStyle(Color.leaf, 1);
-      badge.fillCircle(cx, cardY + introN(44), badgeR);
+      badge.fillCircle(cx, cardY + typeIntroN(44), badgeR);
       badge.lineStyle(2, 0x2a4a28, 1);
-      badge.strokeCircle(cx, cardY + introN(44), badgeR);
+      badge.strokeCircle(cx, cardY + typeIntroN(44), badgeR);
 
-      addUiText(this, cx, cardY + introN(44), String(i + 1), {
+      addUiText(this, cx, cardY + typeIntroN(44), String(i + 1), {
         size: headingSize,
         color: Color.creamHex,
         fontStyle: "700",
         strokeThickness: 0,
         ...MENU_TYPE_FIT,
-        maxWidth: introN(34),
-        maxHeight: introN(34),
+        maxWidth: typeIntroN(34),
+        maxHeight: typeIntroN(34),
       })
         .setOrigin(0.5)
         .setDepth(43);
 
-      addUiText(this, cx, cardY + introN(66), step.title, {
+      addUiText(this, cx, cardY + typeIntroN(66), step.title, {
         size: headingSize,
         color: Color.inkHex,
         fontStyle: "700",
         strokeThickness: 0,
         ...MENU_TYPE_FIT,
-        maxWidth: cardW - introN(40),
-        maxHeight: introN(28),
+        maxWidth: cardW - typeIntroN(40),
+        maxHeight: typeIntroN(28),
       })
         .setOrigin(0.5, 0)
         .setDepth(42);
@@ -323,7 +307,7 @@ export class TitleScene extends Phaser.Scene {
         align: "center",
         strokeThickness: 0,
         ...MENU_TYPE_FIT,
-        maxWidth: cardW - introN(52),
+        maxWidth: cardW - typeIntroN(52),
         maxHeight: bodyH,
       })
         .setOrigin(0.5, 0)
@@ -343,14 +327,14 @@ export class TitleScene extends Phaser.Scene {
         originX: 0.5,
         originY: 0,
         variant: "primary",
-        minWidth: introN(380),
+        minWidth: typeIntroN(380),
         minHeight: btnH,
         depth: 43,
         caption: "Begin the 9 AM shift",
         labelSize: headingSize,
-        captionSize: introPx(13),
-        labelMaxHeight: introN(36),
-        captionMaxHeight: introN(40),
+        captionSize: typeIntroPx(TYPE_INTRO.howtoCaption),
+        labelMaxHeight: typeIntroN(36),
+        captionMaxHeight: typeIntroN(40),
       },
     );
 

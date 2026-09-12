@@ -19,7 +19,8 @@ import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import { skyAt, skyVisualDirtyKey } from "../sim/dayNight";
 import type { SimSnapshot } from "../sim/gameSim";
 import { addSignText, setSignCopy, setSignPosition, signPlaqueExtents } from "../ui/signText";
-import { Color, MSG_TYPE_FIT, scaleMsgBox, scaleMsgPx } from "../ui/theme";
+import { Color } from "../ui/theme";
+import { typeRoleBox, typeRolePx } from "../ui/typeScale";
 import { designHudInset, HUD_TOUCH_MIN_DESIGN, readCssSafeArea, VIEWFIT_EVENT } from "../ui/viewFit";
 
 /** 25% larger than shop bags (BAG_SCALE 0.7). */
@@ -29,12 +30,6 @@ const CUSTOMER_X = DOORSTEP_DOOR_X + 200;
 const PERSON_HIT_PAD = 80; // ~10% over prior 72 for mobile taps
 const BAG_HIT_PAD = 88; // ~10% over prior 80 for mobile taps
 
-/**
- * Doorstep message chips: prompt 25px then the shared {@link scaleMsgPx} bump. Lazy so
- * create() sees the shell contain scale. `maxHeight` must move with the seed — clamp-fit
- * will otherwise drop below it.
- */
-const doorPromptPx = (): string => scaleMsgPx(25);
 /** Gap between a sprite's edge and the chip anchored off it. */
 const DOOR_CHIP_GAP = 36;
 /** Keep a wide chip on screen when the sprite it hangs off is near an edge. */
@@ -141,12 +136,13 @@ export class DoorScene extends Phaser.Scene {
     // Anchored over the customer's head rather than parked at a fixed y — the
     // instruction names them, so it should be pointing at them.
     this.prompt = addSignText(this, CUSTOMER_X, 0, "", {
-      size: doorPromptPx(),
+      size: typeRolePx("hudBody"),
+      typeRole: "hudBody",
+      padVariant: "compact",
       align: "center",
       fontStyle: "600",
-      ...MSG_TYPE_FIT,
-      maxWidth: scaleMsgBox(DOOR_PROMPT_MAX_W),
-      maxHeight: scaleMsgBox(DOOR_PROMPT_MAX_H),
+      maxWidth: typeRoleBox(DOOR_PROMPT_MAX_W, "hudBody"),
+      maxHeight: typeRoleBox(DOOR_PROMPT_MAX_H, "hudBody"),
     })
       .setOrigin(0.5, 1)
       .setDepth(8);

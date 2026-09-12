@@ -6,14 +6,15 @@ import { makePlaqueNineSlice, plaqueTextureForAccent } from "./signPlaqueNine";
 import { makeType, type TypeStyle } from "./typekit";
 import type { UiTextOptions } from "./text";
 import { Color } from "./theme";
+import { padForVariant, type PadVariant } from "./typeScale";
 
 /**
  * Sign text contract — standard UI: ink stays inside its panel.
  *
  * - {@link addSignText} returns inner `Text`; callers move the {@link signContainer} host only.
  * - Patched `Text.setPosition` never zeroes glyph locals (#53).
- * - {@link layoutPlaque} sizes the nine-slice from glyph bounds + {@link SIGN_PAD_X}/{@link SIGN_PAD_Y}.
- * - {@link inkInsidePlaque} fails on empty boxes or top-clipped ink.
+ * - {@link layoutPlaque} sizes the nine-slice from glyph bounds + pad variant.
+ * - {@link inkInsidePlaque} skips layout when ink would clip — never throws on live frames.
  * - {@link syncChildScrollFactors} copies scroll from the host only.
  */
 const ACCENT = "signAccent";
@@ -24,9 +25,11 @@ const PUMP_REGISTRY = "kindlingSignPlaquePump";
 export interface SignTextOptions extends UiTextOptions {
   /** Inner ring colour, for state the copy alone cannot carry. Defaults to leaf green. */
   accent?: number;
-  /** Override default {@link SIGN_PAD_X} for compact chips (drive callouts). */
+  /** Plaque padding variant — {@link padForVariant} must match layout and ink checks. */
+  padVariant?: PadVariant;
+  /** @deprecated Prefer {@link padVariant}. */
   padX?: number;
-  /** Override default {@link SIGN_PAD_Y} for compact chips (drive callouts). */
+  /** @deprecated Prefer {@link padVariant}. */
   padY?: number;
 }
 
@@ -296,7 +299,8 @@ function layoutPlaque(entry: SignPlaqueEntry): void {
     pad,
   );
   if (!ink.ok) {
-    throw new Error(`sign plaque layout: ${ink.reason} for "${copy.slice(0, 32)}"`);
+    entry.dirty = false;
+    return;
   }
 
   const key = [copy, w, h, text.originX, text.originY, accent, text.depth, tex, pad.x, pad.y].join(":");
@@ -322,7 +326,7 @@ export function addSignText(
   content: string,
   options: SignTextOptions = {},
 ): Phaser.GameObjects.Text {
-  const { accent, padX, padY, padding: _pad, ...style } = options;
+  const { accent, padVariant, padX, padY, padding: _pad, ...style } = options;
   const host = scene.add.container(x, y);
   const text = makeType(scene, 0, 0, content, {
     ...(style as TypeStyle),
@@ -332,11 +336,15 @@ export function addSignText(
     padding: undefined,
   });
   if (accent !== undefined) text.setData(ACCENT, accent);
-  if (padX !== undefined || padY !== undefined) {
-    text.setData(SIGN_PAD, { x: padX ?? SIGN_PAD_X, y: padY ?? SIGN_PAD_Y });
-  }
+  const pads =
+    padVariant !== undefined
+      ? padForVariant(padVariant)
+      : padX !== undefined || padY !== undefined
+        ? { x: padX ?? SIGN_PAD_X, y: padY ?? SIGN_PAD_Y }
+        : padForVariant("default");
+  text.setData(SIGN_PAD, pads);
 
-  const plaque = makePlaqueNineSlice(scene, SIGN_PAD_X * 2 + 8, SIGN_PAD_Y * 2 + 8, accent ?? SIGN_BORDER);
+  const plaque = makePlaqueNineSlice(scene, pads.x * 2 + 8, pads.y * 2 + 8, accent ?? SIGN_BORDER);
   host.add([plaque, text]);
   host.setScrollFactor(0);
   syncChildScrollFactors(host);

@@ -186,10 +186,28 @@ describe("text boxes are all the counter plaque", () => {
     expect(helper).not.toContain("signPlaqueRings");
   });
 
-  it("allows compact plaque pads on sign hosts", () => {
-    expect(helper).toContain("padX?: number");
+  it("allows compact plaque pads via padVariant on sign hosts", () => {
+    expect(helper).toContain("padVariant?: PadVariant");
+    expect(helper).toContain("padForVariant");
     expect(helper).toContain("signPads(text)");
     expect(helper).toContain('text.setData(SIGN_PAD');
+  });
+
+  it("layoutPlaque does not throw when ink fails — skips instead", () => {
+    const layoutStart = helper.indexOf("function layoutPlaque(entry: SignPlaqueEntry): void {");
+    if (layoutStart === -1) throw new Error("layoutPlaque not found");
+    const layoutEnd = helper.indexOf("\n}", layoutStart);
+    if (layoutEnd === -1) throw new Error("layoutPlaque end not found");
+    const layout = helper.slice(layoutStart, layoutEnd);
+    expect(layout).toContain("if (!ink.ok)");
+    expect(layout).not.toContain("throw new Error");
+  });
+
+  it("compact pad variant resolves through padForVariant", () => {
+    const typeScale = read("./typeScale.ts");
+    expect(typeScale).toContain('PAD_COMPACT = { x: 8, y: 6 }');
+    expect(helper).toContain('padVariant !== undefined');
+    expect(helper).not.toMatch(/layoutPlaque[\s\S]*throw new Error/);
   });
 
   it("parents text + plaque in a host container", () => {
