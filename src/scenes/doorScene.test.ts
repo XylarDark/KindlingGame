@@ -104,6 +104,15 @@ describe("doorstep prompt", () => {
     expect(src).toContain("setSignCopy(this.prompt");
   });
 
+  it("refits prompt ink after copy changes so the plaque and glyphs stay aligned", () => {
+    const sync = between(src, "if (promptLine !== this.lastPrompt)", "this.placePrompt();", "prompt refit");
+    expect(sync).toContain("this.refitDoorPrompt()");
+    const refit = between(src, "private refitDoorPrompt(", "\n  }", "refitDoorPrompt");
+    expect(refit).toContain("fitTypeToBox(");
+    expect(refit).toContain("DOOR_PROMPT_MAX_W");
+    expect(refit).toContain("DOOR_PROMPT_MAX_H");
+  });
+
   it("clears the door prompt while the ID card carries confirm copy", () => {
     const sync = between(src, "const idInspect = drop.idAsked", "if (promptLine !== this.lastPrompt)", "idInspect prompt");
     expect(sync).toContain("idInspect");

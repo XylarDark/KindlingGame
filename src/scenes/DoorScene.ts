@@ -30,6 +30,7 @@ import {
   syncSignPlaque,
 } from "../ui/signText";
 import { Color } from "../ui/theme";
+import { fitTypeToBox } from "../ui/typekit";
 import { typeRoleBox, typeRolePx } from "../ui/typeScale";
 import { designHudInset, HUD_TOUCH_MIN_DESIGN, readCssSafeArea, VIEWFIT_EVENT } from "../ui/viewFit";
 
@@ -181,6 +182,16 @@ export class DoorScene extends Phaser.Scene {
     this.placePrompt();
   }
 
+  /** Clamp prompt ink into the wide door box — setSignCopy alone skips typekit refit. */
+  private refitDoorPrompt(): void {
+    if (!String(this.prompt.text ?? "").trim()) return;
+    fitTypeToBox(
+      this.prompt,
+      typeRoleBox(DOOR_PROMPT_MAX_W, "hudTitle"),
+      typeRoleBox(DOOR_PROMPT_MAX_H, "hudTitle"),
+    );
+  }
+
   /** Door action plaques hug copy and sit above the customer's head. */
   private placePrompt(): void {
     syncSignPlaque(this.prompt);
@@ -318,10 +329,10 @@ export class DoorScene extends Phaser.Scene {
           : nextPhoto
             ? `Photo — tap bag.`
             : drop.hint || "At the door.";
-    // setText refits typekit — only pay when the instruction changes.
     if (promptLine !== this.lastPrompt) {
       this.lastPrompt = promptLine;
       setSignCopy(this.prompt, promptLine);
+      this.refitDoorPrompt();
     }
     this.prompt.setAlpha(1);
     this.placePrompt();
