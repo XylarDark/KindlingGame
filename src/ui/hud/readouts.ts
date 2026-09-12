@@ -21,7 +21,7 @@ import type { SafeInset } from "../viewFit";
 import { HUD_CORNER_TOP, HUD_SCORE_GAP, HUD_SIGN_GAP, readoutOutline, SCORE_POP_POOL } from "./constants";
 import type { ChipPlacer } from "./chipCollision";
 import { placeChip, textInkAabb, unionAabb } from "./placeChips";
-import { chipPriority } from "./slots";
+import { chipPriority, SLOT_GUTTER } from "./slots";
 
 export interface ReadoutCorner {
   left: number;
@@ -33,7 +33,6 @@ export interface HudReadoutsChrome {
   cog: Phaser.GameObjects.Image;
   settingsOpen: boolean;
   resultsVisible: boolean;
-  setCogCaptionShown(shown: boolean): void;
   releaseScorePop(label: Phaser.GameObjects.Text): void;
 }
 
@@ -124,8 +123,9 @@ export class HudReadouts {
   }
 
   layoutReadoutColumn(inset: SafeInset): void {
-    const left = 28 + inset.left;
-    const right = GAME_WIDTH - 28 - inset.right;
+    const g = SLOT_GUTTER;
+    const left = inset.left + g;
+    const right = GAME_WIDTH - inset.right - g;
     this.readoutCorner = { left, right, top: HUD_CORNER_TOP + inset.top };
     setSignPosition(this.coverText, left, this.readoutCorner.top + 40);
     setSignPosition(this.doorTitleText, left, this.readoutCorner.top + 44);
@@ -173,12 +173,13 @@ export class HudReadouts {
       this.scorePopLayer.setPosition(signLeft, y - 46);
       return;
     }
-    const { left, right, top } = this.readoutCorner;
+    const { left, top } = this.readoutCorner;
     this.scoreCaption.setOrigin(0, 0.5).setPosition(left, top);
     const valueX = left + this.scoreCaption.width + HUD_SCORE_GAP;
     this.scoreText.setOrigin(0, 0.5).setPosition(valueX, top);
-    this.clockText.setOrigin(1, 0.5).setPosition(right, top);
-    this.scorePopLayer.setPosition(valueX + valueW + 16, top);
+    const clockX = valueX + valueW + HUD_SCORE_GAP;
+    this.clockText.setOrigin(0, 0.5).setPosition(clockX, top);
+    this.scorePopLayer.setPosition(clockX + this.clockText.width + 16, top);
   }
 
   matchCaptionToValue(): void {
@@ -200,10 +201,7 @@ export class HudReadouts {
     chrome.cog.setVisible(!hide);
     this.scorePopLayer.setVisible(!hide);
     if (hide) {
-      chrome.setCogCaptionShown(false);
       for (const label of this.scorePopPool) chrome.releaseScorePop(label);
-    } else if (!chrome.settingsOpen) {
-      chrome.setCogCaptionShown(true);
     }
   }
 

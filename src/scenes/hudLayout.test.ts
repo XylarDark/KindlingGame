@@ -61,16 +61,10 @@ describe("HUD sign attachment guards", () => {
     expect(place).not.toMatch(/setPosition\([^)]*,\s*0\s*\)/);
   });
 
-  it("keeps the settings caption off the right edge and below the cog bottom", () => {
+  it("does not create or layout a Settings caption plaque", () => {
+    expect(settings).not.toContain("cogCaption");
     const layout = between(settings, "layout(inset: SafeInset): void {", "\n  }", "settings layout");
-    expect(layout).toContain("cogCaptionX");
-    expect(layout).toContain("cogCaptionY");
-    expect(layout).toContain("signPlaqueExtents(this.cogCaption)");
-    expect(layout).toContain("plaqueHalf");
-    expect(layout).toContain("Phaser.Math.Clamp");
-    expect(layout).toContain("signYFloor(this.cogCaption, cogBottom, 8)");
-    expect(layout).toMatch(/setSignPosition\(this\.cogCaption, cogCaptionX, cogCaptionY\)/);
-    expect(layout).not.toContain("setSignPosition(this.cogCaption, 0, 0)");
+    expect(layout).not.toContain("cogCaption");
     const create = between(settings, "create(): void {", "\n  }", "settings create");
     expect(create).not.toMatch(/addSignText\([^,]+,\s*0,\s*0,\s*"Settings"/);
   });
@@ -105,9 +99,9 @@ describe("HUD placement geometry", () => {
     expect(place).not.toContain("setPosition(0, 0)");
   });
 
-  it("FAILS if settings caption is left at world origin without cog-relative layout", () => {
+  it("FAILS if settings layout still references a caption host", () => {
     const layout = between(settings, "layout(inset: SafeInset): void {", "\n  }", "settings layout");
-    expect(layout).not.toMatch(/setSignPosition\(this\.cogCaption,\s*0,\s*0\)/);
+    expect(layout).not.toContain("cogCaption");
     expect(layout).toContain("cogY - cogSize");
   });
 });
@@ -129,9 +123,18 @@ describe("HUD chip resolver wiring", () => {
     expect(placeChips).toContain("export function placeChip");
   });
 
-  it("registers settings as a cog+caption union before lower-priority chips", () => {
+  it("registers settings as cog-only before lower-priority chips", () => {
     expect(settings).toContain("registerChipObstacle");
-    expect(settings).toContain("unionAabb");
+    expect(settings).not.toContain("unionAabb");
+  });
+
+  it("places drive/door SCORE and clock together in the top-left safe slot", () => {
+    const column = between(readouts, "layoutReadoutColumn(inset: SafeInset): void {", "\n  }", "layoutReadoutColumn");
+    expect(column).toContain("SLOT_GUTTER");
+    const place = between(readouts, "placeReadouts(): void {", "\n  }", "placeReadouts");
+    expect(place).toMatch(/readoutsInShop[\s\S]*counterSignReadoutAnchors/);
+    expect(place).toMatch(/this\.clockText\.setOrigin\(0, 0\.5\)\.setPosition\(clockX, top\)/);
+    expect(place).not.toMatch(/this\.clockText\.setOrigin\(1, 0\.5\)\.setPosition\(right, top\)/);
   });
 
   it("caps cover width so it cannot reach the shop lot mark", () => {

@@ -87,15 +87,15 @@ describe("doorstep tap target flash", () => {
 });
 
 describe("doorstep prompt", () => {
-  it("seeds the prompt from the hudBody role token with compact pads", () => {
-    const box = between(src, "this.prompt = addSignText(", ".setOrigin(0.5, 1)", "prompt box");
-    expect(box).toContain('typeRole: "hudBody"');
-    expect(box).toContain('typeRolePx("hudBody")');
+  it("seeds the prompt from the hudTitle role token with compact pads", () => {
+    const box = between(src, "this.prompt = addSignText(", ".setOrigin(0.5, 0.5)", "prompt box");
+    expect(box).toContain('typeRole: "hudTitle"');
+    expect(box).toContain('typeRolePx("hudTitle")');
     expect(box).toContain('padVariant: "compact"');
     expect(box).toContain("DOOR_PROMPT_MAX_W");
     expect(box).toContain("DOOR_PROMPT_MAX_H");
-    expect(box).toContain('typeRoleBox(DOOR_PROMPT_MAX_W, "hudBody")');
-    expect(box).toContain('typeRoleBox(DOOR_PROMPT_MAX_H, "hudBody")');
+    expect(box).toContain('typeRoleBox(DOOR_PROMPT_MAX_W, "hudTitle")');
+    expect(box).toContain('typeRoleBox(DOOR_PROMPT_MAX_H, "hudTitle")');
   });
 
   it("uses setSignCopy so empty prompt copy never paints a plaque", () => {
@@ -116,38 +116,31 @@ describe("doorstep prompt", () => {
     expect(resolve).toContain("placeChip(placer, \"doorPrompt\"");
   });
 
-  it("clamps the prompt away from the bag hit target", () => {
+  it("pins the prompt at the driver↔customer midpoint with dodge overlap only", () => {
     const fn = between(src, "private placePrompt(", "\n  }", "placePrompt");
-    expect(fn).toContain("this.bag.input?.enabled");
-    expect(fn).toContain("bagLeft");
-    expect(fn).toContain("this.promptAnchorX");
+    expect(fn).toContain("DOOR_PROMPT_MID_X");
+    expect(fn).toContain("DOOR_PROMPT_BODY_Y");
     expect(fn).toContain("dodgePromptX");
+    expect(fn).not.toContain("spriteHeadTop");
+    expect(fn).not.toContain("promptAnchorX");
   });
 
-  it("never anchors prompt Y off the bag — always clears both heads via plaque host", () => {
+  it("does not follow bag or customer x each frame for prompt anchor", () => {
     const sync = between(src, "const who = drop.customerName", "if (promptLine !== this.lastPrompt)", "sync prompt anchor");
+    expect(sync).not.toContain("promptAnchorX");
     expect(sync).not.toContain("promptAnchorY");
     expect(sync).not.toContain("bag.displayHeight");
-    expect(sync).toMatch(/this\.promptAnchorX = nextHand \|\| nextPhoto \? this\.bag\.x : this\.customer\.x/);
-
-    const fn = between(src, "private placePrompt(", "\n  }", "placePrompt");
-    expect(fn).toContain("signPlaqueExtents");
-    expect(fn).toContain("plaque.bottomLocal");
-    expect(fn).toContain("plaque.topLocal");
-    expect(fn).toContain("spriteHeadTop(this.driver)");
-    expect(fn).toContain("spriteHeadTop(this.customer)");
-    expect(fn).not.toContain("prompt.displayHeight");
-    expect(fn).not.toContain("promptAnchorY");
   });
 
   it("keeps prompt chips compact with short copy", () => {
     expect(src).toContain("Photo — tap bag.");
     expect(src).not.toContain("Tap the bag in their hands");
     expect(constant("DOOR_PROMPT_MAX_W")).toBeGreaterThanOrEqual(280);
-    expect(constant("DOOR_PROMPT_MAX_W")).toBeLessThanOrEqual(400);
+    expect(constant("DOOR_PROMPT_MAX_W")).toBeLessThanOrEqual(520);
   });
 
-  it("lifts the prompt farther above the customer head", () => {
+  it("uses a wider prompt box for hudTitle between the two characters", () => {
+    expect(constant("DOOR_PROMPT_MAX_W")).toBeGreaterThanOrEqual(440);
     expect(constant("DOOR_CHIP_GAP")).toBe(36);
   });
 
@@ -155,7 +148,7 @@ describe("doorstep prompt", () => {
     // A taller chip pushes harder on this clamp; losing it puts the prompt under the
     // notch on a short viewport.
     const fn = between(src, "private placePrompt(", "\n  }", "placePrompt");
-    expect(fn).toContain("this.insetTop + DOOR_CHIP_GAP - plaque.topLocal");
+    expect(fn).toContain("this.insetTop + DOOR_CHIP_GAP + plaque.panelH / 2");
     expect(fn).toContain("Math.max(");
   });
 });

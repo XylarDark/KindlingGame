@@ -37,10 +37,13 @@ const BAG_HIT_PAD = 88; // ~10% over prior 80 for mobile taps
 const DOOR_CHIP_GAP = 36;
 /** Keep a wide chip on screen when the sprite it hangs off is near an edge. */
 const DOOR_CHIP_MARGIN = 24;
-/** Prompt chip width — hugs copy; prior 720px plaque covered faces. */
-const DOOR_PROMPT_MAX_W = 360;
-/** Two wrapped lines at the door prompt seed. */
-const DOOR_PROMPT_MAX_H = 72;
+/** Prompt chip width — hugs copy between the two characters. */
+const DOOR_PROMPT_MAX_W = 480;
+/** Two wrapped lines at the door prompt seed (hudTitle). */
+const DOOR_PROMPT_MAX_H = 96;
+/** Fixed midpoint between driver and customer — not head-follow bob. */
+const DOOR_PROMPT_MID_X = (DRIVER_X + CUSTOMER_X) / 2;
+const DOOR_PROMPT_BODY_Y = (floorY: number): number => floorY - PERSON_DISPLAY_H * 0.52;
 
 /**
  * Flash cadence for the next tap target, as `Math.sin(gameMs / DOOR_FLASH_RATE)` — a
@@ -80,8 +83,6 @@ export class DoorScene extends Phaser.Scene {
   private lastSkyKey = "";
   private lastBagHanded: boolean | null = null;
   private lastPrompt = "";
-  /** Horizontal anchor for the prompt — bag mid on hand/photo, customer on ask-ID. */
-  private promptAnchorX = CUSTOMER_X;
   private lighting?: DayNightPipeline;
   private lastGradeKey = "";
   private lastGradeMs = -1e9;
@@ -136,18 +137,16 @@ export class DoorScene extends Phaser.Scene {
     this.bag.on("pointerup", onDoorConfirmUp);
     this.bag.on("pointerupoutside", onDoorConfirmUp);
 
-    // Anchored over the customer's head rather than parked at a fixed y — the
-    // instruction names them, so it should be pointing at them.
-    this.prompt = addSignText(this, CUSTOMER_X, 0, "", {
-      size: typeRolePx("hudBody"),
-      typeRole: "hudBody",
+    this.prompt = addSignText(this, DOOR_PROMPT_MID_X, 0, "", {
+      size: typeRolePx("hudTitle"),
+      typeRole: "hudTitle",
       padVariant: "compact",
       align: "center",
       fontStyle: "600",
-      maxWidth: typeRoleBox(DOOR_PROMPT_MAX_W, "hudBody"),
-      maxHeight: typeRoleBox(DOOR_PROMPT_MAX_H, "hudBody"),
+      maxWidth: typeRoleBox(DOOR_PROMPT_MAX_W, "hudTitle"),
+      maxHeight: typeRoleBox(DOOR_PROMPT_MAX_H, "hudTitle"),
     })
-      .setOrigin(0.5, 1)
+      .setOrigin(0.5, 0.5)
       .setDepth(8);
 
     this.paintDoorDayNight(getSim().snapshot());
@@ -168,28 +167,13 @@ export class DoorScene extends Phaser.Scene {
     this.placePrompt();
   }
 
-  /**
-   * Prompt sits above both people, measured from the plaque host (pads + 9-slice), and
-   * dodges the bag and character AABBs on X. Cheap enough to run every frame — copy
-   * width changes as the action changes.
-   */
+  /** Prompt pinned between driver and customer at torso height — resolver dodges overlaps only. */
   private placePrompt(): void {
     const plaque = signPlaqueExtents(this.prompt);
     const half = plaque.panelW / 2 + DOOR_CHIP_MARGIN;
-    let x = Phaser.Math.Clamp(this.promptAnchorX, half, GAME_WIDTH - half);
-    if (this.bag.visible && this.bag.input?.enabled) {
-      const bagHalf = this.bag.displayWidth * 0.5 + DOOR_CHIP_MARGIN;
-      const bagLeft = this.bag.x - bagHalf;
-      const bagRight = this.bag.x + bagHalf;
-      if (x + half > bagLeft && x - half < bagRight) {
-        x = this.promptAnchorX <= this.bag.x ? bagLeft - half - 8 : bagRight + half + 8;
-        x = Phaser.Math.Clamp(x, half, GAME_WIDTH - half);
-      }
-    }
-    const headTop = Math.min(spriteHeadTop(this.driver), spriteHeadTop(this.customer));
-    const yFloor = this.insetTop + DOOR_CHIP_GAP - plaque.topLocal;
-    const yAbove = headTop - DOOR_CHIP_GAP - plaque.bottomLocal;
-    let y = Math.max(yFloor, yAbove);
+    let x = Phaser.Math.Clamp(DOOR_PROMPT_MID_X, half, GAME_WIDTH - half);
+    const yFloor = this.insetTop + DOOR_CHIP_GAP + plaque.panelH / 2;
+    const y = Math.max(yFloor, DOOR_PROMPT_BODY_Y(this.floorY));
     x = dodgePromptX(x, y, plaque, half, [this.driver, this.customer, this.bag]);
     this.resolveDoorPrompt(x, y);
   }
@@ -284,7 +268,6 @@ export class DoorScene extends Phaser.Scene {
     if (canBag && !this.bag.input) enableWideHit(this.bag, BAG_HIT_PAD);
 
     const who = drop.customerName ?? "the customer";
-    this.promptAnchorX = nextHand || nextPhoto ? this.bag.x : this.customer.x;
     const promptLine = nextAsk
       ? `Tap ${who} for ID.`
       : nextHand
@@ -377,11 +360,6 @@ function enableWideHit(obj: Phaser.GameObjects.Image, pad: number): void {
     hitArea: new Phaser.Geom.Rectangle(-need, -need, width + need * 2, height + need * 2),
     hitAreaCallback: Phaser.Geom.Rectangle.Contains,
   });
-}
-
-/** Toggle hit without tearing down listeners every frame (bag/photo after ID). */
-function spriteHeadTop(model: Phaser.GameObjects.Image): number {
-  return model.y - model.displayHeight * model.originY;
 }
 
 type Aabb = { left: number; right: number; top: number; bottom: number };
