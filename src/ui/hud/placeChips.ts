@@ -3,6 +3,7 @@ import {
   setSignCopy,
   setSignPosition,
   signPlaqueExtents,
+  signPlaqueMid,
   syncSignPlaque,
 } from "../signText";
 import { chipPriority, chipSafeRect } from "./slots";
@@ -56,7 +57,8 @@ export function textInkAabb(text: Phaser.GameObjects.Text): ChipAabb {
 }
 
 /**
- * Place a sign chip at preferred position, dodging higher-priority plaques.
+ * Place a sign chip at a preferred **plaque-center** position, dodging higher-priority plaques.
+ * Converts to host coords via {@link signPlaqueMid} before collision search.
  * Returns false and clears copy when no non-overlapping position fits.
  */
 export function placeChip(
@@ -72,7 +74,15 @@ export function placeChip(
   if (!host.visible || copy.length === 0) return false;
   syncSignPlaque(host);
   const plaque = signPlaqueExtents(host);
-  const slot = placer.findOpenSlot(preferredX, preferredY, plaque, priority, id, headHang);
+  const mid = signPlaqueMid(host);
+  const slot = placer.findOpenSlot(
+    preferredX - mid.midX,
+    preferredY - mid.midY,
+    plaque,
+    priority,
+    id,
+    headHang,
+  );
   if (!slot) {
     setSignCopy(host, "");
     return false;

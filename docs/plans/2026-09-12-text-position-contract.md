@@ -296,12 +296,10 @@ setSignPosition(chip, desiredPlaqueCenterX - midX, signYAbove(chip, ceilingY, ga
 
 Plain HUD numerals stay on `addUiText` with explicit origins.
 
-**Follow-up (future PR):** Export `signPlaqueMid(text)` and `setSignPlaqueCenter(text, x, y)` wrapping the subtraction; migrate `layoutCustomerSpeech` / door / shop call sites; teach `placeChip` to accept optional anchor mode — out of scope here.
-
-**Tiny change shipped with this note:** Contract comment at top of `signText.ts` stating host `(x,y)` semantics explicitly (see that file).
+**Implemented (PR `setSignPlaqueCenter`):** `signPlaqueMid`, `setSignPlaqueCenter`, `setSignPlaqueEdge`, and `signPlaqueCenterWorld` in `src/ui/signText.ts`. `placeChip` preferred `(x, y)` is plaque center (converted via mid locals in `src/ui/hud/placeChips.ts`). Shop, door, and HUD call sites migrated; shop registers tablet/people obstacles for the #61 resolver.
 
 ---
 
 ## Verification
 
-Investigation only — no runtime behavior change beyond the comment. `npm test` must stay green if touched.
+`npm run typecheck` + `npm test` green; lane captures for shop / door / drive.

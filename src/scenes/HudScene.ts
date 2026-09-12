@@ -24,9 +24,11 @@ import { RESULTS_NEW_DAY, RESULTS_TITLE } from "../ui/copy";
 import {
   addSignText,
   setSignCopy,
+  setSignPlaqueCenter,
   setSignPosition,
   signContainer,
   signPlaqueExtents,
+  signPlaqueMid,
   syncSignPlaque,
 } from "../ui/signText";
 import { addUiText } from "../ui/text";
@@ -293,7 +295,10 @@ export class HudScene extends Phaser.Scene {
     const cogLeft = this.hudSettings.cog.x - this.hudSettings.cog.displayWidth;
     const cogTop = this.hudSettings.cog.y - this.hudSettings.cog.displayHeight;
     this.phoneWidget.layout(inset, cogLeft, cogTop, viewW, viewH);
-    setSignPosition(this.toastText, viewW / 2 - 40, bottom);
+    syncSignPlaque(this.toastText);
+    const toastMid = signPlaqueMid(this.toastText);
+    const toastBottom = signPlaqueExtents(this.toastText).bottomLocal;
+    setSignPlaqueCenter(this.toastText, viewW / 2, bottom - toastBottom + toastMid.midY);
     this.padCenter = { x: 196 + inset.left, y: viewH - 220 - inset.bottom };
     this.lastPadFlash = null;
     this.drawPad();
@@ -303,9 +308,9 @@ export class HudScene extends Phaser.Scene {
 
   /** Auto-drive nudge label — clamp so the plaque never clips the HUD edge. */
   private placePadLabel(inset: SafeInset, viewW: number, viewH: number): void {
-    const anchorY = this.padCenter.y - 128;
-    const clamped = clampSignHost(this.padLabel, this.padCenter.x, anchorY, viewW, viewH, inset);
-    setSignPosition(this.padLabel, clamped.x, clamped.y);
+    const centerY = this.padCenter.y - 128;
+    const clamped = clampSignPlaqueCenter(this.padLabel, this.padCenter.x, centerY, viewW, viewH, inset);
+    setSignPlaqueCenter(this.padLabel, clamped.x, clamped.y);
   }
 
   private paintHud(snap: SimSnapshot): void {
@@ -516,9 +521,19 @@ export class HudScene extends Phaser.Scene {
     this.readouts.resolvePlaqueSlots(placer, atDoor);
 
     if (toastVisible) {
-      let toastY = viewH - 40 - inset.bottom;
-      if (showPhone) toastY -= PHONE_H + CHIP_GAP;
-      placeChip(placer, "toast", this.toastText, viewW / 2, toastY, chipPriority("toast"));
+      syncSignPlaque(this.toastText);
+      let bottomEdge = viewH - 40 - inset.bottom;
+      if (showPhone) bottomEdge -= PHONE_H + CHIP_GAP;
+      const toastMid = signPlaqueMid(this.toastText);
+      const toastBottom = signPlaqueExtents(this.toastText).bottomLocal;
+      placeChip(
+        placer,
+        "toast",
+        this.toastText,
+        viewW / 2,
+        bottomEdge - toastBottom + toastMid.midY,
+        chipPriority("toast"),
+      );
     }
 
     if (showPad && this.padLabel.visible) {
@@ -878,11 +893,11 @@ export class HudScene extends Phaser.Scene {
   }
 }
 
-/** Nudge a projected sign host so its plaque stays inside the HUD viewport. */
-function clampSignHost(
+/** Nudge a preferred plaque center so the panel stays inside the HUD viewport. */
+function clampSignPlaqueCenter(
   text: Phaser.GameObjects.Text,
-  x: number,
-  y: number,
+  centerX: number,
+  centerY: number,
   viewW: number,
   viewH: number,
   inset: SafeInset,
@@ -891,13 +906,10 @@ function clampSignHost(
   syncSignPlaque(text);
   const plaque = signPlaqueExtents(text);
   const halfW = plaque.panelW / 2;
+  const halfH = plaque.panelH / 2;
   return {
-    x: Phaser.Math.Clamp(x, inset.left + margin + halfW, viewW - inset.right - margin - halfW),
-    y: Phaser.Math.Clamp(
-      y,
-      inset.top + margin - plaque.topLocal,
-      viewH - inset.bottom - margin - plaque.bottomLocal,
-    ),
+    x: Phaser.Math.Clamp(centerX, inset.left + margin + halfW, viewW - inset.right - margin - halfW),
+    y: Phaser.Math.Clamp(centerY, inset.top + margin + halfH, viewH - inset.bottom - margin - halfH),
   };
 }
 

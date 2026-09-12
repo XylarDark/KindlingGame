@@ -29,7 +29,7 @@ describe("ShopScene session perf guards", () => {
   });
 
   it("positions the target callout via setSignPosition and hides it on depart", () => {
-    expect(src).toContain("setSignPosition(this.targetCallout");
+    expect(src).toContain("setSignPlaqueCenter(this.targetCallout");
     expect(src).toContain("this.targetCallout.setVisible(false)");
   });
 

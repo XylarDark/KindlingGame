@@ -13,9 +13,9 @@ import { padForVariant, type PadVariant } from "./typeScale";
  *
  * - {@link addSignText} returns inner `Text`; callers move the {@link signContainer} host only.
  * - {@link setSignPosition}(x, y) sets the **host container origin**, not the ink origin, plaque
- *   center, or Phaser Text origin. Derive host coords from a named anchor via
- *   {@link signPlaqueExtents} (e.g. plaque center X = host.x + (leftLocal + rightLocal) / 2;
- *   vertical: {@link signYAbove} / {@link signYFloor}). Plain {@link addUiText} is unchanged.
+ *   center, or Phaser Text origin. Prefer {@link setSignPlaqueCenter} / {@link setSignPlaqueEdge}
+ *   so scenes pass named visual anchors; vertical-only: {@link signYAbove} / {@link signYFloor}.
+ *   {@link placeChip} preferred `(x, y)` is always plaque center. Plain {@link addUiText} unchanged.
  * - Patched `Text.setPosition` never zeroes glyph locals (#53).
  * - {@link layoutPlaque} sizes the nine-slice from glyph bounds + pad variant.
  * - {@link inkInsidePlaque} skips layout when ink would clip — never throws on live frames.
@@ -251,6 +251,43 @@ export function signYAbove(text: Phaser.GameObjects.Text, ceilingY: number, gap:
 /** Host Y so the plaque's top pixel sits at least `gap` px below `floorY`. */
 export function signYFloor(text: Phaser.GameObjects.Text, floorY: number, gap: number): number {
   return floorY + gap - signPlaqueExtents(text).topLocal;
+}
+
+/** Plaque AABB center in host-local space — use with {@link setSignPosition} host coords. */
+export function signPlaqueMid(text: Phaser.GameObjects.Text): { midX: number; midY: number } {
+  const ext = signPlaqueExtents(text);
+  return {
+    midX: (ext.leftLocal + ext.rightLocal) / 2,
+    midY: (ext.topLocal + ext.bottomLocal) / 2,
+  };
+}
+
+/** Plaque AABB center in world/design space. */
+export function signPlaqueCenterWorld(text: Phaser.GameObjects.Text): { x: number; y: number } {
+  const host = signHostPosition(text);
+  const mid = signPlaqueMid(text);
+  return { x: host.x + mid.midX, y: host.y + mid.midY };
+}
+
+/** Move a sign chip so its plaque center sits at `(worldX, worldY)`. */
+export function setSignPlaqueCenter(text: Phaser.GameObjects.Text, worldX: number, worldY: number): void {
+  syncSignPlaque(text);
+  const mid = signPlaqueMid(text);
+  setSignPosition(text, worldX - mid.midX, worldY - mid.midY);
+}
+
+/** Pin a plaque's left or right edge at `worldX`; `worldY` is the plaque vertical center. */
+export function setSignPlaqueEdge(
+  text: Phaser.GameObjects.Text,
+  worldX: number,
+  worldY: number,
+  edge: "left" | "right",
+): void {
+  syncSignPlaque(text);
+  const ext = signPlaqueExtents(text);
+  const mid = signPlaqueMid(text);
+  const hostX = edge === "left" ? worldX - ext.leftLocal : worldX - ext.rightLocal;
+  setSignPosition(text, hostX, worldY - mid.midY);
 }
 
 /** Hit-test the plaque host, not inner Text at local glyph offsets. */

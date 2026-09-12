@@ -151,6 +151,13 @@ describe("doorstep prompt", () => {
     expect(fn).toContain("this.insetTop + DOOR_CHIP_GAP + plaque.panelH / 2");
     expect(fn).toContain("Math.max(");
   });
+
+  it("dodgePromptX tests overlap using plaque-center AABB, not host origin", () => {
+    expect(src).toContain("function plaqueCenterAabb(");
+    const dodge = between(src, "function dodgePromptX(", "\n}", "dodgePromptX");
+    expect(dodge).toContain("plaqueCenterAabb(x, y, plaque)");
+    expect(dodge).not.toContain("chipPlaqueAabb(x, y, plaque)");
+  });
 });
 
 describe("doorstep bag caption", () => {
