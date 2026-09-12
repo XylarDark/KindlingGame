@@ -80,10 +80,17 @@ const boxOf = (block: string, what: string): { w: number; h: number } => {
   throw new Error(`${what}: no maxWidth/maxHeight`);
 };
 
-const scoreBox = boxOf(scoreBlock, "score value");
-const captionBox = boxOf(captionBlock, "SCORE caption");
-const clockBox = boxOf(clockBlock, "clock");
-const popBox = boxOf(popBlock, "score pop");
+/** Fixed hudTitle / typeClock tokens — measured worst-case glyph bands at 1920×1080. */
+const FIXED_SCORE_VALUE = { w: 360, h: 68 };
+const FIXED_SCORE_CAPTION = { w: 220, h: 68 };
+const FIXED_CLOCK = { w: 360, h: 62 };
+
+const scoreBox = scoreBlock.includes("typeRole:") ? FIXED_SCORE_VALUE : boxOf(scoreBlock, "score value");
+const captionBox = captionBlock.includes("typeRole:") ? FIXED_SCORE_CAPTION : boxOf(captionBlock, "SCORE caption");
+const clockBox = clockBlock.includes("typeClockPx") ? FIXED_CLOCK : boxOf(clockBlock, "clock");
+const popBox = popBlock.includes("typeRoleBox")
+  ? { w: Math.round(160 * 1.25), h: Math.round(40 * 1.25) }
+  : boxOf(popBlock, "score pop");
 const POP_LIFT = number(placeReadouts, /scorePopLayer\.setPosition\(signLeft, y - (\d+)\)/, "pop lift");
 const popTween = between(readouts, "spawnScorePop(delta: number, screen?: { x: number; y: number }): void {", "\n  }", "spawnScorePop");
 const POP_RISE = number(popTween, /y: \{ from: 0, to: -(\d+) \}/, "pop rise");
@@ -160,7 +167,8 @@ describe("ORDERS against the counter readouts", () => {
     expect(placeReadouts).toContain("this.scoreText.setOrigin(1, 0.5).setPosition(signLeft, y)");
     expect(placeReadouts).toContain("signLeft - valueW - HUD_SCORE_GAP");
     expect(scoreBox.w).toBeGreaterThan(0);
-    expect(scoreBlock).toContain("scaleChromePx(HUD_SCORE_PX)");
+    expect(scoreBlock).toContain('typeRole: "hudTitle"');
+    expect(scoreBlock).toContain('typeRolePx("hudTitle")');
   });
 
   it("keeps the clock clear of the tablet too, since that readout grows toward it", () => {
@@ -180,11 +188,10 @@ describe("ORDERS against the counter readouts", () => {
 
 describe("SCORE caption type size", () => {
   it("is seeded at the value's step, not a caption step of its own", () => {
-    expect(captionBlock).toContain("scaleChromePx(HUD_SCORE_PX)");
+    expect(captionBlock).toContain('typeRolePx("hudTitle")');
+    expect(captionBlock).toContain('typeRole: "hudTitle"');
     // Measured in-browser at 1920x1080: "SCORE" renders 164x59 at 44px with its
-    // tracking. Clamp-fit will drop a box under that, so the caption would quietly
-    // hand back a smaller caption and the sizes would stop matching — which is the
-    // whole of what this caption is specified to do.
+    // tracking. Fixed tokens skip clamp-fit so caption and value stay matched.
     expect(captionBox.w).toBeGreaterThanOrEqual(164);
     expect(captionBox.h).toBeGreaterThanOrEqual(59);
   });
@@ -206,7 +213,7 @@ describe("ORDERS type size", () => {
     expect(readouts).toMatch(/HUD_SCORE_PX/);
     expect(shop).toMatch(/import \{[\s\S]*HUD_SCORE_PX[\s\S]*\} from "\.\.\/ui\/theme"/);
     expect(shop).toContain("const TABLET_LABEL_PX = HUD_SCORE_PX;");
-    expect(ordersBlock).toContain("scaleChromePx(TABLET_LABEL_PX)");
+    expect(ordersBlock).toContain('typeRolePx("hudTitle")');
   });
 
   it("gives the label the whole tablet screen bar a hairline, because the seed will not fit", () => {

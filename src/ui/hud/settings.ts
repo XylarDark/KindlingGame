@@ -17,7 +17,8 @@ import {
 } from "../signText";
 import { addUiText } from "../text";
 import { settingsGeom, type SettingsGeom } from "../settingsGeom";
-import { Color, HUD_TYPE_FIT, MENU_TYPE_FIT, scaleChromePx } from "../theme";
+import { Color, HUD_TYPE_FIT, MENU_TYPE_FIT } from "../theme";
+import { typeRolePx } from "../typeScale";
 import type { SafeInset } from "../viewFit";
 import { hudSceneViewport, HUD_TOUCH_MIN_DESIGN } from "../viewFit";
 import {
@@ -335,11 +336,11 @@ export class HudSettings {
       .setInteractive({ useHandCursor: true });
     this.cogHit.on("pointerdown", toggleSettings);
     this.cogCaption = addSignText(this.scene, cogX - cogSize / 2, cogY - cogSize - 8, "Settings", {
-      size: scaleChromePx(HUD_COG_CAPTION_PX),
+      size: typeRolePx("hudSmall"),
+      typeRole: "hudSmall",
       padding: HUD_COG_CAPTION_PAD,
       fontStyle: "600",
       align: "center",
-      ...HUD_TYPE_FIT,
       maxWidth: HUD_COG_CAPTION_BOX.w,
       maxHeight: HUD_COG_CAPTION_BOX.h,
     })

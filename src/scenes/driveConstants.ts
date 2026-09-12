@@ -8,7 +8,7 @@ export const DRIVE_VAN_TEX_H = 104;
 /** Gap between a map anchor and its screen-space sign host. */
 export const DRIVE_CHIP_GAP = 14;
 
-/** Design-space chip box limits (passed through {@link scaleMsgBox}). */
+/** Design-space chip box limits (passed through {@link typeRoleBox}). */
 export const DRIVE_PIN_MAX_W = 200;
 export const DRIVE_PIN_MAX_H = 76;
 export const DRIVE_VAN_MAX_W = 300;

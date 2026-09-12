@@ -14,8 +14,8 @@ import {
   syncSignPlaque,
 } from "../signText";
 import { addUiText } from "../text";
-import { Color, HUD_READOUT_PX, HUD_SCORE_PX, HUD_TYPE_FIT, scaleChromePx, scaleMsgBox, scaleMsgPx } from "../theme";
-import { Type } from "../theme";
+import { Color, HUD_READOUT_PX, HUD_SCORE_PX } from "../theme";
+import { typeClockPx, typeRoleBox, typeRolePx } from "../typeScale";
 import { worldToScreen } from "../worldProject";
 import type { SafeInset } from "../viewFit";
 import { HUD_CORNER_TOP, HUD_SCORE_GAP, HUD_SIGN_GAP, readoutOutline, SCORE_POP_POOL } from "./constants";
@@ -58,13 +58,11 @@ export class HudReadouts {
 
   create(): void {
     this.scoreText = addUiText(this.scene, 0, 0, "", {
-      size: scaleChromePx(HUD_SCORE_PX),
+      size: typeRolePx("hudTitle"),
+      typeRole: "hudTitle",
       color: Color.creamHex,
       fontStyle: "700",
       align: "right",
-      ...HUD_TYPE_FIT,
-      maxWidth: 360,
-      maxHeight: 68,
       ...readoutOutline(HUD_SCORE_PX),
     })
       .setOrigin(1, 0.5)
@@ -72,14 +70,12 @@ export class HudReadouts {
       .setDepth(20);
 
     this.scoreCaption = addUiText(this.scene, 0, 0, "SCORE", {
-      size: scaleChromePx(HUD_SCORE_PX),
+      size: typeRolePx("hudTitle"),
+      typeRole: "hudTitle",
       color: Color.creamHex,
       fontStyle: "700",
       align: "right",
       letterSpacing: 2,
-      ...HUD_TYPE_FIT,
-      maxWidth: 220,
-      maxHeight: 68,
       ...readoutOutline(HUD_SCORE_PX),
     })
       .setOrigin(1, 0.5)
@@ -90,12 +86,9 @@ export class HudReadouts {
     this.warmScorePopPool();
 
     this.clockText = addUiText(this.scene, 0, 0, "", {
-      size: scaleChromePx(HUD_READOUT_PX),
+      size: typeClockPx(),
       color: Color.creamHex,
       fontStyle: "700",
-      ...HUD_TYPE_FIT,
-      maxWidth: 360,
-      maxHeight: 62,
       ...readoutOutline(HUD_READOUT_PX),
     })
       .setOrigin(0, 0.5)
@@ -103,22 +96,24 @@ export class HudReadouts {
       .setDepth(20);
 
     this.coverText = addSignText(this.scene, 0, 0, "", {
-      size: scaleMsgPx(13),
+      size: typeRolePx("hudSmall"),
+      typeRole: "hudSmall",
       fontStyle: "600",
       noWrap: true,
-      maxWidth: scaleMsgBox(280),
-      maxHeight: scaleMsgBox(40),
+      maxWidth: typeRoleBox(280, "hudSmall"),
+      maxHeight: typeRoleBox(40, "hudSmall"),
     })
       .setOrigin(0, 0)
       .setDepth(20)
       .setVisible(false);
 
     this.doorTitleText = addSignText(this.scene, 0, 0, "", {
-      size: scaleMsgPx(16),
+      size: typeRolePx("hudBody"),
+      typeRole: "hudBody",
       fontStyle: "700",
       noWrap: true,
-      maxWidth: scaleMsgBox(900),
-      maxHeight: scaleMsgBox(48),
+      maxWidth: typeRoleBox(900, "hudBody"),
+      maxHeight: typeRoleBox(48, "hudBody"),
     })
       .setOrigin(0, 0.5)
       .setDepth(20)
@@ -280,11 +275,11 @@ export class HudReadouts {
   warmScorePopPool(): void {
     for (let i = 0; i < SCORE_POP_POOL; i++) {
       const label = addSignText(this.scene, 0, 0, "", {
-        size: Type.heading,
+        size: typeRolePx("hudBody"),
+        typeRole: "hudBody",
         fontStyle: "700",
-        padding: { x: 10, y: 4 },
-        maxWidth: 160,
-        maxHeight: 40,
+        maxWidth: typeRoleBox(160, "hudBody"),
+        maxHeight: typeRoleBox(40, "hudBody"),
       })
         .setOrigin(0, 0.5)
         .setVisible(false)
