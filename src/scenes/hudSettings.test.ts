@@ -92,6 +92,13 @@ describe("settings cog panel", () => {
     expect(layout).not.toMatch(/const cogX = GAME_WIDTH - 24 - inset\.right/);
     expect(layout).toContain("signPlaqueExtents(this.cogCaption)");
     expect(layout).toContain("cogCenterX");
+    expect(layout, "caption centers on cog AABB").toMatch(
+      /cogCenterX = this\.cog\.x - this\.cog\.displayWidth \/ 2/,
+    );
+    expect(layout, "host x offsets measured plaque mid").toMatch(/plaqueMidX/);
+    expect(layout, "caption host tracks clamped plaque center").toMatch(
+      /cogCaptionX = clampedCenterX - plaqueMidX/,
+    );
   });
 
   it("keeps a hud button's hit area on the box it paints", () => {

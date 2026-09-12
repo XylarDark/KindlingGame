@@ -218,6 +218,16 @@ describe("SCORE caption type size", () => {
   });
 });
 
+describe("ORDERS queue badge", () => {
+  it("pins the count badge to the tablet top-right bezel", () => {
+    const badgeBlock = between(shop, "this.queueBadge = addSignText(", ".setVisible(false)", "queueBadge");
+    expect(badgeBlock).toContain("tab.left + tab.w - badgeInset");
+    expect(badgeBlock).toContain("tab.top + badgeInset");
+    expect(badgeBlock).toMatch(/\.setOrigin\(1,\s*0\)/);
+    expect(badgeBlock).not.toMatch(/\.setOrigin\(0\.5\)/);
+  });
+});
+
 describe("ORDERS type size", () => {
   it("is seeded from the score's own constant rather than a copy of the number", () => {
     expect(readouts).toMatch(/HUD_SCORE_PX/);

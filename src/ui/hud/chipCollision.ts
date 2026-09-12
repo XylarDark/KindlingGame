@@ -92,14 +92,15 @@ export class ChipPlacer {
   }
 
   /** Candidate offsets to try when the preferred position overlaps a blocker. */
-  candidateOffsets(plaque: ChipPlaqueExtents): readonly { dx: number; dy: number }[] {
-    return [
+  candidateOffsets(plaque: ChipPlaqueExtents, headHang = false): readonly { dx: number; dy: number }[] {
+    const offsets: { dx: number; dy: number }[] = [
       { dx: 0, dy: 0 },
       { dx: 0, dy: -(CHIP_GAP + plaque.panelH) },
       { dx: CHIP_GAP + plaque.panelW, dy: 0 },
       { dx: -(CHIP_GAP + plaque.panelW), dy: 0 },
-      { dx: 0, dy: CHIP_GAP + plaque.panelH },
     ];
+    if (!headHang) offsets.push({ dx: 0, dy: CHIP_GAP + plaque.panelH });
+    return offsets;
   }
 
   findOpenSlot(
@@ -108,8 +109,9 @@ export class ChipPlacer {
     plaque: ChipPlaqueExtents,
     priority: number,
     id: string,
+    headHang = false,
   ): { x: number; y: number; aabb: ChipAabb } | null {
-    for (const { dx, dy } of this.candidateOffsets(plaque)) {
+    for (const { dx, dy } of this.candidateOffsets(plaque, headHang)) {
       const { x, y, aabb } = clampChipHost(preferredX + dx, preferredY + dy, plaque, this.safe);
       if (!aabbInside(aabb, this.safe)) continue;
       if (this.collides(aabb, priority)) continue;

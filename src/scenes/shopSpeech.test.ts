@@ -140,6 +140,23 @@ describe("shop speech chip resolver", () => {
     expect(src).toContain("placeChip(placer");
     expect(src).toContain("speechSlotId");
   });
+
+  it("anchors leadBubble above the head via signYAbove, not downward dodge", () => {
+    const resolve = between(src, "private resolveShopChips(", "\n  }", "resolveShopChips");
+    expect(resolve, "head anchor helper").toContain("headBubbleAnchor");
+    const headAnchor = between(src, "private headBubbleAnchor(", "\n  }", "headBubbleAnchor");
+    expect(headAnchor, "uses model head top + plaque gap").toMatch(
+      /signYAbove\(chip, modelHeadTop\(model\), CUSTOMER_SPEECH_GAP\)/,
+    );
+    expect(resolve, "lead preferred x beside fetch walk").toMatch(/leadX = this\.keyLead\.x - 168/);
+    expect(resolve, "lead alt centered on sprite").toMatch(/\{ x: this\.keyLead\.x, y: leadAnchor\.y \}/);
+    expect(resolve, "forbids downward resolver shift").toMatch(
+      /placeShopChip\([\s\S]*"leadBubble"[\s\S]*true,\s*\)/,
+    );
+    expect(resolve, "does not reuse stale host pos for lead").not.toMatch(
+      /keyLeadBubble[\s\S]*signHostPosition\(this\.keyLeadBubble\)/,
+    );
+  });
 });
 
 describe("side speech collision layout", () => {
