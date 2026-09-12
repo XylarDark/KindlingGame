@@ -13,9 +13,9 @@ export const SLOT_GUTTER = 12;
  *
  * | id            | Anchor                         | Who |
  * |---------------|--------------------------------|-----|
- * | scoreClock    | COUNTER_SIGN in shop; top-left safe bar on drive/door | SCORE caption + value + clock |
+ * | scoreClock    | COUNTER_SIGN in shop; top-left on drive; top-right at door | SCORE caption + value + clock |
  * | cover         | Under scoreClock, maxWidth capped from shop mark | shopCover while keyLead in shop |
- * | doorTitle     | Same slot as cover; mutually exclusive | Door stop line on HUD |
+ * | doorTitle     | Top-center safe inset for whole door visit | Orange stop line on HUD |
  * | toast         | Top-center safe inset | Instruction / status line |
  * | settings      | Bottom-right cog AABB | Settings chrome |
  * | phone         | Above settings or left of it | Drive call UI |
@@ -29,7 +29,7 @@ export const SLOT_GUTTER = 12;
  * | drivePin      | (hidden) | Removed — map stays clean on Drive |
  * | driveVan      | (hidden) | Removed — van toast banner off map |
  * | driveShop     | (hidden) | Removed — shop-lot caption off map |
- * | doorPrompt    | Top-center safe inset | Door action instructions |
+ * | doorPrompt    | Above customer head (headHang) | Door action instructions |
  * | scorePop      | Beside scoring actor slot | Hud flash |
  */
 export type ChipSlotId =

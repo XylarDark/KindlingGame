@@ -32,7 +32,7 @@ import {
 } from "./constants";
 import type { ChipPlacer } from "./chipCollision";
 import { placeChip, textInkAabb, unionAabb } from "./placeChips";
-import { chipPriority, SLOT_GUTTER } from "./slots";
+import { CHIP_GAP, chipPriority, SLOT_GUTTER } from "./slots";
 
 /** Plaque center when the panel's top-left corner sits at `(left, top)`. */
 function plaqueCenterFromTopLeft(
@@ -73,6 +73,8 @@ export class HudReadouts {
 
   private captionPx = HUD_SCORE_PX;
   readoutsInShop = true;
+  /** Driver at the doorstep — SCORE + clock pin top-right; orange status top-center. */
+  readoutsAtDoor = false;
   readoutCorner: ReadoutCorner = { left: 28, right: GAME_WIDTH - 28, top: HUD_CORNER_TOP };
   private lastDoorTitle = "";
   private lastReadoutsHidden: boolean | null = null;
@@ -152,8 +154,6 @@ export class HudReadouts {
     this.readoutCorner = { left, right, top: HUD_CORNER_TOP + inset.top };
     const coverCenter = plaqueCenterFromTopLeft(this.coverText, left, this.readoutCorner.top + 40);
     setSignPlaqueCenter(this.coverText, coverCenter.x, coverCenter.y);
-    const doorCenter = plaqueCenterFromTopLeft(this.doorTitleText, left, this.readoutCorner.top + 44);
-    setSignPlaqueCenter(this.doorTitleText, doorCenter.x, doorCenter.y);
   }
 
   /**
@@ -185,6 +185,17 @@ export class HudReadouts {
     this.matchCaptionToValue();
     const valueW = this.scoreText.width;
     const captionW = this.scoreCaption.width;
+    if (this.readoutsAtDoor) {
+      const { right, top } = this.readoutCorner;
+      const edge = right - 4;
+      this.clockText.setOrigin(1, 0.5).setPosition(edge, top);
+      this.scoreText.setOrigin(1, 0.5).setPosition(edge - this.clockText.width - HUD_SCORE_GAP, top);
+      this.scoreCaption
+        .setOrigin(1, 0.5)
+        .setPosition(edge - this.clockText.width - HUD_SCORE_GAP - valueW - HUD_SCORE_GAP, top);
+      this.scorePopLayer.setPosition(right - this.clockText.width - HUD_SCORE_GAP - valueW / 2, top - 46);
+      return;
+    }
     if (this.readoutsInShop) {
       const { signLeft, signRight, y } = this.counterSignReadoutAnchors();
       let gap = HUD_SCORE_GAP;
@@ -217,7 +228,8 @@ export class HudReadouts {
   }
 
   paintReadoutChrome(atDoor: boolean, showId: boolean, chrome: HudReadoutsChrome): void {
-    const hide = atDoor || showId;
+    // Door/ID: Luke wants SCORE + clock visible top-right for the whole porch visit.
+    const hide = !atDoor && showId;
     if (hide === this.lastReadoutsHidden) return;
     this.lastReadoutsHidden = hide;
     this.scoreText.setVisible(!hide);
@@ -245,10 +257,8 @@ export class HudReadouts {
     const show = title.trim().length > 0;
     this.doorTitleText.setVisible(show);
     if (!show) return;
-    if (title !== this.lastDoorTitle) {
-      this.lastDoorTitle = title;
-      setSignCopy(this.doorTitleText, title);
-    }
+    if (title !== this.lastDoorTitle) this.lastDoorTitle = title;
+    if (this.doorTitleText.text !== title) setSignCopy(this.doorTitleText, title);
     setSignAccent(this.doorTitleText, destOrder && isSlaUrgent(destOrder.slaRemainingMs) ? Color.danger : undefined);
     syncSignPlaque(this.doorTitleText);
   }
@@ -351,7 +361,7 @@ export class HudReadouts {
   }
 
   /** Register score row and resolve cover / door-title plaques through the frame placer. */
-  resolvePlaqueSlots(placer: ChipPlacer, _atDoor: boolean): void {
+  resolvePlaqueSlots(placer: ChipPlacer, atDoor: boolean): void {
     if (this.scoreText.visible) {
       placer.register(
         "scoreClock",
@@ -364,9 +374,24 @@ export class HudReadouts {
       const center = plaqueCenterFromTopLeft(this.coverText, this.readoutCorner.left, coverY);
       placeChip(placer, "cover", this.coverText, center.x, center.y, chipPriority("cover"));
     }
-    if (this.doorTitleText.visible && String(this.doorTitleText.text).trim()) {
-      const center = plaqueCenterFromTopLeft(this.doorTitleText, this.readoutCorner.left, coverY + 4);
-      placeChip(placer, "doorTitle", this.doorTitleText, center.x, center.y, chipPriority("doorTitle"));
+    if (atDoor && this.doorTitleText.visible && String(this.doorTitleText.text).trim()) {
+      syncSignPlaque(this.doorTitleText);
+      const plaque = signPlaqueExtents(this.doorTitleText);
+      const centerY = this.readoutCorner.top + SLOT_GUTTER + plaque.panelH / 2;
+      let centerX = placer.viewW / 2;
+      if (this.scoreText.visible) {
+        const scoreLeft = Math.min(
+          textInkAabb(this.scoreCaption).left,
+          textInkAabb(this.scoreText).left,
+          textInkAabb(this.clockText).left,
+        );
+        const halfW = plaque.panelW / 2;
+        const maxCenter = scoreLeft - CHIP_GAP - halfW;
+        if (centerX + halfW > scoreLeft - CHIP_GAP) {
+          centerX = Math.max(placer.safe.left + halfW, maxCenter);
+        }
+      }
+      placeChip(placer, "doorTitle", this.doorTitleText, centerX, centerY, chipPriority("doorTitle"));
     }
   }
 

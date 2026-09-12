@@ -114,7 +114,7 @@ export class HudScene extends Phaser.Scene {
   /** Last shiftEnded passed to setPwaIdle — edge only, not every frame. */
   private pwaIdleShiftEnded = false;
   /** Door/HUD stacking — bringToTop only when this changes (not every frame). */
-  private doorTopMode: "id" | "play" | "hud" = "hud";
+  private doorTopMode: "doorHud" | "hud" = "hud";
   private lastClockLabel = "";
   private lastToast = "";
   private lastPadLabel = "";
@@ -293,6 +293,7 @@ export class HudScene extends Phaser.Scene {
     const cogLeft = this.hudSettings.cog.x - this.hudSettings.cog.displayWidth;
     const cogTop = this.hudSettings.cog.y - this.hudSettings.cog.displayHeight;
     this.phoneWidget.layout(inset, cogLeft, cogTop, viewW, viewH);
+    this.idCard.layout(inset, viewW, viewH);
     this.placeInstructionChip(this.toastText, inset, viewW, viewH);
     this.padCenter = { x: 196 + inset.left, y: viewH - 220 - inset.bottom };
     this.lastPadFlash = null;
@@ -319,14 +320,18 @@ export class HudScene extends Phaser.Scene {
     const scoreLabel = String(snap.score);
     const scoreResized = scoreLabel !== this.readouts.scoreText.text;
     if (scoreResized) this.readouts.scoreText.setText(scoreLabel);
+    const atDoor = snap.dropoff.phase === "atDoor";
     if (snap.clockLabel !== this.lastClockLabel) {
       this.lastClockLabel = snap.clockLabel;
       this.readouts.clockText.setText(snap.clockLabel);
+      if (atDoor) this.readouts.placeReadouts();
     }
     const inShop = snap.playerRole !== "driver";
     const modeChanged = inShop !== this.readouts.readoutsInShop;
     this.readouts.readoutsInShop = inShop;
-    if (scoreResized || modeChanged || this.readouts.readoutsInShop) this.readouts.placeReadouts();
+    const doorModeChanged = atDoor !== this.readouts.readoutsAtDoor;
+    this.readouts.readoutsAtDoor = atDoor;
+    if (!atDoor && (scoreResized || modeChanged)) this.readouts.placeReadouts();
     this.consumeScoreFlash(snap);
     this.consumeSfx(snap);
     this.syncResults(snap);
@@ -351,7 +356,6 @@ export class HudScene extends Phaser.Scene {
 
     const drop = snap.dropoff;
     const showPhone = snap.playerRole === "driver" && (drop.phase === "atCurb" || drop.phase === "calling");
-    const atDoor = drop.phase === "atDoor";
     const flashPhone = flashNext?.kind === "phone";
 
     this.phoneWidget.phone.setVisible(showPhone);
@@ -503,6 +507,7 @@ export class HudScene extends Phaser.Scene {
     }
     this.syncDriveScene(snap);
     this.syncDoorScene(snap);
+    if (atDoor) this.readouts.placeReadouts();
     this.resolveHudChips(snap, atDoor, showPhone, showPad, this.toastText.visible);
     this.syncMusicIfNeeded(snap.gameMs);
   }
@@ -811,7 +816,6 @@ export class HudScene extends Phaser.Scene {
 
   private syncDoorScene(snap: SimSnapshot): void {
     const wantDoor = snap.playerRole === "driver" && snap.dropoff.phase === "atDoor";
-    const showId = !!snap.dropoff.idCard && snap.dropoff.idAsked && !snap.dropoff.idChecked;
     const sceneKey = `${snap.playerRole}:${snap.dropoff.phase}:${wantDoor ? 1 : 0}`;
     if (sceneKey !== this.lastDoorSceneKey) {
       this.lastDoorSceneKey = sceneKey;
@@ -835,15 +839,13 @@ export class HudScene extends Phaser.Scene {
         }
       }
     }
-    const topMode: "id" | "play" | "hud" = wantDoor ? (showId ? "id" : "play") : "hud";
+    // Door playfield under HUD chrome — score, status, and ID must stay visible at the porch.
+    const topMode: "doorHud" | "hud" = wantDoor ? "doorHud" : "hud";
     if (topMode === this.doorTopMode) return;
     this.doorTopMode = topMode;
-    if (topMode === "id") {
+    if (topMode === "doorHud") {
       this.scene.bringToTop("door");
       this.scene.bringToTop();
-    } else if (topMode === "play") {
-      this.scene.bringToTop();
-      this.scene.bringToTop("door");
     } else {
       this.scene.bringToTop();
     }

@@ -127,19 +127,33 @@ describe("shop capture seed geometry", () => {
 
 describe("door prompt placement contract", () => {
   const doorSrc = readScene("../scenes/DoorScene.ts");
+  const readoutsSrc = readScene("../ui/hud/readouts.ts");
   const DOOR_CHIP_GAP = 36;
-  const insetTop = 0;
+  const CUSTOMER_X = 960 + 200;
+  const headTop = 720;
 
-  it("preferred door prompt center matches top-center band math", () => {
+  it("preferred door prompt center sits above the customer head", () => {
     const plaque = mockSpeechPlaque(440, 72);
-    const preferredY = insetTop + DOOR_CHIP_GAP + plaque.panelH / 2;
-    const aabb = plaqueAabbFromCenter(GAME_WIDTH / 2, preferredY, plaque);
-    assertPlacement(topCenter(aabb, GAME_WIDTH, insetTop, DOOR_CHIP_GAP), "door prompt");
+    const center = speechPlaqueCenterAboveHead(plaque, CUSTOMER_X, headTop, DOOR_CHIP_GAP);
+    const aabb = plaqueAabbFromCenter(center.x, center.y, plaque);
+    assertPlacement(aboveHead(aabb, headTop, DOOR_CHIP_GAP), "door prompt");
   });
 
   it("door scene still resolves through placeChip after anchor geometry", () => {
-    expect(doorSrc).toContain("resolveDoorPrompt(x, y)");
+    expect(doorSrc).toContain("resolveDoorPrompt(x, preferred.y)");
     expect(doorSrc).toContain('placeChip(placer, "doorPrompt"');
+    expect(doorSrc).toContain("speechPlaqueAboveHead");
+  });
+
+  it("door orange status resolves top-center for the whole atDoor visit", () => {
+    const margin = 12;
+    const plaque = mockSpeechPlaque(520, 48);
+    const centerY = margin + plaque.panelH / 2;
+    const aabb = plaqueAabbFromCenter(GAME_WIDTH / 2, centerY, plaque);
+    assertPlacement(topCenter(aabb, GAME_WIDTH, 0, margin), "door status");
+    expect(readoutsSrc).toContain("atDoor && this.doorTitleText.visible");
+    expect(readoutsSrc).toMatch(/let centerX = placer\.viewW \/ 2/);
+    expect(readoutsSrc).toContain("paintDoorTitle");
   });
 });
 
@@ -160,7 +174,6 @@ describe("HUD toast / instruction top-center", () => {
     expect(hudSrc).toContain("inset.top + SCREEN_CHIP_MARGIN + toastPlaque.panelH / 2");
   });
 
-  // TODO: when door orange-status always-on chip lands, assert its band here (topCenter + no face overlap).
 });
 
 describe("shop scene uses exported placement helpers", () => {

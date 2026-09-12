@@ -7,6 +7,7 @@ import { enableItemHit } from "../../input/hit";
 import { addUiText } from "../text";
 import { Color, HUD_TYPE_FIT } from "../theme";
 import { GAME_HEIGHT, GAME_WIDTH } from "../../sim/constants";
+import type { SafeInset } from "../viewFit";
 import {
   ID_CARD_FILL,
   ID_CARD_H,
@@ -82,6 +83,15 @@ export class HudIdCard {
   private idDrawnFor = "";
 
   constructor(private readonly scene: Phaser.Scene) {}
+
+  /** Keep the modal card centered in the HUD viewport (resize / safe-area aware). */
+  layout(_inset: SafeInset, viewW: number, viewH: number): void {
+    const cx = viewW / 2;
+    const cy = viewH / 2;
+    this.idPanel.setPosition(cx, cy);
+    this.idDim.setPosition(cx, cy);
+    this.idDim.setSize(viewW, viewH);
+  }
 
   create(): void {
     this.idDim = this.scene.add
