@@ -356,6 +356,35 @@ describe("GameSim order loops", () => {
     expect(sim.snapshot().toast).toBe("");
   });
 
+  it("dedupes holding copy between key lead and customer", () => {
+    const sim = GameSim.create({ seed: 2, autoSpawn: false });
+    const order = sim.spawnOrder("inStore");
+    waitForCustomerAtCounter(sim, order.id);
+    sim.shopClick({ type: "strain", skuId: order.skuId });
+    waitForFetch(sim);
+    const sku = sim.catalog.find((s) => s.id === order.skuId)!;
+    const snap = sim.snapshot();
+    expect(snap.keyLeadLine).toBe(`Holding ${sku.name}`);
+    const customer = snap.customers.find((c) => c.orderId === order.id);
+    expect(customer?.bubble).toBe("Tap me");
+    expect(customer?.feedback ?? "").toBe("");
+    sim.shopClick({ type: "strain", skuId: order.skuId });
+    expect(sim.snapshot().customers.find((c) => c.orderId === order.id)?.feedback ?? "").toBe("");
+  });
+
+  it("dedupes holding copy for ticket bagging on the key lead only", () => {
+    const sim = GameSim.create({ seed: 1, autoSpawn: false });
+    const order = sim.spawnOrder("pickup");
+    sim.shopClick({ type: "tablet", orderId: order.id });
+    sim.shopClick({ type: "strain", skuId: order.skuId });
+    waitForFetch(sim);
+    const sku = sim.catalog.find((s) => s.id === order.skuId)!;
+    expect(sim.snapshot().keyLeadLine).toBe(`Holding ${sku.name}. Tap a bag`);
+    sim.shopClick({ type: "strain", skuId: order.skuId });
+    expect(sim.snapshot().keyLeadLine).toBe(`Holding ${sku.name}. Tap a bag`);
+    expect(sim.snapshot().ordersNotice).not.toMatch(/Already holding/);
+  });
+
   it("scores on-time and late delivery handoffs", () => {
     const onTime = GameSim.create({ seed: 4, autoSpawn: false });
     fillTicket(onTime, "delivery", { destinationId: "house-1" });

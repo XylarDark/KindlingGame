@@ -885,7 +885,7 @@ export class GameSim {
         return;
       }
       if (this.handSkuId === skuId) {
-        this.setCustomerFeedback(walkIn.id, `Already holding ${sku.name}. Tap me.`);
+        this.clearCustomerFeedback(walkIn.id);
         return;
       }
       this.clearCustomerFeedback(walkIn.id);
@@ -899,7 +899,7 @@ export class GameSim {
     const ticket = this.selectedTicket();
     if (ticket) {
       if (this.handSkuId === ticket.skuId) {
-        this.setOrdersNotice(`Already holding ${skuById(this.catalog, ticket.skuId)?.name}. Tap a bag.`);
+        this.clearTargetCallout();
         return;
       }
       if (skuId !== ticket.skuId) {
@@ -1318,8 +1318,10 @@ export class GameSim {
       return "Tap me — pickup";
     }
     if (Math.abs(customer.x - customer.targetX) > 24) return "Coming in…";
-    if (order.status === "readyForHandoff") return `Tap me — ${sku.name}`;
-    if (this.handSkuId === order.skuId) return `Tap me — ${sku.name}`;
+    if (order.status === "readyForHandoff") {
+      return this.handSkuId === order.skuId ? "Tap me" : `Tap me — ${sku.name}`;
+    }
+    if (this.handSkuId === order.skuId) return "Tap me";
     return `I want ${sku.name}`;
   }
 
@@ -1744,9 +1746,7 @@ export class GameSim {
     if (this.handSkuId) {
       const sku = skuById(this.catalog, this.handSkuId);
       const name = sku?.name ?? "it";
-      return this.selectedTicket()
-        ? `Holding ${name}. Tap a bag.`
-        : `Holding ${name}. Tap the customer.`;
+      return this.selectedTicket() ? `Holding ${name}. Tap a bag` : `Holding ${name}`;
     }
     if (!selected || selected.type === "inStore") return null;
     const sku = skuById(this.catalog, selected.skuId);
