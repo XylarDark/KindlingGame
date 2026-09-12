@@ -34,6 +34,11 @@ export const PERSON_DISPLAY_MAX_H = Math.round(PERSON_HAT_H * PEOPLE_SCALE);
 /** Shirt mark sits above the laminate; head stays under the TVs. */
 export const KEYLEAD = { x: COUNTER_MID, y: COUNTER_TOP + 78 };
 
+/** Head top when the key lead stands at {@link KEYLEAD} (bottom-anchored, tallest hat frame). */
+export function keyLeadSlotHeadTop(): number {
+  return KEYLEAD.y - PERSON_DISPLAY_MAX_H;
+}
+
 const COUNTER_SIGN_H = 64;
 /** Shade band + painted edge along the bottom of the counter face. */
 export const COUNTER_FACE_SHADE_H = 28;
