@@ -480,6 +480,9 @@ function drawStreetCar(
   }
 }
 
+/** Shop-window traffic pace — 2× travel time ≈ half speed (Luke polish #74). */
+const SHOP_WINDOW_CAR_SLOWDOWN = 2;
+
 /** Periods keep a car entering at hour=12 and hour=20.5 (those gameMs land on 15000). */
 const STREET_CARS: { period: number; offset: number; travel: number; dir: 1 | -1; body: number; lane: number }[] = [
   { period: 15000, offset: 0, travel: 3500, dir: 1, body: Pal.rust, lane: 0 },
@@ -500,9 +503,10 @@ function paintPassingCars(
   const span = STREET_W + cw * 2;
   for (const car of STREET_CARS) {
     if (kind === "door" && car.period > 23000) continue;
+    const travel = car.travel * SHOP_WINDOW_CAR_SLOWDOWN;
     const phase = ((gameMs + car.offset) % car.period + car.period) % car.period;
-    if (phase >= car.travel) continue;
-    const t = phase / car.travel;
+    if (phase >= travel) continue;
+    const t = phase / travel;
     const x = car.dir === 1 ? originX - cw + t * span : originX + STREET_W - t * span;
     drawStreetCar(g, x, streetY + car.lane, car.dir, car.body, sky, clip, kind);
   }

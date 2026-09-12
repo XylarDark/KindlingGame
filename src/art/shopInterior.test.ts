@@ -99,4 +99,11 @@ describe("delivery window paint", () => {
     // outgrew the backdrop would show bare sky down both edges of the glass.
     expect(streetW).toBeGreaterThan(WINDOW.w);
   });
+
+  it("slows shop-window passing cars so they read as ambient, not racing", () => {
+    expect(src).toContain("SHOP_WINDOW_CAR_SLOWDOWN");
+    expect(src).toMatch(/travel = car\.travel \* SHOP_WINDOW_CAR_SLOWDOWN/);
+    const slowdown = Number(src.match(/const SHOP_WINDOW_CAR_SLOWDOWN = (\d+);/)?.[1]);
+    expect(slowdown).toBeGreaterThanOrEqual(2);
+  });
 });

@@ -18,13 +18,19 @@ export function doorstepQuery(): DoorstepShot | null {
   return null;
 }
 
-/** `?capture=shop-counter|shop-lead` seeds a lane still without promo drive/door setup. */
-export type CaptureSeed = "shop-counter" | "shop-lead";
+/** `?capture=shop-*` seeds a lane still without promo drive/door setup. */
+export type CaptureSeed = "shop-counter" | "shop-lead" | "shop-holding" | "shop-orders-badge";
 
 export function captureQuery(): CaptureSeed | null {
   try {
     const q = new URLSearchParams(globalThis.location?.search ?? "").get("capture");
-    if (q === "shop-counter" || q === "shop-lead") return q;
+    if (
+      q === "shop-counter" ||
+      q === "shop-lead" ||
+      q === "shop-holding" ||
+      q === "shop-orders-badge"
+    )
+      return q;
   } catch {
     /* ignore */
   }
@@ -110,6 +116,21 @@ export function applyCaptureSeed(sim: GameSim): void {
     const order = sim.spawnOrder("inStore");
     waitCustomerSettled(sim, order.id);
     for (let i = 0; i < 40; i++) sim.tick(50);
+    return;
+  }
+
+  if (seed === "shop-holding") {
+    const order = sim.spawnOrder("inStore");
+    waitCustomerSettled(sim, order.id);
+    sim.shopClick({ type: "strain", skuId: order.skuId });
+    waitFetch(sim);
+    return;
+  }
+
+  if (seed === "shop-orders-badge") {
+    sim.spawnOrder("pickup");
+    sim.spawnOrder("delivery", { destinationId: "house-1" });
+    for (let i = 0; i < 16; i++) sim.tick(50);
     return;
   }
 

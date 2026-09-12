@@ -221,16 +221,18 @@ describe("SCORE caption type size", () => {
 describe("ORDERS queue badge", () => {
   it("pins the count badge to the tablet top-right bezel", () => {
     const badgeBlock = between(shop, "this.queueBadge = addSignText(", ".setVisible(false)", "queueBadge");
-    expect(badgeBlock).toContain("tab.left + tab.w - badgeInset");
-    expect(badgeBlock).toContain("tab.top + badgeInset");
     expect(badgeBlock).toMatch(/\.setOrigin\(1,\s*0\)/);
     expect(badgeBlock).not.toMatch(/\.setOrigin\(0\.5\)/);
+    expect(shop).toContain("private pinQueueBadge(");
   });
 
   it("reapplies badge position on syncTablet so layout cannot drift", () => {
     const sync = between(shop, "private syncTablet(snap: SimSnapshot, pulse: number, flash: boolean): void {", "\n  }", "syncTablet");
-    expect(sync).toContain("setSignPosition(this.queueBadge, tab.left + tab.w - badgeInset, tab.top + badgeInset)");
-    expect(sync).toContain("syncSignPlaque(this.queueBadge)");
+    expect(sync).toContain("this.pinQueueBadge(tab)");
+    const pin = between(shop, "private pinQueueBadge(", "\n  }", "pinQueueBadge");
+    expect(pin).toContain("syncSignPlaque(this.queueBadge)");
+    expect(pin).toContain("tab.left + tab.w - badgeInset - ext.rightLocal");
+    expect(pin).toContain("tab.top + badgeInset - ext.topLocal");
   });
 });
 

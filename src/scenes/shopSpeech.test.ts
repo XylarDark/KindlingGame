@@ -64,11 +64,11 @@ describe("speech stays off the models it belongs to", () => {
     expect(sync, "no unconditional key-lead setText").not.toMatch(/keyLeadBubble[\s\S]*?\.setText\(callout \?\? ""\)/);
     expect(sync, "pin key-lead only when shown").toMatch(/if \(showKeyLeadBubble\)/);
     expect(sync, "pin driver only when shown").toMatch(/if \(showDriverBubble\)/);
-    expect(sync, "key-lead pin uses slot head + TV band, not live sprite").toMatch(
-      /leadSpeechPlaqueCenter\([\s\S]*KEYLEAD\.x[\s\S]*keyLeadSlotHeadTop\(\)/,
+    expect(sync, "key-lead pin uses slot head above-head center, not live sprite").toMatch(
+      /speechPlaqueAboveHead\(this\.keyLeadBubble, KEYLEAD\.x, keyLeadSlotHeadTop\(\)/,
     );
     expect(sync, "key-lead pin does not track live sprite x/y").not.toMatch(
-      /leadSpeechPlaqueCenter\([\s\S]*this\.keyLead\.(x|y)/,
+      /speechPlaqueAboveHead\([\s\S]*this\.keyLead\.(x|y)/,
     );
     expect(sync, "driver pin uses head-above helper").toMatch(
       /speechPlaqueAboveHead\(this\.driverBubble, DRIVER\.x, modelHeadTop\(this\.driver\)\)/,
@@ -138,13 +138,13 @@ describe("shop speech chip resolver", () => {
     expect(src).toContain("speechSlotId");
   });
 
-  it("anchors leadBubble between head and TVs with headHang", () => {
+  it("anchors leadBubble above KEYLEAD slot head with headHang", () => {
     const resolve = between(src, "private resolveShopChips(", "\n  }", "resolveShopChips");
-    expect(resolve, "lead preferred via slot band, not live sprite").toMatch(
-      /leadSpeechPlaqueCenter\([\s\S]*KEYLEAD\.x[\s\S]*keyLeadSlotHeadTop\(\)/,
+    expect(resolve, "lead preferred above slot head center, not live sprite").toMatch(
+      /speechPlaqueAboveHead\(this\.keyLeadBubble, KEYLEAD\.x, keyLeadSlotHeadTop\(\)/,
     );
     expect(resolve, "lead resolver does not track live keyLead x").not.toMatch(
-      /leadSpeechPlaqueCenter\([\s\S]*this\.keyLead\.x/,
+      /speechPlaqueAboveHead\([\s\S]*this\.keyLead\.x/,
     );
     expect(resolve, "driver preferred via speechPlaqueAboveHead").toMatch(
       /speechPlaqueAboveHead\(this\.driverBubble, DRIVER\.x, modelHeadTop\(this\.driver\)\)/,

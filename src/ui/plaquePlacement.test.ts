@@ -15,8 +15,6 @@ import {
   keyLeadSlotHeadTop,
   layoutCustomerSpeech,
   PERSON_DISPLAY_MAX_H,
-  TV_GRID_TOP,
-  TV_H,
 } from "../maps/shopT0";
 import { GAME_WIDTH } from "../sim/constants";
 import { GameSim } from "../sim/gameSim";
@@ -24,8 +22,6 @@ import type { ChipPlaqueExtents } from "./hud/chipCollision";
 import {
   aboveHead,
   assertPlacement,
-  inHeadTvBandPlaque,
-  leadSpeechPlaqueCenterFromExtents,
   overlapsObstacle,
   plaqueAabbFromCenter,
   speechPlaqueCenterAboveHead,
@@ -66,13 +62,12 @@ describe("plaque placement contract helpers", () => {
     expect(aboveHead(aabb, headTop, gap).ok).toBe(false);
   });
 
-  it("inHeadTvBand passes for key-lead slot geometry", () => {
+  it("aboveHead passes for key-lead slot geometry centered on KEYLEAD", () => {
     const headTop = keyLeadSlotHeadTop();
-    const tvBottom = TV_GRID_TOP + TV_H;
-    const plaque = mockSpeechPlaque(280, 48);
-    const center = leadSpeechPlaqueCenterFromExtents(plaque, KEYLEAD.x, headTop, tvBottom, CUSTOMER_SPEECH_GAP);
+    const plaque = mockSpeechPlaque(320, 48);
+    const center = speechPlaqueCenterAboveHead(plaque, KEYLEAD.x, headTop, CUSTOMER_SPEECH_GAP);
     const aabb = plaqueAabbFromCenter(center.x, center.y, plaque);
-    expect(inHeadTvBandPlaque(aabb, headTop, tvBottom, CUSTOMER_SPEECH_GAP).ok).toBe(true);
+    expect(center.x).toBe(KEYLEAD.x);
     assertPlacement(aboveHead(aabb, headTop, CUSTOMER_SPEECH_GAP), "key-lead above slot head");
   });
 
@@ -96,20 +91,20 @@ describe("shop capture seed geometry", () => {
     vi.unstubAllGlobals();
   });
 
-  it("shop-lead speech lands in KEYLEAD slot head↔TV band", () => {
+  it("shop-holding speech sits above KEYLEAD slot head center", () => {
     const sim = GameSim.create({ seed: 2, autoSpawn: false });
-    vi.stubGlobal("location", { search: "?capture=shop-lead" });
+    vi.stubGlobal("location", { search: "?capture=shop-holding" });
     applyCaptureSeed(sim);
 
     const headTop = keyLeadSlotHeadTop();
-    const tvBottom = TV_GRID_TOP + TV_H;
     for (const panelH of [40, 48, 56, 64]) {
-      const plaque = mockSpeechPlaque(260, panelH);
-      const center = leadSpeechPlaqueCenterFromExtents(plaque, KEYLEAD.x, headTop, tvBottom, CUSTOMER_SPEECH_GAP);
+      const plaque = mockSpeechPlaque(360, panelH);
+      const center = speechPlaqueCenterAboveHead(plaque, KEYLEAD.x, headTop, CUSTOMER_SPEECH_GAP);
       const aabb = plaqueAabbFromCenter(center.x, center.y, plaque);
-      assertPlacement(inHeadTvBandPlaque(aabb, headTop, tvBottom, CUSTOMER_SPEECH_GAP), `panelH=${panelH}`);
+      assertPlacement(aboveHead(aabb, headTop, CUSTOMER_SPEECH_GAP), `panelH=${panelH}`);
       expect(center.x).toBe(KEYLEAD.x);
     }
+    expect(sim.snapshot().keyLeadLine).toMatch(/Holding/);
   });
 
   it("shop-counter customer order sits above head, not on torso", () => {
@@ -173,7 +168,7 @@ describe("shop scene uses exported placement helpers", () => {
 
   it("imports leadSpeechPlaqueCenter from plaquePlacementPhaser", () => {
     expect(shopSrc).toContain('from "../ui/plaquePlacementPhaser"');
-    expect(shopSrc).toContain("leadSpeechPlaqueCenter(");
+    expect(shopSrc).toContain("speechPlaqueAboveHead(");
     expect(shopSrc).toContain("keyLeadSlotHeadTop()");
     expect(shopSrc).not.toMatch(/function leadSpeechPlaqueCenter\(/);
   });

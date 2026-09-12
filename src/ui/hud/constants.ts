@@ -16,6 +16,9 @@ export const HUD_SIGN_GAP = 28;
 export const HUD_SCORE_GAP = 16;
 /** Reused score flash labels — avoids per-flash addSignText PRE_RENDER listener churn. */
 export const SCORE_POP_POOL = 3;
+/** Score plate punch — half the prior pace so the tally reads without rushing. */
+export const SCORE_POP_SCALE_MS = 560;
+export const SCORE_POP_RISE_MS = 1800;
 
 /**
  * No chip behind the readouts, so the ink outline is what separates them from
