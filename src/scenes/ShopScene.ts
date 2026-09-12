@@ -73,9 +73,8 @@ import {
   paintLayoutDebug,
   type LayoutDebugLayer,
 } from "../ui/layoutDebug";
-import { inHeadTvBand, plaqueAabbFromCenter } from "../ui/plaquePlacement";
+import { aboveHeadBand, plaqueAabbFromCenter } from "../ui/plaquePlacement";
 import {
-  leadSpeechPlaqueCenter,
   modelHeadTop,
   speechPlaqueAboveHead,
   spriteBodyAabb,
@@ -256,8 +255,7 @@ export class ShopScene extends Phaser.Scene {
     });
     wireHover(this.tabletHit);
 
-    const badgeInset = 6;
-    this.queueBadge = addSignText(this, tab.left + tab.w - badgeInset, tab.top + badgeInset, "", {
+    this.queueBadge = addSignText(this, 0, 0, "", {
       size: typeRolePx("hudSmall"),
       typeRole: "hudSmall",
       fontStyle: "700",
@@ -267,6 +265,7 @@ export class ShopScene extends Phaser.Scene {
       .setOrigin(1, 0)
       .setDepth(13)
       .setVisible(false);
+    this.pinQueueBadge(tab);
 
     this.targetCallout = addSignText(this, 0, 0, "", {
       size: typeRolePx("hudSmall"),
@@ -286,7 +285,7 @@ export class ShopScene extends Phaser.Scene {
       typeRole: "speech",
       align: "center",
       fontStyle: "600",
-      maxWidth: typeRoleBox(340, "speech"),
+      maxWidth: typeRoleBox(440, "speech"),
       maxHeight: typeRoleBox(104, "speech"),
     })
       .setOrigin(0.5, 0.5)
@@ -360,12 +359,7 @@ export class ShopScene extends Phaser.Scene {
       const becameVisible = showKeyLeadBubble && !this.lastShowKeyLeadBubble;
       const sizeDirty = panelH !== this.lastKeyLeadPanelH;
       if (textDirty || becameVisible || sizeDirty) {
-        const lead = leadSpeechPlaqueCenter(
-          this.keyLeadBubble,
-          KEYLEAD.x,
-          keyLeadSlotHeadTop(),
-          TV_GRID_TOP + TV_H,
-        );
+        const lead = speechPlaqueAboveHead(this.keyLeadBubble, KEYLEAD.x, keyLeadSlotHeadTop(), CUSTOMER_SPEECH_GAP);
         setSignPlaqueCenter(this.keyLeadBubble, lead.x, lead.y);
       }
       this.lastKeyLeadPanelH = panelH;
@@ -525,12 +519,7 @@ export class ShopScene extends Phaser.Scene {
     }
 
     if (this.keyLeadBubble.visible) {
-      const lead = leadSpeechPlaqueCenter(
-        this.keyLeadBubble,
-        KEYLEAD.x,
-        keyLeadSlotHeadTop(),
-        TV_GRID_TOP + TV_H,
-      );
+      const lead = speechPlaqueAboveHead(this.keyLeadBubble, KEYLEAD.x, keyLeadSlotHeadTop(), CUSTOMER_SPEECH_GAP);
       this.placeShopChip(
         placer,
         "leadBubble",
@@ -569,11 +558,10 @@ export class ShopScene extends Phaser.Scene {
     const tv = tvRowAabb();
     layers.push({ label: "tvRow", aabb: tv, color: 0xff8844 });
     const headTop = keyLeadSlotHeadTop();
-    const tvBottom = TV_GRID_TOP + TV_H;
-    const leadBand = inHeadTvBand(headTop, tvBottom, CUSTOMER_SPEECH_GAP);
+    const leadBand = aboveHeadBand(headTop, CUSTOMER_SPEECH_GAP);
     layers.push({
-      label: "keyLeadBand",
-      aabb: { left: KEYLEAD.x - 120, top: leadBand.top, right: KEYLEAD.x + 120, bottom: leadBand.bottom },
+      label: "keyLeadAboveHead",
+      aabb: { left: KEYLEAD.x - 160, top: leadBand.top, right: KEYLEAD.x + 160, bottom: leadBand.bottom },
       color: 0x44aaff,
     });
     const customerHeadTop = CUSTOMER_SPOT.y - PERSON_DISPLAY_H;
@@ -658,13 +646,22 @@ export class ShopScene extends Phaser.Scene {
     // screen minus 16, which would have quietly undone TABLET_LABEL_INSET.
     this.tabletLabel.setAlpha(1);
     this.tabletLabel.setColor(Color.creamHex);
-    const badgeInset = 6;
-    setSignPosition(this.queueBadge, tab.left + tab.w - badgeInset, tab.top + badgeInset);
     this.queueBadge.setVisible(count > 1);
     if (this.queueBadge.visible && this.queueBadge.text !== String(count)) {
       this.queueBadge.setText(String(count));
     }
+    this.pinQueueBadge(tab);
+  }
+
+  /** Top-right of the ORDERS tablet bezel — re-pin after every sync so plaque layout cannot drift. */
+  private pinQueueBadge(tab: ReturnType<typeof tabletLayout>, badgeInset = 6): void {
     syncSignPlaque(this.queueBadge);
+    const ext = signPlaqueExtents(this.queueBadge);
+    setSignPosition(
+      this.queueBadge,
+      tab.left + tab.w - badgeInset - ext.rightLocal,
+      tab.top + badgeInset - ext.topLocal,
+    );
   }
 
   /**

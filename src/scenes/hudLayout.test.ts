@@ -46,6 +46,8 @@ describe("HUD sign attachment guards", () => {
     expect(pop).toContain("signContainer(label)");
     expect(pop).toMatch(/targets: popHost/);
     expect(pop).not.toMatch(/targets: label/);
+    expect(pop).toContain("SCORE_POP_SCALE_MS");
+    expect(pop).toContain("SCORE_POP_RISE_MS");
   });
 
   it("anchors shop readouts to the counter sign box when readoutsInShop", () => {

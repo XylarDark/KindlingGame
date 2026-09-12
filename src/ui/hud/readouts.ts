@@ -21,7 +21,15 @@ import { Color, HUD_READOUT_PX, HUD_SCORE_PX } from "../theme";
 import { typeClockPx, typeRoleBox, typeRolePx } from "../typeScale";
 import { worldToScreen } from "../worldProject";
 import type { SafeInset } from "../viewFit";
-import { HUD_CORNER_TOP, HUD_SCORE_GAP, HUD_SIGN_GAP, readoutOutline, SCORE_POP_POOL } from "./constants";
+import {
+  HUD_CORNER_TOP,
+  HUD_SCORE_GAP,
+  HUD_SIGN_GAP,
+  readoutOutline,
+  SCORE_POP_POOL,
+  SCORE_POP_RISE_MS,
+  SCORE_POP_SCALE_MS,
+} from "./constants";
 import type { ChipPlacer } from "./chipCollision";
 import { placeChip, textInkAabb, unionAabb } from "./placeChips";
 import { chipPriority, SLOT_GUTTER } from "./slots";
@@ -369,7 +377,7 @@ export class HudReadouts {
     this.scene.tweens.add({
       targets: this.scoreText,
       scale: { from: 1.18, to: 1 },
-      duration: 280,
+      duration: SCORE_POP_SCALE_MS,
       ease: "Back.easeOut",
     });
     const popHost = signContainer(label);
@@ -377,7 +385,7 @@ export class HudReadouts {
       targets: popHost,
       y: { from: 0, to: -56 },
       alpha: { from: 1, to: 0 },
-      duration: 900,
+      duration: SCORE_POP_RISE_MS,
       ease: "Cubic.easeOut",
       onComplete: () => this.releaseScorePop(label),
     });
