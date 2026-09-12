@@ -88,8 +88,10 @@ describe("settings cog panel", () => {
     expect(layout).toContain("syncSignPlaque(this.cogCaption)");
     expect(layout).toContain("syncSignHit(this.cogCaption)");
     expect(layout).toContain("this.cogHit.setPosition");
-    expect(layout).toMatch(/const cogX = viewW - 24 - inset\.right/);
+    expect(layout).toMatch(/let cogX = viewW - 24 - inset\.right/);
     expect(layout).not.toMatch(/const cogX = GAME_WIDTH - 24 - inset\.right/);
+    expect(layout).toContain("signPlaqueExtents(this.cogCaption)");
+    expect(layout).toContain("cogCenterX");
   });
 
   it("keeps a hud button's hit area on the box it paints", () => {

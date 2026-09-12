@@ -85,7 +85,7 @@ const captionBox = boxOf(captionBlock, "SCORE caption");
 const clockBox = boxOf(clockBlock, "clock");
 const popBox = boxOf(popBlock, "score pop");
 const POP_LIFT = number(placeReadouts, /scorePopLayer\.setPosition\(signLeft, y - (\d+)\)/, "pop lift");
-const popTween = between(readouts, "spawnScorePop(delta: number): void {", "\n  }", "spawnScorePop");
+const popTween = between(readouts, "spawnScorePop(delta: number, screen?: { x: number; y: number }): void {", "\n  }", "spawnScorePop");
 const POP_RISE = number(popTween, /y: \{ from: 0, to: -(\d+) \}/, "pop rise");
 const ORDERS_INSET = number(shop, /const TABLET_LABEL_INSET = (\d+);/, "TABLET_LABEL_INSET");
 

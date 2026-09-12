@@ -67,6 +67,24 @@ describe("sign text ink contract", () => {
     expect(inkInsidePlaque(glyph, plaque).ok).toBe(true);
   });
 
+  it("validates compact drive chip pads — not the default SIGN_PAD constants", () => {
+    const compact = { x: 8, y: 6 };
+    const glyph = mockGlyph(120, 48, 0.5, 1);
+    const panelW = 120 + compact.x * 2;
+    const panelH = 48 + compact.y * 2;
+    const { left, top } = glyphAabb(glyph);
+    const plaque = mockPlaque(
+      left - compact.x + panelW / 2,
+      top - compact.y + panelH / 2,
+      panelW,
+      panelH,
+      0.5,
+      0.5,
+    );
+    expect(inkInsidePlaque(glyph, plaque, compact).ok).toBe(true);
+    expect(inkInsidePlaque(glyph, plaque).ok).toBe(false);
+  });
+
   it("layoutPlaque validates ink before lastLayoutKey early-return", () => {
     const layoutStart = helper.indexOf("function layoutPlaque(entry: SignPlaqueEntry): void {");
     if (layoutStart === -1) throw new Error("layoutPlaque not found");
@@ -75,6 +93,15 @@ describe("sign text ink contract", () => {
     const layout = helper.slice(layoutStart, layoutEnd);
     expect(layout).toContain("inkFitsPlaque(");
     expect(layout).toMatch(/inkFitsPlaque[\s\S]*if \(key === entry\.lastLayoutKey\)/);
+  });
+
+  it("passes signPads into ink validation", () => {
+    const layoutStart = helper.indexOf("function layoutPlaque(entry: SignPlaqueEntry): void {");
+    if (layoutStart === -1) throw new Error("layoutPlaque not found");
+    const layoutEnd = helper.indexOf("\n}", layoutStart);
+    if (layoutEnd === -1) throw new Error("layoutPlaque end not found");
+    const layout = helper.slice(layoutStart, layoutEnd);
+    expect(layout).toMatch(/inkFitsPlaque\([\s\S]*,\s*pad,\s*\)/);
   });
 
   it("layoutPlaque sizes the plaque before ink validation — not the boot default box", () => {

@@ -45,13 +45,19 @@ export function plaqueAabb(plaque: PlaqueLayout): AxisAlignedBox {
   return { left, top, right: left + w, bottom: top + h };
 }
 
+export interface InkPad {
+  x: number;
+  y: number;
+}
+
 /**
- * True when glyph ink sits inside the plaque with SIGN_PAD margin (± tolerance).
+ * True when glyph ink sits inside the plaque with the given pad margin (± tolerance).
  * Returns a reason string when layout would clip or leave an empty box.
  */
 export function inkInsidePlaque(
   glyph: GlyphLayout,
   plaque: PlaqueLayout,
+  pad: InkPad = { x: SIGN_PAD_X, y: SIGN_PAD_Y },
   tolerance = INK_PAD_TOLERANCE,
 ): { ok: true } | { ok: false; reason: string } {
   const { width: w, height: h } = glyph;
@@ -59,9 +65,9 @@ export function inkInsidePlaque(
   if (plaque.width <= 0 || plaque.height <= 0) return { ok: false, reason: "empty plaque box" };
   const ink = glyphAabb(glyph);
   const panel = plaqueAabb(plaque);
-  if (ink.top < panel.top + SIGN_PAD_Y - tolerance) return { ok: false, reason: "top-clipped ink" };
-  if (ink.left < panel.left + SIGN_PAD_X - tolerance) return { ok: false, reason: "left-clipped ink" };
-  if (ink.right > panel.right - SIGN_PAD_X + tolerance) return { ok: false, reason: "right-clipped ink" };
-  if (ink.bottom > panel.bottom - SIGN_PAD_Y + tolerance) return { ok: false, reason: "bottom-clipped ink" };
+  if (ink.top < panel.top + pad.y - tolerance) return { ok: false, reason: "top-clipped ink" };
+  if (ink.left < panel.left + pad.x - tolerance) return { ok: false, reason: "left-clipped ink" };
+  if (ink.right > panel.right - pad.x + tolerance) return { ok: false, reason: "right-clipped ink" };
+  if (ink.bottom > panel.bottom - pad.y + tolerance) return { ok: false, reason: "bottom-clipped ink" };
   return { ok: true };
 }

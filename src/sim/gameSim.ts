@@ -71,7 +71,7 @@ import {
   type HouseStop,
 } from "../maps/cityT0";
 import { cityTrafficLoops, driveSpeedForTraffic, trafficCars, type TrafficCarView } from "../maps/traffic";
-import { BACK_DOOR, customerSlotX, DOOR, KEYLEAD } from "../maps/shopT0";
+import { BACK_DOOR, CUSTOMER_SPOT, customerSlotX, DOOR, KEYLEAD, PERSON_DISPLAY_MAX_H } from "../maps/shopT0";
 
 export type PlayerRole = "keyLead" | "driver";
 
@@ -91,6 +91,21 @@ export interface KeyLeadView {
   facing: number;
   phase: KeyLeadPhase;
   visible: boolean;
+}
+
+/** World-space anchor for a floating score delta — HudScene projects through the live camera. */
+export type ScorePopSpace = "shop" | "drive" | "door";
+
+export interface ScorePopAnchor {
+  x: number;
+  y: number;
+  space: ScorePopSpace;
+}
+
+export interface ScoreFlash {
+  id: number;
+  delta: number;
+  anchor: ScorePopAnchor;
 }
 
 export interface CustomerView {
@@ -185,7 +200,7 @@ export interface SimSnapshot {
   /** Settings: End shift early after ≥1 scored complete/fail. */
   canEndShiftEarly: boolean;
   /** Latest score delta for HUD pops; id increments each event. */
-  scoreFlash: { id: number; delta: number } | null;
+  scoreFlash: ScoreFlash | null;
   /** One-shot UI sound cue for HudScene. */
   sfxCue: { id: number; kind: SfxKind } | null;
 }
@@ -246,7 +261,7 @@ export class GameSim {
   shiftEnded = false;
   private under19Fails = 0;
   private scoredActions = 0;
-  private scoreFlash: { id: number; delta: number } | null = null;
+  private scoreFlash: ScoreFlash | null = null;
   private scoreFlashSeq = 0;
   private sfxCue: { id: number; kind: SfxKind } | null = null;
   private sfxSeq = 0;
@@ -2045,7 +2060,7 @@ export class GameSim {
     if (this.playerRole === "driver" && order.type !== "delivery") this.coverServed += 1;
     const delta = scoreForComplete(order, this.clock.gameMs);
     this.score += delta;
-    this.pushScoreFlash(delta);
+    this.pushScoreFlash(delta, this.scorePopAnchor(order));
     this.scoredActions += 1;
     this.customers = this.customers.filter((c) => c.orderId !== order.id);
     if (this.selectedOrderId === order.id) this.selectedOrderId = null;
@@ -2077,7 +2092,7 @@ export class GameSim {
     }
     const delta = scoreForFail();
     this.score += delta;
-    this.pushScoreFlash(delta);
+    this.pushScoreFlash(delta, this.scorePopAnchor(order));
     this.scoredActions += 1;
     if (reason.includes("under 19")) this.under19Fails += 1;
     this.customers = this.customers.filter((c) => c.orderId !== order.id);
@@ -2118,10 +2133,27 @@ export class GameSim {
     this.shiftLedger.push(order);
   }
 
-  private pushScoreFlash(delta: number): void {
+  private scorePopAnchor(order: Order): ScorePopAnchor {
+    if (this.playerRole === "driver") {
+      const drop = this.dropoff;
+      if (drop?.phase === "atDoor" && drop.customer) {
+        return { x: drop.customer.x, y: drop.customer.y, space: "door" };
+      }
+      return { x: this.vehicle.x, y: this.vehicle.y, space: "drive" };
+    }
+    const customer = this.customers.find((c) => c.orderId === order.id);
+    const headY = CUSTOMER_SPOT.y - PERSON_DISPLAY_MAX_H * 0.55;
+    return {
+      x: customer?.x ?? CUSTOMER_SPOT.x,
+      y: headY,
+      space: "shop",
+    };
+  }
+
+  private pushScoreFlash(delta: number, anchor: ScorePopAnchor): void {
     this.touch();
     this.scoreFlashSeq += 1;
-    this.scoreFlash = { id: this.scoreFlashSeq, delta };
+    this.scoreFlash = { id: this.scoreFlashSeq, delta, anchor };
   }
 
   private pushSfx(kind: SfxKind): void {

@@ -1164,7 +1164,9 @@ describe("GameSim order loops", () => {
     const sim = GameSim.create({ seed: 3, autoSpawn: false });
     fillTicket(sim, "inStore");
     expect(sim.score).toBe(SCORE_INSTORE);
-    expect(sim.snapshot().scoreFlash?.delta).toBe(SCORE_INSTORE);
+    const flash = sim.snapshot().scoreFlash;
+    expect(flash?.delta).toBe(SCORE_INSTORE);
+    expect(flash?.anchor.space).toBe("shop");
     sim.endShift();
     const score = sim.score;
     sim.tick(60_000);

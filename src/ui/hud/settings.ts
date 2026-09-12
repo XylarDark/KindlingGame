@@ -357,18 +357,23 @@ export class HudSettings {
     const { width: viewW, height: viewH } = hudSceneViewport(this.scene);
     this.syncViewportChrome(viewW, viewH);
     const cogSize = HUD_TOUCH_MIN_DESIGN;
-    const cogX = viewW - 24 - inset.right;
+    let cogX = viewW - 24 - inset.right;
     const cogY = viewH - 20 - inset.bottom;
     this.cog.setPosition(cogX, cogY);
     this.cog.setDisplaySize(cogSize, cogSize);
     this.cogHit.setPosition(cogX - cogSize / 2, cogY - cogSize / 2);
     this.cogHit.setSize(cogSize, cogSize);
     syncSignPlaque(this.cogCaption);
-    const cogCaptionX = Phaser.Math.Clamp(
-      cogX - cogSize / 2,
-      inset.left + HUD_COG_CAPTION_BOX.w / 2 + 8,
-      viewW - inset.right - HUD_COG_CAPTION_BOX.w / 2 - 8,
-    );
+    const cogCenterX = cogX - cogSize / 2;
+    const plaqueHalf = signPlaqueExtents(this.cogCaption).panelW / 2;
+    const captionMinX = inset.left + plaqueHalf + 8;
+    const captionMaxX = viewW - inset.right - plaqueHalf - 8;
+    let cogCaptionX = Phaser.Math.Clamp(cogCenterX, captionMinX, captionMaxX);
+    if (cogCaptionX !== cogCenterX) {
+      cogX = cogCaptionX + cogSize / 2;
+      this.cog.setPosition(cogX, cogY);
+      this.cogHit.setPosition(cogX - cogSize / 2, cogY - cogSize / 2);
+    }
     const cogTop = cogY - cogSize;
     const extents = signPlaqueExtents(this.cogCaption);
     const minCenterY = inset.top + extents.panelH / 2 + 8;
