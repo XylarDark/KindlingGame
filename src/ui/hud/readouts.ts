@@ -376,11 +376,22 @@ export class HudReadouts {
   /** Register score row and resolve cover / door-title plaques through the frame placer. */
   resolvePlaqueSlots(placer: ChipPlacer, atDoor: boolean): void {
     if (this.scoreText.visible) {
-      placer.register(
-        "scoreClock",
-        unionAabb([textInkAabb(this.scoreCaption), textInkAabb(this.scoreText), textInkAabb(this.clockText)]),
-        chipPriority("scoreClock"),
-      );
+      if (atDoor) {
+        placer.register(
+          "scoreClock",
+          unionAabb([textInkAabb(this.scoreCaption), textInkAabb(this.scoreText)]),
+          chipPriority("scoreClock"),
+        );
+        if (this.clockText.visible) {
+          placer.register("scoreClock", textInkAabb(this.clockText), chipPriority("scoreClock"));
+        }
+      } else {
+        placer.register(
+          "scoreClock",
+          unionAabb([textInkAabb(this.scoreCaption), textInkAabb(this.scoreText), textInkAabb(this.clockText)]),
+          chipPriority("scoreClock"),
+        );
+      }
     }
     const coverY = this.readoutCorner.top + 40;
     if (this.coverText.visible && String(this.coverText.text).trim()) {
@@ -392,15 +403,21 @@ export class HudReadouts {
       const plaque = signPlaqueExtents(this.doorTitleText);
       const centerY = this.readoutCorner.top + SLOT_GUTTER + plaque.panelH / 2;
       let centerX = placer.viewW / 2;
+      const halfW = plaque.panelW / 2;
       if (this.scoreText.visible) {
-        const scoreLeft = Math.min(textInkAabb(this.scoreCaption).left, textInkAabb(this.scoreText).left);
-        const halfW = plaque.panelW / 2;
-        const maxCenter = scoreLeft - CHIP_GAP - halfW;
-        if (centerX + halfW > scoreLeft - CHIP_GAP) {
-          centerX = Math.max(placer.safe.left + halfW, maxCenter);
+        const scoreRight = Math.max(textInkAabb(this.scoreCaption).right, textInkAabb(this.scoreText).right);
+        if (centerX - halfW < scoreRight + CHIP_GAP) {
+          centerX = scoreRight + CHIP_GAP + halfW;
         }
       }
-      placeChip(placer, "doorTitle", this.doorTitleText, centerX, centerY, chipPriority("doorTitle"));
+      if (this.clockText.visible) {
+        const clockLeft = textInkAabb(this.clockText).left;
+        if (centerX + halfW > clockLeft - CHIP_GAP) {
+          centerX = clockLeft - CHIP_GAP - halfW;
+        }
+      }
+      centerX = Phaser.Math.Clamp(centerX, placer.safe.left + halfW, placer.safe.right - halfW);
+      setSignPlaqueCenter(this.doorTitleText, centerX, centerY);
     }
   }
 

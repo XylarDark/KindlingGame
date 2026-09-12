@@ -29,8 +29,6 @@ import {
   signPlaqueExtents,
   syncSignPlaque,
 } from "../ui/signText";
-import { ChipPlacer, placeChip } from "../ui/hud/placeChips";
-import { chipPriority, chipSafeRect } from "../ui/hud/slots";
 import { Color } from "../ui/theme";
 import { typeRoleBox, typeRolePx } from "../ui/typeScale";
 import { designHudInset, HUD_TOUCH_MIN_DESIGN, readCssSafeArea, VIEWFIT_EVENT } from "../ui/viewFit";
@@ -46,8 +44,8 @@ const BAG_HIT_PAD = 88; // ~10% over prior 80 for mobile taps
 const DOOR_CHIP_GAP = 36;
 /** Keep a wide chip on screen when the sprite it hangs off is near an edge. */
 const DOOR_CHIP_MARGIN = 24;
-/** Prompt chip width — hugs copy between the two characters. */
-const DOOR_PROMPT_MAX_W = 480;
+/** Prompt chip width — one-line “Tap … for ID” above the customer head. */
+const DOOR_PROMPT_MAX_W = 680;
 /** Two wrapped lines at the door prompt seed (hudTitle) with default pad. */
 const DOOR_PROMPT_MAX_H = 120;
 /** Clearance between customer head top and prompt plaque bottom. */
@@ -154,6 +152,7 @@ export class DoorScene extends Phaser.Scene {
       padVariant: "default",
       align: "center",
       fontStyle: "600",
+      noWrap: true,
       lineSpacing: 6,
       maxWidth: typeRoleBox(DOOR_PROMPT_MAX_W, "hudTitle"),
       maxHeight: typeRoleBox(DOOR_PROMPT_MAX_H, "hudTitle"),
@@ -195,11 +194,7 @@ export class DoorScene extends Phaser.Scene {
 
   private resolveDoorPrompt(preferredX: number, preferredY: number): void {
     if (!String(this.prompt.text ?? "").trim()) return;
-    const inset = designHudInset(readCssSafeArea(document.getElementById("game-root")));
-    // Isolated placer — sharing the HUD frame let unrelated chips nudge the prompt downward.
-    const placer = new ChipPlacer(chipSafeRect(inset, GAME_WIDTH, GAME_HEIGHT), GAME_WIDTH, GAME_HEIGHT);
-    const ok = placeChip(placer, "doorPrompt", this.prompt, preferredX, preferredY, chipPriority("doorPrompt"), true);
-    if (!ok) setSignPlaqueCenter(this.prompt, preferredX, preferredY);
+    setSignPlaqueCenter(this.prompt, preferredX, preferredY);
     this.paintDoorLayoutDebug();
   }
 

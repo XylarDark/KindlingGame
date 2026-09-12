@@ -142,10 +142,11 @@ describe("door prompt placement contract", () => {
     expect(aabb.bottom).toBeLessThanOrEqual(headTop - DOOR_HEAD_GAP + 1);
   });
 
-  it("door scene still resolves through placeChip after anchor geometry", () => {
+  it("door scene pins prompt center on customer x after anchor geometry", () => {
     expect(doorSrc).toContain("resolveDoorPrompt(x, preferred.y)");
-    expect(doorSrc).toContain('placeChip(placer, "doorPrompt"');
+    expect(doorSrc).toContain("setSignPlaqueCenter(this.prompt, preferredX, preferredY)");
     expect(doorSrc).toContain("speechPlaqueAboveHead");
+    expect(doorSrc).toContain("this.customer.x");
   });
 
   it("door orange status resolves top-center for the whole atDoor visit", () => {
