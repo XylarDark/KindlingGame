@@ -114,14 +114,13 @@ export const BENCH = {
   y: COUNTER_TOP + Math.floor((COUNTER_FRONT - COUNTER_TOP) / 2),
 };
 /**
- * Side speech chip size (~+25% message scale). Chips sit beside settled
- * customers (not in an overhead band), so the lobby no longer reserves a vertical
- * strip under the counter for copy.
+ * Order-announcement chip size (~+25% message scale). Plaques sit above settled
+ * customers' heads once they reach the counter.
  */
 export const CUSTOMER_SPEECH_H = 83;
 /** Daylight between stacked speech / feedback chips, and above a model's head when hanging. */
 export const CUSTOMER_SPEECH_GAP = 14;
-/** Horizontal gap from the customer's body edge to the near edge of their chip. */
+/** @deprecated Side chips removed — kept for width math in legacy callers. */
 export const CUSTOMER_SPEECH_SIDE_GAP = 12;
 /** Hair sits this far below the counter front so heads stay fully visible. */
 export const CUSTOMER_HEAD_CLEAR = 12;
@@ -240,37 +239,53 @@ function rectsOverlap(
   );
 }
 
+/** Plaque center Y for speech hung above a standing customer's head. */
+export function customerSpeechCenterY(
+  headTopY: number,
+  bubbleH: number = CUSTOMER_SPEECH_H,
+): number {
+  return headTopY - CUSTOMER_SPEECH_GAP - bubbleH / 2;
+}
+
 /**
- * Place settled customers' speech beside them. Prefer each customer's right; flip left
- * when the right side collides with another chip, the screen edge, the sandwich board, or
- * the settings column. Callers pass customers front-of-queue first so earlier speakers
- * keep their preferred side.
+ * Place settled customers' order speech above their heads. Callers pass customers
+ * front-of-queue first; when plaques overlap, later speakers stack upward.
  */
 export function layoutCustomerSpeech(
   customers: readonly { orderId: string; x: number }[],
   bubbleH: number = CUSTOMER_SPEECH_H,
 ): CustomerSpeechBox[] {
   const placed: CustomerSpeechBox[] = [];
-  // Mid-upper torso / head band beside the model.
-  const y = CUSTOMER_SPOT.y - PERSON_DISPLAY_MAX_H + Math.max(48, bubbleH);
+  const headTop = CUSTOMER_SPOT.y - PERSON_DISPLAY_MAX_H;
+  const baseY = customerSpeechCenterY(headTop, bubbleH);
   for (const customer of customers) {
-    const trySide = (side: CustomerSpeechSide): CustomerSpeechBox | null => {
-      const room = customerSideRoom(customer.x, side);
-      if (room < CUSTOMER_SPEECH_MIN_W) return null;
-      const w = customerSpeechWidth(room);
-      const x = chipCentreX(customer.x, side, w);
-      const box: CustomerSpeechBox = { orderId: customer.orderId, x, y, w, h: bubbleH, side };
-      // Keep clear of the counter lip.
-      if (box.y - box.h / 2 < COUNTER_FRONT + 2) return null;
-      if (box.x - box.w / 2 < CUSTOMER_BUBBLE_MIN_X) return null;
-      if (box.x + box.w / 2 > CUSTOMER_BUBBLE_MAX_X) return null;
-      for (const other of placed) {
-        if (rectsOverlap(box, other)) return null;
-      }
-      return box;
+    const halfRoom = Math.min(
+      customer.x - CUSTOMER_BUBBLE_MIN_X,
+      CUSTOMER_BUBBLE_MAX_X - customer.x,
+    );
+    if (halfRoom < CUSTOMER_SPEECH_MIN_W / 2) continue;
+    const w = customerSpeechWidth(halfRoom * 2);
+    const x = Math.min(
+      CUSTOMER_BUBBLE_MAX_X - w / 2,
+      Math.max(CUSTOMER_BUBBLE_MIN_X + w / 2, customer.x),
+    );
+    let y = baseY;
+    const box: CustomerSpeechBox = {
+      orderId: customer.orderId,
+      x,
+      y,
+      w,
+      h: bubbleH,
+      side: "right",
     };
-    const box = trySide("right") ?? trySide("left");
-    if (box) placed.push(box);
+    let guard = 0;
+    while (placed.some((other) => rectsOverlap(box, other)) && guard++ < 8) {
+      y -= bubbleH + CUSTOMER_SPEECH_PAD;
+      box.y = y;
+    }
+    // Plaque bottom must sit above the head line with gap — not on the face or counter lip.
+    if (box.y + box.h / 2 > headTop - CUSTOMER_SPEECH_GAP) continue;
+    placed.push(box);
   }
   return placed;
 }

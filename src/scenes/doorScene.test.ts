@@ -116,11 +116,12 @@ describe("doorstep prompt", () => {
     expect(resolve).toContain("placeChip(placer, \"doorPrompt\"");
   });
 
-  it("pins the prompt at the driver↔customer midpoint with dodge overlap only", () => {
+  it("pins the prompt top-center as an instruction chip", () => {
     const fn = between(src, "private placePrompt(", "\n  }", "placePrompt");
-    expect(fn).toContain("DOOR_PROMPT_MID_X");
-    expect(fn).toContain("DOOR_PROMPT_BODY_Y");
-    expect(fn).toContain("dodgePromptX");
+    expect(fn).toContain("GAME_WIDTH / 2");
+    expect(fn).toContain("this.insetTop + DOOR_CHIP_GAP + plaque.panelH / 2");
+    expect(fn).not.toContain("DOOR_PROMPT_MID_X");
+    expect(fn).not.toContain("dodgePromptX");
     expect(fn).not.toContain("spriteHeadTop");
     expect(fn).not.toContain("promptAnchorX");
   });
@@ -139,24 +140,14 @@ describe("doorstep prompt", () => {
     expect(constant("DOOR_PROMPT_MAX_W")).toBeLessThanOrEqual(520);
   });
 
-  it("uses a wider prompt box for hudTitle between the two characters", () => {
+  it("uses a wide prompt box for hudTitle instruction copy", () => {
     expect(constant("DOOR_PROMPT_MAX_W")).toBeGreaterThanOrEqual(440);
     expect(constant("DOOR_CHIP_GAP")).toBe(36);
   });
 
-  it("still floors the chip against the top safe inset using plaque bounds", () => {
-    // A taller chip pushes harder on this clamp; losing it puts the prompt under the
-    // notch on a short viewport.
+  it("anchors the chip from the top safe inset using plaque bounds", () => {
     const fn = between(src, "private placePrompt(", "\n  }", "placePrompt");
     expect(fn).toContain("this.insetTop + DOOR_CHIP_GAP + plaque.panelH / 2");
-    expect(fn).toContain("Math.max(");
-  });
-
-  it("dodgePromptX tests overlap using plaque-center AABB, not host origin", () => {
-    expect(src).toContain("function plaqueCenterAabb(");
-    const dodge = between(src, "function dodgePromptX(", "\n}", "dodgePromptX");
-    expect(dodge).toContain("plaqueCenterAabb(x, y, plaque)");
-    expect(dodge).not.toContain("chipPlaqueAabb(x, y, plaque)");
   });
 });
 

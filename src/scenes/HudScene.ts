@@ -28,7 +28,6 @@ import {
   setSignPosition,
   signContainer,
   signPlaqueExtents,
-  signPlaqueMid,
   syncSignPlaque,
 } from "../ui/signText";
 import { addUiText } from "../ui/text";
@@ -288,29 +287,32 @@ export class HudScene extends Phaser.Scene {
   private layoutHud(): void {
     const inset = designHudInset(readCssSafeArea(document.getElementById("game-root")));
     const { width: viewW, height: viewH } = hudSceneViewport(this);
-    const bottom = viewH - 40 - inset.bottom;
     this.readouts.layoutReadoutColumn(inset);
     this.readouts.placeReadouts();
     this.hudSettings.layout(inset);
     const cogLeft = this.hudSettings.cog.x - this.hudSettings.cog.displayWidth;
     const cogTop = this.hudSettings.cog.y - this.hudSettings.cog.displayHeight;
     this.phoneWidget.layout(inset, cogLeft, cogTop, viewW, viewH);
-    syncSignPlaque(this.toastText);
-    const toastMid = signPlaqueMid(this.toastText);
-    const toastBottom = signPlaqueExtents(this.toastText).bottomLocal;
-    setSignPlaqueCenter(this.toastText, viewW / 2, bottom - toastBottom + toastMid.midY);
+    this.placeInstructionChip(this.toastText, inset, viewW, viewH);
     this.padCenter = { x: 196 + inset.left, y: viewH - 220 - inset.bottom };
     this.lastPadFlash = null;
     this.drawPad();
     this.padKnob.setPosition(this.padCenter.x, this.padCenter.y);
-    this.placePadLabel(inset, viewW, viewH);
+    this.placeInstructionChip(this.padLabel, inset, viewW, viewH);
   }
 
-  /** Auto-drive nudge label — clamp so the plaque never clips the HUD edge. */
-  private placePadLabel(inset: SafeInset, viewW: number, viewH: number): void {
-    const centerY = this.padCenter.y - 128;
-    const clamped = clampSignPlaqueCenter(this.padLabel, this.padCenter.x, centerY, viewW, viewH, inset);
-    setSignPlaqueCenter(this.padLabel, clamped.x, clamped.y);
+  /** Instruction / toast plaques pin top-center, clear of the safe inset. */
+  private placeInstructionChip(
+    chip: Phaser.GameObjects.Text,
+    inset: SafeInset,
+    viewW: number,
+    viewH: number,
+  ): void {
+    syncSignPlaque(chip);
+    const plaque = signPlaqueExtents(chip);
+    const centerY = inset.top + SCREEN_CHIP_MARGIN + plaque.panelH / 2;
+    const clamped = clampSignPlaqueCenter(chip, viewW / 2, centerY, viewW, viewH, inset);
+    setSignPlaqueCenter(chip, clamped.x, clamped.y);
   }
 
   private paintHud(snap: SimSnapshot): void {
@@ -487,7 +489,7 @@ export class HudScene extends Phaser.Scene {
       }
       const inset = designHudInset(readCssSafeArea(document.getElementById("game-root")));
       const { width: viewW, height: viewH } = hudSceneViewport(this);
-      this.placePadLabel(inset, viewW, viewH);
+      this.placeInstructionChip(this.padLabel, inset, viewW, viewH);
       const padFlash = !!flashNext && flashNext.kind === "gpsPin";
       if (padFlash !== this.lastPadFlash) {
         this.lastPadFlash = padFlash;
@@ -522,22 +524,16 @@ export class HudScene extends Phaser.Scene {
 
     if (toastVisible) {
       syncSignPlaque(this.toastText);
-      let bottomEdge = viewH - 40 - inset.bottom;
-      if (showPhone) bottomEdge -= PHONE_H + CHIP_GAP;
-      const toastMid = signPlaqueMid(this.toastText);
-      const toastBottom = signPlaqueExtents(this.toastText).bottomLocal;
-      placeChip(
-        placer,
-        "toast",
-        this.toastText,
-        viewW / 2,
-        bottomEdge - toastBottom + toastMid.midY,
-        chipPriority("toast"),
-      );
+      const toastPlaque = signPlaqueExtents(this.toastText);
+      const toastY = inset.top + SCREEN_CHIP_MARGIN + toastPlaque.panelH / 2;
+      placeChip(placer, "toast", this.toastText, viewW / 2, toastY, chipPriority("toast"));
     }
 
     if (showPad && this.padLabel.visible) {
-      placeChip(placer, "pad", this.padLabel, this.padCenter.x, this.padCenter.y - 128, chipPriority("pad"));
+      syncSignPlaque(this.padLabel);
+      const padPlaque = signPlaqueExtents(this.padLabel);
+      const padY = inset.top + SCREEN_CHIP_MARGIN + padPlaque.panelH / 2;
+      placeChip(placer, "pad", this.padLabel, viewW / 2, padY, chipPriority("pad"));
     }
 
     if (showPhone && this.phoneWidget.phone.visible) {

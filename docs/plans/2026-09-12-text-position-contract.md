@@ -296,10 +296,33 @@ setSignPosition(chip, desiredPlaqueCenterX - midX, signYAbove(chip, ceilingY, ga
 
 Plain HUD numerals stay on `addUiText` with explicit origins.
 
-**Implemented (PR `setSignPlaqueCenter`):** `signPlaqueMid`, `setSignPlaqueCenter`, `setSignPlaqueEdge`, and `signPlaqueCenterWorld` in `src/ui/signText.ts`. `placeChip` preferred `(x, y)` is plaque center (converted via mid locals in `src/ui/hud/placeChips.ts`). Shop, door, and HUD call sites migrated; shop registers tablet/people obstacles for the #61 resolver.
+**Implemented (#66):** `signPlaqueMid`, `setSignPlaqueCenter`, `setSignPlaqueEdge`, and `signPlaqueCenterWorld` in `src/ui/signText.ts`. `placeChip` preferred `(x, y)` is plaque center (converted via mid locals in `src/ui/hud/placeChips.ts`).
+
+**Implemented (Luke text-position contract):** All character-tied and instructional sign chips follow the pin rules below. Resolver uses `headHang = true` for speech so plaques never dodge downward onto faces. Shop registers TV row, tablet, and people as obstacles.
+
+---
+
+## Pin rules (Luke contract)
+
+| Chip | Before (#66) | After (contract) | API |
+|------|---------------|----------------|-----|
+| Customer order | Beside torso (side layout) | Above head at counter | `layoutCustomerSpeech` → `setSignPlaqueCenter` + `placeChip` headHang |
+| Key-lead speech | Left of KEYLEAD slot (side pin) | Between head top and TV row bottom | `leadSpeechPlaqueCenter` + headHang |
+| Driver speech | Left of DRIVER slot | Above driver head | `speechPlaqueAboveHead` + headHang |
+| TV strain callout | Above targeted TV | Unchanged (above TV) | `setSignPlaqueCenter` |
+| Door prompt | Mid driver↔customer, torso Y | Top-center instruction | `placeChip` at safe inset top |
+| HUD toast | Bottom-center | Top-center instruction | `placeInstructionChip` / `placeChip` |
+| HUD pad label | Above bottom-left pad | Top-center instruction | `placeInstructionChip` / `placeChip` |
+| SCORE / clock | Counter sign / top-left | Unchanged (#64) | `addUiText` + `paintReadoutChrome` |
+| Settings caption | Removed | Still removed (cog only) | — |
+| Drive map captions | Hidden | Still hidden | — |
+
+**Character speech:** plaque center above the speaker's head (`signYAbove` + `setSignPlaqueCenter`).  
+**Instruction text:** top-center of the safe inset unless it is tied to a speaking character (then head-above applies).  
+**Key lead:** vertical band between `modelHeadTop(keyLead)` and `TV_GRID_TOP + TV_H`.
 
 ---
 
 ## Verification
 
-`npm run typecheck` + `npm test` green; lane captures for shop / door / drive.
+`npm run verify` green; lane captures: shop customer at counter (order above head), key-lead speech between head and TVs, door/instruction top-center, no plaques on faces.

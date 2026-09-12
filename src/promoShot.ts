@@ -1,3 +1,4 @@
+import { customerSlotX } from "./maps/shopT0";
 import { houseById, tileToWorld } from "./maps/cityT0";
 import { CALL_CONNECT_MS, NPC_INTERACT_COOLDOWN_MS } from "./sim/constants";
 import type { GameSim } from "./sim/gameSim";
@@ -11,6 +12,19 @@ export function doorstepQuery(): DoorstepShot | null {
   try {
     const q = new URLSearchParams(globalThis.location?.search ?? "").get("doorstep");
     if (q === "ask" || q === "check" || q === "hand" || q === "photo") return q;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+/** `?capture=shop-counter|shop-lead` seeds a lane still without promo drive/door setup. */
+export type CaptureSeed = "shop-counter" | "shop-lead";
+
+export function captureQuery(): CaptureSeed | null {
+  try {
+    const q = new URLSearchParams(globalThis.location?.search ?? "").get("capture");
+    if (q === "shop-counter" || q === "shop-lead") return q;
   } catch {
     /* ignore */
   }
@@ -76,6 +90,33 @@ function waitFetch(sim: GameSim): void {
     if (sim.snapshot().keyLead.phase === "idle" && sim.snapshot().handSkuId) return;
     sim.tick(50);
   }
+}
+
+function waitCustomerSettled(sim: GameSim, orderId: string): void {
+  for (let i = 0; i < 400; i++) {
+    const snap = sim.snapshot();
+    const c = snap.customers.find((v) => v.orderId === orderId);
+    if (c && Math.abs(c.x - customerSlotX(0)) < 2 && c.bubble) return;
+    sim.tick(50);
+  }
+}
+
+/** Agent-capture seeds — shop counter speech and key-lead fetch band. */
+export function applyCaptureSeed(sim: GameSim): void {
+  const seed = captureQuery();
+  if (!seed) return;
+
+  if (seed === "shop-counter") {
+    const order = sim.spawnOrder("inStore");
+    waitCustomerSettled(sim, order.id);
+    for (let i = 0; i < 40; i++) sim.tick(50);
+    return;
+  }
+
+  const order = sim.spawnOrder("inStore");
+  waitCustomerSettled(sim, order.id);
+  sim.shopClick({ type: "strain", skuId: order.skuId });
+  for (let i = 0; i < 24; i++) sim.tick(50);
 }
 
 /** Seed a delivery mid-run (map) or at the ID-check porch (door). */
