@@ -134,6 +134,14 @@ describe("HudScene paint dirty guards", () => {
     expect(callouts).not.toContain("clampSignPlaqueCenter(this.drivePinLabel");
   });
 
+  it("keeps HUD above the door scene for the whole porch visit", () => {
+    const src = read("HudScene.ts");
+    const sync = between(src, "private syncDoorScene(snap: SimSnapshot): void {", "private readInput", "syncDoorScene");
+    expect(sync).toContain('"doorHud"');
+    expect(sync).toMatch(/bringToTop\("door"\)[\s\S]*bringToTop\(\)/);
+    expect(sync).not.toMatch(/bringToTop\(\)[\s\S]*bringToTop\("door"\)/);
+  });
+
   it("sleeps drive/door when keyLead owns the shop world", () => {
     const src = read("HudScene.ts");
     const sync = src.slice(src.indexOf("private syncDriveScene"), src.indexOf("private makeResults"));

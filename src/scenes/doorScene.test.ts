@@ -102,6 +102,12 @@ describe("doorstep prompt", () => {
     expect(src).toContain("setSignCopy(this.prompt");
   });
 
+  it("clears the door prompt while the ID card carries confirm copy", () => {
+    const sync = between(src, "const idInspect = drop.idAsked", "if (promptLine !== this.lastPrompt)", "idInspect prompt");
+    expect(sync).toContain("idInspect");
+    expect(sync).toMatch(/promptLine = idInspect\s*\?\s*""/);
+  });
+
   it("resolves the prompt through placeChip after anchor geometry", () => {
     const fn = between(src, "private placePrompt(", "\n  }", "placePrompt");
     expect(fn).toContain("resolveDoorPrompt(x, y)");
