@@ -70,6 +70,8 @@ describe("speech stays off the models it belongs to", () => {
     );
     expect(sync, "tracks key-lead bubble visibility for re-pin").toContain("lastShowKeyLeadBubble");
     expect(sync, "tracks driver bubble visibility for re-pin").toContain("lastShowDriverBubble");
+    expect(sync, "re-pins key-lead when plaque height changes").toContain("lastKeyLeadPanelH");
+    expect(sync, "re-pins driver when plaque height changes").toContain("lastDriverPanelH");
     expect(src, "target callout uses plaque center").toMatch(
       /setSignPlaqueCenter\(this\.targetCallout, p\.x, p\.y - strainSlotH\(\) \/ 2 - 6\)/,
     );
@@ -99,8 +101,10 @@ describe("speech stays off the models it belongs to", () => {
 
   it("dirty-guards customer bubble setText, applyPersonTexture, and speech layout", () => {
     const sync = between(src, "private syncCustomers(", "private makeHotspots(", "syncCustomers");
-    expect(sync, "layout keyed on order id + quantized x").toContain("lastCustomerLayoutKey");
-    expect(sync, "layout keyed on order id + quantized x").toContain("Math.round(c.x)");
+    expect(sync, "layout keyed on order id + quantized x + plaque height").toContain("lastCustomerLayoutKey");
+    expect(sync, "layout keyed on order id + quantized x + plaque height").toContain("Math.round(c.x)");
+    expect(sync, "layout keyed on order id + quantized x + plaque height").toMatch(/Math\.round\(h\)/);
+    expect(sync, "measures plaque before layoutCustomerSpeech").toMatch(/signPlaqueExtents\(visual\.bubble\)/);
     expect(sync, "bubble setText guarded").toMatch(/if \(bubble\.text !== customer\.bubble\) bubble\.setText/);
     const make = between(src, "private makeCustomerVisual(", "return { sprite, bubble, feedback", "makeCustomerVisual");
     expect(make, "fixed speech token at build").toMatch(/typeRole: "speech"/);
@@ -154,6 +158,11 @@ describe("overhead speech collision layout", () => {
     const headTop = CUSTOMER_SPOT.y - PERSON_DISPLAY_MAX_H;
     expect(alone[0]!.x).toBe(customerSlotX(0));
     expect(alone[0]!.y).toBe(customerSpeechCenterY(headTop, CUSTOMER_SPEECH_H));
+
+    const tight = layoutCustomerSpeech([{ orderId: "b", x: customerSlotX(0), h: 52 }]);
+    expect(tight[0]!.h).toBe(52);
+    expect(tight[0]!.y).toBe(customerSpeechCenterY(headTop, 52));
+    expect(tight[0]!.y).toBeGreaterThan(alone[0]!.y);
 
     const three = [0, 1, 2].map((slot) => ({ orderId: `c${slot}`, x: customerSlotX(slot) }));
     const boxes = layoutCustomerSpeech(three);

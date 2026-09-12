@@ -252,13 +252,13 @@ export function customerSpeechCenterY(
  * front-of-queue first; when plaques overlap, later speakers stack upward.
  */
 export function layoutCustomerSpeech(
-  customers: readonly { orderId: string; x: number }[],
-  bubbleH: number = CUSTOMER_SPEECH_H,
+  customers: readonly { orderId: string; x: number; h?: number }[],
+  defaultBubbleH: number = CUSTOMER_SPEECH_H,
 ): CustomerSpeechBox[] {
   const placed: CustomerSpeechBox[] = [];
   const headTop = CUSTOMER_SPOT.y - PERSON_DISPLAY_MAX_H;
-  const baseY = customerSpeechCenterY(headTop, bubbleH);
   for (const customer of customers) {
+    const bubbleH = customer.h ?? defaultBubbleH;
     const halfRoom = Math.min(
       customer.x - CUSTOMER_BUBBLE_MIN_X,
       CUSTOMER_BUBBLE_MAX_X - customer.x,
@@ -269,7 +269,7 @@ export function layoutCustomerSpeech(
       CUSTOMER_BUBBLE_MAX_X - w / 2,
       Math.max(CUSTOMER_BUBBLE_MIN_X + w / 2, customer.x),
     );
-    let y = baseY;
+    let y = customerSpeechCenterY(headTop, bubbleH);
     const box: CustomerSpeechBox = {
       orderId: customer.orderId,
       x,

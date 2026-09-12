@@ -16,7 +16,6 @@ import {
   CUSTOMER_SPEECH_MAX_W,
   customerFeetY,
   customerSlotX,
-  customerSpeechCenterY,
   customerSpeechShows,
   layoutCustomerSpeech,
   DRIVER,
@@ -209,6 +208,8 @@ export class ShopScene extends Phaser.Scene {
   private lastTvKey = "";
   private lastShowKeyLeadBubble = false;
   private lastShowDriverBubble = false;
+  private lastKeyLeadPanelH = -1;
+  private lastDriverPanelH = -1;
   /** Ordered settled ids + quantized x — layoutCustomerSpeech only when this changes. */
   private lastCustomerLayoutKey = "";
   private customerLayoutById = new Map<string, ReturnType<typeof layoutCustomerSpeech>[number]>();
@@ -385,8 +386,11 @@ export class ShopScene extends Phaser.Scene {
     if (showKeyLeadBubble) {
       const textDirty = this.keyLeadBubble.text !== callout;
       if (textDirty) this.keyLeadBubble.setText(callout);
+      syncSignPlaque(this.keyLeadBubble);
+      const panelH = signPlaqueExtents(this.keyLeadBubble).panelH;
       const becameVisible = showKeyLeadBubble && !this.lastShowKeyLeadBubble;
-      if (textDirty || becameVisible) {
+      const sizeDirty = panelH !== this.lastKeyLeadPanelH;
+      if (textDirty || becameVisible || sizeDirty) {
         const lead = leadSpeechPlaqueCenter(
           this.keyLeadBubble,
           kx,
@@ -395,6 +399,9 @@ export class ShopScene extends Phaser.Scene {
         );
         setSignPlaqueCenter(this.keyLeadBubble, lead.x, lead.y);
       }
+      this.lastKeyLeadPanelH = panelH;
+    } else {
+      this.lastKeyLeadPanelH = -1;
     }
     this.lastShowKeyLeadBubble = showKeyLeadBubble;
 
@@ -410,11 +417,17 @@ export class ShopScene extends Phaser.Scene {
       const driverTextDirty = this.driverBubble.text !== driverLine;
       if (driverTextDirty) this.driverBubble.setText(driverLine);
       this.driverBubble.setAlpha(1);
+      syncSignPlaque(this.driverBubble);
+      const panelH = signPlaqueExtents(this.driverBubble).panelH;
       const becameVisible = showDriverBubble && !this.lastShowDriverBubble;
-      if (driverTextDirty || becameVisible) {
+      const sizeDirty = panelH !== this.lastDriverPanelH;
+      if (driverTextDirty || becameVisible || sizeDirty) {
         const driver = speechPlaqueAboveHead(this.driverBubble, DRIVER.x, modelHeadTop(this.driver));
         setSignPlaqueCenter(this.driverBubble, driver.x, driver.y);
       }
+      this.lastDriverPanelH = panelH;
+    } else {
+      this.lastDriverPanelH = -1;
     }
     this.lastShowDriverBubble = showDriverBubble;
     if (highlightGo) {
@@ -858,6 +871,11 @@ export class ShopScene extends Phaser.Scene {
     visual.look = -1;
   }
 
+  private customerSpeechPlaqueH(bubble: Phaser.GameObjects.Text): number {
+    syncSignPlaque(bubble);
+    return signPlaqueExtents(bubble).panelH;
+  }
+
   private syncCustomers(list: CustomerView[], pulse: number, focusId: string | null): void {
     const seen = new Set(list.map((c) => c.orderId));
     for (const id of [...this.customers.keys()]) {
@@ -870,14 +888,35 @@ export class ShopScene extends Phaser.Scene {
     );
     // Front-of-queue first keeps preferred right side for earlier arrivals.
     const ordered = [...settledList].sort((a, b) => a.slot - b.slot);
-    const layoutKey = ordered.map((c) => `${c.orderId}:${Math.round(c.x)}`).join("|");
+
+    // Sync copy before layout so measured plaque height matches tight ink (#70), not CUSTOMER_SPEECH_H.
+    for (const customer of ordered) {
+      if (!customer.bubble) continue;
+      let visual = this.customers.get(customer.orderId);
+      if (!visual) visual = this.acquireCustomerVisual(customer.orderId, customer.look);
+      if (visual.bubble.text !== customer.bubble) visual.bubble.setText(customer.bubble);
+      syncSignPlaque(visual.bubble);
+    }
+
+    const layoutKey = ordered
+      .map((c) => {
+        const visual = this.customers.get(c.orderId);
+        const h =
+          c.bubble && visual ? this.customerSpeechPlaqueH(visual.bubble) : CUSTOMER_SPEECH_H;
+        return `${c.orderId}:${Math.round(c.x)}:${Math.round(h)}`;
+      })
+      .join("|");
     if (layoutKey !== this.lastCustomerLayoutKey) {
       this.lastCustomerLayoutKey = layoutKey;
       this.customerLayoutById = new Map(
-        layoutCustomerSpeech(ordered.map((c) => ({ orderId: c.orderId, x: c.x }))).map((box) => [
-          box.orderId,
-          box,
-        ]),
+        layoutCustomerSpeech(
+          ordered.map((c) => {
+            const visual = this.customers.get(c.orderId);
+            const h =
+              c.bubble && visual ? signPlaqueExtents(visual.bubble).panelH : CUSTOMER_SPEECH_H;
+            return { orderId: c.orderId, x: c.x, h };
+          }),
+        ).map((box) => [box.orderId, box]),
       );
     }
 
@@ -912,11 +951,13 @@ export class ShopScene extends Phaser.Scene {
       if (layout && note) {
         feedback.setVisible(true);
         if (feedback.text !== note) feedback.setText(note);
-        setSignPlaqueCenter(
-          feedback,
-          layout.x,
-          layout.y + layout.h / 2 + CUSTOMER_SPEECH_GAP + feedback.height / 2,
-        );
+        syncSignPlaque(bubble);
+        const bubbleBottom =
+          signPlaqueCenterWorld(bubble).y +
+          signPlaqueExtents(bubble).bottomLocal -
+          signPlaqueMid(bubble).midY;
+        const fbPreferred = speechPlaqueAboveHead(feedback, layout.x, bubbleBottom);
+        setSignPlaqueCenter(feedback, fbPreferred.x, fbPreferred.y);
       } else {
         feedback.setVisible(false);
       }
