@@ -6,6 +6,14 @@ import { describe, expect, it } from "vitest";
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (rel: string): string => readFileSync(join(here, rel), "utf8").replace(/\r\n/g, "\n");
 
+function between(text: string, start: string, end: string, what: string): string {
+  const from = text.indexOf(start);
+  if (from === -1) throw new Error(`${what}: start marker not found: ${JSON.stringify(start)}`);
+  const to = text.indexOf(end, from + start.length);
+  if (to === -1) throw new Error(`${what}: end marker not found: ${JSON.stringify(end)}`);
+  return text.slice(from, to);
+}
+
 describe("HudScene fixed-step wall-clock sim tick", () => {
   it("advances sim through kindlingClock with scene delta for both clock modes", () => {
     const src = read("HudScene.ts");
@@ -79,15 +87,26 @@ describe("HudScene paint dirty guards", () => {
     expect(src).toContain("if (snap.shiftEnded !== this.pwaIdleShiftEnded)");
   });
 
-  it("hides score/clock/cog at door and during ID inspect", () => {
+  it("keeps score/clock/cog visible at door (including ID inspect)", () => {
     const src = read("HudScene.ts");
     const readouts = read("../ui/hud/readouts.ts");
     expect(src).toContain("paintReadoutChrome");
+    expect(src).toContain("readoutsAtDoor");
     const fn = readouts.slice(readouts.indexOf("paintReadoutChrome("), readouts.indexOf("paintDoorTitle("));
-    expect(fn).toMatch(/atDoor \|\| showId/);
+    expect(fn).toMatch(/!atDoor && showId/);
     expect(fn).toContain("this.scoreText.setVisible(!hide)");
     expect(fn).toContain("this.clockText.setVisible(!hide)");
-    expect(fn).toContain("chrome.cog.setVisible(!hide)");
+    const place = between(readouts, "placeReadouts(): void {", "matchCaptionToValue(): void {", "placeReadouts");
+    expect(place).toContain("readoutsAtDoor");
+    expect(place).toMatch(/readoutsAtDoor[\s\S]*setOrigin\(1, 0\.5\)\.setPosition\(edge, top\)/);
+  });
+
+  it("keeps HUD above the door scene for the whole porch visit", () => {
+    const src = read("HudScene.ts");
+    const sync = between(src, "private syncDoorScene(snap: SimSnapshot): void {", "private readInput", "syncDoorScene");
+    expect(sync).toContain('"doorHud"');
+    expect(sync).toMatch(/bringToTop\("door"\)[\s\S]*bringToTop\(\)/);
+    expect(sync).not.toMatch(/bringToTop\(\)[\s\S]*bringToTop\("door"\)/);
   });
 
   it("hides the shop scene while driving so ORDERS cannot leak into Door", () => {
@@ -113,6 +132,14 @@ describe("HudScene paint dirty guards", () => {
     const callouts = src.slice(src.indexOf("private paintDriveCallouts"), src.indexOf("private tutorialFlashHint"));
     expect(callouts).toContain("drivePinLabel.setVisible(false)");
     expect(callouts).not.toContain("clampSignPlaqueCenter(this.drivePinLabel");
+  });
+
+  it("keeps HUD above the door scene for the whole porch visit", () => {
+    const src = read("HudScene.ts");
+    const sync = between(src, "private syncDoorScene(snap: SimSnapshot): void {", "private readInput", "syncDoorScene");
+    expect(sync).toContain('"doorHud"');
+    expect(sync).toMatch(/bringToTop\("door"\)[\s\S]*bringToTop\(\)/);
+    expect(sync).not.toMatch(/bringToTop\(\)[\s\S]*bringToTop\("door"\)/);
   });
 
   it("sleeps drive/door when keyLead owns the shop world", () => {

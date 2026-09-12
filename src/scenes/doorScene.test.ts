@@ -102,28 +102,40 @@ describe("doorstep prompt", () => {
     expect(src).toContain("setSignCopy(this.prompt");
   });
 
+  it("clears the door prompt while the ID card carries confirm copy", () => {
+    const sync = between(src, "const idInspect = drop.idAsked", "if (promptLine !== this.lastPrompt)", "idInspect prompt");
+    expect(sync).toContain("idInspect");
+    expect(sync).toMatch(/promptLine = idInspect\s*\?\s*""/);
+  });
+
   it("resolves the prompt through placeChip after anchor geometry", () => {
     const fn = between(src, "private placePrompt(", "\n  }", "placePrompt");
-    expect(fn).toContain("resolveDoorPrompt(x, y)");
+    expect(fn).toContain("resolveDoorPrompt(x, preferred.y)");
     const resolve = between(src, "private resolveDoorPrompt(", "\n  }", "resolveDoorPrompt");
     expect(resolve).toContain("placeChip(placer, \"doorPrompt\"");
   });
 
-  it("registers the bag as a fixed obstacle before doorPrompt resolves", () => {
+  it("does not register the bag as a chip obstacle — it was displacing head prompts", () => {
     const resolve = between(src, "private resolveDoorPrompt(", "\n  }", "resolveDoorPrompt");
-    expect(resolve).toContain('register("doorBag"');
-    expect(resolve).toContain("spriteAabb(this.bag)");
+    expect(resolve).not.toContain('register("doorBag"');
     expect(resolve).toContain("placeChip(placer, \"doorPrompt\"");
   });
 
-  it("pins the prompt top-center as an instruction chip", () => {
+  it("clears the door prompt while the ID card carries confirm copy", () => {
+    const sync = between(src, "const idInspect = drop.idAsked", "if (promptLine !== this.lastPrompt)", "idInspect prompt");
+    expect(sync).toContain("idInspect");
+    expect(sync).toMatch(/promptLine = idInspect\s*\?\s*""/);
+  });
+
+  it("pins the prompt above the customer head with headHang", () => {
     const fn = between(src, "private placePrompt(", "\n  }", "placePrompt");
-    expect(fn).toContain("GAME_WIDTH / 2");
-    expect(fn).toContain("this.insetTop + DOOR_CHIP_GAP + plaque.panelH / 2");
-    expect(fn).not.toContain("DOOR_PROMPT_MID_X");
-    expect(fn).not.toContain("dodgePromptX");
-    expect(fn).not.toContain("spriteHeadTop");
-    expect(fn).not.toContain("promptAnchorX");
+    expect(fn).toContain("speechPlaqueAboveHead(this.prompt, this.customer.x, headTop, DOOR_CHIP_GAP)");
+    expect(fn).toContain("modelHeadTop(this.customer)");
+    expect(fn).toContain("this.customer.x");
+    expect(fn).not.toContain("GAME_WIDTH / 2");
+    expect(fn).not.toContain("this.insetTop + DOOR_CHIP_GAP");
+    const resolve = between(src, "private resolveDoorPrompt(", "\n  }", "resolveDoorPrompt");
+    expect(resolve).toMatch(/placeChip\([\s\S]*"doorPrompt"[\s\S]*true\)/);
   });
 
   it("does not follow bag or customer x each frame for prompt anchor", () => {
@@ -145,9 +157,9 @@ describe("doorstep prompt", () => {
     expect(constant("DOOR_CHIP_GAP")).toBe(36);
   });
 
-  it("anchors the chip from the top safe inset using plaque bounds", () => {
-    const fn = between(src, "private placePrompt(", "\n  }", "placePrompt");
-    expect(fn).toContain("this.insetTop + DOOR_CHIP_GAP + plaque.panelH / 2");
+  it("derives headTop through plaquePlacementPhaser", () => {
+    expect(src).toContain('from "../ui/plaquePlacementPhaser"');
+    expect(src).toContain("modelHeadTop(this.customer)");
   });
 });
 

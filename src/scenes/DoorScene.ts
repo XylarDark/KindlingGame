@@ -19,7 +19,8 @@ import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import { skyAt, skyVisualDirtyKey } from "../sim/dayNight";
 import type { SimSnapshot } from "../sim/gameSim";
 import { layoutDebugEnabled, paintLayoutDebug, type LayoutDebugLayer } from "../ui/layoutDebug";
-import { plaqueAabbFromCenter, topCenterY } from "../ui/plaquePlacement";
+import { aboveHeadBand, plaqueAabbFromCenter } from "../ui/plaquePlacement";
+import { modelHeadTop, speechPlaqueAboveHead } from "../ui/plaquePlacementPhaser";
 import { addSignText, setSignCopy, signPlaqueCenterWorld, signPlaqueExtents, syncSignPlaque } from "../ui/signText";
 import { beginChipFrame, placeChip } from "../ui/hud/placeChips";
 import { chipPriority } from "../ui/hud/slots";
@@ -126,15 +127,15 @@ export class DoorScene extends Phaser.Scene {
       p.event.stopPropagation();
       getSim().pressDropoffConfirm();
     };
-    const onDoorConfirmUp = (): void => {
+    const onConfirmUp = (): void => {
       getSim().releaseDropoffConfirm();
     };
     this.customer.on("pointerdown", onDoorConfirmDown);
-    this.customer.on("pointerup", onDoorConfirmUp);
-    this.customer.on("pointerupoutside", onDoorConfirmUp);
+    this.customer.on("pointerup", onConfirmUp);
+    this.customer.on("pointerupoutside", onConfirmUp);
     this.bag.on("pointerdown", onDoorConfirmDown);
-    this.bag.on("pointerup", onDoorConfirmUp);
-    this.bag.on("pointerupoutside", onDoorConfirmUp);
+    this.bag.on("pointerup", onConfirmUp);
+    this.bag.on("pointerupoutside", onConfirmUp);
 
     this.prompt = addSignText(this, GAME_WIDTH / 2, 0, "", {
       size: typeRolePx("hudTitle"),
@@ -169,46 +170,45 @@ export class DoorScene extends Phaser.Scene {
     this.placePrompt();
   }
 
-  /** Door instructions pin top-center — action copy, not character speech beside faces. */
+  /** Door action plaques hug copy and sit above the customer's head. */
   private placePrompt(): void {
+    syncSignPlaque(this.prompt);
+    const headTop = modelHeadTop(this.customer);
+    const preferred = speechPlaqueAboveHead(this.prompt, this.customer.x, headTop, DOOR_CHIP_GAP);
     const plaque = signPlaqueExtents(this.prompt);
     const half = plaque.panelW / 2 + DOOR_CHIP_MARGIN;
-    const x = Phaser.Math.Clamp(GAME_WIDTH / 2, half, GAME_WIDTH - half);
-    const y = this.insetTop + DOOR_CHIP_GAP + plaque.panelH / 2;
-    this.resolveDoorPrompt(x, y);
+    const x = Phaser.Math.Clamp(preferred.x, half, GAME_WIDTH - half);
+    this.resolveDoorPrompt(x, preferred.y);
   }
 
   private resolveDoorPrompt(preferredX: number, preferredY: number): void {
     const inset = designHudInset(readCssSafeArea(document.getElementById("game-root")));
     const placer = beginChipFrame(this.game, inset, GAME_WIDTH, GAME_HEIGHT);
-    if (this.bag.visible && this.bag.input?.enabled) {
-      placer.register("doorBag", spriteAabb(this.bag), chipPriority("doorPrompt") + 10);
-    }
     if (!String(this.prompt.text ?? "").trim()) return;
-    placeChip(placer, "doorPrompt", this.prompt, preferredX, preferredY, chipPriority("doorPrompt"));
+    placeChip(placer, "doorPrompt", this.prompt, preferredX, preferredY, chipPriority("doorPrompt"), true);
     this.paintDoorLayoutDebug();
   }
 
-  /** `?layoutDebug=1` — top-center instruction band + landed prompt AABB. */
+  /** `?layoutDebug=1` — above-head band + landed prompt AABB. */
   private paintDoorLayoutDebug(): void {
     if (!this.layoutDebugGfx) return;
-    const plaque = signPlaqueExtents(this.prompt);
-    const targetY = topCenterY(this.insetTop, DOOR_CHIP_GAP, plaque.panelH);
-    const halfW = plaque.panelW / 2 + DOOR_CHIP_MARGIN;
+    const headTop = modelHeadTop(this.customer);
+    const band = aboveHeadBand(headTop, DOOR_CHIP_GAP);
     const layers: LayoutDebugLayer[] = [
       {
-        label: "topCenterBand",
+        label: "aboveHeadBand",
         aabb: {
-          left: GAME_WIDTH / 2 - halfW,
-          top: this.insetTop + DOOR_CHIP_GAP,
-          right: GAME_WIDTH / 2 + halfW,
-          bottom: targetY + plaque.panelH / 2,
+          left: this.customer.x - 220,
+          top: Number.isFinite(band.top) ? band.top : 0,
+          right: this.customer.x + 220,
+          bottom: band.bottom,
         },
         color: 0x44aaff,
       },
     ];
     if (this.prompt.visible && String(this.prompt.text ?? "").trim()) {
       syncSignPlaque(this.prompt);
+      const plaque = signPlaqueExtents(this.prompt);
       const center = signPlaqueCenterWorld(this.prompt);
       layers.push({
         label: "doorPrompt",
@@ -298,14 +298,17 @@ export class DoorScene extends Phaser.Scene {
     armHit(this.bag, canBag, BAG_HIT_PAD);
     if (canBag && !this.bag.input) enableWideHit(this.bag, BAG_HIT_PAD);
 
+    const idInspect = drop.idAsked && !!drop.idCard && !drop.idChecked;
     const who = drop.customerName ?? "the customer";
-    const promptLine = nextAsk
-      ? `Tap ${who} for ID.`
-      : nextHand
-        ? `Tap bag → ${who}.`
-        : nextPhoto
-          ? `Photo — tap bag.`
-          : drop.hint || "At the door.";
+    const promptLine = idInspect
+      ? ""
+      : nextAsk
+        ? `Tap ${who} for ID.`
+        : nextHand
+          ? `Tap bag → ${who}.`
+          : nextPhoto
+            ? `Photo — tap bag.`
+            : drop.hint || "At the door.";
     // setText refits typekit — only pay when the instruction changes.
     if (promptLine !== this.lastPrompt) {
       this.lastPrompt = promptLine;
@@ -391,16 +394,6 @@ function enableWideHit(obj: Phaser.GameObjects.Image, pad: number): void {
     hitArea: new Phaser.Geom.Rectangle(-need, -need, width + need * 2, height + need * 2),
     hitAreaCallback: Phaser.Geom.Rectangle.Contains,
   });
-}
-
-type Aabb = { left: number; right: number; top: number; bottom: number };
-
-function spriteAabb(img: Phaser.GameObjects.Image): Aabb {
-  const w = img.displayWidth;
-  const h = img.displayHeight;
-  const left = img.x - w * img.originX;
-  const top = img.y - h * img.originY;
-  return { left, right: left + w, top, bottom: top + h };
 }
 
 function armHit(obj: Phaser.GameObjects.Image, on: boolean, pad: number): void {

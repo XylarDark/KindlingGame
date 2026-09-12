@@ -130,13 +130,20 @@ describe("HUD chip resolver wiring", () => {
     expect(settings).not.toContain("unionAabb");
   });
 
-  it("places drive/door SCORE and clock together in the top-left safe slot", () => {
+  it("places drive SCORE row top-left and door SCORE row top-right", () => {
     const column = between(readouts, "layoutReadoutColumn(inset: SafeInset): void {", "\n  }", "layoutReadoutColumn");
     expect(column).toContain("SLOT_GUTTER");
     const place = between(readouts, "placeReadouts(): void {", "\n  }", "placeReadouts");
     expect(place).toMatch(/readoutsInShop[\s\S]*counterSignReadoutAnchors/);
     expect(place).toMatch(/this\.clockText\.setOrigin\(0, 0\.5\)\.setPosition\(clockX, top\)/);
-    expect(place).not.toMatch(/this\.clockText\.setOrigin\(1, 0\.5\)\.setPosition\(right, top\)/);
+    expect(place).toMatch(/readoutsAtDoor[\s\S]*this\.clockText\.setOrigin\(1, 0\.5\)\.setPosition\(edge, top\)/);
+  });
+
+  it("resolves doorTitle top-center for the whole door visit", () => {
+    const resolve = between(readouts, "resolvePlaqueSlots(", "\n  }", "resolvePlaqueSlots");
+    expect(resolve).toContain("atDoor && this.doorTitleText.visible");
+    expect(resolve).toMatch(/let centerX = placer\.viewW \/ 2/);
+    expect(resolve).toMatch(/placeChip\(placer, "doorTitle"[\s\S]*centerX, centerY/);
   });
 
   it("caps cover width so it cannot reach the shop lot mark", () => {
