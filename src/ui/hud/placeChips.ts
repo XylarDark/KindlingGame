@@ -66,12 +66,13 @@ export function placeChip(
   preferredX: number,
   preferredY: number,
   priority = chipPriority(id),
+  headHang = false,
 ): boolean {
   const copy = String(host.text ?? "").trim();
   if (!host.visible || copy.length === 0) return false;
   syncSignPlaque(host);
   const plaque = signPlaqueExtents(host);
-  const slot = placer.findOpenSlot(preferredX, preferredY, plaque, priority, id);
+  const slot = placer.findOpenSlot(preferredX, preferredY, plaque, priority, id, headHang);
   if (!slot) {
     setSignCopy(host, "");
     return false;

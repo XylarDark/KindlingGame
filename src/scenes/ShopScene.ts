@@ -58,6 +58,7 @@ import {
   signHostPosition,
   signPlaqueExtents,
   signYAbove,
+  syncSignPlaque,
 } from "../ui/signText";
 import type { ChipPlacer } from "../ui/hud/chipCollision";
 import { beginChipFrame, placeChip } from "../ui/hud/placeChips";
@@ -240,14 +241,15 @@ export class ShopScene extends Phaser.Scene {
     });
     wireHover(this.tabletHit);
 
-    this.queueBadge = addSignText(this, tab.left + tab.w - 10, tab.top + 10, "", {
+    const badgeInset = 6;
+    this.queueBadge = addSignText(this, tab.left + tab.w - badgeInset, tab.top + badgeInset, "", {
       size: typeRolePx("hudSmall"),
       typeRole: "hudSmall",
       fontStyle: "700",
       maxWidth: 48,
       maxHeight: 28,
     })
-      .setOrigin(0.5)
+      .setOrigin(1, 0)
       .setDepth(13)
       .setVisible(false);
 
@@ -412,10 +414,23 @@ export class ShopScene extends Phaser.Scene {
     preferredY: number,
     priority: number,
     alt?: { x: number; y: number },
+    headHang = false,
   ): void {
-    if (placeChip(placer, id, chip, preferredX, preferredY, priority)) return;
-    if (alt && placeChip(placer, id, chip, alt.x, alt.y, priority)) return;
+    if (placeChip(placer, id, chip, preferredX, preferredY, priority, headHang)) return;
+    if (alt && placeChip(placer, id, chip, alt.x, alt.y, priority, headHang)) return;
     setSignCopy(chip, "");
+  }
+
+  /** Preferred slot anchor for speech hung above a bottom-anchored person sprite. */
+  private headBubbleAnchor(
+    chip: Phaser.GameObjects.Text,
+    model: Phaser.GameObjects.Image,
+    preferredX: number,
+  ): { x: number; y: number } {
+    return {
+      x: preferredX,
+      y: signYAbove(chip, modelHeadTop(model), CUSTOMER_SPEECH_GAP),
+    };
   }
 
   private resolveShopChips(
@@ -468,25 +483,33 @@ export class ShopScene extends Phaser.Scene {
     }
 
     if (this.keyLeadBubble.visible) {
-      const pos = signHostPosition(this.keyLeadBubble);
+      syncSignPlaque(this.keyLeadBubble);
+      const leadX = this.keyLead.x - 168;
+      const leadAnchor = this.headBubbleAnchor(this.keyLeadBubble, this.keyLead, leadX);
       this.placeShopChip(
         placer,
         "leadBubble",
         this.keyLeadBubble,
-        pos.x,
-        pos.y,
+        leadAnchor.x,
+        leadAnchor.y,
         chipPriority("leadBubble"),
+        { x: this.keyLead.x, y: leadAnchor.y },
+        true,
       );
     }
     if (this.driverBubble.visible) {
-      const pos = signHostPosition(this.driverBubble);
+      syncSignPlaque(this.driverBubble);
+      const driverX = DRIVER.x - 24;
+      const driverAnchor = this.headBubbleAnchor(this.driverBubble, this.driver, driverX);
       this.placeShopChip(
         placer,
         "driverBubble",
         this.driverBubble,
-        pos.x,
-        pos.y,
+        driverAnchor.x,
+        driverAnchor.y,
         chipPriority("driverBubble"),
+        { x: DRIVER.x, y: driverAnchor.y },
+        true,
       );
     }
     if (this.targetCallout.visible) {

@@ -341,7 +341,8 @@ export class HudSettings {
     this.cogCaption = addSignText(this.scene, cogX - cogSize / 2, cogY - cogSize - 8, "Settings", {
       size: typeRolePx("hudSmall"),
       typeRole: "hudSmall",
-      padding: HUD_COG_CAPTION_PAD,
+      padX: HUD_COG_CAPTION_PAD.x,
+      padY: HUD_COG_CAPTION_PAD.y,
       fontStyle: "600",
       align: "center",
       maxWidth: HUD_COG_CAPTION_BOX.w,
@@ -368,13 +369,16 @@ export class HudSettings {
     this.cogHit.setPosition(cogX - cogSize / 2, cogY - cogSize / 2);
     this.cogHit.setSize(cogSize, cogSize);
     syncSignPlaque(this.cogCaption);
-    const cogCenterX = cogX - cogSize / 2;
-    const plaqueHalf = signPlaqueExtents(this.cogCaption).panelW / 2;
+    const cogCenterX = this.cog.x - this.cog.displayWidth / 2;
+    const capExtents = signPlaqueExtents(this.cogCaption);
+    const plaqueMidX = (capExtents.leftLocal + capExtents.rightLocal) / 2;
+    const plaqueHalf = capExtents.panelW / 2;
     const captionMinX = inset.left + plaqueHalf + 8;
     const captionMaxX = viewW - inset.right - plaqueHalf - 8;
-    let cogCaptionX = Phaser.Math.Clamp(cogCenterX, captionMinX, captionMaxX);
-    if (cogCaptionX !== cogCenterX) {
-      cogX = cogCaptionX + cogSize / 2;
+    const clampedCenterX = Phaser.Math.Clamp(cogCenterX, captionMinX, captionMaxX);
+    let cogCaptionX = clampedCenterX - plaqueMidX;
+    if (clampedCenterX !== cogCenterX) {
+      cogX = clampedCenterX + cogSize / 2;
       this.cog.setPosition(cogX, cogY);
       this.cogHit.setPosition(cogX - cogSize / 2, cogY - cogSize / 2);
     }
