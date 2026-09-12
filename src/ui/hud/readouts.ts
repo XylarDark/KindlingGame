@@ -401,7 +401,7 @@ export class HudReadouts {
     if (atDoor && this.doorTitleText.visible && String(this.doorTitleText.text).trim()) {
       syncSignPlaque(this.doorTitleText);
       const plaque = signPlaqueExtents(this.doorTitleText);
-      const centerY = this.readoutCorner.top + SLOT_GUTTER + plaque.panelH / 2;
+      const centerY = this.readoutCorner.top;
       let centerX = placer.viewW / 2;
       const halfW = plaque.panelW / 2;
       if (this.scoreText.visible) {

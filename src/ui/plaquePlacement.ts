@@ -159,6 +159,16 @@ export function speechPlaqueCenterAboveHead(
   return { x: centerX, y: hostY + midY };
 }
 
+/** Door ask prompt — pin plaque center on customer X, bottom clears headTop − gap. */
+export function doorPromptPlaqueCenter(
+  plaque: ChipPlaqueExtents,
+  customerX: number,
+  headTopY: number,
+  gap: number,
+): { x: number; y: number } {
+  return { x: customerX, y: headTopY - gap - plaque.panelH / 2 };
+}
+
 /** Key-lead speech centered in the head↔TV band, or above-head fallback when tight. */
 export function leadSpeechPlaqueCenterFromExtents(
   plaque: ChipPlaqueExtents,

@@ -20,11 +20,12 @@ import { skyAt, skyVisualDirtyKey } from "../sim/dayNight";
 import type { SimSnapshot } from "../sim/gameSim";
 import { layoutDebugEnabled, paintLayoutDebug, type LayoutDebugLayer } from "../ui/layoutDebug";
 import { aboveHeadBand, plaqueAabbFromCenter } from "../ui/plaquePlacement";
-import { speechPlaqueAboveHead, standingPersonHeadTop } from "../ui/plaquePlacementPhaser";
+import { standingPersonHeadTop } from "../ui/plaquePlacementPhaser";
 import {
   addSignText,
   setSignCopy,
   setSignPlaqueCenter,
+  signContainer,
   signPlaqueCenterWorld,
   signPlaqueExtents,
   syncSignPlaque,
@@ -43,14 +44,12 @@ const BAG_HIT_PAD = 88; // ~10% over prior 80 for mobile taps
 
 /** Gap between a sprite's edge and the chip anchored off it. */
 const DOOR_CHIP_GAP = 36;
-/** Keep a wide chip on screen when the sprite it hangs off is near an edge. */
-const DOOR_CHIP_MARGIN = 24;
 /** Prompt chip width — one-line “Tap … for ID” above the customer head. */
 const DOOR_PROMPT_MAX_W = 680;
 /** Two wrapped lines at the door prompt seed (hudTitle) with default pad. */
 const DOOR_PROMPT_MAX_H = 120;
 /** Clearance between customer head top and prompt plaque bottom. */
-const DOOR_HEAD_GAP = 88;
+const DOOR_HEAD_GAP = 120;
 /** Renders above flashing customer (11) and bag (12) during ask/hand steps. */
 const DOOR_PROMPT_DEPTH = 14;
 
@@ -99,6 +98,11 @@ export class DoorScene extends Phaser.Scene {
   private onPreRenderDayNight = (): void => {
     if (!this.sys.isActive() || this.sys.isSleeping()) return;
     this.paintDoorDayNight(getSim().snapshot());
+  };
+  /** After the plaque pump lays out ink, pin the prompt above the customer head. */
+  private onPreRenderDoorPrompt = (): void => {
+    if (!this.sys.isActive() || this.sys.isSleeping()) return;
+    this.placePrompt();
   };
 
   constructor() {
@@ -163,8 +167,10 @@ export class DoorScene extends Phaser.Scene {
 
     this.paintDoorDayNight(getSim().snapshot());
     this.events.on(Phaser.Scenes.Events.PRE_RENDER, this.onPreRenderDayNight);
+    this.events.on(Phaser.Scenes.Events.PRE_RENDER, this.onPreRenderDoorPrompt);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.events.off(Phaser.Scenes.Events.PRE_RENDER, this.onPreRenderDayNight);
+      this.events.off(Phaser.Scenes.Events.PRE_RENDER, this.onPreRenderDoorPrompt);
     });
     if (layoutDebugEnabled()) {
       this.layoutDebugGfx = this.add.graphics().setDepth(99);
@@ -192,20 +198,27 @@ export class DoorScene extends Phaser.Scene {
     );
   }
 
-  /** Door action plaques hug copy and sit above the customer's head. */
-  private placePrompt(): void {
-    syncSignPlaque(this.prompt);
-    const headTop = standingPersonHeadTop(this.customer);
-    const preferred = speechPlaqueAboveHead(this.prompt, this.customer.x, headTop, DOOR_HEAD_GAP);
-    const plaque = signPlaqueExtents(this.prompt);
-    const half = plaque.panelW / 2 + DOOR_CHIP_MARGIN;
-    const x = Phaser.Math.Clamp(preferred.x, half, GAME_WIDTH - half);
-    this.resolveDoorPrompt(x, preferred.y);
+  /** Match customer scroll — scrollFactor(0) signs drift beside sprites on a zoomed door cam. */
+  private syncPromptScroll(): void {
+    const host = signContainer(this.prompt);
+    host.setScrollFactor(1, 1);
+    for (const child of host.list) {
+      if ("setScrollFactor" in child && typeof child.setScrollFactor === "function") {
+        child.setScrollFactor(1, 1);
+      }
+    }
   }
 
-  private resolveDoorPrompt(preferredX: number, preferredY: number): void {
+  /** Door action plaques hug copy and sit above the customer's head. */
+  private placePrompt(): void {
     if (!String(this.prompt.text ?? "").trim()) return;
-    setSignPlaqueCenter(this.prompt, preferredX, preferredY);
+    this.syncPromptScroll();
+    this.refitDoorPrompt();
+    syncSignPlaque(this.prompt);
+    this.syncPromptScroll();
+    const headTop = standingPersonHeadTop(this.customer);
+    const ext = signPlaqueExtents(this.prompt);
+    setSignPlaqueCenter(this.prompt, this.customer.x, headTop - DOOR_HEAD_GAP - ext.panelH / 2);
     this.paintDoorLayoutDebug();
   }
 
@@ -335,7 +348,6 @@ export class DoorScene extends Phaser.Scene {
       this.refitDoorPrompt();
     }
     this.prompt.setAlpha(1);
-    this.placePrompt();
   }
 
   private bakeDoorFacade(houseIndex: number): Phaser.GameObjects.RenderTexture {

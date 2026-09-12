@@ -105,8 +105,9 @@ describe("doorstep prompt", () => {
   });
 
   it("refits prompt ink after copy changes so the plaque and glyphs stay aligned", () => {
-    const sync = between(src, "if (promptLine !== this.lastPrompt)", "this.placePrompt();", "prompt refit");
+    const sync = between(src, "if (promptLine !== this.lastPrompt)", "this.prompt.setAlpha(1);", "prompt refit");
     expect(sync).toContain("this.refitDoorPrompt()");
+    expect(src).toContain("onPreRenderDoorPrompt");
     const refit = between(src, "private refitDoorPrompt(", "\n  }", "refitDoorPrompt");
     expect(refit).toContain("fitTypeToBox(");
     expect(refit).toContain("DOOR_PROMPT_MAX_W");
@@ -119,12 +120,16 @@ describe("doorstep prompt", () => {
     expect(sync).toMatch(/promptLine = idInspect\s*\?\s*""/);
   });
 
-  it("pins the prompt through setSignPlaqueCenter after anchor geometry", () => {
+  it("centers the prompt on customer x with plaque bottom above the head", () => {
     const fn = between(src, "private placePrompt(", "\n  }", "placePrompt");
-    expect(fn).toContain("resolveDoorPrompt(x, preferred.y)");
-    const resolve = between(src, "private resolveDoorPrompt(", "\n  }", "resolveDoorPrompt");
-    expect(resolve).toContain("setSignPlaqueCenter(this.prompt, preferredX, preferredY)");
-    expect(resolve).not.toContain("placeChip");
+    expect(fn).toContain("setSignPlaqueCenter(this.prompt, this.customer.x");
+    expect(fn).toContain("headTop - DOOR_HEAD_GAP - ext.panelH / 2");
+    expect(fn).toContain("syncPromptScroll");
+    const scroll = between(src, "private syncPromptScroll(", "\n  }", "syncPromptScroll");
+    expect(scroll).toContain("host.setScrollFactor(1, 1)");
+    expect(fn).not.toContain("placeChip");
+    expect(fn).not.toContain("speechPlaqueAboveHead");
+    expect(fn).not.toContain("promptAnchor");
   });
 
   it("clears the door prompt while the ID card carries confirm copy", () => {
@@ -135,11 +140,10 @@ describe("doorstep prompt", () => {
 
   it("pins the prompt centered on the customer head with standingPersonHeadTop", () => {
     const fn = between(src, "private placePrompt(", "\n  }", "placePrompt");
-    expect(fn).toContain("speechPlaqueAboveHead(this.prompt, this.customer.x, headTop, DOOR_HEAD_GAP)");
     expect(fn).toContain("standingPersonHeadTop(this.customer)");
+    expect(fn).toContain("signPlaqueExtents(this.prompt)");
     expect(src).toContain(".setDepth(DOOR_PROMPT_DEPTH)");
-    expect(fn).toContain("this.customer.x");
-    expect(fn).not.toContain("GAME_WIDTH / 2");
+    expect(fn).not.toContain("DOOR_CHIP_MARGIN");
     expect(fn).not.toContain("this.insetTop + DOOR_CHIP_GAP");
   });
 
@@ -159,13 +163,14 @@ describe("doorstep prompt", () => {
 
   it("uses a wide prompt box for hudTitle instruction copy", () => {
     expect(constant("DOOR_PROMPT_MAX_W")).toBeGreaterThanOrEqual(640);
-    expect(constant("DOOR_CHIP_GAP")).toBe(36);
+    expect(constant("DOOR_HEAD_GAP")).toBeGreaterThanOrEqual(100);
   });
 
   it("derives headTop through standingPersonHeadTop (tallest hat frame)", () => {
     expect(src).toContain('from "../ui/plaquePlacementPhaser"');
     expect(src).toContain("standingPersonHeadTop(this.customer)");
-    expect(src).toContain("setSignPlaqueCenter(this.prompt, preferredX, preferredY)");
+    expect(src).toContain("onPreRenderDoorPrompt");
+    expect(src).toContain("setSignPlaqueCenter(this.prompt");
   });
 });
 

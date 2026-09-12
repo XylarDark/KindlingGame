@@ -151,6 +151,8 @@ describe("HUD chip resolver wiring", () => {
     expect(resolve).toContain("scoreRight + CHIP_GAP");
     expect(resolve).toContain("clockLeft - CHIP_GAP");
     expect(resolve).toContain("placer.viewW / 2");
+    expect(resolve).toMatch(/const centerY = this\.readoutCorner\.top/);
+    expect(resolve).not.toMatch(/readoutCorner\.top \+ SLOT_GUTTER \+ plaque\.panelH/);
     const doorTitle = between(readouts, "paintDoorTitle(snap: SimSnapshot, atDoor: boolean", "\n  paintCover(", "paintDoorTitle");
     expect(doorTitle).toContain("setSignAccent(this.doorTitleText, Color.danger)");
     expect(doorTitle).toContain("HUD_DOOR_READOUT_DEPTH");
