@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { glyphAabb, inkInsidePlaque } from "./signTextInk";
+import { glyphAabb, inkInsidePlaque, measureInkHeight, measureInkWidth, plaqueCenterFromInkBox, tightInkLayout } from "./signTextInk";
 import { SIGN_PAD_X, SIGN_PAD_Y } from "./signPlaque";
 
 function read(path: string): string {
@@ -102,6 +102,20 @@ describe("sign text ink contract", () => {
     if (layoutEnd === -1) throw new Error("layoutPlaque end not found");
     const layout = helper.slice(layoutStart, layoutEnd);
     expect(layout).toMatch(/inkFitsPlaque\([\s\S]*,\s*pad,\s*\)/);
+    expect(layout).toMatch(/inkFitsPlaque\(\s*layout,/);
+  });
+
+  it("sizes plaque from tight ink, not wrap-ceiling text.width", () => {
+    expect(helper).toContain("tightInkLayout");
+    expect(helper).toContain("applyTightInkBox");
+    const layoutStart = helper.indexOf("function layoutPlaque(entry: SignPlaqueEntry): void {");
+    if (layoutStart === -1) throw new Error("layoutPlaque not found");
+    const layoutEnd = helper.indexOf("\n}", layoutStart);
+    if (layoutEnd === -1) throw new Error("layoutPlaque end not found");
+    const layout = helper.slice(layoutStart, layoutEnd);
+    expect(layout).toMatch(/let layout = tightInkLayout\(text\)/);
+    expect(layout).toMatch(/const w = layout\.width/);
+    expect(layout).toMatch(/plaqueCenterFromGlyphs\(text, layout\)/);
   });
 
   it("layoutPlaque sizes the plaque before ink validation — not the boot default box", () => {
@@ -143,6 +157,7 @@ describe("text boxes are all the counter plaque", () => {
     expect(helper).toContain("signPads(text)");
     expect(helper).toMatch(/padding: undefined/);
     expect(helper).toContain("glyphLocalBounds");
+    expect(helper).toContain("tightInkLayout");
     expect(helper).toContain("plaqueCenterFromGlyphs");
   });
 
@@ -269,6 +284,81 @@ describe("text boxes are all the counter plaque", () => {
     expect(add).not.toMatch(/plaque\.setScrollFactor/);
     expect(helper).toContain("syncChildScrollFactors(host)");
     expect(add).toContain("makeType(scene, 0, 0, content");
+  });
+});
+
+describe("tight ink measurement", () => {
+  it("shrinks width when reported box equals a wrap ceiling", () => {
+    const lines = ["Tap me"];
+    const mockText = {
+      width: 350,
+      height: 83,
+      originX: 0.5,
+      originY: 0.5,
+      padding: { left: 0, right: 0, top: 0, bottom: 0 },
+      lineSpacing: 4,
+      letterSpacing: 0,
+      style: {
+        fontSize: "19px",
+        metrics: { fontSize: 19 },
+        strokeThickness: 0,
+        wordWrapWidth: 330,
+        wordWrap: true,
+        maxLines: 0,
+        syncFont: () => {},
+      },
+      context: {
+        measureText: (s: string) => ({ width: s === " " ? 4 : s.length * 9 }),
+      },
+      canvas: {},
+      updateText() {
+        return mockText;
+      },
+      getWrappedText: () => lines,
+    } as unknown as Phaser.GameObjects.Text;
+
+    expect(measureInkWidth(mockText, lines)).toBe(50);
+    expect(measureInkHeight(mockText, 1)).toBe(19);
+    const layout = tightInkLayout(mockText);
+    expect(layout.width).toBe(50);
+    expect(layout.height).toBe(19);
+  });
+
+  it("keeps full width for copy that fills the wrap box", () => {
+    const longLine = "A much longer line of speech that uses the full wrap width";
+    const mockText = {
+      width: 350,
+      height: 48,
+      originX: 0.5,
+      originY: 0.5,
+      padding: { left: 0, right: 0, top: 0, bottom: 0 },
+      lineSpacing: 4,
+      letterSpacing: 0,
+      style: {
+        fontSize: "19px",
+        metrics: { fontSize: 19 },
+        strokeThickness: 0,
+        wordWrapWidth: 330,
+        wordWrap: true,
+        maxLines: 0,
+        syncFont: () => {},
+      },
+      context: {
+        measureText: (s: string) => ({ width: s === " " ? 4 : s.length * 6.2 }),
+      },
+      canvas: {},
+      updateText() {
+        return mockText;
+      },
+      getWrappedText: () => [longLine],
+    } as unknown as Phaser.GameObjects.Text;
+
+    expect(tightInkLayout(mockText).width).toBe(350);
+  });
+
+  it("centres plaque on ink box midpoints", () => {
+    const ink = glyphAabb({ width: 80, height: 24, originX: 0.5, originY: 0.5 });
+    expect(plaqueCenterFromInkBox(ink)).toEqual({ x: -40, y: -12 });
   });
 });
 

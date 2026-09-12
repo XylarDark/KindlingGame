@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { notePerfPlaquePump, notePerfSetText } from "./perfProbe";
 import { SIGN_BORDER, SIGN_PAD_X, SIGN_PAD_Y } from "./signPlaque";
-import { glyphLocalBounds as glyphLocalBoundsInk, inkInsidePlaque as inkFitsPlaque } from "./signTextInk";
+import { glyphLocalBounds as glyphLocalBoundsInk, inkInsidePlaque as inkFitsPlaque, plaqueCenterFromInkBox, tightInkLayout } from "./signTextInk";
 import { makePlaqueNineSlice, plaqueTextureForAccent } from "./signPlaqueNine";
 import { makeType, type TypeStyle } from "./typekit";
 import type { UiTextOptions } from "./text";
@@ -203,22 +203,34 @@ export { glyphAabb, inkInsidePlaque } from "./signTextInk";
 
 function plaqueCenterFromGlyphs(
   text: Phaser.GameObjects.Text,
-  w: number,
-  h: number,
-  panelW: number,
-  panelH: number,
+  layout: { width: number; height: number; originX: number; originY: number },
 ): { x: number; y: number } {
-  const pad = signPads(text);
-  const { left, top } = glyphLocalBounds(text, w, h);
-  return { x: left - pad.x + panelW / 2, y: top - pad.y + panelH / 2 };
+  const ink = glyphLocalBoundsInk(layout);
+  return plaqueCenterFromInkBox({
+    left: ink.left,
+    top: ink.top,
+    right: ink.left + layout.width,
+    bottom: ink.top + layout.height,
+  });
+}
+
+function applyTightInkBox(text: Phaser.GameObjects.Text, layout: ReturnType<typeof tightInkLayout>): void {
+  const slack = 0.5;
+  const shrinkW = text.width > layout.width + slack;
+  const shrinkH = text.height > layout.height + slack;
+  if (shrinkW || shrinkH) {
+    text.setFixedSize(layout.width, layout.height);
+    text.updateText();
+  }
 }
 
 /** Laid-out plaque bounds — pads and 9-slice included, not bare Text.displayHeight. */
 export function signPlaqueExtents(text: Phaser.GameObjects.Text): SignPlaqueExtents {
   syncSignPlaque(text);
   const plaque = text.getData(SIGN_PLAQUE) as Phaser.GameObjects.NineSlice | undefined;
-  const w = text.width;
-  const h = text.height;
+  const layout = tightInkLayout(text);
+  const w = layout.width;
+  const h = layout.height;
   if (!plaque) {
     const { left, top } = glyphLocalBounds(text, w, h);
     return {
@@ -232,7 +244,7 @@ export function signPlaqueExtents(text: Phaser.GameObjects.Text): SignPlaqueExte
   }
   const panelH = plaque.height;
   const panelW = plaque.width;
-  const center = plaqueCenterFromGlyphs(text, w, h, panelW, panelH);
+  const center = plaqueCenterFromGlyphs(text, layout);
   return {
     panelW,
     panelH,
@@ -326,8 +338,11 @@ function layoutPlaque(entry: SignPlaqueEntry): void {
   }
 
   text.updateText();
-  const w = text.width;
-  const h = text.height;
+  let layout = tightInkLayout(text);
+  applyTightInkBox(text, layout);
+  layout = tightInkLayout(text);
+  const w = layout.width;
+  const h = layout.height;
   const pad = signPads(text);
   const panelW = Math.max(8, w + pad.x * 2);
   const panelH = Math.max(8, h + pad.y * 2);
@@ -337,7 +352,7 @@ function layoutPlaque(entry: SignPlaqueEntry): void {
 
   const textX = -w * text.originX;
   const textY = -h * text.originY;
-  const plaqueCenter = plaqueCenterFromGlyphs(text, w, h, panelW, panelH);
+  const plaqueCenter = plaqueCenterFromGlyphs(text, layout);
   // Always repair inner layout — patched setPosition must not leave glyphs orphaned at (0,0).
   entry.setTextLocal(textX, textY);
   plaque.setSize(panelW, panelH);
@@ -346,7 +361,7 @@ function layoutPlaque(entry: SignPlaqueEntry): void {
   syncChildScrollFactors(host);
 
   const ink = inkFitsPlaque(
-    { width: w, height: h, originX: text.originX, originY: text.originY },
+    layout,
     { x: plaque.x, y: plaque.y, width: panelW, height: panelH, originX: plaque.originX, originY: plaque.originY },
     pad,
   );
