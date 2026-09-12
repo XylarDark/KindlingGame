@@ -98,7 +98,10 @@ describe("HudScene paint dirty guards", () => {
     expect(fn).toContain("this.clockText.setVisible(!hide)");
     const place = between(readouts, "placeReadouts(): void {", "matchCaptionToValue(): void {", "placeReadouts");
     expect(place).toContain("readoutsAtDoor");
-    expect(place).toMatch(/readoutsAtDoor[\s\S]*setOrigin\(1, 0\.5\)\.setPosition\(edge, top\)/);
+    expect(place).toMatch(/readoutsAtDoor[\s\S]*hudSceneViewport/);
+    expect(place).toMatch(/readoutsAtDoor[\s\S]*this\.scoreCaption\.setOrigin\(0, 0\.5\)\.setPosition\(left, top\)/);
+    expect(place).toMatch(/readoutsAtDoor[\s\S]*this\.clockText\.setOrigin\(1, 0\.5\)\.setPosition\(clockEdge, top\)/);
+    expect(src).toContain("resetReadoutChromeCache");
   });
 
   it("keeps HUD above the door scene for the whole porch visit", () => {

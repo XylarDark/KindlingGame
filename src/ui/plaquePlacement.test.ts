@@ -22,6 +22,7 @@ import type { ChipPlaqueExtents } from "./hud/chipCollision";
 import {
   aboveHead,
   assertPlacement,
+  doorPromptPlaqueCenter,
   overlapsObstacle,
   plaqueAabbFromCenter,
   speechPlaqueCenterAboveHead,
@@ -128,32 +129,49 @@ describe("shop capture seed geometry", () => {
 describe("door prompt placement contract", () => {
   const doorSrc = readScene("../scenes/DoorScene.ts");
   const readoutsSrc = readScene("../ui/hud/readouts.ts");
-  const DOOR_CHIP_GAP = 36;
+  const DOOR_HEAD_GAP = 120;
   const CUSTOMER_X = 960 + 200;
-  const headTop = 720;
+  /** Door floor feet + 8 — matches DoorScene floorY seed. */
+  const DOOR_FLOOR_Y = 838;
+  const headTop = DOOR_FLOOR_Y - 335;
 
   it("preferred door prompt center sits above the customer head", () => {
-    const plaque = mockSpeechPlaque(440, 72);
-    const center = speechPlaqueCenterAboveHead(plaque, CUSTOMER_X, headTop, DOOR_CHIP_GAP);
+    const plaque = mockSpeechPlaque(440, 88);
+    const center = doorPromptPlaqueCenter(plaque, CUSTOMER_X, headTop, DOOR_HEAD_GAP);
     const aabb = plaqueAabbFromCenter(center.x, center.y, plaque);
-    assertPlacement(aboveHead(aabb, headTop, DOOR_CHIP_GAP), "door prompt");
+    assertPlacement(aboveHead(aabb, headTop, DOOR_HEAD_GAP), "door prompt");
+    expect(aabb.bottom).toBeLessThanOrEqual(headTop - DOOR_HEAD_GAP + 1);
   });
 
-  it("door scene still resolves through placeChip after anchor geometry", () => {
-    expect(doorSrc).toContain("resolveDoorPrompt(x, preferred.y)");
-    expect(doorSrc).toContain('placeChip(placer, "doorPrompt"');
-    expect(doorSrc).toContain("speechPlaqueAboveHead");
+  it("Tap Ren Park for ID lands centered on customer x with head clearance", () => {
+    const plaque = mockSpeechPlaque(480, 92);
+    const center = doorPromptPlaqueCenter(plaque, CUSTOMER_X, headTop, DOOR_HEAD_GAP);
+    const aabb = plaqueAabbFromCenter(center.x, center.y, plaque);
+    expect(Math.abs(center.x - CUSTOMER_X)).toBeLessThan(2);
+    expect(aabb.bottom).toBeLessThanOrEqual(headTop - DOOR_HEAD_GAP + 1);
   });
 
-  it("door orange status resolves top-center for the whole atDoor visit", () => {
-    const margin = 12;
+  it("door scene centers prompt on customer x above head via setSignPlaqueCenter", () => {
+    expect(doorSrc).toContain("setSignPlaqueCenter(this.prompt, this.customer.x");
+    expect(doorSrc).toContain("headTop - DOOR_HEAD_GAP - ext.panelH / 2");
+    expect(doorSrc).toContain("host.setScrollFactor(1, 1)");
+    expect(doorSrc).not.toContain("speechPlaqueAboveHead");
+    expect(doorSrc).not.toContain("clampDoorPromptX");
+    expect(doorSrc).not.toContain("promptAnchor");
+  });
+
+  it("door orange status sits inline with the score row and top-center on x", () => {
+    const rowY = 28;
     const plaque = mockSpeechPlaque(520, 48);
-    const centerY = margin + plaque.panelH / 2;
-    const aabb = plaqueAabbFromCenter(GAME_WIDTH / 2, centerY, plaque);
-    assertPlacement(topCenter(aabb, GAME_WIDTH, 0, margin), "door status");
+    const aabb = plaqueAabbFromCenter(GAME_WIDTH / 2, rowY, plaque);
+    expect(aabb.top).toBeLessThan(rowY);
+    expect(aabb.bottom).toBeGreaterThan(rowY);
+    expect(topCenter(aabb, GAME_WIDTH, 0, 0).ok).toBe(true);
     expect(readoutsSrc).toContain("atDoor && this.doorTitleText.visible");
+    expect(readoutsSrc).toMatch(/const centerY = this\.readoutCorner\.top/);
+    expect(readoutsSrc).not.toMatch(/readoutCorner\.top \+ SLOT_GUTTER \+ plaque\.panelH/);
     expect(readoutsSrc).toMatch(/let centerX = placer\.viewW \/ 2/);
-    expect(readoutsSrc).toContain("paintDoorTitle");
+    expect(readoutsSrc).toContain("setSignAccent(this.doorTitleText, Color.danger)");
   });
 });
 

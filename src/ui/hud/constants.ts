@@ -12,6 +12,10 @@ import { Color } from "../theme";
 
 /** Corner fallback keeps clear of the ceiling band on the road and at doors. */
 export const HUD_CORNER_TOP = 76;
+/** Score row on drive/shop — below ID dim (24) and panel (25). */
+export const HUD_READOUT_DEPTH = 20;
+/** Door porch chrome — above ID overlay so score + status stay visible. */
+export const HUD_DOOR_READOUT_DEPTH = 28;
 export const HUD_SIGN_GAP = 28;
 export const HUD_SCORE_GAP = 16;
 /** Reused score flash labels — avoids per-flash addSignText PRE_RENDER listener churn. */

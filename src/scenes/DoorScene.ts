@@ -20,11 +20,18 @@ import { skyAt, skyVisualDirtyKey } from "../sim/dayNight";
 import type { SimSnapshot } from "../sim/gameSim";
 import { layoutDebugEnabled, paintLayoutDebug, type LayoutDebugLayer } from "../ui/layoutDebug";
 import { aboveHeadBand, plaqueAabbFromCenter } from "../ui/plaquePlacement";
-import { modelHeadTop, speechPlaqueAboveHead } from "../ui/plaquePlacementPhaser";
-import { addSignText, setSignCopy, signPlaqueCenterWorld, signPlaqueExtents, syncSignPlaque } from "../ui/signText";
-import { beginChipFrame, placeChip } from "../ui/hud/placeChips";
-import { chipPriority } from "../ui/hud/slots";
+import { standingPersonHeadTop } from "../ui/plaquePlacementPhaser";
+import {
+  addSignText,
+  setSignCopy,
+  setSignPlaqueCenter,
+  signContainer,
+  signPlaqueCenterWorld,
+  signPlaqueExtents,
+  syncSignPlaque,
+} from "../ui/signText";
 import { Color } from "../ui/theme";
+import { fitTypeToBox } from "../ui/typekit";
 import { typeRoleBox, typeRolePx } from "../ui/typeScale";
 import { designHudInset, HUD_TOUCH_MIN_DESIGN, readCssSafeArea, VIEWFIT_EVENT } from "../ui/viewFit";
 
@@ -37,12 +44,14 @@ const BAG_HIT_PAD = 88; // ~10% over prior 80 for mobile taps
 
 /** Gap between a sprite's edge and the chip anchored off it. */
 const DOOR_CHIP_GAP = 36;
-/** Keep a wide chip on screen when the sprite it hangs off is near an edge. */
-const DOOR_CHIP_MARGIN = 24;
-/** Prompt chip width — hugs copy between the two characters. */
-const DOOR_PROMPT_MAX_W = 480;
-/** Two wrapped lines at the door prompt seed (hudTitle). */
-const DOOR_PROMPT_MAX_H = 96;
+/** Prompt chip width — one-line “Tap … for ID” above the customer head. */
+const DOOR_PROMPT_MAX_W = 680;
+/** Two wrapped lines at the door prompt seed (hudTitle) with default pad. */
+const DOOR_PROMPT_MAX_H = 120;
+/** Clearance between customer head top and prompt plaque bottom. */
+const DOOR_HEAD_GAP = 120;
+/** Renders above flashing customer (11) and bag (12) during ask/hand steps. */
+const DOOR_PROMPT_DEPTH = 14;
 
 /**
  * Flash cadence for the next tap target, as `Math.sin(gameMs / DOOR_FLASH_RATE)` — a
@@ -89,6 +98,11 @@ export class DoorScene extends Phaser.Scene {
   private onPreRenderDayNight = (): void => {
     if (!this.sys.isActive() || this.sys.isSleeping()) return;
     this.paintDoorDayNight(getSim().snapshot());
+  };
+  /** After the plaque pump lays out ink, pin the prompt above the customer head. */
+  private onPreRenderDoorPrompt = (): void => {
+    if (!this.sys.isActive() || this.sys.isSleeping()) return;
+    this.placePrompt();
   };
 
   constructor() {
@@ -140,19 +154,23 @@ export class DoorScene extends Phaser.Scene {
     this.prompt = addSignText(this, GAME_WIDTH / 2, 0, "", {
       size: typeRolePx("hudTitle"),
       typeRole: "hudTitle",
-      padVariant: "compact",
+      padVariant: "default",
       align: "center",
       fontStyle: "600",
+      noWrap: true,
+      lineSpacing: 6,
       maxWidth: typeRoleBox(DOOR_PROMPT_MAX_W, "hudTitle"),
       maxHeight: typeRoleBox(DOOR_PROMPT_MAX_H, "hudTitle"),
     })
       .setOrigin(0.5, 0.5)
-      .setDepth(8);
+      .setDepth(DOOR_PROMPT_DEPTH);
 
     this.paintDoorDayNight(getSim().snapshot());
     this.events.on(Phaser.Scenes.Events.PRE_RENDER, this.onPreRenderDayNight);
+    this.events.on(Phaser.Scenes.Events.PRE_RENDER, this.onPreRenderDoorPrompt);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.events.off(Phaser.Scenes.Events.PRE_RENDER, this.onPreRenderDayNight);
+      this.events.off(Phaser.Scenes.Events.PRE_RENDER, this.onPreRenderDoorPrompt);
     });
     if (layoutDebugEnabled()) {
       this.layoutDebugGfx = this.add.graphics().setDepth(99);
@@ -170,30 +188,45 @@ export class DoorScene extends Phaser.Scene {
     this.placePrompt();
   }
 
-  /** Door action plaques hug copy and sit above the customer's head. */
-  private placePrompt(): void {
-    syncSignPlaque(this.prompt);
-    const headTop = modelHeadTop(this.customer);
-    const preferred = speechPlaqueAboveHead(this.prompt, this.customer.x, headTop, DOOR_CHIP_GAP);
-    const plaque = signPlaqueExtents(this.prompt);
-    const half = plaque.panelW / 2 + DOOR_CHIP_MARGIN;
-    const x = Phaser.Math.Clamp(preferred.x, half, GAME_WIDTH - half);
-    this.resolveDoorPrompt(x, preferred.y);
+  /** Clamp prompt ink into the wide door box — setSignCopy alone skips typekit refit. */
+  private refitDoorPrompt(): void {
+    if (!String(this.prompt.text ?? "").trim()) return;
+    fitTypeToBox(
+      this.prompt,
+      typeRoleBox(DOOR_PROMPT_MAX_W, "hudTitle"),
+      typeRoleBox(DOOR_PROMPT_MAX_H, "hudTitle"),
+    );
   }
 
-  private resolveDoorPrompt(preferredX: number, preferredY: number): void {
-    const inset = designHudInset(readCssSafeArea(document.getElementById("game-root")));
-    const placer = beginChipFrame(this.game, inset, GAME_WIDTH, GAME_HEIGHT);
+  /** Match customer scroll — scrollFactor(0) signs drift beside sprites on a zoomed door cam. */
+  private syncPromptScroll(): void {
+    const host = signContainer(this.prompt);
+    host.setScrollFactor(1, 1);
+    for (const child of host.list) {
+      if ("setScrollFactor" in child && typeof child.setScrollFactor === "function") {
+        child.setScrollFactor(1, 1);
+      }
+    }
+  }
+
+  /** Door action plaques hug copy and sit above the customer's head. */
+  private placePrompt(): void {
     if (!String(this.prompt.text ?? "").trim()) return;
-    placeChip(placer, "doorPrompt", this.prompt, preferredX, preferredY, chipPriority("doorPrompt"), true);
+    this.syncPromptScroll();
+    this.refitDoorPrompt();
+    syncSignPlaque(this.prompt);
+    this.syncPromptScroll();
+    const headTop = standingPersonHeadTop(this.customer);
+    const ext = signPlaqueExtents(this.prompt);
+    setSignPlaqueCenter(this.prompt, this.customer.x, headTop - DOOR_HEAD_GAP - ext.panelH / 2);
     this.paintDoorLayoutDebug();
   }
 
   /** `?layoutDebug=1` — above-head band + landed prompt AABB. */
   private paintDoorLayoutDebug(): void {
     if (!this.layoutDebugGfx) return;
-    const headTop = modelHeadTop(this.customer);
-    const band = aboveHeadBand(headTop, DOOR_CHIP_GAP);
+    const headTop = standingPersonHeadTop(this.customer);
+    const band = aboveHeadBand(headTop, DOOR_HEAD_GAP);
     const layers: LayoutDebugLayer[] = [
       {
         label: "aboveHeadBand",
@@ -309,13 +342,12 @@ export class DoorScene extends Phaser.Scene {
           : nextPhoto
             ? `Photo — tap bag.`
             : drop.hint || "At the door.";
-    // setText refits typekit — only pay when the instruction changes.
     if (promptLine !== this.lastPrompt) {
       this.lastPrompt = promptLine;
       setSignCopy(this.prompt, promptLine);
+      this.refitDoorPrompt();
     }
     this.prompt.setAlpha(1);
-    this.placePrompt();
   }
 
   private bakeDoorFacade(houseIndex: number): Phaser.GameObjects.RenderTexture {
