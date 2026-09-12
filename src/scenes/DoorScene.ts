@@ -18,7 +18,9 @@ import { getSim } from "../session";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import { skyAt, skyVisualDirtyKey } from "../sim/dayNight";
 import type { SimSnapshot } from "../sim/gameSim";
-import { addSignText, setSignCopy, signPlaqueExtents } from "../ui/signText";
+import { layoutDebugEnabled, paintLayoutDebug, type LayoutDebugLayer } from "../ui/layoutDebug";
+import { plaqueAabbFromCenter, topCenterY } from "../ui/plaquePlacement";
+import { addSignText, setSignCopy, signPlaqueCenterWorld, signPlaqueExtents, syncSignPlaque } from "../ui/signText";
 import { beginChipFrame, placeChip } from "../ui/hud/placeChips";
 import { chipPriority } from "../ui/hud/slots";
 import { Color } from "../ui/theme";
@@ -79,6 +81,7 @@ export class DoorScene extends Phaser.Scene {
   private lastSkyKey = "";
   private lastBagHanded: boolean | null = null;
   private lastPrompt = "";
+  private layoutDebugGfx?: Phaser.GameObjects.Graphics;
   private lighting?: DayNightPipeline;
   private lastGradeKey = "";
   private lastGradeMs = -1e9;
@@ -150,6 +153,9 @@ export class DoorScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.events.off(Phaser.Scenes.Events.PRE_RENDER, this.onPreRenderDayNight);
     });
+    if (layoutDebugEnabled()) {
+      this.layoutDebugGfx = this.add.graphics().setDepth(99);
+    }
     this.layoutDoorHud();
     const relayout = (): void => this.layoutDoorHud();
     this.scale.on(Phaser.Scale.Events.RESIZE, relayout);
@@ -180,6 +186,37 @@ export class DoorScene extends Phaser.Scene {
     }
     if (!String(this.prompt.text ?? "").trim()) return;
     placeChip(placer, "doorPrompt", this.prompt, preferredX, preferredY, chipPriority("doorPrompt"));
+    this.paintDoorLayoutDebug();
+  }
+
+  /** `?layoutDebug=1` — top-center instruction band + landed prompt AABB. */
+  private paintDoorLayoutDebug(): void {
+    if (!this.layoutDebugGfx) return;
+    const plaque = signPlaqueExtents(this.prompt);
+    const targetY = topCenterY(this.insetTop, DOOR_CHIP_GAP, plaque.panelH);
+    const halfW = plaque.panelW / 2 + DOOR_CHIP_MARGIN;
+    const layers: LayoutDebugLayer[] = [
+      {
+        label: "topCenterBand",
+        aabb: {
+          left: GAME_WIDTH / 2 - halfW,
+          top: this.insetTop + DOOR_CHIP_GAP,
+          right: GAME_WIDTH / 2 + halfW,
+          bottom: targetY + plaque.panelH / 2,
+        },
+        color: 0x44aaff,
+      },
+    ];
+    if (this.prompt.visible && String(this.prompt.text ?? "").trim()) {
+      syncSignPlaque(this.prompt);
+      const center = signPlaqueCenterWorld(this.prompt);
+      layers.push({
+        label: "doorPrompt",
+        aabb: plaqueAabbFromCenter(center.x, center.y, plaque),
+        color: 0xffff44,
+      });
+    }
+    paintLayoutDebug(this.layoutDebugGfx, layers);
   }
 
   update(): void {

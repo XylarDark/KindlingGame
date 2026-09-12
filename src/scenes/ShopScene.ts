@@ -10,6 +10,8 @@ import { drawShopCounter, drawShopInterior, paintShopDayNight, paintWindowGlow }
 import {
   BAG_PANEL,
   BAG_STACK,
+  CUSTOMER_BUBBLE_MAX_X,
+  CUSTOMER_BUBBLE_MIN_X,
   CUSTOMER_SPOT,
   CUSTOMER_SPEECH_GAP,
   CUSTOMER_SPEECH_H,
@@ -64,9 +66,20 @@ import {
   signPlaqueCenterWorld,
   signPlaqueExtents,
   signPlaqueMid,
-  signYAbove,
   syncSignPlaque,
 } from "../ui/signText";
+import {
+  layoutDebugEnabled,
+  paintLayoutDebug,
+  type LayoutDebugLayer,
+} from "../ui/layoutDebug";
+import { inHeadTvBand, plaqueAabbFromCenter } from "../ui/plaquePlacement";
+import {
+  leadSpeechPlaqueCenter,
+  modelHeadTop,
+  speechPlaqueAboveHead,
+  spriteBodyAabb,
+} from "../ui/plaquePlacementPhaser";
 import type { ChipAabb, ChipPlacer } from "../ui/hud/chipCollision";
 import { beginChipFrame, placeChip } from "../ui/hud/placeChips";
 import { chipPriority, speechSlotId } from "../ui/hud/slots";
@@ -115,61 +128,12 @@ type CustomerVisual = {
   look: number;
 };
 
-/**
- * Top edge of a bottom-anchored person sprite without walking the display tree.
- * {@link Phaser.GameObjects.Components.GetBounds#getBounds} allocates a Rect every call —
- * paid every Shop frame during key-lead fetch when the bubble follows a moving sprite.
- */
-function modelHeadTop(model: Phaser.GameObjects.Image): number {
-  return model.y - model.displayHeight * model.originY;
-}
-
-/** Preferred plaque center for character speech above a model's head. */
-function speechPlaqueAboveHead(
-  chip: Phaser.GameObjects.Text,
-  centerX: number,
-  headTopY: number,
-  gap = CUSTOMER_SPEECH_GAP,
-): { x: number; y: number } {
-  syncSignPlaque(chip);
-  const mid = signPlaqueMid(chip);
-  const hostY = signYAbove(chip, headTopY, gap);
-  return { x: centerX, y: hostY + mid.midY };
-}
-
-/** Key-lead speech fits in the vertical band between slot head top and the TV row. */
-function leadSpeechPlaqueCenter(
-  chip: Phaser.GameObjects.Text,
-  centerX: number,
-  headTopY: number,
-  tvBottomY: number,
-): { x: number; y: number } {
-  syncSignPlaque(chip);
-  const ext = signPlaqueExtents(chip);
-  const gap = CUSTOMER_SPEECH_GAP;
-  const minCenterY = headTopY + gap + ext.panelH / 2;
-  const maxCenterY = tvBottomY - gap - ext.panelH / 2;
-  const y =
-    minCenterY <= maxCenterY
-      ? (minCenterY + maxCenterY) / 2
-      : speechPlaqueAboveHead(chip, centerX, headTopY).y;
-  return { x: centerX, y };
-}
-
 function tvRowAabb(): ChipAabb {
   const top = TV_GRID_TOP;
   const bottom = TV_GRID_TOP + TV_H;
   const left = TV_GRID_LEFT;
   const right = TV_GRID_LEFT + TV_GRID_W;
   return { left, top, right, bottom };
-}
-
-function spriteBodyAabb(sprite: Phaser.GameObjects.Image): ChipAabb {
-  const w = sprite.displayWidth;
-  const h = sprite.displayHeight;
-  const left = sprite.x - w * sprite.originX;
-  const top = sprite.y - h * sprite.originY;
-  return { left, top, right: left + w, bottom: top + h };
 }
 
 export class ShopScene extends Phaser.Scene {
@@ -220,6 +184,7 @@ export class ShopScene extends Phaser.Scene {
   };
   /** Static shop Graphics/Text collapsed into RTs (Drive-style). */
   private shopBakeLayers: Phaser.GameObjects.RenderTexture[] = [];
+  private layoutDebugGfx?: Phaser.GameObjects.Graphics;
 
   constructor() {
     super("shop");
@@ -243,6 +208,9 @@ export class ShopScene extends Phaser.Scene {
     });
     this.makeHotspots();
     this.warmCustomerPool();
+    if (layoutDebugEnabled()) {
+      this.layoutDebugGfx = this.add.graphics().setDepth(99);
+    }
 
     this.bagRack = this.add.image(BAG_STACK.x, BAG_STACK.y, "tex-bag-bags").setOrigin(0.5, 1).setDepth(8);
     enableItemHit(this.bagRack);
@@ -591,6 +559,48 @@ export class ShopScene extends Phaser.Scene {
       const pos = signPlaqueCenterWorld(this.targetCallout);
       this.placeShopChip(placer, "tvCallout", this.targetCallout, pos.x, pos.y, chipPriority("tvCallout"));
     }
+    this.paintShopLayoutDebug();
+  }
+
+  /** `?layoutDebug=1` — draw target bands and landed plaque AABBs for on-device tuning. */
+  private paintShopLayoutDebug(): void {
+    if (!this.layoutDebugGfx) return;
+    const layers: LayoutDebugLayer[] = [];
+    const tv = tvRowAabb();
+    layers.push({ label: "tvRow", aabb: tv, color: 0xff8844 });
+    const headTop = keyLeadSlotHeadTop();
+    const tvBottom = TV_GRID_TOP + TV_H;
+    const leadBand = inHeadTvBand(headTop, tvBottom, CUSTOMER_SPEECH_GAP);
+    layers.push({
+      label: "keyLeadBand",
+      aabb: { left: KEYLEAD.x - 120, top: leadBand.top, right: KEYLEAD.x + 120, bottom: leadBand.bottom },
+      color: 0x44aaff,
+    });
+    const customerHeadTop = CUSTOMER_SPOT.y - PERSON_DISPLAY_H;
+    layers.push({
+      label: "customerHead",
+      aabb: {
+        left: CUSTOMER_BUBBLE_MIN_X,
+        top: customerHeadTop - CUSTOMER_SPEECH_GAP - 80,
+        right: CUSTOMER_BUBBLE_MAX_X,
+        bottom: customerHeadTop - CUSTOMER_SPEECH_GAP,
+      },
+      color: 0x88ff44,
+    });
+    const pinPlaque = (chip: Phaser.GameObjects.Text, color: number, label: string): void => {
+      if (!chip.visible || !String(chip.text ?? "").trim()) return;
+      syncSignPlaque(chip);
+      const center = signPlaqueCenterWorld(chip);
+      const ext = signPlaqueExtents(chip);
+      layers.push({ label, aabb: plaqueAabbFromCenter(center.x, center.y, ext), color });
+    };
+    pinPlaque(this.keyLeadBubble, 0xffff44, "leadBubble");
+    pinPlaque(this.driverBubble, 0xffff44, "driverBubble");
+    for (const visual of this.customers.values()) {
+      pinPlaque(visual.bubble, 0xffffff, `customer-${visual.orderId}`);
+      pinPlaque(visual.feedback, 0xff6666, `feedback-${visual.orderId}`);
+    }
+    paintLayoutDebug(this.layoutDebugGfx, layers);
   }
 
   private syncTargetCallout(snap: SimSnapshot): void {
