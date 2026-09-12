@@ -17,7 +17,7 @@ import {
 } from "../sim/constants";
 import { getSim, startSession } from "../session";
 import { setPwaIdle } from "../pwaUpdate";
-import type { SimSnapshot } from "../sim/gameSim";
+import type { ScorePopAnchor, SimSnapshot } from "../sim/gameSim";
 import type { ShiftResults } from "../sim/shiftResults";
 import { tutorialHints, type TutorialHint } from "../sim/tutorialHints";
 import { skyAt, skyVisualDirtyKey } from "../sim/dayNight";
@@ -766,7 +766,18 @@ export class HudScene extends Phaser.Scene {
     const flash = snap.scoreFlash;
     if (!flash || flash.id === this.lastScoreFlashId) return;
     this.lastScoreFlashId = flash.id;
-    this.readouts.spawnScorePop(flash.delta);
+    this.readouts.spawnScorePop(flash.delta, this.projectScorePop(flash.anchor));
+  }
+
+  /** Float +N beside the scoring actor — shop customer, van, or doorstep guest. */
+  private projectScorePop(anchor: ScorePopAnchor): { x: number; y: number } {
+    const world = this.scene.get(anchor.space) as Phaser.Scene | undefined;
+    const cam = world?.sys.isActive() ? world.cameras.main : this.cameras.main;
+    const pt = worldToScreen(cam, anchor.x, anchor.y);
+    const offsetX = anchor.space === "shop" ? 52 : 72;
+    const offsetY =
+      anchor.space === "drive" ? -DRIVE_VAN_TEX_H / 2 - 8 : anchor.space === "door" ? -48 : -20;
+    return { x: pt.x + offsetX, y: pt.y + offsetY };
   }
 
   private consumeSfx(snap: SimSnapshot): void {

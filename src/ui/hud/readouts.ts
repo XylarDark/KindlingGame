@@ -295,7 +295,7 @@ export class HudReadouts {
     }
   }
 
-  acquireScorePop(delta: number): Phaser.GameObjects.Text {
+  acquireScorePop(delta: number, besideActor = false): Phaser.GameObjects.Text {
     let label = this.scorePopFree.pop();
     if (!label) {
       label = this.scorePopPool[0]!;
@@ -305,7 +305,7 @@ export class HudReadouts {
     }
     const positive = delta >= 0;
     label
-      .setOrigin(this.readoutsInShop ? 1 : 0, 0.5)
+      .setOrigin(besideActor ? 0 : this.readoutsInShop ? 1 : 0, 0.5)
       .setVisible(true)
       .setAlpha(1)
       .setY(0);
@@ -320,9 +320,10 @@ export class HudReadouts {
     if (!this.scorePopFree.includes(label)) this.scorePopFree.push(label);
   }
 
-  spawnScorePop(delta: number): void {
-    const label = this.acquireScorePop(delta);
-    this.placeReadouts();
+  spawnScorePop(delta: number, screen?: { x: number; y: number }): void {
+    const label = this.acquireScorePop(delta, !!screen);
+    if (screen) this.scorePopLayer.setPosition(screen.x, screen.y);
+    else this.placeReadouts();
     this.scene.tweens.add({
       targets: this.scoreText,
       scale: { from: 1.18, to: 1 },

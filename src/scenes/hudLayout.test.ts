@@ -56,7 +56,8 @@ describe("HUD sign attachment guards", () => {
     const layout = between(settings, "layout(inset: SafeInset): void {", "\n  }", "settings layout");
     expect(layout).toContain("cogCaptionX");
     expect(layout).toContain("cogCaptionY");
-    expect(layout).toContain("HUD_COG_CAPTION_BOX.w");
+    expect(layout).toContain("signPlaqueExtents(this.cogCaption)");
+    expect(layout).toContain("plaqueHalf");
     expect(layout).toContain("Phaser.Math.Clamp");
     expect(layout).toMatch(/setSignPosition\(this\.cogCaption, cogCaptionX, cogCaptionY\)/);
     expect(layout).not.toContain("setSignPosition(this.cogCaption, 0, 0)");

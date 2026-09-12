@@ -293,6 +293,7 @@ function layoutPlaque(entry: SignPlaqueEntry): void {
   const ink = inkFitsPlaque(
     { width: w, height: h, originX: text.originX, originY: text.originY },
     { x: plaque.x, y: plaque.y, width: panelW, height: panelH, originX: plaque.originX, originY: plaque.originY },
+    pad,
   );
   if (!ink.ok) {
     throw new Error(`sign plaque layout: ${ink.reason} for "${copy.slice(0, 32)}"`);
