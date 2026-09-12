@@ -12,6 +12,10 @@ import { padForVariant, type PadVariant } from "./typeScale";
  * Sign text contract — standard UI: ink stays inside its panel.
  *
  * - {@link addSignText} returns inner `Text`; callers move the {@link signContainer} host only.
+ * - {@link setSignPosition}(x, y) sets the **host container origin**, not the ink origin, plaque
+ *   center, or Phaser Text origin. Derive host coords from a named anchor via
+ *   {@link signPlaqueExtents} (e.g. plaque center X = host.x + (leftLocal + rightLocal) / 2;
+ *   vertical: {@link signYAbove} / {@link signYFloor}). Plain {@link addUiText} is unchanged.
  * - Patched `Text.setPosition` never zeroes glyph locals (#53).
  * - {@link layoutPlaque} sizes the nine-slice from glyph bounds + pad variant.
  * - {@link inkInsidePlaque} skips layout when ink would clip — never throws on live frames.
