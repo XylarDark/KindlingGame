@@ -4,7 +4,7 @@ import { CITY, houseById, lotWorldRect } from "../../maps/cityT0";
 import { cityMinimapGeometry, minimapProjection, type WorldRect } from "../../maps/cityMinimap";
 import { getSim } from "../../session";
 import type { SimSnapshot } from "../../sim/gameSim";
-import { ackTap } from "../../input/tapAck";
+import { ackTap, releaseTapAck } from "../../input/tapAck";
 import { addSignText, setSignAccent, signContainer } from "../signText";
 import { addUiText } from "../text";
 import { Color, HUD_TYPE_FIT } from "../theme";
@@ -40,11 +40,16 @@ export class HudPhone {
   private lastPhoneLine = "";
   private lastPhoneAccentKey = "";
   private lastPhoneMapKey = "";
+  /** Restored after ackTap — setDisplaySize leaves scale ≠ 1. */
+  private phoneBodyBaseX = 1;
+  private phoneBodyBaseY = 1;
 
   constructor(private readonly scene: Phaser.Scene) {}
 
   create(): void {
     this.phoneBody = this.scene.add.image(0, 0, "tex-phone").setDisplaySize(PHONE_W, PHONE_H);
+    this.phoneBodyBaseX = this.phoneBody.scaleX;
+    this.phoneBodyBaseY = this.phoneBody.scaleY;
     this.phoneChrome = this.scene.add.graphics();
     this.phoneMapBase = this.scene.add
       .renderTexture(PHONE_MAP.x, PHONE_MAP.y, PHONE_MAP.w, PHONE_MAP.h)
@@ -77,14 +82,23 @@ export class HudPhone {
     this.phoneHit = this.scene.add
       .rectangle(0, 0, PHONE_CHASSIS.w, PHONE_CHASSIS.h, 0x000000, 0.001)
       .setInteractive({ useHandCursor: true });
+    const releasePhoneTap = (): void => {
+      releaseTapAck(this.phoneBody, this.phoneBodyBaseX, this.phoneBodyBaseY);
+    };
     this.phoneHit.on("pointerdown", (p: Phaser.Input.Pointer) => {
       p.event.stopPropagation();
       ackTap(this.phoneBody);
       playUiSfx(this.scene.game, "ticket");
       getSim().pressDropoffConfirm();
     });
-    this.phoneHit.on("pointerup", () => getSim().releaseDropoffConfirm());
-    this.phoneHit.on("pointerupoutside", () => getSim().releaseDropoffConfirm());
+    this.phoneHit.on("pointerup", () => {
+      releasePhoneTap();
+      getSim().releaseDropoffConfirm();
+    });
+    this.phoneHit.on("pointerupoutside", () => {
+      releasePhoneTap();
+      getSim().releaseDropoffConfirm();
+    });
     this.phone = this.scene.add
       .container(GAME_WIDTH - 160, GAME_HEIGHT - 220, [
         this.phoneBody,
