@@ -6,28 +6,14 @@ import { loadDisplayPrefs, saveDisplayPrefs } from "../displayPrefs";
 import { openInstallCoachFromSettings } from "../installCoach";
 import { addHudButton, addPanel } from "../chrome";
 import { END_SHIFT_CAPTION, END_SHIFT_LABEL } from "../copy";
-import {
-  addSignText,
-  setSignPosition,
-  signContainer,
-  signHostPosition,
-  signPlaqueExtents,
-  signYFloor,
-  syncSignHit,
-  syncSignPlaque,
-} from "../signText";
 import { addUiText } from "../text";
 import { settingsGeom, type SettingsGeom } from "../settingsGeom";
 import { Color, HUD_TYPE_FIT, MENU_TYPE_FIT } from "../theme";
-import { typeRolePx } from "../typeScale";
 import type { SafeInset } from "../viewFit";
 import { hudSceneViewport, HUD_TOUCH_MIN_DESIGN } from "../viewFit";
-import { chipPlaqueAabb, unionAabb, type ChipPlacer } from "./placeChips";
+import { type ChipPlacer } from "./placeChips";
 import { chipPriority } from "./slots";
 import {
-  HUD_COG_CAPTION_BOX,
-  HUD_COG_CAPTION_PAD,
-  HUD_COG_CAPTION_PX,
   rowBand,
   rowMidY,
   SET_BTN_CAP_PX,
@@ -54,15 +40,11 @@ export interface HudSettingsDeps {
   ensureShopVisible(): void;
 }
 
-/**
- * Settings cog, caption, dim, and panel. Caption is laid out relative to the cog —
- * never at world (0,0) after the first layoutHud pass.
- */
+/** Settings cog, dim, and panel — cog-only tap target (no caption plaque). */
 export class HudSettings {
   cog!: Phaser.GameObjects.Image;
   /** Standard rectangle hit — Image + custom hitArea misses Phaser input on shrunk HUD cameras. */
   cogHit!: Phaser.GameObjects.Rectangle;
-  cogCaption!: Phaser.GameObjects.Text;
   settingsDim!: Phaser.GameObjects.Rectangle;
   settingsPanel!: Phaser.GameObjects.Container;
   settingsBox!: SettingsGeom;
@@ -338,22 +320,6 @@ export class HudSettings {
       .setDepth(43)
       .setInteractive({ useHandCursor: true });
     this.cogHit.on("pointerdown", toggleSettings);
-    this.cogCaption = addSignText(this.scene, cogX - cogSize / 2, cogY - cogSize - 8, "Settings", {
-      size: typeRolePx("hudSmall"),
-      typeRole: "hudSmall",
-      padX: HUD_COG_CAPTION_PAD.x,
-      padY: HUD_COG_CAPTION_PAD.y,
-      fontStyle: "600",
-      align: "center",
-      maxWidth: HUD_COG_CAPTION_BOX.w,
-      maxHeight: HUD_COG_CAPTION_BOX.h,
-    })
-      .setOrigin(0.5, 0.5)
-      .setDepth(42);
-    const captionHost = signContainer(this.cogCaption);
-    // scrollFactor 0 on sign hosts skews input on RenderBudget-shrunk HUD cameras.
-    captionHost.setScrollFactor(1);
-    captionHost.on("pointerdown", toggleSettings);
     this.refreshMusicControls();
     this.refreshFullscreenControl();
   }
@@ -368,27 +334,6 @@ export class HudSettings {
     this.cog.setDisplaySize(cogSize, cogSize);
     this.cogHit.setPosition(cogX - cogSize / 2, cogY - cogSize / 2);
     this.cogHit.setSize(cogSize, cogSize);
-    syncSignPlaque(this.cogCaption);
-    const cogCenterX = this.cog.x - this.cog.displayWidth / 2;
-    const capExtents = signPlaqueExtents(this.cogCaption);
-    const plaqueMidX = (capExtents.leftLocal + capExtents.rightLocal) / 2;
-    const plaqueHalf = capExtents.panelW / 2;
-    const captionMinX = inset.left + plaqueHalf + 8;
-    const captionMaxX = viewW - inset.right - plaqueHalf - 8;
-    const clampedCenterX = Phaser.Math.Clamp(cogCenterX, captionMinX, captionMaxX);
-    let cogCaptionX = clampedCenterX - plaqueMidX;
-    if (clampedCenterX !== cogCenterX) {
-      cogX = clampedCenterX + cogSize / 2;
-      this.cog.setPosition(cogX, cogY);
-      this.cogHit.setPosition(cogX - cogSize / 2, cogY - cogSize / 2);
-    }
-    const cogBottom = cogY;
-    const extents = signPlaqueExtents(this.cogCaption);
-    const minCenterY = inset.top + extents.panelH / 2 + 8;
-    const maxCenterY = viewH - inset.bottom - extents.panelH / 2 - 8;
-    const cogCaptionY = Phaser.Math.Clamp(signYFloor(this.cogCaption, cogBottom, 8), minCenterY, maxCenterY);
-    setSignPosition(this.cogCaption, cogCaptionX, cogCaptionY);
-    syncSignHit(this.cogCaption);
     const panelTop = Math.max(inset.top, cogY - cogSize - 32 - this.settingsBox.h);
     this.settingsPanel.setPosition(cogX - SETTINGS_W, panelTop);
     const volBounds = this.volumeTrack.getBounds();
@@ -420,7 +365,6 @@ export class HudSettings {
     this.settingsDim.setVisible(true);
     this.armSettingsDim(true);
     this.settingsPanel.setVisible(true);
-    this.setCogCaptionShown(false);
     this.refreshMusicControls();
     this.refreshFullscreenControl();
     this.refreshEndShiftButton();
@@ -431,26 +375,21 @@ export class HudSettings {
     this.settingsDim.setVisible(false);
     this.armSettingsDim(false);
     this.settingsPanel.setVisible(false);
-    this.setCogCaptionShown(true);
   }
 
-  setCogCaptionShown(shown: boolean): void {
-    this.cogCaption.setVisible(shown);
-  }
-
-  /** Cog + caption union — registered before lower-priority chips resolve. */
+  /** Cog AABB — registered before lower-priority chips resolve. */
   registerChipObstacle(placer: ChipPlacer): void {
     if (!this.cog.visible) return;
-    syncSignPlaque(this.cogCaption);
-    const capPos = signHostPosition(this.cogCaption);
-    const captionBox = chipPlaqueAabb(capPos.x, capPos.y, signPlaqueExtents(this.cogCaption));
-    const cogBox = {
-      left: this.cog.x - this.cog.displayWidth,
-      top: this.cog.y - this.cog.displayHeight,
-      right: this.cog.x,
-      bottom: this.cog.y,
-    };
-    placer.register("settings", unionAabb([captionBox, cogBox]), chipPriority("settings"));
+    placer.register(
+      "settings",
+      {
+        left: this.cog.x - this.cog.displayWidth,
+        top: this.cog.y - this.cog.displayHeight,
+        right: this.cog.x,
+        bottom: this.cog.y,
+      },
+      chipPriority("settings"),
+    );
   }
 
   refreshEndShiftButton(): void {

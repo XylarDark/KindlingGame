@@ -34,8 +34,7 @@ describe("drive HUD callout sizing", () => {
     const hud = read("HudScene.ts");
     const create = hud.slice(hud.indexOf("create(): void"), hud.indexOf("update(): void"));
     const callouts = hud.slice(hud.indexOf("private paintDriveCallouts"), hud.indexOf("private tutorialFlashHint"));
-    expect(callouts).toContain("DRIVE_PIN_TEX_H");
-    expect(callouts).toContain("DRIVE_VAN_TEX_H");
+    expect(callouts).toContain("drivePinLabel.setVisible(false)");
     expect(create).toContain('typeRoleBox(DRIVE_PIN_MAX_W, "hudBody")');
     expect(create).toContain('typeRoleBox(DRIVE_VAN_MAX_W, "hudBody")');
     expect(create).toContain('typeRoleBox(DRIVE_SHOP_CAP_MAX_W, "hudBody")');
@@ -43,12 +42,15 @@ describe("drive HUD callout sizing", () => {
     expect(hud).toContain('padVariant: "compact"');
   });
 
-  it("runs drive callouts through the shared chip resolver after projection", () => {
+  it("hides drive descriptive chips — map stays clean; resolver skips drivePin/van/shop", () => {
     const hud = read("HudScene.ts");
-    const resolve = hud.slice(hud.indexOf("private resolveHudChips"), hud.indexOf("private tutorialFlashHint"));
-    expect(resolve).toContain('placeDrive("drivePin"');
-    expect(resolve).toContain("placeChip(placer, id, label");
-    expect(resolve).toContain("atDoor");
+    const callouts = hud.slice(hud.indexOf("private paintDriveCallouts"), hud.indexOf("private tutorialFlashHint"));
+    expect(callouts).toContain("drivePinLabel.setVisible(false)");
+    expect(callouts).toContain("driveVanBanner.setVisible(false)");
+    expect(callouts).toContain("driveShopCaption.setVisible(false)");
+    expect(callouts).not.toContain("worldToScreen");
+    const resolve = hud.slice(hud.indexOf("private resolveHudChips"), hud.indexOf("private syncShopVisibility"));
+    expect(resolve).not.toContain('placeDrive("drivePin"');
     expect(resolve).toContain("registerChipObstacle");
   });
 });

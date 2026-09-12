@@ -59,12 +59,11 @@ describe("DriveScene grade throttle and dirty guards", () => {
     expect(update).toContain("pinActive = !!stopId && this.sys.isActive()");
   });
 
-  it("projects drive callouts from HudScene screen-space", () => {
+  it("keeps drive descriptive chips hidden on the HUD — no world projection", () => {
     expect(hud).toContain("paintDriveCallouts");
-    expect(hud).toContain("worldToScreen");
-    expect(hud).toContain("drivePinLabel");
-    expect(hud).toContain("driveVanBanner");
-    expect(hud).toContain("driveShopCaption");
+    const callouts = hud.slice(hud.indexOf("private paintDriveCallouts"), hud.indexOf("private tutorialFlashHint"));
+    expect(callouts).toContain("drivePinLabel.setVisible(false)");
+    expect(callouts).not.toContain("worldToScreen");
     expect(hud).not.toContain("syncDriveLabelScale");
   });
 

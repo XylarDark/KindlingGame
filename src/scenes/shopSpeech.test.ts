@@ -33,36 +33,23 @@ function between(text: string, start: string, end: string, what: string): string
 }
 
 describe("speech stays off the models it belongs to", () => {
-  it("hangs a chip off displayHeight/origin, not getBounds per frame", () => {
-    const headTop = between(src, "function modelHeadTop(", "\n}", "modelHeadTop");
-    expect(headTop, "derives top from origin and displayHeight").toMatch(/displayHeight \* model\.originY/);
-    expect(headTop, "does not walk the display tree").not.toMatch(/getBounds/);
+  it("pins side speech at slot anchors via pinSideSpeech, not getBounds per frame", () => {
+    const pin = between(src, "function pinSideSpeech(", "\n}", "pinSideSpeech");
+    expect(pin, "uses CUSTOMER_SPEECH_SIDE_GAP left of body").toMatch(/CUSTOMER_SPEECH_SIDE_GAP/);
+    expect(pin, "torso Y clears the face").toMatch(/PERSON_DISPLAY_H \* 0\.48/);
+    expect(pin, "positions via setSignPosition").toContain("setSignPosition(");
+    expect(pin, "does not walk the display tree").not.toMatch(/getBounds/);
 
-    const hang = between(src, "function hangAboveHead(", "\n}", "hangAboveHead");
-    expect(hang, "uses modelHeadTop").toMatch(/modelHeadTop\(model\)/);
-    expect(hang, "clears the head using plaque host bounds, not bare Text height").toMatch(/signYAbove\(chip, modelHeadTop\(model\), CUSTOMER_SPEECH_GAP\)/);
-    expect(hang, "does not ignore SIGN_PAD on the 9-slice").not.toMatch(/chip\.height \/ 2/);
-    expect(hang, "leaves the standard daylight").toMatch(/CUSTOMER_SPEECH_GAP/);
-    expect(hang, "does not walk the display tree").not.toMatch(/getBounds/);
-    expect(hang, "takes explicit host x — inner Text x is local under 9-slice hosts").toMatch(
-      /function hangAboveHead\(chip[^)]*, x: number\)/,
+    expect(src, "key-lead bubble side-anchored left of slot").toMatch(
+      /keyLeadBubble = addSignText[\s\S]*?\.setOrigin\(1, 0\.5\)/,
     );
-    expect(hang, "positions via setSignPosition").toMatch(/setSignPosition\(chip, x,/);
-    expect(hang, "never reads chip\.x for placement").not.toMatch(/chip\.x/);
-
-    for (const speaker of ["keyLeadBubble", "driverBubble"]) {
-      expect(src, `${speaker} is hung, not offset`).toMatch(
-        new RegExp(`hangAboveHead\\(this\\.${speaker}`),
-      );
-    }
-    expect(src, "key-lead bubble bottom-anchored like door/drive chips").toMatch(
-      /keyLeadBubble = addSignText[\s\S]*?\.setOrigin\(0\.5, 1\)/,
+    expect(src, "driver bubble side-anchored left of slot").toMatch(
+      /driverBubble = addSignText[\s\S]*?\.setOrigin\(1, 0\.5\)/,
     );
-    expect(src, "no fixed head offsets left in sync").not.toMatch(/setPosition\([^)]*PERSON_DISPLAY_H - \d+\)/);
     expect(src, "Shop sync never calls getBounds").not.toMatch(/getBounds\(\)/);
   });
 
-  it("dirty-guards key-lead and driver bubble setText so fetch walk is not a refit every frame", () => {
+  it("dirty-guards key-lead and driver bubble setText and pins only on copy/visibility change", () => {
     const sync = between(src, "private sync(snap: SimSnapshot)", "const packNext", "shop sync");
     expect(sync, "key-lead text guarded").toMatch(
       /const textDirty = this\.keyLeadBubble\.text !== callout[\s\S]*if \(textDirty\) this\.keyLeadBubble\.setText\(callout\)/,
@@ -71,17 +58,16 @@ describe("speech stays off the models it belongs to", () => {
       /const driverTextDirty = this\.driverBubble\.text !== driverLine[\s\S]*if \(driverTextDirty\) this\.driverBubble\.setText\(driverLine\)/,
     );
     expect(sync, "no unconditional key-lead setText").not.toMatch(/keyLeadBubble[\s\S]*?\.setText\(callout \?\? ""\)/);
-    expect(sync, "hang key-lead only when shown").toMatch(/if \(showKeyLeadBubble\)/);
-    expect(sync, "hang driver only when shown").toMatch(/if \(showDriverBubble\)/);
-    expect(sync, "key-lead position quantized").toMatch(/Math\.round\(this\.keyLead\.x\) !== Math\.round\(kx\)/);
-    expect(sync, "bubble host follows lead with explicit bx").toMatch(
-      /if \(textDirty \|\| leadMoved \|\| becameVisible\) hangAboveHead\(this\.keyLeadBubble, this\.keyLead, bx\)/,
+    expect(sync, "pin key-lead only when shown").toMatch(/if \(showKeyLeadBubble\)/);
+    expect(sync, "pin driver only when shown").toMatch(/if \(showDriverBubble\)/);
+    expect(sync, "key-lead pin uses KEYLEAD slot, not walk chase").toMatch(
+      /if \(textDirty \|\| becameVisible\) pinSideSpeech\(this\.keyLeadBubble, KEYLEAD\.x, KEYLEAD\.y\)/,
     );
-    expect(sync, "driver bubble Y when copy changes or bubble re-shows").toMatch(
-      /if \(driverTextDirty \|\| becameVisible\) hangAboveHead\(this\.driverBubble, this\.driver, DRIVER\.x - 24\)/,
+    expect(sync, "driver pin uses DRIVER slot").toMatch(
+      /if \(driverTextDirty \|\| becameVisible\) pinSideSpeech\(this\.driverBubble, DRIVER\.x, DRIVER\.y\)/,
     );
-    expect(sync, "tracks key-lead bubble visibility for re-hang").toContain("lastShowKeyLeadBubble");
-    expect(sync, "tracks driver bubble visibility for re-hang").toContain("lastShowDriverBubble");
+    expect(sync, "tracks key-lead bubble visibility for re-pin").toContain("lastShowKeyLeadBubble");
+    expect(sync, "tracks driver bubble visibility for re-pin").toContain("lastShowDriverBubble");
     expect(src, "target callout uses setSignPosition").toMatch(
       /setSignPosition\(this\.targetCallout, p\.x, p\.y - strainSlotH\(\) \/ 2 - 6\)/,
     );
@@ -141,21 +127,16 @@ describe("shop speech chip resolver", () => {
     expect(src).toContain("speechSlotId");
   });
 
-  it("anchors leadBubble above the head via signYAbove, not downward dodge", () => {
+  it("anchors leadBubble left of KEYLEAD slot with side pin (headHang=false)", () => {
     const resolve = between(src, "private resolveShopChips(", "\n  }", "resolveShopChips");
-    expect(resolve, "head anchor helper").toContain("headBubbleAnchor");
-    const headAnchor = between(src, "private headBubbleAnchor(", "\n  }", "headBubbleAnchor");
-    expect(headAnchor, "uses model head top + plaque gap").toMatch(
-      /signYAbove\(chip, modelHeadTop\(model\), CUSTOMER_SPEECH_GAP\)/,
+    expect(resolve, "lead preferred x left of slot body").toMatch(
+      /KEYLEAD\.x - SHOP_BODY_HALF - CUSTOMER_SPEECH_SIDE_GAP/,
     );
-    expect(resolve, "lead preferred x beside fetch walk").toMatch(/leadX = this\.keyLead\.x - 168/);
-    expect(resolve, "lead alt centered on sprite").toMatch(/\{ x: this\.keyLead\.x, y: leadAnchor\.y \}/);
-    expect(resolve, "forbids downward resolver shift").toMatch(
+    expect(resolve, "lead torso Y").toMatch(/KEYLEAD\.y - PERSON_DISPLAY_H \* 0\.48/);
+    expect(resolve, "no head-hang resolver mode").not.toMatch(
       /placeShopChip\([\s\S]*"leadBubble"[\s\S]*true,\s*\)/,
     );
-    expect(resolve, "does not reuse stale host pos for lead").not.toMatch(
-      /keyLeadBubble[\s\S]*signHostPosition\(this\.keyLeadBubble\)/,
-    );
+    expect(resolve, "does not chase live keyLead x").not.toMatch(/this\.keyLead\.x - 168/);
   });
 });
 

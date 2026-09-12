@@ -103,14 +103,13 @@ describe("HudScene paint dirty guards", () => {
     expect(cover).toContain("cover.active");
   });
 
-  it("clamps drive pad and callout plaques inside the HUD viewport", () => {
+  it("clamps drive pad label inside the HUD viewport; descriptive map chips stay hidden", () => {
     const src = read("HudScene.ts");
     expect(src).toContain("clampSignHost");
     expect(src).toContain("placePadLabel");
     const callouts = src.slice(src.indexOf("private paintDriveCallouts"), src.indexOf("private tutorialFlashHint"));
-    expect(callouts).toContain("clampSignHost(this.drivePinLabel");
-    expect(callouts).toContain("clampSignHost(this.driveVanBanner");
-    expect(callouts).toContain("clampSignHost(this.driveShopCaption");
+    expect(callouts).toContain("drivePinLabel.setVisible(false)");
+    expect(callouts).not.toContain("clampSignHost(this.drivePinLabel");
   });
 
   it("sleeps drive/door when keyLead owns the shop world", () => {

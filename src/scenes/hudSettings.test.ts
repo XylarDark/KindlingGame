@@ -62,11 +62,12 @@ describe("settings cog panel", () => {
     expect(settings.match(/captionSize: SET_BTN_CAP_PX/g)).toHaveLength(2);
   });
 
-  it("stands the cog caption down while the panel covers it, and brings it back", () => {
-    const open = between(settings, "openSettings(): void {", "\n  }", "openSettings");
-    const close = between(settings, "close(): void {", "\n  }", "closeSettings");
-    expect(open).toContain("this.setCogCaptionShown(false)");
-    expect(close).toContain("this.setCogCaptionShown(true)");
+  it("does not create a Settings caption plaque — cog-only tap target", () => {
+    expect(settings).not.toContain("cogCaption");
+    expect(settings).not.toContain("setCogCaptionShown");
+    expect(settings).not.toMatch(/addSignText\([^)]*"Settings"/);
+    const create = between(settings, "create(): void {", "\n  }", "settings create");
+    expect(create).not.toContain("signContainer(this.cogCaption)");
   });
 
   it("uses a rectangle tap target for the cog — Image custom hitArea misses Phaser input on shrunk HUD cameras", () => {
@@ -75,37 +76,23 @@ describe("settings cog panel", () => {
     expect(create).toContain("this.cogHit = this.scene.add");
     expect(create).toContain('this.cogHit.on("pointerdown", toggleSettings)');
     expect(create).not.toContain("this.cog.on(\"pointerdown\"");
-    expect(create).toContain("signContainer(this.cogCaption)");
-    expect(create).toContain("captionHost.setScrollFactor(1)");
-    expect(create).not.toContain("this.cogCaption.setScrollFactor");
-    expect(create).not.toContain("captionPlaque?.setScrollFactor");
     expect(create).toMatch(/\.setDisplaySize\(cogSize, cogSize\)/);
   });
 
-  it("hangs the cog caption below the gear bottom via signYFloor", () => {
-    const layout = between(settings, "layout(inset: SafeInset): void {", "\n  }", "settings layout");
-    expect(layout).toContain("signYFloor(this.cogCaption, cogBottom, 8)");
-    expect(layout).toContain("const cogBottom = cogY");
-    expect(layout).not.toContain("signYAbove(this.cogCaption");
-  });
-
-  it("anchors settings chrome to the live HUD viewport and syncs caption hit on the plaque host", () => {
+  it("anchors settings chrome to the live HUD viewport — cog hit only", () => {
     const layout = between(settings, "layout(inset: SafeInset): void {", "\n  }", "settings layout");
     expect(layout).toContain("hudSceneViewport(this.scene)");
-    expect(layout).toContain("syncSignPlaque(this.cogCaption)");
-    expect(layout).toContain("syncSignHit(this.cogCaption)");
     expect(layout).toContain("this.cogHit.setPosition");
     expect(layout).toMatch(/let cogX = viewW - 24 - inset\.right/);
     expect(layout).not.toMatch(/const cogX = GAME_WIDTH - 24 - inset\.right/);
-    expect(layout).toContain("signPlaqueExtents(this.cogCaption)");
-    expect(layout).toContain("cogCenterX");
-    expect(layout, "caption centers on cog AABB").toMatch(
-      /cogCenterX = this\.cog\.x - this\.cog\.displayWidth \/ 2/,
-    );
-    expect(layout, "host x offsets measured plaque mid").toMatch(/plaqueMidX/);
-    expect(layout, "caption host tracks clamped plaque center").toMatch(
-      /cogCaptionX = clampedCenterX - plaqueMidX/,
-    );
+    expect(layout).not.toContain("cogCaption");
+  });
+
+  it("registers cog-only AABB for chip resolver", () => {
+    const reg = between(settings, "registerChipObstacle(placer: ChipPlacer): void {", "\n  }", "registerChipObstacle");
+    expect(reg).not.toContain("unionAabb");
+    expect(reg).not.toContain("cogCaption");
+    expect(reg).toContain("this.cog.displayWidth");
   });
 
   it("keeps a hud button's hit area on the box it paints", () => {

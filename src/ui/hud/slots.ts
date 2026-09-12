@@ -13,24 +13,24 @@ export const SLOT_GUTTER = 12;
  *
  * | id            | Anchor                         | Who |
  * |---------------|--------------------------------|-----|
- * | scoreClock    | COUNTER_SIGN in shop; top safe bar on drive/door | SCORE caption + value + clock |
- * | cover         | Under scoreClock, maxWidth capped from shop mark | shopCover while driving keyLead |
+ * | scoreClock    | COUNTER_SIGN in shop; top-left safe bar on drive/door | SCORE caption + value + clock |
+ * | cover         | Under scoreClock, maxWidth capped from shop mark | shopCover while keyLead in shop |
  * | doorTitle     | Same slot as cover; mutually exclusive | Door stop line on HUD |
  * | toast         | Bottom-center above home-indicator inset | One line |
- * | settings      | Bottom-right; cog + caption as one AABB | Settings chrome |
+ * | settings      | Bottom-right cog AABB | Settings chrome |
  * | phone         | Above settings or left of it | Drive call UI |
  * | pad           | Bottom-left thumb zone | Drive stick label |
  * | titleCards    | Top 55% | How-to 1–3; Title owns; HUD hidden |
  * | titleCta      | Below cards, center | OPEN THE SHOP |
- * | speech-*      | Beside settled customer | Shop walk-in bubbles |
- * | leadBubble    | Above key-lead head | Shop fetch |
- * | driverBubble  | Above seated driver | Shop |
- * | tvCallout     | Above targeted TV | Shop strain hint |
- * | drivePin      | Screen-projected above pin | Hud drive |
- * | driveVan      | Screen-projected above van | Hud drive |
- * | driveShop     | Screen-projected on lot | Hud drive |
- * | doorPrompt    | Above customer head | Door doorstep |
- * | scorePop      | Next to scoring actor | Hud flash |
+ * | speech-*      | Beside settled customer slot X | Shop walk-in bubbles |
+ * | leadBubble    | Left of KEYLEAD slot, side pin | Shop fetch/hold callout |
+ * | driverBubble  | Left of DRIVER slot, side pin | Shop ready line |
+ * | tvCallout     | Above targeted TV anchor | Shop strain hint |
+ * | drivePin      | (hidden) | Removed — map stays clean on Drive |
+ * | driveVan      | (hidden) | Removed — van toast banner off map |
+ * | driveShop     | (hidden) | Removed — shop-lot caption off map |
+ * | doorPrompt    | Midpoint driver↔customer, torso Y | Door doorstep |
+ * | scorePop      | Beside scoring actor slot | Hud flash |
  */
 export type ChipSlotId =
   | "scoreClock"

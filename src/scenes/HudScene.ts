@@ -3,11 +3,9 @@ import { playCameraClick, playUiSfx } from "../audio/sfx";
 import { syncMusicToClock } from "../audio/music";
 import { applyPortraitTexture } from "../art/peopleAtlas";
 import { clampInput } from "../input/controls";
-import { CITY, houseTitle, lotCenter, TILE } from "../maps/cityT0";
 import {
   GAME_HEIGHT,
   GAME_WIDTH,
-  HANDOFF_RADIUS,
   NPC_INTERACT_COOLDOWN_MS,
   SCORE_DELIVERY_LATE,
   SCORE_DELIVERY_ON_TIME,
@@ -22,10 +20,9 @@ import type { ShiftResults } from "../sim/shiftResults";
 import { tutorialHints, type TutorialHint } from "../sim/tutorialHints";
 import { skyAt, skyVisualDirtyKey } from "../sim/dayNight";
 import { addHudButton, addPanel } from "../ui/chrome";
-import { formatSlaClock, isSlaUrgent, RESULTS_NEW_DAY, RESULTS_TITLE } from "../ui/copy";
+import { RESULTS_NEW_DAY, RESULTS_TITLE } from "../ui/copy";
 import {
   addSignText,
-  setSignAccent,
   setSignCopy,
   setSignPosition,
   signContainer,
@@ -43,13 +40,10 @@ import { Color, MENU_TYPE_FIT, Type } from "../ui/theme";
 import { typeRoleBox, typeRolePx } from "../ui/typeScale";
 import { worldToScreen } from "../ui/worldProject";
 import {
-  DRIVE_CHIP_GAP,
   DRIVE_PIN_MAX_W,
-  DRIVE_PIN_TEX_H,
   DRIVE_SHOP_CAP_MAX_W,
   DRIVE_VAN_MAX_W,
   DRIVE_VAN_TEX_H,
-  PIN_CYCLE_MS,
 } from "./driveConstants";
 import { loadWorldScenes } from "./worldScenes";
 import {
@@ -66,7 +60,6 @@ import { HudPhone } from "../ui/hud/phone";
 import { HudIdCard } from "../ui/hud/idCard";
 import { ID_DENY_INK, ID_OK_INK, ID_PHOTO_H, ID_PHOTO_W, PHONE_H } from "../ui/hud/constants";
 import { beginChipFrame, placeChip } from "../ui/hud/placeChips";
-import { signHostPosition } from "../ui/signText";
 import { CHIP_GAP, chipPriority } from "../ui/hud/slots";
 
 /**
@@ -98,7 +91,6 @@ export class HudScene extends Phaser.Scene {
   private drivePinLabel!: Phaser.GameObjects.Text;
   private driveVanBanner!: Phaser.GameObjects.Text;
   private driveShopCaption!: Phaser.GameObjects.Text;
-  private driveShopCenter = { x: 0, y: 0 };
   private lastPinWho = "";
   private lastVanToast = "";
   private lastShopCaptionKey = "";
@@ -171,7 +163,6 @@ export class HudScene extends Phaser.Scene {
       .setOrigin(0.5, 1)
       .setDepth(20);
 
-    this.driveShopCenter = lotCenter(CITY.shopLot.origin, CITY.shopLot.w, CITY.shopLot.h);
     this.drivePinLabel = addSignText(this, 0, 0, "", {
       size: typeRolePx("hudBody"),
       typeRole: "hudBody",
@@ -466,7 +457,6 @@ export class HudScene extends Phaser.Scene {
       cog: this.hudSettings.cog,
       settingsOpen: this.hudSettings.isOpen,
       resultsVisible: this.resultsVisible,
-      setCogCaptionShown: (shown) => this.hudSettings.setCogCaptionShown(shown),
       releaseScorePop: (label) => this.readouts.releaseScorePop(label),
     });
     this.syncShopVisibility(snap);
@@ -535,18 +525,6 @@ export class HudScene extends Phaser.Scene {
       placeChip(placer, "pad", this.padLabel, this.padCenter.x, this.padCenter.y - 128, chipPriority("pad"));
     }
 
-    const driving = snap.playerRole === "driver" && !atDoor;
-    if (driving) {
-      const placeDrive = (id: "drivePin" | "driveVan" | "driveShop", label: Phaser.GameObjects.Text): void => {
-        if (!label.visible || !String(label.text).trim()) return;
-        const pos = signHostPosition(label);
-        placeChip(placer, id, label, pos.x, pos.y, chipPriority(id));
-      };
-      placeDrive("drivePin", this.drivePinLabel);
-      placeDrive("driveVan", this.driveVanBanner);
-      placeDrive("driveShop", this.driveShopCaption);
-    }
-
     if (showPhone && this.phoneWidget.phone.visible) {
       const phoneBounds = this.phoneWidget.phone.getBounds();
       placer.register(
@@ -570,100 +548,22 @@ export class HudScene extends Phaser.Scene {
     this.scene.setVisible(show, "shop");
   }
 
-  private paintDriveCallouts(
-    snap: SimSnapshot,
-    driving: boolean,
-    flashNext: TutorialHint | null,
-  ): void {
-    const drive = this.scene.get("drive");
-    if (!driving || !drive?.sys.isActive()) {
+  /** Drive map stays clean — descriptive world chips removed; SCORE + clock live in the HUD bar. */
+  private paintDriveCallouts(_snap: SimSnapshot, driving: boolean, _flashNext: TutorialHint | null): void {
+    if (this.lastPinWho || this.lastVanToast || this.lastShopCaptionKey) {
       this.lastPinWho = "";
       this.lastVanToast = "";
       this.lastShopCaptionKey = "";
-      this.drivePinLabel.setVisible(false);
-      this.driveVanBanner.setVisible(false);
-      this.driveShopCaption.setVisible(false);
-      signContainer(this.drivePinLabel).setVisible(false);
-      signContainer(this.driveVanBanner).setVisible(false);
-      signContainer(this.driveShopCaption).setVisible(false);
-      return;
-    }
-    const cam = (drive as Phaser.Scene).cameras.main;
-    const inset = designHudInset(readCssSafeArea(document.getElementById("game-root")));
-    const { width: viewW, height: viewH } = hudSceneViewport(this);
-    const stopId = snap.run?.nextStopId;
-    const destOrder = snap.orders.find((o) => o.destinationId === stopId && o.status === "onRun");
-    const pinBob =
-      stopId && drive.sys.isActive()
-        ? 8 + 8 * Math.sin((snap.gameMs / PIN_CYCLE_MS) * Math.PI * 2)
-        : 0;
-
-    if (stopId) {
-      const house = CITY.houses.find((h) => h.id === stopId);
-      if (house) {
-        const x = house.stop.c * TILE + TILE / 2;
-        const y = house.stop.r * TILE + TILE / 2 - 6;
-        const clock = destOrder ? formatSlaClock(destOrder.slaRemainingMs) : "";
-        const who = destOrder
-          ? `${houseTitle(stopId)}\n${destOrder.customerName}${clock ? `\n${clock}` : ""}`
-          : houseTitle(stopId);
-        if (who !== this.lastPinWho) {
-          this.lastPinWho = who;
-          setSignCopy(this.drivePinLabel, who);
-        }
-        const urgent = !!destOrder && isSlaUrgent(destOrder.slaRemainingMs);
-        setSignAccent(this.drivePinLabel, urgent ? Color.danger : undefined);
-        const flashPin = flashNext?.kind === "gpsPin";
-        if (flashPin) setSignAccent(this.drivePinLabel, Color.lime);
-        syncSignPlaque(this.drivePinLabel);
-        const anchor = worldToScreen(cam, x, y - pinBob - DRIVE_PIN_TEX_H - DRIVE_CHIP_GAP);
-        const pinPos = clampSignHost(this.drivePinLabel, anchor.x, anchor.y, viewW, viewH, inset);
-        setSignPosition(this.drivePinLabel, pinPos.x, pinPos.y);
-      }
-    } else {
-      this.lastPinWho = "";
       setSignCopy(this.drivePinLabel, "");
-    }
-
-    if (snap.toast && !stopId) {
-      const vehicle = snap.vehicle;
-      if (snap.toast !== this.lastVanToast) {
-        this.lastVanToast = snap.toast;
-        setSignCopy(this.driveVanBanner, snap.toast);
-      }
-      syncSignPlaque(this.driveVanBanner);
-      const anchor = worldToScreen(cam, vehicle.x, vehicle.y - DRIVE_VAN_TEX_H / 2 - DRIVE_CHIP_GAP);
-      const vanPos = clampSignHost(this.driveVanBanner, anchor.x, anchor.y, viewW, viewH, inset);
-      setSignPosition(this.driveVanBanner, vanPos.x, vanPos.y);
-    } else {
-      this.lastVanToast = "";
       setSignCopy(this.driveVanBanner, "");
+      setSignCopy(this.driveShopCaption, "");
     }
-
-    const nearShop =
-      Math.hypot(snap.vehicle.x - this.driveShopCenter.x, snap.vehicle.y - this.driveShopCenter.y) <=
-      HANDOFF_RADIUS;
-    const captionText = snap.run?.nextStopId
-      ? "Kindling"
-      : nearShop
-        ? "Tap Kindling to return"
-        : snap.autoDriving
-          ? "Van heading to Kindling"
-          : "Drive to Kindling";
-    const captionKey = `${captionText}:${nearShop ? 1 : 0}`;
-    if (captionKey !== this.lastShopCaptionKey) {
-      this.lastShopCaptionKey = captionKey;
-      setSignCopy(this.driveShopCaption, captionText);
-      setSignAccent(this.driveShopCaption, snap.run?.nextStopId ? undefined : nearShop ? Color.lime : undefined);
-    }
-    syncSignPlaque(this.driveShopCaption);
-    const shopAnchor = worldToScreen(
-      cam,
-      this.driveShopCenter.x,
-      this.driveShopCenter.y + CITY.shopLot.h * TILE * 0.42,
-    );
-    const shopPos = clampSignHost(this.driveShopCaption, shopAnchor.x, shopAnchor.y, viewW, viewH, inset);
-    setSignPosition(this.driveShopCaption, shopPos.x, shopPos.y);
+    this.drivePinLabel.setVisible(false);
+    this.driveVanBanner.setVisible(false);
+    this.driveShopCaption.setVisible(false);
+    signContainer(this.drivePinLabel).setVisible(false);
+    signContainer(this.driveVanBanner).setVisible(false);
+    signContainer(this.driveShopCaption).setVisible(false);
   }
 
   private tutorialFlashHint(snap: SimSnapshot): TutorialHint | null {

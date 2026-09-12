@@ -7,6 +7,7 @@ import { getRenderBudget, syncSceneRenderCamera } from "../ui/renderBudget";
 import { wireSceneDayNightLifecycle } from "../ui/sceneDayNightLifecycle";
 import { loadWorldScenes } from "./worldScenes";
 import { drawShopCounter, drawShopInterior, paintShopDayNight, paintWindowGlow } from "../art/shopInterior";
+import { PERSON_W } from "../art/peopleSize";
 import {
   BAG_PANEL,
   BAG_STACK,
@@ -14,6 +15,7 @@ import {
   CUSTOMER_SPEECH_GAP,
   CUSTOMER_SPEECH_H,
   CUSTOMER_SPEECH_MAX_W,
+  CUSTOMER_SPEECH_SIDE_GAP,
   customerFeetY,
   customerSlotX,
   customerSpeechShows,
@@ -117,14 +119,16 @@ function modelHeadTop(model: Phaser.GameObjects.Image): number {
   return model.y - model.displayHeight * model.originY;
 }
 
-/**
- * Hang a chip in the air above a model's head, measuring off displayHeight/origin rather than
- * getBounds. A box grows downward from its middle as its copy wraps, so a fixed offset that
- * clears a one-line callout puts a two-line one across the face — the key lead's hat is where
- * that showed. Recompute chip Y when text changes (height) or the model moves.
- */
-function hangAboveHead(chip: Phaser.GameObjects.Text, model: Phaser.GameObjects.Image, x: number): void {
-  setSignPosition(chip, x, signYAbove(chip, modelHeadTop(model), CUSTOMER_SPEECH_GAP));
+/** Body half-width at shop people scale — pin math uses slot anchors, not live sprite chase. */
+const SHOP_BODY_HALF = (PERSON_W * PEOPLE_SCALE) / 2;
+
+/** Pin speech left of a standing slot, clear of the face (side anchor, headHang=false). */
+function pinSideSpeech(chip: Phaser.GameObjects.Text, slotX: number, feetY: number): void {
+  setSignPosition(
+    chip,
+    slotX - SHOP_BODY_HALF - CUSTOMER_SPEECH_SIDE_GAP,
+    feetY - PERSON_DISPLAY_H * 0.48,
+  );
 }
 
 export class ShopScene extends Phaser.Scene {
@@ -266,15 +270,15 @@ export class ShopScene extends Phaser.Scene {
       .setDepth(14)
       .setVisible(false);
 
-    this.keyLeadBubble = addSignText(this, KEYLEAD.x - 168, KEYLEAD.y - PERSON_DISPLAY_H - 24, "", {
+    this.keyLeadBubble = addSignText(this, KEYLEAD.x - 168, KEYLEAD.y - PERSON_DISPLAY_H * 0.48, "", {
       size: typeRolePx("speech"),
       typeRole: "speech",
-      align: "center",
+      align: "left",
       fontStyle: "600",
       maxWidth: typeRoleBox(340, "speech"),
       maxHeight: typeRoleBox(104, "speech"),
     })
-      .setOrigin(0.5, 1)
+      .setOrigin(1, 0.5)
       .setDepth(12)
       .setVisible(false);
 
@@ -284,15 +288,15 @@ export class ShopScene extends Phaser.Scene {
     this.wireShopTap(this.driver, PEOPLE_SCALE, () => this.departNow());
     wireHover(this.driver);
 
-    this.driverBubble = addSignText(this, DRIVER.x - 24, DRIVER.y - PERSON_DISPLAY_H - 8, "", {
+    this.driverBubble = addSignText(this, DRIVER.x - 24, DRIVER.y - PERSON_DISPLAY_H * 0.48, "", {
       size: typeRolePx("speech"),
       typeRole: "speech",
-      align: "center",
+      align: "left",
       fontStyle: "600",
       maxWidth: typeRoleBox(336, "speech"),
       maxHeight: typeRoleBox(124, "speech"),
     })
-      .setOrigin(1, 1)
+      .setOrigin(1, 0.5)
       .setDepth(12)
       .setVisible(false);
 
@@ -331,20 +335,17 @@ export class ShopScene extends Phaser.Scene {
     this.keyLead.setVisible(snap.keyLead.visible && snap.playerRole === "keyLead");
     const kx = snap.keyLead.x;
     const ky = snap.keyLead.y;
-    const leadMoved =
-      Math.round(this.keyLead.x) !== Math.round(kx) || Math.round(this.keyLead.y) !== Math.round(ky);
-    if (leadMoved) this.keyLead.setPosition(kx, ky);
+    if (Math.round(this.keyLead.x) !== Math.round(kx) || Math.round(this.keyLead.y) !== Math.round(ky)) {
+      this.keyLead.setPosition(kx, ky);
+    }
     const callout = snap.keyLeadLine;
     const showKeyLeadBubble = !!callout && snap.keyLead.visible && snap.playerRole === "keyLead";
     this.keyLeadBubble.setVisible(showKeyLeadBubble);
-    // setText refits typekit — only pay when the Grabbing line changes (not every walk frame).
     if (showKeyLeadBubble) {
       const textDirty = this.keyLeadBubble.text !== callout;
       if (textDirty) this.keyLeadBubble.setText(callout);
-      const bx = kx - 168;
       const becameVisible = showKeyLeadBubble && !this.lastShowKeyLeadBubble;
-      // Bubble follows a walking sprite — host x/y, not inner Text locals (9-slice host model).
-      if (textDirty || leadMoved || becameVisible) hangAboveHead(this.keyLeadBubble, this.keyLead, bx);
+      if (textDirty || becameVisible) pinSideSpeech(this.keyLeadBubble, KEYLEAD.x, KEYLEAD.y);
     }
     this.lastShowKeyLeadBubble = showKeyLeadBubble;
 
@@ -361,7 +362,7 @@ export class ShopScene extends Phaser.Scene {
       if (driverTextDirty) this.driverBubble.setText(driverLine);
       this.driverBubble.setAlpha(1);
       const becameVisible = showDriverBubble && !this.lastShowDriverBubble;
-      if (driverTextDirty || becameVisible) hangAboveHead(this.driverBubble, this.driver, DRIVER.x - 24);
+      if (driverTextDirty || becameVisible) pinSideSpeech(this.driverBubble, DRIVER.x, DRIVER.y);
     }
     this.lastShowDriverBubble = showDriverBubble;
     if (highlightGo) {
@@ -421,18 +422,6 @@ export class ShopScene extends Phaser.Scene {
     setSignCopy(chip, "");
   }
 
-  /** Preferred slot anchor for speech hung above a bottom-anchored person sprite. */
-  private headBubbleAnchor(
-    chip: Phaser.GameObjects.Text,
-    model: Phaser.GameObjects.Image,
-    preferredX: number,
-  ): { x: number; y: number } {
-    return {
-      x: preferredX,
-      y: signYAbove(chip, modelHeadTop(model), CUSTOMER_SPEECH_GAP),
-    };
-  }
-
   private resolveShopChips(
     snap: SimSnapshot,
     ordered: readonly { orderId: string; slot: number }[],
@@ -484,32 +473,24 @@ export class ShopScene extends Phaser.Scene {
 
     if (this.keyLeadBubble.visible) {
       syncSignPlaque(this.keyLeadBubble);
-      const leadX = this.keyLead.x - 168;
-      const leadAnchor = this.headBubbleAnchor(this.keyLeadBubble, this.keyLead, leadX);
       this.placeShopChip(
         placer,
         "leadBubble",
         this.keyLeadBubble,
-        leadAnchor.x,
-        leadAnchor.y,
+        KEYLEAD.x - SHOP_BODY_HALF - CUSTOMER_SPEECH_SIDE_GAP,
+        KEYLEAD.y - PERSON_DISPLAY_H * 0.48,
         chipPriority("leadBubble"),
-        { x: this.keyLead.x, y: leadAnchor.y },
-        true,
       );
     }
     if (this.driverBubble.visible) {
       syncSignPlaque(this.driverBubble);
-      const driverX = DRIVER.x - 24;
-      const driverAnchor = this.headBubbleAnchor(this.driverBubble, this.driver, driverX);
       this.placeShopChip(
         placer,
         "driverBubble",
         this.driverBubble,
-        driverAnchor.x,
-        driverAnchor.y,
+        DRIVER.x - SHOP_BODY_HALF - CUSTOMER_SPEECH_SIDE_GAP,
+        DRIVER.y - PERSON_DISPLAY_H * 0.48,
         chipPriority("driverBubble"),
-        { x: DRIVER.x, y: driverAnchor.y },
-        true,
       );
     }
     if (this.targetCallout.visible) {
