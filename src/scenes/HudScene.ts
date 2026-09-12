@@ -64,7 +64,10 @@ import { HudReadouts } from "../ui/hud/readouts";
 import { HudSettings } from "../ui/hud/settings";
 import { HudPhone } from "../ui/hud/phone";
 import { HudIdCard } from "../ui/hud/idCard";
-import { ID_DENY_INK, ID_OK_INK, ID_PHOTO_H, ID_PHOTO_W } from "../ui/hud/constants";
+import { ID_DENY_INK, ID_OK_INK, ID_PHOTO_H, ID_PHOTO_W, PHONE_H } from "../ui/hud/constants";
+import { beginChipFrame, placeChip } from "../ui/hud/placeChips";
+import { signHostPosition } from "../ui/signText";
+import { CHIP_GAP, chipPriority } from "../ui/hud/slots";
 
 /**
  * Cap one sim step so a long background pause does not jump the shift clock.
@@ -503,7 +506,60 @@ export class HudScene extends Phaser.Scene {
     }
     this.syncDriveScene(snap);
     this.syncDoorScene(snap);
+    this.resolveHudChips(snap, atDoor, showPhone, showPad, this.toastText.visible);
     this.syncMusicIfNeeded(snap.gameMs);
+  }
+
+  /** One resolver pass after copy is set — plaques dodge higher-priority slots. */
+  private resolveHudChips(
+    snap: SimSnapshot,
+    atDoor: boolean,
+    showPhone: boolean,
+    showPad: boolean,
+    toastVisible: boolean,
+  ): void {
+    const inset = designHudInset(readCssSafeArea(document.getElementById("game-root")));
+    const { width: viewW, height: viewH } = hudSceneViewport(this);
+    const placer = beginChipFrame(this.game, inset, viewW, viewH);
+    this.hudSettings.registerChipObstacle(placer);
+    this.readouts.placeReadouts();
+    this.readouts.resolvePlaqueSlots(placer, atDoor);
+
+    if (toastVisible) {
+      let toastY = viewH - 40 - inset.bottom;
+      if (showPhone) toastY -= PHONE_H + CHIP_GAP;
+      placeChip(placer, "toast", this.toastText, viewW / 2, toastY, chipPriority("toast"));
+    }
+
+    if (showPad && this.padLabel.visible) {
+      placeChip(placer, "pad", this.padLabel, this.padCenter.x, this.padCenter.y - 128, chipPriority("pad"));
+    }
+
+    const driving = snap.playerRole === "driver" && !atDoor;
+    if (driving) {
+      const placeDrive = (id: "drivePin" | "driveVan" | "driveShop", label: Phaser.GameObjects.Text): void => {
+        if (!label.visible || !String(label.text).trim()) return;
+        const pos = signHostPosition(label);
+        placeChip(placer, id, label, pos.x, pos.y, chipPriority(id));
+      };
+      placeDrive("drivePin", this.drivePinLabel);
+      placeDrive("driveVan", this.driveVanBanner);
+      placeDrive("driveShop", this.driveShopCaption);
+    }
+
+    if (showPhone && this.phoneWidget.phone.visible) {
+      const phoneBounds = this.phoneWidget.phone.getBounds();
+      placer.register(
+        "phone",
+        {
+          left: phoneBounds.left,
+          top: phoneBounds.top,
+          right: phoneBounds.right,
+          bottom: phoneBounds.bottom,
+        },
+        chipPriority("phone"),
+      );
+    }
   }
 
   /** Shop ORDERS and strain chips must not paint through Door while the scene sleeps. */

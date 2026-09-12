@@ -14,6 +14,8 @@ const readouts = read("../ui/hud/readouts.ts");
 const settings = read("../ui/hud/settings.ts");
 const sign = read("../ui/signText.ts");
 const budget = read("../ui/renderBudget.ts");
+const slots = read("../ui/hud/slots.ts");
+const placeChips = read("../ui/hud/placeChips.ts");
 
 function between(text: string, start: string, end: string, what: string): string {
   const from = text.indexOf(start);
@@ -99,5 +101,37 @@ describe("HUD placement geometry", () => {
     const layout = between(settings, "layout(inset: SafeInset): void {", "\n  }", "settings layout");
     expect(layout).not.toMatch(/setSignPosition\(this\.cogCaption,\s*0,\s*0\)/);
     expect(layout).toContain("cogY - cogSize");
+  });
+});
+
+describe("HUD chip resolver wiring", () => {
+  it("documents slot table and CHIP_GAP in slots.ts", () => {
+    expect(slots).toContain("export const CHIP_GAP = 10");
+    expect(slots).toContain("scoreClock");
+    expect(slots).toContain("CHIP_PRIORITY");
+  });
+
+  it("resolves plaques once per frame from paintHud via resolveHudChips", () => {
+    const paint = between(hud, "private paintHud(snap: SimSnapshot): void {", "private syncShopVisibility", "paintHud");
+    expect(paint).toContain("resolveHudChips(");
+    const resolve = between(hud, "private resolveHudChips(", "\n  }", "resolveHudChips");
+    expect(resolve).toContain("beginChipFrame");
+    expect(resolve).toContain("registerChipObstacle");
+    expect(resolve).toContain('placeChip(placer, "toast"');
+    expect(placeChips).toContain("export function placeChip");
+  });
+
+  it("registers settings as a cog+caption union before lower-priority chips", () => {
+    expect(settings).toContain("registerChipObstacle");
+    expect(settings).toContain("unionAabb");
+  });
+
+  it("caps cover width so it cannot reach the shop lot mark", () => {
+    const cover = between(readouts, "coverMaxWidth(): number {", "\n  }", "coverMaxWidth");
+    expect(cover).toContain("Math.min");
+    expect(cover).toContain("columnCap");
+    expect(cover).toContain("scoreCap");
+    const resolve = between(readouts, "resolvePlaqueSlots(", "\n  }", "resolvePlaqueSlots");
+    expect(resolve).toContain('placeChip(placer, "cover"');
   });
 });

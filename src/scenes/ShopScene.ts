@@ -50,7 +50,19 @@ import { nextShopHint } from "../sim/tutorialHints";
 import { driverReadyCopy } from "../ui/copy";
 import { readyTally, receiptSlips } from "../ui/receipts";
 import { wireHover } from "../ui/chrome";
-import { addSignText, setSignAccent, setSignPosition, signYAbove } from "../ui/signText";
+import {
+  addSignText,
+  setSignAccent,
+  setSignCopy,
+  setSignPosition,
+  signHostPosition,
+  signPlaqueExtents,
+  signYAbove,
+} from "../ui/signText";
+import type { ChipPlacer } from "../ui/hud/chipCollision";
+import { beginChipFrame, placeChip } from "../ui/hud/placeChips";
+import { chipPriority, speechSlotId } from "../ui/hud/slots";
+import { designHudInset, readCssSafeArea } from "../ui/viewFit";
 import { addUiText } from "../ui/text";
 import {
   Color,
@@ -384,8 +396,103 @@ export class ShopScene extends Phaser.Scene {
 
     this.syncTablet(snap, tabletPulse, next?.kind === "tablet");
     this.syncTargetCallout(snap);
+    const ordered = [...snap.customers]
+      .filter((c) => Math.abs(c.x - customerSlotX(c.slot)) < 1 && customerSpeechShows(true))
+      .sort((a, b) => a.slot - b.slot);
     this.syncCustomers(snap.customers, pulse, next?.kind === "customer" ? next.orderId : null);
     this.syncOutgoing(snap);
+    this.resolveShopChips(snap, ordered);
+  }
+
+  private placeShopChip(
+    placer: ChipPlacer,
+    id: string,
+    chip: Phaser.GameObjects.Text,
+    preferredX: number,
+    preferredY: number,
+    priority: number,
+    alt?: { x: number; y: number },
+  ): void {
+    if (placeChip(placer, id, chip, preferredX, preferredY, priority)) return;
+    if (alt && placeChip(placer, id, chip, alt.x, alt.y, priority)) return;
+    setSignCopy(chip, "");
+  }
+
+  private resolveShopChips(
+    snap: SimSnapshot,
+    ordered: readonly { orderId: string; slot: number }[],
+  ): void {
+    if (snap.playerRole !== "keyLead") return;
+    const inset = designHudInset(readCssSafeArea(document.getElementById("game-root")));
+    const placer = beginChipFrame(this.game, inset, GAME_WIDTH, GAME_HEIGHT);
+
+    for (const customer of ordered) {
+      const visual = this.customers.get(customer.orderId);
+      if (!visual?.bubble.visible) continue;
+      const layout = this.customerLayoutById.get(customer.orderId);
+      if (!layout) continue;
+      const priority = 50 - customer.slot;
+      const headAlt = {
+        x: layout.x,
+        y: signYAbove(visual.bubble, modelHeadTop(visual.sprite), CUSTOMER_SPEECH_GAP),
+      };
+      this.placeShopChip(
+        placer,
+        speechSlotId(customer.orderId),
+        visual.bubble,
+        layout.x,
+        layout.y,
+        priority,
+        headAlt,
+      );
+      if (
+        visual.feedback.visible &&
+        String(visual.feedback.text).trim() &&
+        visual.bubble.visible &&
+        String(visual.bubble.text).trim()
+      ) {
+        const bubblePos = signHostPosition(visual.bubble);
+        const belowY = signYAbove(visual.feedback, bubblePos.y + signPlaqueExtents(visual.bubble).bottomLocal, CUSTOMER_SPEECH_GAP);
+        this.placeShopChip(
+          placer,
+          `${speechSlotId(customer.orderId)}-fb`,
+          visual.feedback,
+          layout.x,
+          layout.y + layout.h / 2 + CUSTOMER_SPEECH_GAP + visual.feedback.height / 2,
+          priority - 1,
+          { x: bubblePos.x, y: belowY },
+        );
+      } else if (visual.feedback.visible && !String(visual.bubble.text).trim()) {
+        setSignCopy(visual.feedback, "");
+      }
+    }
+
+    if (this.keyLeadBubble.visible) {
+      const pos = signHostPosition(this.keyLeadBubble);
+      this.placeShopChip(
+        placer,
+        "leadBubble",
+        this.keyLeadBubble,
+        pos.x,
+        pos.y,
+        chipPriority("leadBubble"),
+      );
+    }
+    if (this.driverBubble.visible) {
+      const pos = signHostPosition(this.driverBubble);
+      this.placeShopChip(
+        placer,
+        "driverBubble",
+        this.driverBubble,
+        pos.x,
+        pos.y,
+        chipPriority("driverBubble"),
+      );
+    }
+    if (this.targetCallout.visible) {
+      const pos = signHostPosition(this.targetCallout);
+      this.placeShopChip(placer, "tvCallout", this.targetCallout, pos.x, pos.y, chipPriority("tvCallout"));
+    }
   }
 
   private syncTargetCallout(snap: SimSnapshot): void {

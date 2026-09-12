@@ -19,6 +19,9 @@ import { typeClockPx, typeRoleBox, typeRolePx } from "../typeScale";
 import { worldToScreen } from "../worldProject";
 import type { SafeInset } from "../viewFit";
 import { HUD_CORNER_TOP, HUD_SCORE_GAP, HUD_SIGN_GAP, readoutOutline, SCORE_POP_POOL } from "./constants";
+import type { ChipPlacer } from "./chipCollision";
+import { placeChip, textInkAabb, unionAabb } from "./placeChips";
+import { chipPriority } from "./slots";
 
 export interface ReadoutCorner {
   left: number;
@@ -156,10 +159,16 @@ export class HudReadouts {
   placeReadouts(): void {
     this.matchCaptionToValue();
     const valueW = this.scoreText.width;
+    const captionW = this.scoreCaption.width;
     if (this.readoutsInShop) {
       const { signLeft, signRight, y } = this.counterSignReadoutAnchors();
+      let gap = HUD_SCORE_GAP;
+      const signInnerLeft = COUNTER_SIGN.x - COUNTER_SIGN.w / 2;
+      while (gap > 4 && signLeft - valueW - gap - captionW < signInnerLeft - 8) {
+        gap -= 2;
+      }
       this.scoreText.setOrigin(1, 0.5).setPosition(signLeft, y);
-      this.scoreCaption.setOrigin(1, 0.5).setPosition(signLeft - valueW - HUD_SCORE_GAP, y);
+      this.scoreCaption.setOrigin(1, 0.5).setPosition(signLeft - valueW - gap, y);
       this.clockText.setOrigin(0, 0.5).setPosition(signRight, y);
       this.scorePopLayer.setPosition(signLeft, y - 46);
       return;
@@ -313,6 +322,24 @@ export class HudReadouts {
     this.scene.tweens.killTweensOf(label);
     label.setVisible(false).setAlpha(0).setText("");
     if (!this.scorePopFree.includes(label)) this.scorePopFree.push(label);
+  }
+
+  /** Register score row and resolve cover / door-title plaques through the frame placer. */
+  resolvePlaqueSlots(placer: ChipPlacer, _atDoor: boolean): void {
+    if (this.scoreText.visible) {
+      placer.register(
+        "scoreClock",
+        unionAabb([textInkAabb(this.scoreCaption), textInkAabb(this.scoreText), textInkAabb(this.clockText)]),
+        chipPriority("scoreClock"),
+      );
+    }
+    const coverY = this.readoutCorner.top + 40;
+    if (this.coverText.visible && String(this.coverText.text).trim()) {
+      placeChip(placer, "cover", this.coverText, this.readoutCorner.left, coverY, chipPriority("cover"));
+    }
+    if (this.doorTitleText.visible && String(this.doorTitleText.text).trim()) {
+      placeChip(placer, "doorTitle", this.doorTitleText, this.readoutCorner.left, coverY + 4, chipPriority("doorTitle"));
+    }
   }
 
   spawnScorePop(delta: number, screen?: { x: number; y: number }): void {

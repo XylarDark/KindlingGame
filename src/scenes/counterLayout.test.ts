@@ -131,6 +131,15 @@ const ordersLabel = centred(
   tab.screenH - ORDERS_INSET * 2,
 );
 
+describe("scoreClock inside COUNTER_SIGN", () => {
+  it("keeps caption and value inside the sign band with shrinkable gap", () => {
+    const place = between(readouts, "placeReadouts(): void {", "\n  }", "placeReadouts");
+    expect(place).toContain("COUNTER_SIGN.w / 2");
+    expect(place).toContain("while (gap > 4");
+    expect(place).toContain("signLeft - valueW - gap");
+  });
+});
+
 describe("ORDERS against the counter readouts", () => {
   it("measures two real boxes, so a pass cannot come from comparing nothing", () => {
     // Both of the audits this repo has been burned by reported clean while inspecting
@@ -165,7 +174,8 @@ describe("ORDERS against the counter readouts", () => {
     // bounded-box argument above would still hold, but only by luck of the direction.
     expect(placeReadouts).toContain("counterSignReadoutAnchors()");
     expect(placeReadouts).toContain("this.scoreText.setOrigin(1, 0.5).setPosition(signLeft, y)");
-    expect(placeReadouts).toContain("signLeft - valueW - HUD_SCORE_GAP");
+    expect(placeReadouts).toMatch(/signLeft - valueW - (?:gap|HUD_SCORE_GAP)/);
+    expect(placeReadouts).toContain("while (gap > 4");
     expect(scoreBox.w).toBeGreaterThan(0);
     expect(scoreBlock).toContain('typeRole: "hudTitle"');
     expect(scoreBlock).toContain('typeRolePx("hudTitle")');

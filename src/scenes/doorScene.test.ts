@@ -102,9 +102,18 @@ describe("doorstep prompt", () => {
     expect(src).toContain("setSignCopy(this.prompt");
   });
 
-  it("positions the prompt via setSignPosition on the plaque host", () => {
+  it("resolves the prompt through placeChip after anchor geometry", () => {
     const fn = between(src, "private placePrompt(", "\n  }", "placePrompt");
-    expect(fn).toContain("setSignPosition(this.prompt");
+    expect(fn).toContain("resolveDoorPrompt(x, y)");
+    const resolve = between(src, "private resolveDoorPrompt(", "\n  }", "resolveDoorPrompt");
+    expect(resolve).toContain("placeChip(placer, \"doorPrompt\"");
+  });
+
+  it("registers the bag as a fixed obstacle before doorPrompt resolves", () => {
+    const resolve = between(src, "private resolveDoorPrompt(", "\n  }", "resolveDoorPrompt");
+    expect(resolve).toContain('register("doorBag"');
+    expect(resolve).toContain("spriteAabb(this.bag)");
+    expect(resolve).toContain("placeChip(placer, \"doorPrompt\"");
   });
 
   it("clamps the prompt away from the bag hit target", () => {
@@ -158,7 +167,6 @@ describe("doorstep bag caption", () => {
     for (const dead of [
       "bagCaption",
       "placeBagCaption",
-      "placeChips",
       "DOOR_CAPTION_PX",
       "Tap bag to hand over",
       "Tap bag for photo",

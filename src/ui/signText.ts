@@ -181,10 +181,12 @@ export function setSignPosition(text: Phaser.GameObjects.Text, x: number, y: num
   else text.setPosition(x, y);
 }
 
-/** Plaque panel size and local Y edges relative to the sign host origin. */
+/** Plaque panel size and local edges relative to the sign host origin. */
 export interface SignPlaqueExtents {
   panelW: number;
   panelH: number;
+  leftLocal: number;
+  rightLocal: number;
   topLocal: number;
   bottomLocal: number;
 }
@@ -214,8 +216,15 @@ export function signPlaqueExtents(text: Phaser.GameObjects.Text): SignPlaqueExte
   const w = text.width;
   const h = text.height;
   if (!plaque) {
-    const { top } = glyphLocalBounds(text, w, h);
-    return { panelW: w, panelH: h, topLocal: top, bottomLocal: top + h };
+    const { left, top } = glyphLocalBounds(text, w, h);
+    return {
+      panelW: w,
+      panelH: h,
+      leftLocal: left,
+      rightLocal: left + w,
+      topLocal: top,
+      bottomLocal: top + h,
+    };
   }
   const panelH = plaque.height;
   const panelW = plaque.width;
@@ -223,6 +232,8 @@ export function signPlaqueExtents(text: Phaser.GameObjects.Text): SignPlaqueExte
   return {
     panelW,
     panelH,
+    leftLocal: center.x - panelW / 2,
+    rightLocal: center.x + panelW / 2,
     topLocal: center.y - panelH / 2,
     bottomLocal: center.y + panelH / 2,
   };

@@ -19,6 +19,9 @@ import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import { skyAt, skyVisualDirtyKey } from "../sim/dayNight";
 import type { SimSnapshot } from "../sim/gameSim";
 import { addSignText, setSignCopy, setSignPosition, signPlaqueExtents } from "../ui/signText";
+import { chipPlaqueAabb } from "../ui/hud/chipCollision";
+import { beginChipFrame, placeChip } from "../ui/hud/placeChips";
+import { chipPriority } from "../ui/hud/slots";
 import { Color } from "../ui/theme";
 import { typeRoleBox, typeRolePx } from "../ui/typeScale";
 import { designHudInset, HUD_TOUCH_MIN_DESIGN, readCssSafeArea, VIEWFIT_EVENT } from "../ui/viewFit";
@@ -188,7 +191,17 @@ export class DoorScene extends Phaser.Scene {
     const yAbove = headTop - DOOR_CHIP_GAP - plaque.bottomLocal;
     let y = Math.max(yFloor, yAbove);
     x = dodgePromptX(x, y, plaque, half, [this.driver, this.customer, this.bag]);
-    setSignPosition(this.prompt, x, y);
+    this.resolveDoorPrompt(x, y);
+  }
+
+  private resolveDoorPrompt(preferredX: number, preferredY: number): void {
+    const inset = designHudInset(readCssSafeArea(document.getElementById("game-root")));
+    const placer = beginChipFrame(this.game, inset, GAME_WIDTH, GAME_HEIGHT);
+    if (this.bag.visible && this.bag.input?.enabled) {
+      placer.register("doorBag", spriteAabb(this.bag), chipPriority("doorPrompt") + 10);
+    }
+    if (!String(this.prompt.text ?? "").trim()) return;
+    placeChip(placer, "doorPrompt", this.prompt, preferredX, preferredY, chipPriority("doorPrompt"));
   }
 
   update(): void {
@@ -382,12 +395,7 @@ function spriteAabb(img: Phaser.GameObjects.Image): Aabb {
 }
 
 function chipAabb(x: number, y: number, plaque: ReturnType<typeof signPlaqueExtents>): Aabb {
-  return {
-    left: x - plaque.panelW / 2,
-    right: x + plaque.panelW / 2,
-    top: y + plaque.topLocal,
-    bottom: y + plaque.bottomLocal,
-  };
+  return chipPlaqueAabb(x, y, plaque);
 }
 
 function aabbOverlap(a: Aabb, b: Aabb): boolean {

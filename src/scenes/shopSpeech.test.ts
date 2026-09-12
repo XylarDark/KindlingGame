@@ -134,6 +134,14 @@ describe("speech stays off the models it belongs to", () => {
   });
 });
 
+describe("shop speech chip resolver", () => {
+  it("runs resolveShopChips after customer sync with placeChip", () => {
+    expect(src).toContain("resolveShopChips");
+    expect(src).toContain("placeChip(placer");
+    expect(src).toContain("speechSlotId");
+  });
+});
+
 describe("side speech collision layout", () => {
   it("prefers the customer's right and flips left when the right side is blocked", () => {
     const alone = layoutCustomerSpeech([{ orderId: "a", x: customerSlotX(0) }]);
