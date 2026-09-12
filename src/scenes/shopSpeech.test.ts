@@ -22,6 +22,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const read = (rel: string): string => readFileSync(join(here, rel), "utf8").replace(/\r\n/g, "\n");
 
 const src = read("ShopScene.ts");
+const placement = read("../ui/plaquePlacementPhaser.ts");
 
 /**
  * Slice between two markers, throwing on a miss. A scan that quietly matches nothing is
@@ -37,10 +38,11 @@ function between(text: string, start: string, end: string, what: string): string
 
 describe("speech stays off the models it belongs to", () => {
   it("pins character speech above heads via plaque center, not beside torsos", () => {
-    const above = between(src, "function speechPlaqueAboveHead(", "\n}", "speechPlaqueAboveHead");
+    const above = between(placement, "export function speechPlaqueAboveHead(", "\n}", "speechPlaqueAboveHead");
     expect(above, "uses signYAbove for head clearance").toMatch(/signYAbove\(chip, headTopY, gap\)/);
     expect(above, "returns plaque center coords").toMatch(/return \{ x: centerX, y: hostY \+ mid\.midY \}/);
     expect(above, "does not walk the display tree").not.toMatch(/getBounds/);
+    expect(src, "Shop imports speech placement helpers").toContain('from "../ui/plaquePlacementPhaser"');
 
     expect(src, "key-lead bubble centered above head band").toMatch(
       /keyLeadBubble = addSignText[\s\S]*?\.setOrigin\(0\.5, 0\.5\)/,
