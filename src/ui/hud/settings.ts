@@ -10,6 +10,7 @@ import {
   addSignText,
   setSignPosition,
   signContainer,
+  signHostPosition,
   signPlaqueExtents,
   signYAbove,
   syncSignHit,
@@ -21,6 +22,8 @@ import { Color, HUD_TYPE_FIT, MENU_TYPE_FIT } from "../theme";
 import { typeRolePx } from "../typeScale";
 import type { SafeInset } from "../viewFit";
 import { hudSceneViewport, HUD_TOUCH_MIN_DESIGN } from "../viewFit";
+import { chipPlaqueAabb, unionAabb, type ChipPlacer } from "./placeChips";
+import { chipPriority } from "./slots";
 import {
   HUD_COG_CAPTION_BOX,
   HUD_COG_CAPTION_PAD,
@@ -428,6 +431,21 @@ export class HudSettings {
 
   setCogCaptionShown(shown: boolean): void {
     this.cogCaption.setVisible(shown);
+  }
+
+  /** Cog + caption union — registered before lower-priority chips resolve. */
+  registerChipObstacle(placer: ChipPlacer): void {
+    if (!this.cog.visible) return;
+    syncSignPlaque(this.cogCaption);
+    const capPos = signHostPosition(this.cogCaption);
+    const captionBox = chipPlaqueAabb(capPos.x, capPos.y, signPlaqueExtents(this.cogCaption));
+    const cogBox = {
+      left: this.cog.x - this.cog.displayWidth,
+      top: this.cog.y - this.cog.displayHeight,
+      right: this.cog.x,
+      bottom: this.cog.y,
+    };
+    placer.register("settings", unionAabb([captionBox, cogBox]), chipPriority("settings"));
   }
 
   refreshEndShiftButton(): void {

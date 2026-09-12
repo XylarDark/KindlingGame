@@ -42,4 +42,13 @@ describe("drive HUD callout sizing", () => {
     expect(create).toContain("...driveChipSignOpts");
     expect(hud).toContain('padVariant: "compact"');
   });
+
+  it("runs drive callouts through the shared chip resolver after projection", () => {
+    const hud = read("HudScene.ts");
+    const resolve = hud.slice(hud.indexOf("private resolveHudChips"), hud.indexOf("private tutorialFlashHint"));
+    expect(resolve).toContain('placeDrive("drivePin"');
+    expect(resolve).toContain("placeChip(placer, id, label");
+    expect(resolve).toContain("atDoor");
+    expect(resolve).toContain("registerChipObstacle");
+  });
 });
