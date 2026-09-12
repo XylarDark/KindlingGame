@@ -128,15 +128,15 @@ describe("shop capture seed geometry", () => {
 describe("door prompt placement contract", () => {
   const doorSrc = readScene("../scenes/DoorScene.ts");
   const readoutsSrc = readScene("../ui/hud/readouts.ts");
-  const DOOR_CHIP_GAP = 36;
+  const DOOR_HEAD_GAP = 48;
   const CUSTOMER_X = 960 + 200;
   const headTop = 720;
 
   it("preferred door prompt center sits above the customer head", () => {
-    const plaque = mockSpeechPlaque(440, 72);
-    const center = speechPlaqueCenterAboveHead(plaque, CUSTOMER_X, headTop, DOOR_CHIP_GAP);
+    const plaque = mockSpeechPlaque(440, 88);
+    const center = speechPlaqueCenterAboveHead(plaque, CUSTOMER_X, headTop, DOOR_HEAD_GAP);
     const aabb = plaqueAabbFromCenter(center.x, center.y, plaque);
-    assertPlacement(aboveHead(aabb, headTop, DOOR_CHIP_GAP), "door prompt");
+    assertPlacement(aboveHead(aabb, headTop, DOOR_HEAD_GAP), "door prompt");
   });
 
   it("door scene still resolves through placeChip after anchor geometry", () => {
@@ -154,6 +154,7 @@ describe("door prompt placement contract", () => {
     expect(readoutsSrc).toContain("atDoor && this.doorTitleText.visible");
     expect(readoutsSrc).toMatch(/let centerX = placer\.viewW \/ 2/);
     expect(readoutsSrc).toContain("paintDoorTitle");
+    expect(readoutsSrc).toContain("setSignAccent(this.doorTitleText, Color.danger)");
   });
 });
 

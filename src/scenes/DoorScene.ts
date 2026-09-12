@@ -41,8 +41,12 @@ const DOOR_CHIP_GAP = 36;
 const DOOR_CHIP_MARGIN = 24;
 /** Prompt chip width — hugs copy between the two characters. */
 const DOOR_PROMPT_MAX_W = 480;
-/** Two wrapped lines at the door prompt seed (hudTitle). */
-const DOOR_PROMPT_MAX_H = 96;
+/** Two wrapped lines at the door prompt seed (hudTitle) with default pad. */
+const DOOR_PROMPT_MAX_H = 120;
+/** Clearance between customer head top and prompt plaque bottom. */
+const DOOR_HEAD_GAP = 48;
+/** Renders above flashing customer (11) and bag (12) during ask/hand steps. */
+const DOOR_PROMPT_DEPTH = 14;
 
 /**
  * Flash cadence for the next tap target, as `Math.sin(gameMs / DOOR_FLASH_RATE)` — a
@@ -140,14 +144,15 @@ export class DoorScene extends Phaser.Scene {
     this.prompt = addSignText(this, GAME_WIDTH / 2, 0, "", {
       size: typeRolePx("hudTitle"),
       typeRole: "hudTitle",
-      padVariant: "compact",
+      padVariant: "default",
       align: "center",
       fontStyle: "600",
+      lineSpacing: 6,
       maxWidth: typeRoleBox(DOOR_PROMPT_MAX_W, "hudTitle"),
       maxHeight: typeRoleBox(DOOR_PROMPT_MAX_H, "hudTitle"),
     })
       .setOrigin(0.5, 0.5)
-      .setDepth(8);
+      .setDepth(DOOR_PROMPT_DEPTH);
 
     this.paintDoorDayNight(getSim().snapshot());
     this.events.on(Phaser.Scenes.Events.PRE_RENDER, this.onPreRenderDayNight);
@@ -174,7 +179,7 @@ export class DoorScene extends Phaser.Scene {
   private placePrompt(): void {
     syncSignPlaque(this.prompt);
     const headTop = modelHeadTop(this.customer);
-    const preferred = speechPlaqueAboveHead(this.prompt, this.customer.x, headTop, DOOR_CHIP_GAP);
+    const preferred = speechPlaqueAboveHead(this.prompt, this.customer.x, headTop, DOOR_HEAD_GAP);
     const plaque = signPlaqueExtents(this.prompt);
     const half = plaque.panelW / 2 + DOOR_CHIP_MARGIN;
     const x = Phaser.Math.Clamp(preferred.x, half, GAME_WIDTH - half);
@@ -193,7 +198,7 @@ export class DoorScene extends Phaser.Scene {
   private paintDoorLayoutDebug(): void {
     if (!this.layoutDebugGfx) return;
     const headTop = modelHeadTop(this.customer);
-    const band = aboveHeadBand(headTop, DOOR_CHIP_GAP);
+    const band = aboveHeadBand(headTop, DOOR_HEAD_GAP);
     const layers: LayoutDebugLayer[] = [
       {
         label: "aboveHeadBand",

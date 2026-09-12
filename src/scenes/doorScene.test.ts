@@ -91,7 +91,8 @@ describe("doorstep prompt", () => {
     const box = between(src, "this.prompt = addSignText(", ".setOrigin(0.5, 0.5)", "prompt box");
     expect(box).toContain('typeRole: "hudTitle"');
     expect(box).toContain('typeRolePx("hudTitle")');
-    expect(box).toContain('padVariant: "compact"');
+    expect(box).toContain('padVariant: "default"');
+    expect(box).toContain("lineSpacing: 6");
     expect(box).toContain("DOOR_PROMPT_MAX_W");
     expect(box).toContain("DOOR_PROMPT_MAX_H");
     expect(box).toContain('typeRoleBox(DOOR_PROMPT_MAX_W, "hudTitle")');
@@ -129,8 +130,9 @@ describe("doorstep prompt", () => {
 
   it("pins the prompt above the customer head with headHang", () => {
     const fn = between(src, "private placePrompt(", "\n  }", "placePrompt");
-    expect(fn).toContain("speechPlaqueAboveHead(this.prompt, this.customer.x, headTop, DOOR_CHIP_GAP)");
+    expect(fn).toContain("speechPlaqueAboveHead(this.prompt, this.customer.x, headTop, DOOR_HEAD_GAP)");
     expect(fn).toContain("modelHeadTop(this.customer)");
+    expect(src).toContain(".setDepth(DOOR_PROMPT_DEPTH)");
     expect(fn).toContain("this.customer.x");
     expect(fn).not.toContain("GAME_WIDTH / 2");
     expect(fn).not.toContain("this.insetTop + DOOR_CHIP_GAP");

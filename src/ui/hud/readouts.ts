@@ -3,7 +3,7 @@ import { houseTitle } from "../../maps/cityT0";
 import { COUNTER_SIGN } from "../../maps/shopT0";
 import { GAME_HEIGHT, GAME_WIDTH } from "../../sim/constants";
 import type { SimSnapshot } from "../../sim/gameSim";
-import { formatSlaClock, isSlaUrgent } from "../copy";
+import { formatSlaClock } from "../copy";
 import { parseFontPx, retypeSize } from "../typekit";
 import {
   addSignText,
@@ -20,9 +20,11 @@ import { addUiText } from "../text";
 import { Color, HUD_READOUT_PX, HUD_SCORE_PX } from "../theme";
 import { typeClockPx, typeRoleBox, typeRolePx } from "../typeScale";
 import { worldToScreen } from "../worldProject";
-import type { SafeInset } from "../viewFit";
+import { designHudInset, hudSceneViewport, readCssSafeArea, type SafeInset } from "../viewFit";
 import {
   HUD_CORNER_TOP,
+  HUD_DOOR_READOUT_DEPTH,
+  HUD_READOUT_DEPTH,
   HUD_SCORE_GAP,
   HUD_SIGN_GAP,
   readoutOutline,
@@ -94,7 +96,7 @@ export class HudReadouts {
     })
       .setOrigin(1, 0.5)
       .setScrollFactor(0)
-      .setDepth(20);
+      .setDepth(HUD_READOUT_DEPTH);
 
     this.scoreCaption = addUiText(this.scene, 0, 0, "SCORE", {
       size: typeRolePx("hudTitle"),
@@ -107,7 +109,7 @@ export class HudReadouts {
     })
       .setOrigin(1, 0.5)
       .setScrollFactor(0)
-      .setDepth(20);
+      .setDepth(HUD_READOUT_DEPTH);
 
     this.scorePopLayer = this.scene.add.container(0, 0).setDepth(30);
     this.warmScorePopPool();
@@ -120,7 +122,7 @@ export class HudReadouts {
     })
       .setOrigin(0, 0.5)
       .setScrollFactor(0)
-      .setDepth(20);
+      .setDepth(HUD_READOUT_DEPTH);
 
     this.coverText = addSignText(this.scene, 0, 0, "", {
       size: typeRolePx("hudSmall"),
@@ -131,7 +133,7 @@ export class HudReadouts {
       maxHeight: typeRoleBox(40, "hudSmall"),
     })
       .setOrigin(0, 0)
-      .setDepth(20)
+      .setDepth(HUD_READOUT_DEPTH)
       .setVisible(false);
 
     this.doorTitleText = addSignText(this.scene, 0, 0, "", {
@@ -143,7 +145,7 @@ export class HudReadouts {
       maxHeight: typeRoleBox(48, "hudBody"),
     })
       .setOrigin(0, 0.5)
-      .setDepth(20)
+      .setDepth(HUD_READOUT_DEPTH)
       .setVisible(false);
   }
 
@@ -186,14 +188,19 @@ export class HudReadouts {
     const valueW = this.scoreText.width;
     const captionW = this.scoreCaption.width;
     if (this.readoutsAtDoor) {
-      const { right, top } = this.readoutCorner;
-      const edge = right - 4;
-      this.clockText.setOrigin(1, 0.5).setPosition(edge, top);
-      this.scoreText.setOrigin(1, 0.5).setPosition(edge - this.clockText.width - HUD_SCORE_GAP, top);
-      this.scoreCaption
-        .setOrigin(1, 0.5)
-        .setPosition(edge - this.clockText.width - HUD_SCORE_GAP - valueW - HUD_SCORE_GAP, top);
-      this.scorePopLayer.setPosition(right - this.clockText.width - HUD_SCORE_GAP - valueW / 2, top - 46);
+      const inset = designHudInset(readCssSafeArea(document.getElementById("game-root")));
+      const { width: viewW } = hudSceneViewport(this.scene);
+      const top = this.readoutCorner.top;
+      const rowRight = viewW - inset.right - SLOT_GUTTER - 4;
+      const clockW = this.clockText.width;
+      const rowW = captionW + HUD_SCORE_GAP + valueW + HUD_SCORE_GAP + clockW;
+      let x = rowRight - rowW;
+      this.scoreCaption.setOrigin(0, 0.5).setPosition(x, top);
+      x += captionW + HUD_SCORE_GAP;
+      this.scoreText.setOrigin(0, 0.5).setPosition(x, top);
+      x += valueW + HUD_SCORE_GAP;
+      this.clockText.setOrigin(0, 0.5).setPosition(x, top);
+      this.scorePopLayer.setPosition(rowRight - clockW - HUD_SCORE_GAP - valueW / 2, top - 46);
       return;
     }
     if (this.readoutsInShop) {
@@ -218,6 +225,11 @@ export class HudReadouts {
     this.scorePopLayer.setPosition(clockX + this.clockText.width + 16, top);
   }
 
+  /** Force paintReadoutChrome to re-apply visibility when porch mode toggles. */
+  resetReadoutChromeCache(): void {
+    this.lastReadoutsHidden = null;
+  }
+
   matchCaptionToValue(): void {
     const px = parseFontPx(this.scoreText.style.fontSize);
     if (px === this.captionPx) return;
@@ -230,6 +242,10 @@ export class HudReadouts {
   paintReadoutChrome(atDoor: boolean, showId: boolean, chrome: HudReadoutsChrome): void {
     // Door/ID: Luke wants SCORE + clock visible top-right for the whole porch visit.
     const hide = !atDoor && showId;
+    const readoutDepth = atDoor ? HUD_DOOR_READOUT_DEPTH : HUD_READOUT_DEPTH;
+    this.scoreText.setDepth(readoutDepth);
+    this.scoreCaption.setDepth(readoutDepth);
+    this.clockText.setDepth(readoutDepth);
     if (hide === this.lastReadoutsHidden) return;
     this.lastReadoutsHidden = hide;
     this.scoreText.setVisible(!hide);
@@ -259,7 +275,8 @@ export class HudReadouts {
     if (!show) return;
     if (title !== this.lastDoorTitle) this.lastDoorTitle = title;
     if (this.doorTitleText.text !== title) setSignCopy(this.doorTitleText, title);
-    setSignAccent(this.doorTitleText, destOrder && isSlaUrgent(destOrder.slaRemainingMs) ? Color.danger : undefined);
+    setSignAccent(this.doorTitleText, Color.danger);
+    this.doorTitleText.setDepth(HUD_DOOR_READOUT_DEPTH);
     syncSignPlaque(this.doorTitleText);
   }
 

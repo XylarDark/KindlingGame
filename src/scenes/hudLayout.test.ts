@@ -136,7 +136,8 @@ describe("HUD chip resolver wiring", () => {
     const place = between(readouts, "placeReadouts(): void {", "\n  }", "placeReadouts");
     expect(place).toMatch(/readoutsInShop[\s\S]*counterSignReadoutAnchors/);
     expect(place).toMatch(/this\.clockText\.setOrigin\(0, 0\.5\)\.setPosition\(clockX, top\)/);
-    expect(place).toMatch(/readoutsAtDoor[\s\S]*this\.clockText\.setOrigin\(1, 0\.5\)\.setPosition\(edge, top\)/);
+    expect(place).toMatch(/readoutsAtDoor[\s\S]*hudSceneViewport/);
+    expect(place).toMatch(/readoutsAtDoor[\s\S]*this\.clockText\.setOrigin\(0, 0\.5\)\.setPosition\(x, top\)/);
   });
 
   it("resolves doorTitle top-center for the whole door visit", () => {
@@ -144,6 +145,9 @@ describe("HUD chip resolver wiring", () => {
     expect(resolve).toContain("atDoor && this.doorTitleText.visible");
     expect(resolve).toMatch(/let centerX = placer\.viewW \/ 2/);
     expect(resolve).toMatch(/placeChip\(placer, "doorTitle"[\s\S]*centerX, centerY/);
+    const doorTitle = between(readouts, "paintDoorTitle(snap: SimSnapshot, atDoor: boolean", "\n  paintCover(", "paintDoorTitle");
+    expect(doorTitle).toContain("setSignAccent(this.doorTitleText, Color.danger)");
+    expect(doorTitle).toContain("HUD_DOOR_READOUT_DEPTH");
   });
 
   it("caps cover width so it cannot reach the shop lot mark", () => {

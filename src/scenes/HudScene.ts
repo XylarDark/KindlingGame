@@ -331,7 +331,8 @@ export class HudScene extends Phaser.Scene {
     this.readouts.readoutsInShop = inShop;
     const doorModeChanged = atDoor !== this.readouts.readoutsAtDoor;
     this.readouts.readoutsAtDoor = atDoor;
-    if (!atDoor && (scoreResized || modeChanged)) this.readouts.placeReadouts();
+    if (doorModeChanged) this.readouts.resetReadoutChromeCache();
+    if (atDoor || scoreResized || modeChanged) this.readouts.placeReadouts();
     this.consumeScoreFlash(snap);
     this.consumeSfx(snap);
     this.syncResults(snap);
