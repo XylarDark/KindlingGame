@@ -178,6 +178,17 @@ describe("text boxes are all the counter plaque", () => {
     expect(helper).toContain("export function signPlaqueExtents");
     expect(helper).toContain("export function signYAbove");
     expect(helper).toContain("export function signYFloor");
+    expect(helper).toContain("export function signPlaqueMid");
+    expect(helper).toContain("export function setSignPlaqueCenter");
+    expect(helper).toContain("export function setSignPlaqueEdge");
+    expect(helper).toContain("export function signPlaqueCenterWorld");
+  });
+
+  it("setSignPlaqueCenter derives host from plaque mid locals", () => {
+    const fn = helper.slice(helper.indexOf("export function setSignPlaqueCenter"), helper.indexOf("export function setSignPlaqueEdge"));
+    expect(fn).toContain("syncSignPlaque(text)");
+    expect(fn).toContain("signPlaqueMid(text)");
+    expect(fn).toMatch(/setSignPosition\(text, worldX - mid\.midX, worldY - mid\.midY\)/);
   });
 
   it("uses NineSlice panels instead of measured Graphics rings", () => {

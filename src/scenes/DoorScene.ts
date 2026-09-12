@@ -372,8 +372,11 @@ function spriteAabb(img: Phaser.GameObjects.Image): Aabb {
   return { left, right: left + w, top, bottom: top + h };
 }
 
-function chipAabb(x: number, y: number, plaque: ReturnType<typeof signPlaqueExtents>): Aabb {
-  return chipPlaqueAabb(x, y, plaque);
+/** Plaque panel AABB when `(centerX, centerY)` is the plaque center in world space. */
+function plaqueCenterAabb(centerX: number, centerY: number, plaque: ReturnType<typeof signPlaqueExtents>): Aabb {
+  const midX = (plaque.leftLocal + plaque.rightLocal) / 2;
+  const midY = (plaque.topLocal + plaque.bottomLocal) / 2;
+  return chipPlaqueAabb(centerX - midX, centerY - midY, plaque);
 }
 
 function aabbOverlap(a: Aabb, b: Aabb): boolean {
@@ -388,7 +391,7 @@ function dodgePromptX(
   half: number,
   sprites: Phaser.GameObjects.Image[],
 ): number {
-  const chip = chipAabb(x, y, plaque);
+  const chip = plaqueCenterAabb(x, y, plaque);
   for (const sprite of sprites) {
     if (!sprite.visible) continue;
     const body = spriteAabb(sprite);
@@ -397,8 +400,11 @@ function dodgePromptX(
     const right = body.right + half + 8;
     x = x <= sprite.x ? left : right;
     x = Phaser.Math.Clamp(x, half, GAME_WIDTH - half);
-    chip.left = x - plaque.panelW / 2;
-    chip.right = x + plaque.panelW / 2;
+    const nudged = plaqueCenterAabb(x, y, plaque);
+    chip.left = nudged.left;
+    chip.right = nudged.right;
+    chip.top = nudged.top;
+    chip.bottom = nudged.bottom;
   }
   return x;
 }

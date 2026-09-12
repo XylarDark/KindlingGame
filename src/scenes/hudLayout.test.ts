@@ -31,7 +31,7 @@ describe("HUD sign attachment guards", () => {
     expect(layout).toContain("this.readouts.layoutReadoutColumn(inset)");
     expect(layout).not.toMatch(/this\.cogCaption\.setPosition\(/);
     const readoutLayout = between(readouts, "layoutReadoutColumn(inset: SafeInset): void {", "\n  }", "layoutReadoutColumn");
-    expect(readoutLayout).toContain("setSignPosition(this.coverText");
+    expect(readoutLayout).toContain("setSignPlaqueCenter(this.coverText");
     expect(readoutLayout).not.toMatch(/this\.coverText\.setPosition\(/);
   });
 
@@ -119,7 +119,7 @@ describe("HUD chip resolver wiring", () => {
     const resolve = between(hud, "private resolveHudChips(", "\n  }", "resolveHudChips");
     expect(resolve).toContain("beginChipFrame");
     expect(resolve).toContain("registerChipObstacle");
-    expect(resolve).toContain('placeChip(placer, "toast"');
+    expect(resolve).toMatch(/placeChip\([\s\S]*"toast"/);
     expect(placeChips).toContain("export function placeChip");
   });
 

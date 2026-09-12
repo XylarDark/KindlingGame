@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
   aabbOverlap,
+  chipPlaqueAabb,
   ChipPlacer,
   clampChipHost,
   expandAabb,
   type ChipAabb,
+  type ChipPlaqueExtents,
 } from "./chipCollision";
+import { readFileSync } from "node:fs";
 import { CHIP_GAP } from "./slots";
-import type { ChipPlaqueExtents } from "./chipCollision";
+
+const placeChipsSrc = readFileSync(new URL("./placeChips.ts", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 
 const safe = { left: 0, top: 0, right: 500, bottom: 500 };
 
@@ -78,5 +82,31 @@ describe("placeChips collision math", () => {
     const offsets = placer.candidateOffsets(plaque, true);
     expect(offsets.some((o) => o.dy > 0)).toBe(false);
     expect(offsets.some((o) => o.dy < 0)).toBe(true);
+  });
+
+  it("placeChip documents and applies plaque-center preferred coords", () => {
+    expect(placeChipsSrc).toContain("preferred **plaque-center**");
+    expect(placeChipsSrc).toContain("preferredX - mid.midX");
+    expect(placeChipsSrc).toContain("preferredY - mid.midY");
+  });
+
+  it("preferred plaque center converts to host before collision search", () => {
+    const plaque: ChipPlaqueExtents = {
+      panelW: 100,
+      panelH: 40,
+      leftLocal: -50,
+      rightLocal: 50,
+      topLocal: -20,
+      bottomLocal: 20,
+    };
+    const midX = 0;
+    const midY = 0;
+    const preferredX = 220;
+    const preferredY = 140;
+    const hostX = preferredX - midX;
+    const hostY = preferredY - midY;
+    const aabb = chipPlaqueAabb(hostX, hostY, plaque);
+    expect((aabb.left + aabb.right) / 2).toBe(preferredX);
+    expect((aabb.top + aabb.bottom) / 2).toBe(preferredY);
   });
 });

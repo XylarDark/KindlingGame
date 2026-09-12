@@ -37,7 +37,7 @@ describe("speech stays off the models it belongs to", () => {
     const pin = between(src, "function pinSideSpeech(", "\n}", "pinSideSpeech");
     expect(pin, "uses CUSTOMER_SPEECH_SIDE_GAP left of body").toMatch(/CUSTOMER_SPEECH_SIDE_GAP/);
     expect(pin, "torso Y clears the face").toMatch(/PERSON_DISPLAY_H \* 0\.48/);
-    expect(pin, "positions via setSignPosition").toContain("setSignPosition(");
+    expect(pin, "positions via plaque edge anchor").toContain("setSignPlaqueEdge(");
     expect(pin, "does not walk the display tree").not.toMatch(/getBounds/);
 
     expect(src, "key-lead bubble side-anchored left of slot").toMatch(
@@ -68,8 +68,8 @@ describe("speech stays off the models it belongs to", () => {
     );
     expect(sync, "tracks key-lead bubble visibility for re-pin").toContain("lastShowKeyLeadBubble");
     expect(sync, "tracks driver bubble visibility for re-pin").toContain("lastShowDriverBubble");
-    expect(src, "target callout uses setSignPosition").toMatch(
-      /setSignPosition\(this\.targetCallout, p\.x, p\.y - strainSlotH\(\) \/ 2 - 6\)/,
+    expect(src, "target callout uses plaque center").toMatch(
+      /setSignPlaqueCenter\(this\.targetCallout, p\.x, p\.y - strainSlotH\(\) \/ 2 - 6\)/,
     );
   });
 
@@ -85,7 +85,7 @@ describe("speech stays off the models it belongs to", () => {
     const sync = between(src, "private syncCustomers(", "private makeHotspots(", "syncCustomers");
     expect(sync, "uses side layout").toMatch(/layoutCustomerSpeech\(/);
     expect(sync, "gated while walking in").toMatch(/customerSpeechShows\(true\)/);
-    expect(sync, "anchors on layout centre via host").toMatch(/setSignPosition\(bubble, layout\.x, layout\.y\)/);
+    expect(sync, "anchors on layout centre via plaque center").toMatch(/setSignPlaqueCenter\(bubble, layout\.x, layout\.y\)/);
     expect(sync, "no overhead band anchor").not.toMatch(/CUSTOMER_SPEECH_BASE/);
   });
 
@@ -129,10 +129,14 @@ describe("shop speech chip resolver", () => {
 
   it("anchors leadBubble left of KEYLEAD slot with side pin (headHang=false)", () => {
     const resolve = between(src, "private resolveShopChips(", "\n  }", "resolveShopChips");
-    expect(resolve, "lead preferred x left of slot body").toMatch(
-      /KEYLEAD\.x - SHOP_BODY_HALF - CUSTOMER_SPEECH_SIDE_GAP/,
+    expect(resolve, "lead preferred via sideSpeechPlaqueCenter").toMatch(
+      /sideSpeechPlaqueCenter\(this\.keyLeadBubble, KEYLEAD\.x, KEYLEAD\.y\)/,
     );
-    expect(resolve, "lead torso Y").toMatch(/KEYLEAD\.y - PERSON_DISPLAY_H \* 0\.48/);
+    expect(resolve, "driver preferred via sideSpeechPlaqueCenter").toMatch(
+      /sideSpeechPlaqueCenter\(this\.driverBubble, DRIVER\.x, DRIVER\.y\)/,
+    );
+    expect(resolve, "registers tablet and people as dodge obstacles").toMatch(/placer\.register\([\s\S]*"tablet"/);
+    expect(resolve, "registers tablet and people as dodge obstacles").toContain("spriteBodyAabb");
     expect(resolve, "no head-hang resolver mode").not.toMatch(
       /placeShopChip\([\s\S]*"leadBubble"[\s\S]*true,\s*\)/,
     );

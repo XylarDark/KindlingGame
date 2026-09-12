@@ -9,8 +9,11 @@ import {
   addSignText,
   setSignAccent,
   setSignCopy,
+  setSignPlaqueCenter,
   setSignPosition,
   signContainer,
+  signPlaqueExtents,
+  signPlaqueMid,
   syncSignPlaque,
 } from "../signText";
 import { addUiText } from "../text";
@@ -22,6 +25,18 @@ import { HUD_CORNER_TOP, HUD_SCORE_GAP, HUD_SIGN_GAP, readoutOutline, SCORE_POP_
 import type { ChipPlacer } from "./chipCollision";
 import { placeChip, textInkAabb, unionAabb } from "./placeChips";
 import { chipPriority, SLOT_GUTTER } from "./slots";
+
+/** Plaque center when the panel's top-left corner sits at `(left, top)`. */
+function plaqueCenterFromTopLeft(
+  text: Phaser.GameObjects.Text,
+  left: number,
+  top: number,
+): { x: number; y: number } {
+  syncSignPlaque(text);
+  const ext = signPlaqueExtents(text);
+  const mid = signPlaqueMid(text);
+  return { x: left + mid.midX - ext.leftLocal, y: top + mid.midY - ext.topLocal };
+}
 
 export interface ReadoutCorner {
   left: number;
@@ -127,8 +142,10 @@ export class HudReadouts {
     const left = inset.left + g;
     const right = GAME_WIDTH - inset.right - g;
     this.readoutCorner = { left, right, top: HUD_CORNER_TOP + inset.top };
-    setSignPosition(this.coverText, left, this.readoutCorner.top + 40);
-    setSignPosition(this.doorTitleText, left, this.readoutCorner.top + 44);
+    const coverCenter = plaqueCenterFromTopLeft(this.coverText, left, this.readoutCorner.top + 40);
+    setSignPlaqueCenter(this.coverText, coverCenter.x, coverCenter.y);
+    const doorCenter = plaqueCenterFromTopLeft(this.doorTitleText, left, this.readoutCorner.top + 44);
+    setSignPlaqueCenter(this.doorTitleText, doorCenter.x, doorCenter.y);
   }
 
   /**
@@ -336,10 +353,12 @@ export class HudReadouts {
     }
     const coverY = this.readoutCorner.top + 40;
     if (this.coverText.visible && String(this.coverText.text).trim()) {
-      placeChip(placer, "cover", this.coverText, this.readoutCorner.left, coverY, chipPriority("cover"));
+      const center = plaqueCenterFromTopLeft(this.coverText, this.readoutCorner.left, coverY);
+      placeChip(placer, "cover", this.coverText, center.x, center.y, chipPriority("cover"));
     }
     if (this.doorTitleText.visible && String(this.doorTitleText.text).trim()) {
-      placeChip(placer, "doorTitle", this.doorTitleText, this.readoutCorner.left, coverY + 4, chipPriority("doorTitle"));
+      const center = plaqueCenterFromTopLeft(this.doorTitleText, this.readoutCorner.left, coverY + 4);
+      placeChip(placer, "doorTitle", this.doorTitleText, center.x, center.y, chipPriority("doorTitle"));
     }
   }
 
