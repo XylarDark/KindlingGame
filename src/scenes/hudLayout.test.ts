@@ -41,6 +41,13 @@ describe("HUD sign attachment guards", () => {
     expect(warm).not.toMatch(/this\.scorePopLayer\.add\(label\)/);
   });
 
+  it("tweens the score pop host so plaque and glyphs rise together", () => {
+    const pop = between(readouts, "spawnScorePop(delta: number, screen?: { x: number; y: number }): void {", "\n  }", "spawnScorePop");
+    expect(pop).toContain("signContainer(label)");
+    expect(pop).toMatch(/targets: popHost/);
+    expect(pop).not.toMatch(/targets: label/);
+  });
+
   it("anchors shop readouts to the counter sign box when readoutsInShop", () => {
     const place = between(readouts, "placeReadouts(): void {", "\n  }", "placeReadouts");
     const project = between(readouts, "counterSignReadoutAnchors(): { signLeft: number; signRight: number; y: number } {", "\n  }", "counterSignReadoutAnchors");
@@ -54,13 +61,14 @@ describe("HUD sign attachment guards", () => {
     expect(place).not.toMatch(/setPosition\([^)]*,\s*0\s*\)/);
   });
 
-  it("keeps the settings caption off the right edge and above the cog column", () => {
+  it("keeps the settings caption off the right edge and below the cog bottom", () => {
     const layout = between(settings, "layout(inset: SafeInset): void {", "\n  }", "settings layout");
     expect(layout).toContain("cogCaptionX");
     expect(layout).toContain("cogCaptionY");
     expect(layout).toContain("signPlaqueExtents(this.cogCaption)");
     expect(layout).toContain("plaqueHalf");
     expect(layout).toContain("Phaser.Math.Clamp");
+    expect(layout).toContain("signYFloor(this.cogCaption, cogBottom, 8)");
     expect(layout).toMatch(/setSignPosition\(this\.cogCaption, cogCaptionX, cogCaptionY\)/);
     expect(layout).not.toContain("setSignPosition(this.cogCaption, 0, 0)");
     const create = between(settings, "create(): void {", "\n  }", "settings create");
