@@ -76,6 +76,21 @@ describe("sign text ink contract", () => {
     expect(layout).toContain("inkFitsPlaque(");
     expect(layout).toMatch(/inkFitsPlaque[\s\S]*if \(key === entry\.lastLayoutKey\)/);
   });
+
+  it("layoutPlaque sizes the plaque before ink validation — not the boot default box", () => {
+    const layoutStart = helper.indexOf("function layoutPlaque(entry: SignPlaqueEntry): void {");
+    if (layoutStart === -1) throw new Error("layoutPlaque not found");
+    const layoutEnd = helper.indexOf("\n}", layoutStart);
+    if (layoutEnd === -1) throw new Error("layoutPlaque end not found");
+    const layout = helper.slice(layoutStart, layoutEnd);
+    const setSizeAt = layout.indexOf("plaque.setSize(panelW, panelH)");
+    const inkAt = layout.indexOf("inkFitsPlaque(");
+    if (setSizeAt < 0) throw new Error("plaque.setSize(panelW, panelH) missing");
+    if (inkAt < 0) throw new Error("inkFitsPlaque missing");
+    expect(setSizeAt).toBeLessThan(inkAt);
+    expect(layout).toMatch(/width: panelW, height: panelH/);
+    expect(layout).not.toMatch(/width: plaque\.width, height: plaque\.height/);
+  });
 });
 
 describe("text boxes are all the counter plaque", () => {
