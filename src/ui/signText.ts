@@ -285,12 +285,14 @@ function layoutPlaque(entry: SignPlaqueEntry): void {
   const plaqueCenter = plaqueCenterFromGlyphs(text, w, h, panelW, panelH);
   // Always repair inner layout — patched setPosition must not leave glyphs orphaned at (0,0).
   entry.setTextLocal(textX, textY);
+  plaque.setSize(panelW, panelH);
+  plaque.setOrigin(0.5, 0.5);
   plaque.setPosition(plaqueCenter.x, plaqueCenter.y);
   syncChildScrollFactors(host);
 
   const ink = inkFitsPlaque(
     { width: w, height: h, originX: text.originX, originY: text.originY },
-    { x: plaque.x, y: plaque.y, width: plaque.width, height: plaque.height, originX: plaque.originX, originY: plaque.originY },
+    { x: plaque.x, y: plaque.y, width: panelW, height: panelH, originX: plaque.originX, originY: plaque.originY },
   );
   if (!ink.ok) {
     throw new Error(`sign plaque layout: ${ink.reason} for "${copy.slice(0, 32)}"`);
@@ -303,8 +305,6 @@ function layoutPlaque(entry: SignPlaqueEntry): void {
   }
   entry.lastLayoutKey = key;
 
-  plaque.setSize(panelW, panelH);
-  plaque.setOrigin(0.5, 0.5);
   plaque.setDepth(text.depth - 0.5);
   host.setDepth(text.depth);
   entry.dirty = false;
