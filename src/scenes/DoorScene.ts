@@ -18,8 +18,7 @@ import { getSim } from "../session";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import { skyAt, skyVisualDirtyKey } from "../sim/dayNight";
 import type { SimSnapshot } from "../sim/gameSim";
-import { addSignText, setSignCopy, setSignPosition, signPlaqueExtents } from "../ui/signText";
-import { chipPlaqueAabb } from "../ui/hud/chipCollision";
+import { addSignText, setSignCopy, signPlaqueExtents } from "../ui/signText";
 import { beginChipFrame, placeChip } from "../ui/hud/placeChips";
 import { chipPriority } from "../ui/hud/slots";
 import { Color } from "../ui/theme";
@@ -41,9 +40,6 @@ const DOOR_CHIP_MARGIN = 24;
 const DOOR_PROMPT_MAX_W = 480;
 /** Two wrapped lines at the door prompt seed (hudTitle). */
 const DOOR_PROMPT_MAX_H = 96;
-/** Fixed midpoint between driver and customer — not head-follow bob. */
-const DOOR_PROMPT_MID_X = (DRIVER_X + CUSTOMER_X) / 2;
-const DOOR_PROMPT_BODY_Y = (floorY: number): number => floorY - PERSON_DISPLAY_H * 0.52;
 
 /**
  * Flash cadence for the next tap target, as `Math.sin(gameMs / DOOR_FLASH_RATE)` — a
@@ -137,7 +133,7 @@ export class DoorScene extends Phaser.Scene {
     this.bag.on("pointerup", onDoorConfirmUp);
     this.bag.on("pointerupoutside", onDoorConfirmUp);
 
-    this.prompt = addSignText(this, DOOR_PROMPT_MID_X, 0, "", {
+    this.prompt = addSignText(this, GAME_WIDTH / 2, 0, "", {
       size: typeRolePx("hudTitle"),
       typeRole: "hudTitle",
       padVariant: "compact",
@@ -167,14 +163,12 @@ export class DoorScene extends Phaser.Scene {
     this.placePrompt();
   }
 
-  /** Prompt pinned between driver and customer at torso height — resolver dodges overlaps only. */
+  /** Door instructions pin top-center — action copy, not character speech beside faces. */
   private placePrompt(): void {
     const plaque = signPlaqueExtents(this.prompt);
     const half = plaque.panelW / 2 + DOOR_CHIP_MARGIN;
-    let x = Phaser.Math.Clamp(DOOR_PROMPT_MID_X, half, GAME_WIDTH - half);
-    const yFloor = this.insetTop + DOOR_CHIP_GAP + plaque.panelH / 2;
-    const y = Math.max(yFloor, DOOR_PROMPT_BODY_Y(this.floorY));
-    x = dodgePromptX(x, y, plaque, half, [this.driver, this.customer, this.bag]);
+    const x = Phaser.Math.Clamp(GAME_WIDTH / 2, half, GAME_WIDTH - half);
+    const y = this.insetTop + DOOR_CHIP_GAP + plaque.panelH / 2;
     this.resolveDoorPrompt(x, y);
   }
 
@@ -370,43 +364,6 @@ function spriteAabb(img: Phaser.GameObjects.Image): Aabb {
   const left = img.x - w * img.originX;
   const top = img.y - h * img.originY;
   return { left, right: left + w, top, bottom: top + h };
-}
-
-/** Plaque panel AABB when `(centerX, centerY)` is the plaque center in world space. */
-function plaqueCenterAabb(centerX: number, centerY: number, plaque: ReturnType<typeof signPlaqueExtents>): Aabb {
-  const midX = (plaque.leftLocal + plaque.rightLocal) / 2;
-  const midY = (plaque.topLocal + plaque.bottomLocal) / 2;
-  return chipPlaqueAabb(centerX - midX, centerY - midY, plaque);
-}
-
-function aabbOverlap(a: Aabb, b: Aabb): boolean {
-  return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
-}
-
-/** Nudge the prompt sideways until its plaque clears character and bag sprites. */
-function dodgePromptX(
-  x: number,
-  y: number,
-  plaque: ReturnType<typeof signPlaqueExtents>,
-  half: number,
-  sprites: Phaser.GameObjects.Image[],
-): number {
-  const chip = plaqueCenterAabb(x, y, plaque);
-  for (const sprite of sprites) {
-    if (!sprite.visible) continue;
-    const body = spriteAabb(sprite);
-    if (!aabbOverlap(chip, body)) continue;
-    const left = body.left - half - 8;
-    const right = body.right + half + 8;
-    x = x <= sprite.x ? left : right;
-    x = Phaser.Math.Clamp(x, half, GAME_WIDTH - half);
-    const nudged = plaqueCenterAabb(x, y, plaque);
-    chip.left = nudged.left;
-    chip.right = nudged.right;
-    chip.top = nudged.top;
-    chip.bottom = nudged.bottom;
-  }
-  return x;
 }
 
 function armHit(obj: Phaser.GameObjects.Image, on: boolean, pad: number): void {

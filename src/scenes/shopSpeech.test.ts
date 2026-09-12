@@ -9,9 +9,12 @@ import {
   CUSTOMER_SPEECH_H,
   CUSTOMER_SPEECH_MIN_W,
   CUSTOMER_SLOT_PITCH,
+  CUSTOMER_SPOT,
   customerSlotX,
+  customerSpeechCenterY,
   customerSpeechShows,
   layoutCustomerSpeech,
+  PERSON_DISPLAY_MAX_H,
 } from "../maps/shopT0";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -33,18 +36,17 @@ function between(text: string, start: string, end: string, what: string): string
 }
 
 describe("speech stays off the models it belongs to", () => {
-  it("pins side speech at slot anchors via pinSideSpeech, not getBounds per frame", () => {
-    const pin = between(src, "function pinSideSpeech(", "\n}", "pinSideSpeech");
-    expect(pin, "uses CUSTOMER_SPEECH_SIDE_GAP left of body").toMatch(/CUSTOMER_SPEECH_SIDE_GAP/);
-    expect(pin, "torso Y clears the face").toMatch(/PERSON_DISPLAY_H \* 0\.48/);
-    expect(pin, "positions via plaque edge anchor").toContain("setSignPlaqueEdge(");
-    expect(pin, "does not walk the display tree").not.toMatch(/getBounds/);
+  it("pins character speech above heads via plaque center, not beside torsos", () => {
+    const above = between(src, "function speechPlaqueAboveHead(", "\n}", "speechPlaqueAboveHead");
+    expect(above, "uses signYAbove for head clearance").toMatch(/signYAbove\(chip, headTopY, gap\)/);
+    expect(above, "returns plaque center coords").toMatch(/return \{ x: centerX, y: hostY \+ mid\.midY \}/);
+    expect(above, "does not walk the display tree").not.toMatch(/getBounds/);
 
-    expect(src, "key-lead bubble side-anchored left of slot").toMatch(
-      /keyLeadBubble = addSignText[\s\S]*?\.setOrigin\(1, 0\.5\)/,
+    expect(src, "key-lead bubble centered above head band").toMatch(
+      /keyLeadBubble = addSignText[\s\S]*?\.setOrigin\(0\.5, 0\.5\)/,
     );
-    expect(src, "driver bubble side-anchored left of slot").toMatch(
-      /driverBubble = addSignText[\s\S]*?\.setOrigin\(1, 0\.5\)/,
+    expect(src, "driver bubble centered above head").toMatch(
+      /driverBubble = addSignText[\s\S]*?\.setOrigin\(0\.5, 0\.5\)/,
     );
     expect(src, "Shop sync never calls getBounds").not.toMatch(/getBounds\(\)/);
   });
@@ -60,11 +62,11 @@ describe("speech stays off the models it belongs to", () => {
     expect(sync, "no unconditional key-lead setText").not.toMatch(/keyLeadBubble[\s\S]*?\.setText\(callout \?\? ""\)/);
     expect(sync, "pin key-lead only when shown").toMatch(/if \(showKeyLeadBubble\)/);
     expect(sync, "pin driver only when shown").toMatch(/if \(showDriverBubble\)/);
-    expect(sync, "key-lead pin uses KEYLEAD slot, not walk chase").toMatch(
-      /if \(textDirty \|\| becameVisible\) pinSideSpeech\(this\.keyLeadBubble, KEYLEAD\.x, KEYLEAD\.y\)/,
+    expect(sync, "key-lead pin uses live sprite head + TV band").toMatch(
+      /leadSpeechPlaqueCenter\([\s\S]*modelHeadTop\(this\.keyLead\)/,
     );
-    expect(sync, "driver pin uses DRIVER slot").toMatch(
-      /if \(driverTextDirty \|\| becameVisible\) pinSideSpeech\(this\.driverBubble, DRIVER\.x, DRIVER\.y\)/,
+    expect(sync, "driver pin uses head-above helper").toMatch(
+      /speechPlaqueAboveHead\(this\.driverBubble, DRIVER\.x, modelHeadTop\(this\.driver\)\)/,
     );
     expect(sync, "tracks key-lead bubble visibility for re-pin").toContain("lastShowKeyLeadBubble");
     expect(sync, "tracks driver bubble visibility for re-pin").toContain("lastShowDriverBubble");
@@ -81,12 +83,12 @@ describe("speech stays off the models it belongs to", () => {
     expect(sync, "feet Y from measured displayHeight").toMatch(/customerFeetY\(sprite\.displayHeight\)/);
   });
 
-  it("places customer chips beside settled speakers via layoutCustomerSpeech", () => {
+  it("places customer order speech above settled speakers via layoutCustomerSpeech", () => {
     const sync = between(src, "private syncCustomers(", "private makeHotspots(", "syncCustomers");
-    expect(sync, "uses side layout").toMatch(/layoutCustomerSpeech\(/);
+    expect(sync, "uses overhead layout").toMatch(/layoutCustomerSpeech\(/);
     expect(sync, "gated while walking in").toMatch(/customerSpeechShows\(true\)/);
     expect(sync, "anchors on layout centre via plaque center").toMatch(/setSignPlaqueCenter\(bubble, layout\.x, layout\.y\)/);
-    expect(sync, "no overhead band anchor").not.toMatch(/CUSTOMER_SPEECH_BASE/);
+    expect(sync, "no side pin helpers").not.toMatch(/pinSideSpeech|setSignPlaqueEdge/);
   });
 
   it("stacks customer-specific feedback under the ask, not as a centre banner", () => {
@@ -127,30 +129,32 @@ describe("shop speech chip resolver", () => {
     expect(src).toContain("speechSlotId");
   });
 
-  it("anchors leadBubble left of KEYLEAD slot with side pin (headHang=false)", () => {
+  it("anchors leadBubble between head and TVs with headHang", () => {
     const resolve = between(src, "private resolveShopChips(", "\n  }", "resolveShopChips");
-    expect(resolve, "lead preferred via sideSpeechPlaqueCenter").toMatch(
-      /sideSpeechPlaqueCenter\(this\.keyLeadBubble, KEYLEAD\.x, KEYLEAD\.y\)/,
+    expect(resolve, "lead preferred via leadSpeechPlaqueCenter").toMatch(
+      /leadSpeechPlaqueCenter\([\s\S]*modelHeadTop\(this\.keyLead\)/,
     );
-    expect(resolve, "driver preferred via sideSpeechPlaqueCenter").toMatch(
-      /sideSpeechPlaqueCenter\(this\.driverBubble, DRIVER\.x, DRIVER\.y\)/,
+    expect(resolve, "driver preferred via speechPlaqueAboveHead").toMatch(
+      /speechPlaqueAboveHead\(this\.driverBubble, DRIVER\.x, modelHeadTop\(this\.driver\)\)/,
     );
-    expect(resolve, "registers tablet and people as dodge obstacles").toMatch(/placer\.register\([\s\S]*"tablet"/);
-    expect(resolve, "registers tablet and people as dodge obstacles").toContain("spriteBodyAabb");
-    expect(resolve, "no head-hang resolver mode").not.toMatch(
+    expect(resolve, "registers tablet, TVs, and people as dodge obstacles").toMatch(/placer\.register\([\s\S]*"tablet"/);
+    expect(resolve, "registers tablet, TVs, and people as dodge obstacles").toContain("tvRowAabb");
+    expect(resolve, "registers tablet, TVs, and people as dodge obstacles").toContain("spriteBodyAabb");
+    expect(resolve, "head-hang for speech chips").toMatch(
       /placeShopChip\([\s\S]*"leadBubble"[\s\S]*true,\s*\)/,
     );
-    expect(resolve, "does not chase live keyLead x").not.toMatch(/this\.keyLead\.x - 168/);
+    expect(resolve, "does not chase live keyLead x with magic offset").not.toMatch(/this\.keyLead\.x - 168/);
   });
 });
 
-describe("side speech collision layout", () => {
-  it("prefers the customer's right and flips left when the right side is blocked", () => {
+describe("overhead speech collision layout", () => {
+  it("centres each customer's plaque above their head", () => {
     const alone = layoutCustomerSpeech([{ orderId: "a", x: customerSlotX(0) }]);
     expect(alone).toHaveLength(1);
-    expect(alone[0]!.side).toBe("right");
+    const headTop = CUSTOMER_SPOT.y - PERSON_DISPLAY_MAX_H;
+    expect(alone[0]!.x).toBe(customerSlotX(0));
+    expect(alone[0]!.y).toBe(customerSpeechCenterY(headTop, CUSTOMER_SPEECH_H));
 
-    // Pack three settled customers — at least one stack must flip or clamp without overlap.
     const three = [0, 1, 2].map((slot) => ({ orderId: `c${slot}`, x: customerSlotX(slot) }));
     const boxes = layoutCustomerSpeech(three);
     expect(boxes.length).toBeGreaterThanOrEqual(2);
@@ -168,7 +172,6 @@ describe("side speech collision layout", () => {
       expect(boxes[i]!.x - boxes[i]!.w / 2).toBeGreaterThanOrEqual(CUSTOMER_BUBBLE_MIN_X);
       expect(boxes[i]!.x + boxes[i]!.w / 2).toBeLessThanOrEqual(CUSTOMER_BUBBLE_MAX_X);
     }
-    expect(boxes.some((b) => b.side === "left") || boxes.length < 3).toBe(true);
   });
 
   it("holds speech until the owner has settled", () => {
@@ -177,12 +180,12 @@ describe("side speech collision layout", () => {
     expect(customerSpeechShows(false, CUSTOMER_SLOT_PITCH)).toBe(false);
   });
 
-  it("keeps chip height within the side stack budget", () => {
+  it("keeps chip height within the overhead stack budget", () => {
     expect(CUSTOMER_SPEECH_H).toBeGreaterThanOrEqual(48);
     expect(CUSTOMER_SPEECH_MIN_W).toBeGreaterThanOrEqual(100);
   });
 
-  it("leaves more daylight above heads than the old 10px band", () => {
+  it("leaves daylight above heads", () => {
     expect(CUSTOMER_SPEECH_GAP).toBeGreaterThanOrEqual(14);
   });
 });

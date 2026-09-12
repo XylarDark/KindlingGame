@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { applyPromoShot } from "./promoShot";
+import { applyCaptureSeed, applyPromoShot } from "./promoShot";
 import { GameSim } from "./sim/gameSim";
 
 describe("applyPromoShot", () => {
@@ -71,6 +71,23 @@ describe("applyPromoShot", () => {
       applyPromoShot(sim);
       expect(sim.clock.gameMs, search).toBe(reference);
     }
+  });
+
+  it("seeds shop counter speech for capture stills", () => {
+    vi.stubGlobal("location", { search: "?capture=shop-counter" });
+    const sim = GameSim.create({ seed: 2, autoSpawn: false });
+    applyCaptureSeed(sim);
+    const snap = sim.snapshot();
+    expect(snap.playerRole).toBe("keyLead");
+    const walkIn = snap.customers.find((c) => c.bubble.includes("want"));
+    expect(walkIn?.bubble.length).toBeGreaterThan(0);
+  });
+
+  it("seeds mid-fetch key-lead speech for capture stills", () => {
+    vi.stubGlobal("location", { search: "?capture=shop-lead" });
+    const sim = GameSim.create({ seed: 2, autoSpawn: false });
+    applyCaptureSeed(sim);
+    expect(sim.snapshot().keyLeadLine).toMatch(/Grabbing/);
   });
 
   it("seeds the porch at CHECK ID with a card", () => {

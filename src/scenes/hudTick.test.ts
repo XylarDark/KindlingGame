@@ -103,10 +103,13 @@ describe("HudScene paint dirty guards", () => {
     expect(cover).toContain("cover.active");
   });
 
-  it("clamps drive pad label inside the HUD viewport; descriptive map chips stay hidden", () => {
+  it("places instruction chips top-center; descriptive map chips stay hidden", () => {
     const src = read("HudScene.ts");
+    expect(src).toContain("placeInstructionChip");
     expect(src).toContain("clampSignPlaqueCenter");
-    expect(src).toContain("placePadLabel");
+    const resolve = src.slice(src.indexOf("private resolveHudChips"), src.indexOf("private syncShopVisibility"));
+    expect(resolve).toMatch(/placeChip\([\s\S]*"toast"[\s\S]*inset\.top \+ SCREEN_CHIP_MARGIN/);
+    expect(resolve).toMatch(/placeChip\([\s\S]*"pad"[\s\S]*viewW \/ 2/);
     const callouts = src.slice(src.indexOf("private paintDriveCallouts"), src.indexOf("private tutorialFlashHint"));
     expect(callouts).toContain("drivePinLabel.setVisible(false)");
     expect(callouts).not.toContain("clampSignPlaqueCenter(this.drivePinLabel");

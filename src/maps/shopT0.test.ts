@@ -141,14 +141,14 @@ describe("customer standing slots", () => {
     expect(visible, "head and chest are on screen").toBeGreaterThan(160);
   });
 
-  it("gives a side chip the room its chosen side leaves it", () => {
-    expect(customerSpeechWidth(Infinity), "open side").toBe(CUSTOMER_SPEECH_MAX_W);
-    expect(customerSpeechWidth(CUSTOMER_SPEECH_MIN_W), "tight side").toBe(CUSTOMER_SPEECH_MIN_W);
+  it("gives an overhead chip the room its horizontal span leaves it", () => {
+    expect(customerSpeechWidth(Infinity), "open span").toBe(CUSTOMER_SPEECH_MAX_W);
+    expect(customerSpeechWidth(CUSTOMER_SPEECH_MIN_W), "tight span").toBe(CUSTOMER_SPEECH_MIN_W);
     expect(customerSpeechWidth(400), "cap at max").toBe(CUSTOMER_SPEECH_MAX_W);
   });
 
   it("holds speech back while its owner is still crossing the floor", () => {
-    // Side chips would jump every frame while x is changing, so they wait for settle.
+    // Overhead chips would jump every frame while x is changing, so they wait for settle.
     expect(customerSpeechShows(false, 40), "mid-walk").toBe(false);
     expect(customerSpeechShows(true, 40), "parked").toBe(true);
     expect(customerSpeechShows(false, CUSTOMER_SLOT_PITCH), "walking in clear air").toBe(false);

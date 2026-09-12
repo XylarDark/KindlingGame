@@ -1,6 +1,6 @@
 import { GameSim } from "./sim/gameSim";
 import { GAME_END_HOUR, GAME_START_HOUR, MS_PER_GAME_HOUR, SHIFT_MS } from "./sim/constants";
-import { applyPromoShot, shotQuery } from "./promoShot";
+import { applyCaptureSeed, applyPromoShot, captureQuery, shotQuery } from "./promoShot";
 
 let sim: GameSim | null = null;
 
@@ -57,6 +57,10 @@ export function beginPlay(): void {
   }
   if (shotQuery()) {
     applyPromoShot(s);
+    return;
+  }
+  if (captureQuery()) {
+    applyCaptureSeed(s);
     return;
   }
   s.enableSpawns();
