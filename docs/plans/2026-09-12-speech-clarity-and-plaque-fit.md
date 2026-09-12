@@ -19,9 +19,11 @@ One speaker owns one fact. Key-lead holding lines drop redundant “Tap the cust
 
 **Approach:** `signTextInk.ts` adds `tightInkLayout`, `measureInkWidth`, and `measureInkHeight` (mirroring Phaser `GetTextSize`). `layoutPlaque` shrinks via `applyTightInkBox` when reported bounds exceed measured ink, then centres the nine-slice on the ink AABB midpoint. All sign chips benefit; pad variants unchanged.
 
-### Step 3 — Pin / re-anchor math (not in this PR)
+### Step 3 — Re-pin to real plaque height ✅ Implemented
 
-`layoutCustomerSpeech`, `speechPlaqueAboveHead`, head↔TV band retune — deferred.
+**Outcome:** Speech centers use measured `signPlaqueExtents` / `signPlaqueMid` after tight-ink sizing (#70), not the stale `CUSTOMER_SPEECH_H` (83) wrap ceiling.
+
+**Approach:** `layoutCustomerSpeech` accepts per-customer `h` from synced plaques. `ShopScene.syncCustomers` sets copy and syncs before layout; layout key includes rounded panel height. Key-lead and driver bubbles re-pin when plaque height changes, not only on copy change. Customer feedback stacks via `speechPlaqueAboveHead` from the order bubble's plaque bottom.
 
 ## Locks
 
