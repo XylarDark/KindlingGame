@@ -661,18 +661,13 @@ export class ShopScene extends Phaser.Scene {
     this.tabletLabel.setPosition(x, y);
   }
 
-  /** Top-right of the ORDERS tablet screen — re-pin after every sync so plaque layout cannot drift. */
-  private pinQueueBadge(tab: ReturnType<typeof tabletLayout>, badgeInset = 6): void {
+  /** Top-right tablet corner — half on the bezel, half off like a notification badge. */
+  private pinQueueBadge(tab: ReturnType<typeof tabletLayout>): void {
     setSignScrollFactor(this.queueBadge, 1, 1);
     syncSignPlaque(this.queueBadge);
-    const ext = signPlaqueExtents(this.queueBadge);
-    const screenRight = tab.screenLeft + tab.screenW - badgeInset;
-    const screenTop = tab.screenTop + badgeInset;
-    setSignPlaqueCenter(
-      this.queueBadge,
-      screenRight - ext.panelW / 2,
-      screenTop + ext.panelH / 2,
-    );
+    const cornerX = tab.left + tab.w;
+    const cornerY = tab.top;
+    setSignPlaqueCenter(this.queueBadge, cornerX, cornerY);
     setSignScrollFactor(this.queueBadge, 1, 1);
   }
 
