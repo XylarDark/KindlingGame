@@ -130,6 +130,12 @@ describe("HUD chip resolver wiring", () => {
     expect(settings).not.toContain("unionAabb");
   });
 
+  it("exposes shop HUD obstacle seeding for ShopScene chip resolve", () => {
+    expect(hud).toContain("prepareShopChipObstacles(placer: ChipPlacer)");
+    expect(readouts).toContain("registerShopHudObstacles(placer: ChipPlacer)");
+    expect(readouts).toContain('"counterSign"');
+  });
+
   it("places drive SCORE row top-left and door SCORE left / clock right", () => {
     const column = between(readouts, "layoutReadoutColumn(inset: SafeInset): void {", "\n  }", "layoutReadoutColumn");
     expect(column).toContain("SLOT_GUTTER");

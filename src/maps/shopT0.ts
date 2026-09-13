@@ -125,6 +125,8 @@ export const BENCH = {
 export const CUSTOMER_SPEECH_H = 83;
 /** Daylight between stacked speech / feedback chips, and above a model's head when hanging. */
 export const CUSTOMER_SPEECH_GAP = 14;
+/** Key-lead holding/callout clearance above the hat line — door prompt feel. */
+export const SHOP_KEY_LEAD_SPEECH_GAP = 60;
 /** @deprecated Side chips removed — kept for width math in legacy callers. */
 export const CUSTOMER_SPEECH_SIDE_GAP = 12;
 /** Hair sits this far below the counter front so heads stay fully visible. */
@@ -270,10 +272,7 @@ export function layoutCustomerSpeech(
     );
     if (halfRoom < CUSTOMER_SPEECH_MIN_W / 2) continue;
     const w = customerSpeechWidth(halfRoom * 2);
-    const x = Math.min(
-      CUSTOMER_BUBBLE_MAX_X - w / 2,
-      Math.max(CUSTOMER_BUBBLE_MIN_X + w / 2, customer.x),
-    );
+    const x = customer.x;
     let y = customerSpeechCenterY(headTop, bubbleH);
     const box: CustomerSpeechBox = {
       orderId: customer.orderId,
@@ -284,12 +283,21 @@ export function layoutCustomerSpeech(
       side: "right",
     };
     let guard = 0;
-    while (placed.some((other) => rectsOverlap(box, other)) && guard++ < 8) {
+    while (placed.some((other) => rectsOverlap(box, other)) && guard++ < 12) {
       y -= bubbleH + CUSTOMER_SPEECH_PAD;
       box.y = y;
     }
-    // Plaque bottom must sit above the head line with gap — not on the face or counter lip.
-    if (box.y + box.h / 2 > headTop - CUSTOMER_SPEECH_GAP) continue;
+    // Tall plaques: snap bottom to the head-clearance line, then stack up if neighbours overlap.
+    const maxBottom = headTop - CUSTOMER_SPEECH_GAP;
+    if (box.y + box.h / 2 > maxBottom) {
+      y = maxBottom - bubbleH / 2;
+      box.y = y;
+      guard = 0;
+      while (placed.some((other) => rectsOverlap(box, other)) && guard++ < 12) {
+        y -= bubbleH + CUSTOMER_SPEECH_PAD;
+        box.y = y;
+      }
+    }
     placed.push(box);
   }
   return placed;

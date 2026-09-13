@@ -135,6 +135,13 @@ class SceneSignPlaquePump {
       mark();
       return out;
     }) as typeof text.setOrigin;
+    const rawSetDepth = text.setDepth.bind(text);
+    text.setDepth = ((value: number) => {
+      const out = rawSetDepth(value);
+      entry.host.setDepth(value);
+      entry.plaque.setDepth(value - 0.5);
+      return out;
+    }) as typeof text.setDepth;
   }
 }
 
@@ -165,6 +172,13 @@ function syncChildScrollFactors(host: Phaser.GameObjects.Container): void {
       child.setScrollFactor(sx, sy);
     }
   }
+}
+
+/** World-placed sign chips (shop customers, door prompt) must match sprite scroll — not HUD SF0. */
+export function setSignScrollFactor(text: Phaser.GameObjects.Text, x: number, y: number): void {
+  const host = signContainer(text);
+  host.setScrollFactor(x, y);
+  syncChildScrollFactors(host);
 }
 
 /** Host container for a sign chip — position this, not the inner Text alone. */

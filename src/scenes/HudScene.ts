@@ -60,6 +60,7 @@ import { HudSettings } from "../ui/hud/settings";
 import { HudPhone } from "../ui/hud/phone";
 import { HudIdCard } from "../ui/hud/idCard";
 import { ID_DENY_INK, ID_OK_INK, ID_PHOTO_H, ID_PHOTO_W, PHONE_H } from "../ui/hud/constants";
+import type { ChipPlacer } from "../ui/hud/chipCollision";
 import { beginChipFrame, placeChip } from "../ui/hud/placeChips";
 import { CHIP_GAP, chipPriority } from "../ui/hud/slots";
 
@@ -511,6 +512,16 @@ export class HudScene extends Phaser.Scene {
     if (atDoor) this.readouts.placeReadouts();
     this.resolveHudChips(snap, atDoor, showPhone, showPad, this.toastText.visible);
     this.syncMusicIfNeeded(snap.gameMs);
+  }
+
+  /**
+   * Shop speech resolves in the same chip frame before HudScene runs — seed SCORE/clock
+   * and counter-sign obstacles so head-hung plaques stack upward instead of onto HUD.
+   */
+  prepareShopChipObstacles(placer: ChipPlacer): void {
+    this.readouts.placeReadouts();
+    this.hudSettings.registerChipObstacle(placer);
+    this.readouts.registerShopHudObstacles(placer);
   }
 
   /** One resolver pass after copy is set — plaques dodge higher-priority slots. */

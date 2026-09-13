@@ -93,14 +93,20 @@ export class ChipPlacer {
 
   /** Candidate offsets to try when the preferred position overlaps a blocker. */
   candidateOffsets(plaque: ChipPlaqueExtents, headHang = false): readonly { dx: number; dy: number }[] {
-    const offsets: { dx: number; dy: number }[] = [
+    const stepY = CHIP_GAP + plaque.panelH;
+    if (headHang) {
+      // Above-head speech stacks upward only — sideways dodge lands on SCORE/clock.
+      const offsets: { dx: number; dy: number }[] = [{ dx: 0, dy: 0 }];
+      for (let i = 1; i <= 12; i++) offsets.push({ dx: 0, dy: -i * stepY });
+      return offsets;
+    }
+    return [
       { dx: 0, dy: 0 },
-      { dx: 0, dy: -(CHIP_GAP + plaque.panelH) },
+      { dx: 0, dy: -stepY },
       { dx: CHIP_GAP + plaque.panelW, dy: 0 },
       { dx: -(CHIP_GAP + plaque.panelW), dy: 0 },
+      { dx: 0, dy: stepY },
     ];
-    if (!headHang) offsets.push({ dx: 0, dy: CHIP_GAP + plaque.panelH });
-    return offsets;
   }
 
   findOpenSlot(

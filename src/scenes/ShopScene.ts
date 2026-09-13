@@ -48,7 +48,7 @@ import {
 } from "../maps/shopT0";
 import { enableItemHit } from "../input/hit";
 import { ackTap, releaseTapAck } from "../input/tapAck";
-import { getSim } from "../session";
+import { consumePendingCaptureSeed, getSim } from "../session";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import { skyAt, skyVisualDirtyKey } from "../sim/dayNight";
 import type { Sku } from "../sim/catalog";
@@ -63,6 +63,8 @@ import {
   setSignCopy,
   setSignPlaqueCenter,
   setSignPosition,
+  setSignScrollFactor,
+  signContainer,
   signPlaqueCenterWorld,
   signPlaqueExtents,
   signPlaqueMid,
@@ -75,13 +77,15 @@ import {
 } from "../ui/layoutDebug";
 import { aboveHeadBand, plaqueAabbFromCenter } from "../ui/plaquePlacement";
 import {
-  modelHeadTop,
+  keyLeadSpeechPlaqueAboveHead,
   speechPlaqueAboveHead,
   spriteBodyAabb,
+  standingPersonHeadTop,
 } from "../ui/plaquePlacementPhaser";
+import { HudScene } from "./HudScene";
 import type { ChipAabb, ChipPlacer } from "../ui/hud/chipCollision";
 import { beginChipFrame, placeChip } from "../ui/hud/placeChips";
-import { chipPriority, speechSlotId } from "../ui/hud/slots";
+import { chipPriority } from "../ui/hud/slots";
 import { designHudInset, readCssSafeArea } from "../ui/viewFit";
 import { addUiText } from "../ui/text";
 import {
@@ -313,6 +317,10 @@ export class ShopScene extends Phaser.Scene {
   }
 
   update(): void {
+    if (consumePendingCaptureSeed()) {
+      this.lastCustomerLayoutKey = "";
+      this.customerLayoutById.clear();
+    }
     this.sync(getSim().snapshot());
   }
 
@@ -355,14 +363,13 @@ export class ShopScene extends Phaser.Scene {
       const textDirty = this.keyLeadBubble.text !== callout;
       if (textDirty) this.keyLeadBubble.setText(callout);
       syncSignPlaque(this.keyLeadBubble);
-      const panelH = signPlaqueExtents(this.keyLeadBubble).panelH;
-      const becameVisible = showKeyLeadBubble && !this.lastShowKeyLeadBubble;
-      const sizeDirty = panelH !== this.lastKeyLeadPanelH;
-      if (textDirty || becameVisible || sizeDirty) {
-        const lead = speechPlaqueAboveHead(this.keyLeadBubble, KEYLEAD.x, keyLeadSlotHeadTop(), CUSTOMER_SPEECH_GAP);
-        setSignPlaqueCenter(this.keyLeadBubble, lead.x, lead.y);
-      }
-      this.lastKeyLeadPanelH = panelH;
+      const lead = keyLeadSpeechPlaqueAboveHead(
+        this.keyLeadBubble,
+        this.keyLead.x,
+        standingPersonHeadTop(this.keyLead),
+      );
+      this.pinShopSpeech(this.keyLeadBubble, lead.x, lead.y);
+      this.lastKeyLeadPanelH = signPlaqueExtents(this.keyLeadBubble).panelH;
     } else {
       this.lastKeyLeadPanelH = -1;
     }
@@ -385,8 +392,12 @@ export class ShopScene extends Phaser.Scene {
       const becameVisible = showDriverBubble && !this.lastShowDriverBubble;
       const sizeDirty = panelH !== this.lastDriverPanelH;
       if (driverTextDirty || becameVisible || sizeDirty) {
-        const driver = speechPlaqueAboveHead(this.driverBubble, DRIVER.x, modelHeadTop(this.driver));
-        setSignPlaqueCenter(this.driverBubble, driver.x, driver.y);
+        const driver = speechPlaqueAboveHead(
+          this.driverBubble,
+          this.driver.x,
+          standingPersonHeadTop(this.driver),
+        );
+        this.pinShopSpeech(this.driverBubble, driver.x, driver.y);
       }
       this.lastDriverPanelH = panelH;
     } else {
@@ -427,12 +438,21 @@ export class ShopScene extends Phaser.Scene {
 
     this.syncTablet(snap, tabletPulse, next?.kind === "tablet");
     this.syncTargetCallout(snap);
-    const ordered = [...snap.customers]
-      .filter((c) => Math.abs(c.x - customerSlotX(c.slot)) < 1 && customerSpeechShows(true))
-      .sort((a, b) => a.slot - b.slot);
     this.syncCustomers(snap.customers, pulse, next?.kind === "customer" ? next.orderId : null);
     this.syncOutgoing(snap);
-    this.resolveShopChips(snap, ordered);
+    this.resolveShopChips(snap);
+  }
+
+  /** World speech — SF1 host depth + above-head center (door prompt pattern). */
+  private pinShopSpeech(chip: Phaser.GameObjects.Text, centerX: number, centerY: number): void {
+    setSignScrollFactor(chip, 1, 1);
+    syncSignPlaque(chip);
+    setSignPlaqueCenter(chip, centerX, centerY);
+    setSignScrollFactor(chip, 1, 1);
+    if (String(chip.text ?? "").trim().length === 0) return;
+    chip.setAlpha(1).setVisible(true);
+    const host = signContainer(chip);
+    host.setAlpha(1).setVisible(true);
   }
 
   private placeShopChip(
@@ -445,18 +465,22 @@ export class ShopScene extends Phaser.Scene {
     alt?: { x: number; y: number },
     headHang = false,
   ): void {
+    // Above-head shop speech lives in world space (SF1). Screen-space placeChip dodges
+    // would overwrite syncCustomers pins and shove plaques off the zoomed shop camera.
+    if (headHang) {
+      if (String(chip.text ?? "").trim().length > 0) this.pinShopSpeech(chip, preferredX, preferredY);
+      return;
+    }
     if (placeChip(placer, id, chip, preferredX, preferredY, priority, headHang)) return;
     if (alt && placeChip(placer, id, chip, alt.x, alt.y, priority, headHang)) return;
     setSignCopy(chip, "");
   }
 
-  private resolveShopChips(
-    snap: SimSnapshot,
-    ordered: readonly { orderId: string; slot: number }[],
-  ): void {
+  private resolveShopChips(snap: SimSnapshot): void {
     if (snap.playerRole !== "keyLead") return;
     const inset = designHudInset(readCssSafeArea(document.getElementById("game-root")));
     const placer = beginChipFrame(this.game, inset, GAME_WIDTH, GAME_HEIGHT);
+    (this.scene.get("hud") as HudScene | undefined)?.prepareShopChipObstacles(placer);
     const tab = tabletLayout();
     placer.register(
       "tablet",
@@ -466,60 +490,13 @@ export class ShopScene extends Phaser.Scene {
     placer.register("tvRow", tvRowAabb(), 58);
     if (this.keyLead.visible) placer.register("keyLead", spriteBodyAabb(this.keyLead), 55);
     if (this.driver.visible) placer.register("driver", spriteBodyAabb(this.driver), 55);
-    for (const visual of this.customers.values()) {
-      if (visual.sprite.visible) {
-        placer.register(`customer-${visual.orderId}`, spriteBodyAabb(visual.sprite), 55);
-      }
-    }
-
-    for (const customer of ordered) {
-      const visual = this.customers.get(customer.orderId);
-      if (!visual?.bubble.visible) continue;
-      const layout = this.customerLayoutById.get(customer.orderId);
-      if (!layout) continue;
-      const priority = 50 - customer.slot;
-      const headTop = modelHeadTop(visual.sprite);
-      const preferred = speechPlaqueAboveHead(visual.bubble, layout.x, headTop);
-      this.placeShopChip(
-        placer,
-        speechSlotId(customer.orderId),
-        visual.bubble,
-        preferred.x,
-        preferred.y,
-        priority,
-        undefined,
-        true,
-      );
-      if (
-        visual.feedback.visible &&
-        String(visual.feedback.text).trim() &&
-        visual.bubble.visible &&
-        String(visual.bubble.text).trim()
-      ) {
-        syncSignPlaque(visual.bubble);
-        const bubbleMid = signPlaqueMid(visual.bubble);
-        const bubbleBottom =
-          signPlaqueCenterWorld(visual.bubble).y +
-          signPlaqueExtents(visual.bubble).bottomLocal -
-          bubbleMid.midY;
-        const feedbackPreferred = speechPlaqueAboveHead(visual.feedback, layout.x, bubbleBottom);
-        this.placeShopChip(
-          placer,
-          `${speechSlotId(customer.orderId)}-fb`,
-          visual.feedback,
-          feedbackPreferred.x,
-          feedbackPreferred.y,
-          priority - 1,
-          undefined,
-          true,
-        );
-      } else if (visual.feedback.visible && !String(visual.bubble.text).trim()) {
-        setSignCopy(visual.feedback, "");
-      }
-    }
 
     if (this.keyLeadBubble.visible) {
-      const lead = speechPlaqueAboveHead(this.keyLeadBubble, KEYLEAD.x, keyLeadSlotHeadTop(), CUSTOMER_SPEECH_GAP);
+      const lead = keyLeadSpeechPlaqueAboveHead(
+        this.keyLeadBubble,
+        this.keyLead.x,
+        standingPersonHeadTop(this.keyLead),
+      );
       this.placeShopChip(
         placer,
         "leadBubble",
@@ -532,7 +509,11 @@ export class ShopScene extends Phaser.Scene {
       );
     }
     if (this.driverBubble.visible) {
-      const driver = speechPlaqueAboveHead(this.driverBubble, DRIVER.x, modelHeadTop(this.driver));
+      const driver = speechPlaqueAboveHead(
+        this.driverBubble,
+        this.driver.x,
+        standingPersonHeadTop(this.driver),
+      );
       this.placeShopChip(
         placer,
         "driverBubble",
@@ -915,17 +896,19 @@ export class ShopScene extends Phaser.Scene {
       })
       .join("|");
     if (layoutKey !== this.lastCustomerLayoutKey) {
-      this.lastCustomerLayoutKey = layoutKey;
-      this.customerLayoutById = new Map(
-        layoutCustomerSpeech(
-          ordered.map((c) => {
-            const visual = this.customers.get(c.orderId);
-            const h =
-              c.bubble && visual ? signPlaqueExtents(visual.bubble).panelH : CUSTOMER_SPEECH_H;
-            return { orderId: c.orderId, x: c.x, h };
-          }),
-        ).map((box) => [box.orderId, box]),
+      const boxes = layoutCustomerSpeech(
+        ordered.map((c) => {
+          const visual = this.customers.get(c.orderId);
+          const h =
+            c.bubble && visual ? signPlaqueExtents(visual.bubble).panelH : CUSTOMER_SPEECH_H;
+          return { orderId: c.orderId, x: c.x, h };
+        }),
       );
+      // Do not cache an empty layout for active speakers — a miss retries next frame.
+      if (boxes.length > 0 || ordered.length === 0) {
+        this.lastCustomerLayoutKey = layoutKey;
+        this.customerLayoutById = new Map(boxes.map((box) => [box.orderId, box]));
+      }
     }
 
     for (const customer of list) {
@@ -946,11 +929,16 @@ export class ShopScene extends Phaser.Scene {
         sprite.setAlpha(1);
         sprite.clearTint();
       }
+      const settled =
+        Math.abs(customer.x - customerSlotX(customer.slot)) < 1 && customerSpeechShows(true);
       const layout = this.customerLayoutById.get(customer.orderId);
-      if (layout && customer.bubble) {
-        bubble.setAlpha(1).setVisible(true);
+      if (customer.bubble && settled) {
+        bubble.setAlpha(1);
         if (bubble.text !== customer.bubble) bubble.setText(customer.bubble);
-        setSignPlaqueCenter(bubble, layout.x, layout.y);
+        const pin = layout
+          ? { x: layout.x, y: layout.y }
+          : speechPlaqueAboveHead(bubble, sprite.x, standingPersonHeadTop(sprite));
+        this.pinShopSpeech(bubble, pin.x, pin.y);
       } else {
         bubble.setVisible(false);
       }
@@ -964,8 +952,8 @@ export class ShopScene extends Phaser.Scene {
           signPlaqueCenterWorld(bubble).y +
           signPlaqueExtents(bubble).bottomLocal -
           signPlaqueMid(bubble).midY;
-        const fbPreferred = speechPlaqueAboveHead(feedback, layout.x, bubbleBottom);
-        setSignPlaqueCenter(feedback, fbPreferred.x, fbPreferred.y);
+        const fbPreferred = speechPlaqueAboveHead(feedback, sprite.x, bubbleBottom);
+        this.pinShopSpeech(feedback, fbPreferred.x, fbPreferred.y);
       } else {
         feedback.setVisible(false);
       }

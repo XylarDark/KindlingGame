@@ -64,14 +64,11 @@ describe("speech stays off the models it belongs to", () => {
     expect(sync, "no unconditional key-lead setText").not.toMatch(/keyLeadBubble[\s\S]*?\.setText\(callout \?\? ""\)/);
     expect(sync, "pin key-lead only when shown").toMatch(/if \(showKeyLeadBubble\)/);
     expect(sync, "pin driver only when shown").toMatch(/if \(showDriverBubble\)/);
-    expect(sync, "key-lead pin uses slot head above-head center, not live sprite").toMatch(
-      /speechPlaqueAboveHead\(this\.keyLeadBubble, KEYLEAD\.x, keyLeadSlotHeadTop\(\)/,
+    expect(sync, "key-lead pin uses live sprite head with door-like gap").toMatch(
+      /keyLeadSpeechPlaqueAboveHead\([\s\S]*this\.keyLeadBubble,[\s\S]*this\.keyLead\.x,[\s\S]*standingPersonHeadTop\(this\.keyLead\)/,
     );
-    expect(sync, "key-lead pin does not track live sprite x/y").not.toMatch(
-      /speechPlaqueAboveHead\([\s\S]*this\.keyLead\.(x|y)/,
-    );
-    expect(sync, "driver pin uses head-above helper").toMatch(
-      /speechPlaqueAboveHead\(this\.driverBubble, DRIVER\.x, modelHeadTop\(this\.driver\)\)/,
+    expect(sync, "driver pin uses standing head line on live sprite x").toMatch(
+      /speechPlaqueAboveHead\([\s\S]*this\.driverBubble,[\s\S]*this\.driver\.x,[\s\S]*standingPersonHeadTop\(this\.driver\)/,
     );
     expect(sync, "tracks key-lead bubble visibility for re-pin").toContain("lastShowKeyLeadBubble");
     expect(sync, "tracks driver bubble visibility for re-pin").toContain("lastShowDriverBubble");
@@ -94,7 +91,7 @@ describe("speech stays off the models it belongs to", () => {
     const sync = between(src, "private syncCustomers(", "private makeHotspots(", "syncCustomers");
     expect(sync, "uses overhead layout").toMatch(/layoutCustomerSpeech\(/);
     expect(sync, "gated while walking in").toMatch(/customerSpeechShows\(true\)/);
-    expect(sync, "anchors on layout centre via plaque center").toMatch(/setSignPlaqueCenter\(bubble, layout\.x, layout\.y\)/);
+    expect(sync, "anchors on layout centre via pinShopSpeech").toMatch(/pinShopSpeech\(bubble, pin\.x, pin\.y\)/);
     expect(sync, "no side pin helpers").not.toMatch(/pinSideSpeech|setSignPlaqueEdge/);
   });
 
@@ -135,25 +132,38 @@ describe("shop speech chip resolver", () => {
   it("runs resolveShopChips after customer sync with placeChip", () => {
     expect(src).toContain("resolveShopChips");
     expect(src).toContain("placeChip(placer");
-    expect(src).toContain("speechSlotId");
+    expect(src).toContain("pinShopSpeech");
   });
 
   it("anchors leadBubble above KEYLEAD slot head with headHang", () => {
     const resolve = between(src, "private resolveShopChips(", "\n  }", "resolveShopChips");
-    expect(resolve, "lead preferred above slot head center, not live sprite").toMatch(
-      /speechPlaqueAboveHead\(this\.keyLeadBubble, KEYLEAD\.x, keyLeadSlotHeadTop\(\)/,
+    expect(resolve, "lead preferred above live keyLead head on sprite x").toMatch(
+      /keyLeadSpeechPlaqueAboveHead\([\s\S]*this\.keyLeadBubble,[\s\S]*this\.keyLead\.x,[\s\S]*standingPersonHeadTop\(this\.keyLead\)/,
     );
-    expect(resolve, "lead resolver does not track live keyLead x").not.toMatch(
-      /speechPlaqueAboveHead\([\s\S]*this\.keyLead\.x/,
+    expect(resolve, "driver preferred via standingPersonHeadTop on live x").toMatch(
+      /speechPlaqueAboveHead\([\s\S]*this\.driverBubble,[\s\S]*this\.driver\.x,[\s\S]*standingPersonHeadTop\(this\.driver\)/,
     );
-    expect(resolve, "driver preferred via speechPlaqueAboveHead").toMatch(
-      /speechPlaqueAboveHead\(this\.driverBubble, DRIVER\.x, modelHeadTop\(this\.driver\)\)/,
+    expect(resolve, "seeds HUD obstacles before shop chips land").toMatch(/prepareShopChipObstacles\(placer\)/);
+    expect(resolve, "customer speech owned by syncCustomers — not re-placed in resolver").not.toMatch(
+      /for \(const customer of ordered\)/,
+    );
+    expect(src, "customer speech pinned on sprite x with tallest hat head line").toMatch(
+      /standingPersonHeadTop\(sprite\)/,
     );
     expect(resolve, "registers tablet, TVs, and people as dodge obstacles").toMatch(/placer\.register\([\s\S]*"tablet"/);
     expect(resolve, "registers tablet, TVs, and people as dodge obstacles").toContain("tvRowAabb");
-    expect(resolve, "registers tablet, TVs, and people as dodge obstacles").toContain("spriteBodyAabb");
+    expect(resolve, "registers keyLead/driver bodies, not customer speech speakers").toContain("spriteBodyAabb");
+    expect(resolve, "does not register customer bodies as speech blockers").not.toMatch(/customer-\$\{/);
     expect(resolve, "head-hang for speech chips").toMatch(
       /placeShopChip\([\s\S]*"leadBubble"[\s\S]*true,\s*\)/,
+    );
+    expect(src, "head-hung speech always pins in world space — no screen-space placeChip").toMatch(
+      /if \(headHang\)[\s\S]*pinShopSpeech\(chip, preferredX, preferredY\)/,
+    );
+    expect(src, "capture seed deferred to first live shop frame").toContain("consumePendingCaptureSeed");
+    expect(src, "world speech uses scrollFactor 1 like door prompt").toContain("setSignScrollFactor");
+    expect(src, "settled customers fall back to above-head pin without layout").toMatch(
+      /speechPlaqueAboveHead\(bubble, sprite\.x, standingPersonHeadTop\(sprite\)\)/,
     );
     expect(resolve, "does not chase live keyLead x with magic offset").not.toMatch(/this\.keyLead\.x - 168/);
   });
@@ -204,6 +214,17 @@ describe("overhead speech collision layout", () => {
 
   it("leaves daylight above heads", () => {
     expect(CUSTOMER_SPEECH_GAP).toBeGreaterThanOrEqual(14);
+  });
+
+  it("never drops a settled speaker when the plaque is taller than CUSTOMER_SPEECH_H", () => {
+    const headTop = CUSTOMER_SPOT.y - PERSON_DISPLAY_MAX_H;
+    const maxBottom = headTop - CUSTOMER_SPEECH_GAP;
+    for (const h of [120, 180, 240]) {
+      const boxes = layoutCustomerSpeech([{ orderId: `tall-${h}`, x: customerSlotX(0), h }]);
+      expect(boxes, `panelH=${h}`).toHaveLength(1);
+      expect(boxes[0]!.x).toBe(customerSlotX(0));
+      expect(boxes[0]!.y + boxes[0]!.h / 2).toBeLessThanOrEqual(maxBottom + 0.01);
+    }
   });
 });
 

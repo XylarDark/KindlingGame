@@ -3,6 +3,8 @@ import { GAME_END_HOUR, GAME_START_HOUR, MS_PER_GAME_HOUR, SHIFT_MS } from "./si
 import { applyCaptureSeed, applyPromoShot, captureQuery, shotQuery } from "./promoShot";
 
 let sim: GameSim | null = null;
+/** Queued at beginPlay — applied on the first live shop frame so sync paints seeded speech. */
+let captureSeedQueued = false;
 
 /** Production / preview builds. Vite `npm run dev` is not live. */
 export function isLiveBuild(): boolean {
@@ -41,6 +43,7 @@ function hourQuery(): number | null {
 }
 
 export function startSession(seed?: number): GameSim {
+  captureSeedQueued = false;
   sim = GameSim.create({ seed: seed ?? (Date.now() % 1_000_000), autoSpawn: false });
   const hour = hourQuery();
   if (hour !== null) sim.clock.gameMs = (hour - GAME_START_HOUR) * MS_PER_GAME_HOUR;
@@ -60,10 +63,21 @@ export function beginPlay(): void {
     return;
   }
   if (captureQuery()) {
-    applyCaptureSeed(s);
+    captureSeedQueued = true;
     return;
   }
   s.enableSpawns();
+}
+
+/**
+ * Apply a queued `?capture=shop-*` seed once the shop scene is running.
+ * Seeding while shop/hud were paused let the first resume frames miss customer speech.
+ */
+export function consumePendingCaptureSeed(): boolean {
+  if (!captureSeedQueued) return false;
+  captureSeedQueued = false;
+  applyCaptureSeed(getSim());
+  return true;
 }
 
 export function getSim(): GameSim {
