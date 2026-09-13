@@ -280,7 +280,7 @@ export class HudReadouts {
   }
 
   private syncShopReadoutMirror(): void {
-    if (!this.shopReadoutsLayerActive(this.readoutsAtDoor, this.lastReadoutsHidden === true)) return;
+    if (!this.readoutsInShop || this.readoutsAtDoor) return;
     this.ensureShopReadouts();
     if (!this.shopScoreText || !this.shopScoreCaption || !this.shopClockText) return;
     this.shopScoreText.setText(this.scoreText.text);
@@ -319,20 +319,22 @@ export class HudReadouts {
     if (shopLayer) {
       this.ensureShopReadouts();
       this.syncShopReadoutMirror();
+      this.shopScoreText?.setVisible(true);
+      this.shopScoreCaption?.setVisible(true);
+      this.shopClockText?.setVisible(true);
+      this.scoreText.setVisible(false);
+      this.scoreCaption.setVisible(false);
+      this.clockText.setVisible(false);
     }
     const visibilityChanged = hide !== this.lastReadoutsHidden || shopLayer !== this.lastShopReadoutsLayer;
     if (!visibilityChanged) return;
     this.lastReadoutsHidden = hide;
     this.lastShopReadoutsLayer = shopLayer;
     const showHudRow = !hide && !shopLayer;
-    this.scoreText.setVisible(showHudRow);
-    this.scoreCaption.setVisible(showHudRow);
-    this.clockText.setVisible(showHudRow);
-    if (shopLayer) {
-      this.shopScoreText?.setVisible(true);
-      this.shopScoreCaption?.setVisible(true);
-      this.shopClockText?.setVisible(true);
-    } else {
+    if (!shopLayer) {
+      this.scoreText.setVisible(showHudRow);
+      this.scoreCaption.setVisible(showHudRow);
+      this.clockText.setVisible(showHudRow);
       this.shopScoreText?.setVisible(false);
       this.shopScoreCaption?.setVisible(false);
       this.shopClockText?.setVisible(false);
