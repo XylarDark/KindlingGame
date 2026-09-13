@@ -85,7 +85,7 @@ describe("speech stays off the models it belongs to", () => {
   it("draws lobby customers in front of the baked counter face", () => {
     const make = between(src, "private makeCustomerVisual(", "return { sprite, bubble, feedback", "makeCustomerVisual");
     expect(make, "customer sprite depth above counter RT (7)").toMatch(/\.setDepth\(8\)/);
-    expect(make, "speech chips above the sprite").toMatch(/\.setDepth\(10\)/);
+    expect(make, "customer speech depth above HUD readouts").toMatch(/\.setDepth\(CUSTOMER_SPEECH_DEPTH\)/);
     const sync = between(src, "private syncCustomers(", "private makeHotspots(", "syncCustomers");
     expect(sync, "feet Y from measured displayHeight").toMatch(/customerFeetY\(sprite\.displayHeight\)/);
   });
@@ -94,7 +94,7 @@ describe("speech stays off the models it belongs to", () => {
     const sync = between(src, "private syncCustomers(", "private makeHotspots(", "syncCustomers");
     expect(sync, "uses overhead layout").toMatch(/layoutCustomerSpeech\(/);
     expect(sync, "gated while walking in").toMatch(/customerSpeechShows\(true\)/);
-    expect(sync, "anchors on layout centre via pinShopSpeech").toMatch(/pinShopSpeech\(bubble, pin\.x, pin\.y\)/);
+    expect(sync, "anchors on layout centre via pinCustomerSpeech").toMatch(/pinCustomerSpeech\(bubble, pin\.x, pin\.y\)/);
     expect(sync, "no side pin helpers").not.toMatch(/pinSideSpeech|setSignPlaqueEdge/);
   });
 
@@ -173,6 +173,9 @@ describe("shop speech chip resolver", () => {
     expect(src, "settled customers fall back to above-head pin without layout").toMatch(
       /speechPlaqueAboveHead\(bubble, sprite\.x, standingPersonHeadTop\(sprite\)\)/,
     );
+    expect(src, "customer speech hosts on HudScene above SCORE/clock").toContain("pinCustomerSpeech");
+    expect(src, "customer speech hosts on HudScene above SCORE/clock").toContain("attachSignHostToScene");
+    expect(src, "customer speech hosts on HudScene above SCORE/clock").toContain("CUSTOMER_SPEECH_DEPTH");
     expect(resolve, "does not chase live keyLead x with magic offset").not.toMatch(/this\.keyLead\.x - 168/);
   });
 });

@@ -186,6 +186,11 @@ describe("text boxes are all the counter plaque", () => {
     expect(helper).toMatch(/entry\.host\.setVisible\(false\)/);
   });
 
+  it("exposes attachSignHostToScene for HUD-overlay speech", () => {
+    expect(helper).toContain("export function attachSignHostToScene");
+    expect(helper).toContain("SIGN_OVERLAY_SCENE");
+  });
+
   it("exposes setSignPosition for host container moves", () => {
     expect(helper).toContain("export function setSignPosition");
     expect(helper).toContain("export function signContainer");
@@ -247,8 +252,9 @@ describe("text boxes are all the counter plaque", () => {
     const layoutEnd = helper.indexOf("\n}", layoutStart);
     if (layoutEnd === -1) throw new Error("layoutPlaque end not found");
     const layout = helper.slice(layoutStart, layoutEnd);
-    expect(layout).toContain("setTextLocal(textX, textY)");
-    expect(layout).not.toMatch(/text\.setPosition\(textX, textY\)/);
+    expect(layout).toContain("inkAnchorPosition(layout)");
+    expect(layout).toContain("setTextLocal(anchor.x, anchor.y)");
+    expect(layout).not.toMatch(/text\.setPosition\(anchor\.x, anchor\.y\)/);
   });
 
   it("repairs inner locals even when lastLayoutKey is unchanged", () => {
@@ -257,8 +263,9 @@ describe("text boxes are all the counter plaque", () => {
     const layoutEnd = helper.indexOf("\n}", layoutStart);
     if (layoutEnd === -1) throw new Error("layoutPlaque end not found");
     const layout = helper.slice(layoutStart, layoutEnd);
-    expect(layout).toContain("setTextLocal(textX, textY)");
-    expect(layout).toMatch(/setTextLocal\(textX, textY\)[\s\S]*if \(key === entry\.lastLayoutKey\)/);
+    expect(layout).toContain("inkAnchorPosition(layout)");
+    expect(layout).toContain("setTextLocal(anchor.x, anchor.y)");
+    expect(layout).toMatch(/setTextLocal\(anchor\.x, anchor\.y\)[\s\S]*if \(key === entry\.lastLayoutKey\)/);
   });
 
   it("patched setPosition moves the host only — never zeroes inner glyph locals", () => {
@@ -358,7 +365,7 @@ describe("tight ink measurement", () => {
 
   it("centres plaque on ink box midpoints", () => {
     const ink = glyphAabb({ width: 80, height: 24, originX: 0.5, originY: 0.5 });
-    expect(plaqueCenterFromInkBox(ink)).toEqual({ x: -40, y: -12 });
+    expect(plaqueCenterFromInkBox(ink)).toEqual({ x: 0, y: 0 });
   });
 });
 

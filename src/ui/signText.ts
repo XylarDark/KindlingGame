@@ -1,7 +1,13 @@
 import Phaser from "phaser";
 import { notePerfPlaquePump, notePerfSetText } from "./perfProbe";
 import { SIGN_BORDER, SIGN_PAD_X, SIGN_PAD_Y } from "./signPlaque";
-import { glyphLocalBounds as glyphLocalBoundsInk, inkInsidePlaque as inkFitsPlaque, plaqueCenterFromInkBox, tightInkLayout } from "./signTextInk";
+import {
+  glyphLocalBounds as glyphLocalBoundsInk,
+  inkAnchorPosition,
+  inkInsidePlaque as inkFitsPlaque,
+  plaqueCenterFromInkBox,
+  tightInkLayout,
+} from "./signTextInk";
 import { makePlaqueNineSlice, plaqueTextureForAccent } from "./signPlaqueNine";
 import { makeType, type TypeStyle } from "./typekit";
 import type { UiTextOptions } from "./text";
@@ -24,6 +30,7 @@ import { padForVariant, type PadVariant } from "./typeScale";
 const ACCENT = "signAccent";
 const SIGN_HOST = "signHost";
 const SIGN_PLAQUE = "signPlaque";
+const SIGN_OVERLAY_SCENE = "signOverlayScene";
 const PUMP_REGISTRY = "kindlingSignPlaquePump";
 
 export interface SignTextOptions extends UiTextOptions {
@@ -172,6 +179,18 @@ function syncChildScrollFactors(host: Phaser.GameObjects.Container): void {
       child.setScrollFactor(sx, sy);
     }
   }
+}
+
+/** Move a sign host into another scene's display list (e.g. Hud above SCORE/clock). */
+export function attachSignHostToScene(text: Phaser.GameObjects.Text, target: Phaser.Scene): void {
+  const host = signContainer(text);
+  const key = target.sys.settings.key;
+  if (host.getData(SIGN_OVERLAY_SCENE) === key) return;
+  if (host.scene !== target) {
+    host.removeFromDisplayList();
+    target.add.existing(host);
+  }
+  host.setData(SIGN_OVERLAY_SCENE, key);
 }
 
 /** World-placed sign chips (shop customers, door prompt) must match sprite scroll — not HUD SF0. */
@@ -364,11 +383,10 @@ function layoutPlaque(entry: SignPlaqueEntry): void {
   const tex = plaqueTextureForAccent(accent);
   if (plaque.texture.key !== tex) plaque.setTexture(tex);
 
-  const textX = -w * text.originX;
-  const textY = -h * text.originY;
+  const anchor = inkAnchorPosition(layout);
   const plaqueCenter = plaqueCenterFromGlyphs(text, layout);
   // Always repair inner layout — patched setPosition must not leave glyphs orphaned at (0,0).
-  entry.setTextLocal(textX, textY);
+  entry.setTextLocal(anchor.x, anchor.y);
   plaque.setSize(panelW, panelH);
   plaque.setOrigin(0.5, 0.5);
   plaque.setPosition(plaqueCenter.x, plaqueCenter.y);

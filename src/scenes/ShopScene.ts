@@ -59,6 +59,7 @@ import { readyTally, receiptSlips } from "../ui/receipts";
 import { wireHover } from "../ui/chrome";
 import {
   addSignText,
+  attachSignHostToScene,
   setSignAccent,
   setSignCopy,
   setSignPlaqueCenter,
@@ -70,6 +71,8 @@ import {
   signPlaqueMid,
   syncSignPlaque,
 } from "../ui/signText";
+import { CUSTOMER_SPEECH_DEPTH } from "../ui/hud/constants";
+import { worldToScreen } from "../ui/worldProject";
 import { SIGN_PAD_X, SIGN_PAD_Y } from "../ui/signPlaque";
 import {
   layoutDebugEnabled,
@@ -474,6 +477,28 @@ export class ShopScene extends Phaser.Scene {
     host.setAlpha(1).setVisible(true);
   }
 
+  /**
+   * Customer order speech — project through the shop camera into HudScene so the plaque
+   * draws above SCORE/clock (ShopScene always renders under the HUD overlay).
+   */
+  private pinCustomerSpeech(chip: Phaser.GameObjects.Text, worldCenterX: number, worldCenterY: number): void {
+    syncSignPlaque(chip);
+    const hud = this.scene.get("hud") as HudScene | undefined;
+    if (hud?.sys.isActive()) {
+      attachSignHostToScene(chip, hud);
+      const screen = worldToScreen(this.cameras.main, worldCenterX, worldCenterY);
+      setSignScrollFactor(chip, 0, 0);
+      setSignPlaqueCenter(chip, screen.x, screen.y);
+      chip.setDepth(CUSTOMER_SPEECH_DEPTH);
+    } else {
+      this.pinShopSpeech(chip, worldCenterX, worldCenterY);
+    }
+    if (String(chip.text ?? "").trim().length === 0) return;
+    chip.setAlpha(1).setVisible(true);
+    const host = signContainer(chip);
+    host.setAlpha(1).setVisible(true);
+  }
+
   private placeShopChip(
     placer: ChipPlacer,
     id: string,
@@ -840,7 +865,7 @@ export class ShopScene extends Phaser.Scene {
       maxHeight: CUSTOMER_SPEECH_H,
     })
       .setOrigin(0.5)
-      .setDepth(10)
+      .setDepth(CUSTOMER_SPEECH_DEPTH)
       .setVisible(false);
     const feedback = addSignText(this, -400, CUSTOMER_SPOT.y - PERSON_DISPLAY_H, "", {
       size: typeRolePx("hudSmall"),
@@ -852,7 +877,7 @@ export class ShopScene extends Phaser.Scene {
       maxHeight: typeRoleBox(48, "hudSmall"),
     })
       .setOrigin(0.5)
-      .setDepth(10)
+      .setDepth(CUSTOMER_SPEECH_DEPTH)
       .setVisible(false);
     return { sprite, bubble, feedback, orderId: null, look: -1 };
   }
@@ -974,7 +999,7 @@ export class ShopScene extends Phaser.Scene {
         const pin = layout
           ? { x: layout.x, y: layout.y }
           : speechPlaqueAboveHead(bubble, sprite.x, standingPersonHeadTop(sprite));
-        this.pinShopSpeech(bubble, pin.x, pin.y);
+        this.pinCustomerSpeech(bubble, pin.x, pin.y);
       } else {
         bubble.setVisible(false);
       }
@@ -983,13 +1008,9 @@ export class ShopScene extends Phaser.Scene {
       if (layout && note) {
         feedback.setVisible(true);
         if (feedback.text !== note) feedback.setText(note);
-        syncSignPlaque(bubble);
-        const bubbleBottom =
-          signPlaqueCenterWorld(bubble).y +
-          signPlaqueExtents(bubble).bottomLocal -
-          signPlaqueMid(bubble).midY;
+        const bubbleBottom = layout.y + layout.h / 2;
         const fbPreferred = speechPlaqueAboveHead(feedback, sprite.x, bubbleBottom);
-        this.pinShopSpeech(feedback, fbPreferred.x, fbPreferred.y);
+        this.pinCustomerSpeech(feedback, fbPreferred.x, fbPreferred.y);
       } else {
         feedback.setVisible(false);
       }

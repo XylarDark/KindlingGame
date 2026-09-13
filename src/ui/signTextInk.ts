@@ -101,11 +101,15 @@ export function plaqueCenterFromInkBox(ink: AxisAlignedBox): { x: number; y: num
   return { x: (ink.left + ink.right) / 2, y: (ink.top + ink.bottom) / 2 };
 }
 
-export function glyphLocalBounds(glyph: GlyphLayout): { left: number; top: number } {
+/** Local Text position so ink sits centered on the sign host origin. */
+export function inkAnchorPosition(glyph: GlyphLayout): { x: number; y: number } {
   const { width: w, height: h, originX, originY } = glyph;
-  const textX = -w * originX;
-  const textY = -h * originY;
-  return { left: textX - w * originX, top: textY - h * originY };
+  return { x: w * (originX - 0.5), y: h * (originY - 0.5) };
+}
+
+export function glyphLocalBounds(glyph: GlyphLayout): { left: number; top: number } {
+  const { width: w, height: h } = glyph;
+  return { left: -w / 2, top: -h / 2 };
 }
 
 /** Glyph ink bounds in host-local space (Phaser origin-aware). */
