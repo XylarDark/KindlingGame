@@ -94,8 +94,9 @@ describe("HudScene paint dirty guards", () => {
     expect(src).toContain("readoutsAtDoor");
     const fn = readouts.slice(readouts.indexOf("paintReadoutChrome("), readouts.indexOf("paintDoorTitle("));
     expect(fn).toMatch(/!atDoor && showId/);
-    expect(fn).toContain("this.scoreText.setVisible(!hide)");
-    expect(fn).toContain("this.clockText.setVisible(!hide)");
+    expect(fn).toMatch(/showHudRow = !hide && !shopLayer/);
+    expect(fn).toContain("this.scoreText.setVisible(showHudRow)");
+    expect(fn).toContain("this.clockText.setVisible(showHudRow)");
     const place = between(readouts, "placeReadouts(): void {", "matchCaptionToValue(): void {", "placeReadouts");
     expect(place).toContain("readoutsAtDoor");
     expect(place).toMatch(/readoutsAtDoor[\s\S]*hudSceneViewport/);

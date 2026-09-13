@@ -14,6 +14,8 @@ import { Color } from "../theme";
 export const HUD_CORNER_TOP = 76;
 /** Score row on drive/shop — below ID dim (24) and panel (25). */
 export const HUD_READOUT_DEPTH = 20;
+/** Shop counter SCORE/clock — below customer speech (10), above counter bake (7). */
+export const SHOP_COUNTER_READOUT_DEPTH = 9;
 /** Door porch chrome — above ID overlay so score + status stay visible. */
 export const HUD_DOOR_READOUT_DEPTH = 28;
 export const HUD_SIGN_GAP = 28;
