@@ -35,13 +35,20 @@ export interface SignTextOptions extends UiTextOptions {
   padX?: number;
   /** @deprecated Prefer {@link padVariant}. */
   padY?: number;
+  /** Chip-local vertical ink nudge inside the plaque (negative lifts glyphs). */
+  inkShiftY?: number;
 }
 
 const SIGN_PAD = "signPad";
+const SIGN_INK_SHIFT = "signInkShift";
 
 function signPads(text: Phaser.GameObjects.Text): { x: number; y: number } {
   const custom = text.getData(SIGN_PAD) as { x: number; y: number } | undefined;
   return custom ?? { x: SIGN_PAD_X, y: SIGN_PAD_Y };
+}
+
+function signInkShift(text: Phaser.GameObjects.Text): number {
+  return (text.getData(SIGN_INK_SHIFT) as number | undefined) ?? 0;
 }
 
 type SignPlaqueEntry = {
@@ -366,9 +373,10 @@ function layoutPlaque(entry: SignPlaqueEntry): void {
 
   const textX = -w * text.originX;
   const textY = -h * text.originY;
+  const inkShiftY = signInkShift(text);
   const plaqueCenter = plaqueCenterFromGlyphs(text, layout);
   // Always repair inner layout — patched setPosition must not leave glyphs orphaned at (0,0).
-  entry.setTextLocal(textX, textY);
+  entry.setTextLocal(textX, textY + inkShiftY);
   plaque.setSize(panelW, panelH);
   plaque.setOrigin(0.5, 0.5);
   plaque.setPosition(plaqueCenter.x, plaqueCenter.y);
@@ -378,13 +386,15 @@ function layoutPlaque(entry: SignPlaqueEntry): void {
     layout,
     { x: plaque.x, y: plaque.y, width: panelW, height: panelH, originX: plaque.originX, originY: plaque.originY },
     pad,
+    undefined,
+    inkShiftY,
   );
   if (!ink.ok) {
     entry.dirty = false;
     return;
   }
 
-  const key = [copy, w, h, text.originX, text.originY, accent, text.depth, tex, pad.x, pad.y].join(":");
+  const key = [copy, w, h, text.originX, text.originY, accent, text.depth, tex, pad.x, pad.y, inkShiftY].join(":");
   if (key === entry.lastLayoutKey) {
     entry.dirty = false;
     return;
@@ -407,7 +417,7 @@ export function addSignText(
   content: string,
   options: SignTextOptions = {},
 ): Phaser.GameObjects.Text {
-  const { accent, padVariant, padX, padY, padding: _pad, ...style } = options;
+  const { accent, padVariant, padX, padY, padding: _pad, inkShiftY, ...style } = options;
   const host = scene.add.container(x, y);
   const text = makeType(scene, 0, 0, content, {
     ...(style as TypeStyle),
@@ -424,6 +434,7 @@ export function addSignText(
         ? { x: padX ?? SIGN_PAD_X, y: padY ?? SIGN_PAD_Y }
         : padForVariant("default");
   text.setData(SIGN_PAD, pads);
+  if (inkShiftY !== undefined) text.setData(SIGN_INK_SHIFT, inkShiftY);
 
   const plaque = makePlaqueNineSlice(scene, pads.x * 2 + 8, pads.y * 2 + 8, accent ?? SIGN_BORDER);
   host.add([plaque, text]);

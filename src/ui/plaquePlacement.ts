@@ -169,19 +169,23 @@ export function doorPromptPlaqueCenter(
   return { x: customerX, y: headTopY - gap - plaque.panelH / 2 };
 }
 
-/** Key-lead speech centered in the head↔TV band, or above-head fallback when tight. */
+/** Key-lead speech in the head↔TV band; optional head bias after midpoint when band fits. */
 export function leadSpeechPlaqueCenterFromExtents(
   plaque: ChipPlaqueExtents,
   centerX: number,
   headTopY: number,
   tvBottomY: number,
   gap: number,
+  headBias = 0,
 ): { x: number; y: number } {
   const minCenterY = tvBottomY + gap + plaque.panelH / 2;
   const maxCenterY = headTopY - gap - plaque.panelH / 2;
   const y =
     minCenterY <= maxCenterY
-      ? (minCenterY + maxCenterY) / 2
+      ? (() => {
+          const mid = (minCenterY + maxCenterY) / 2;
+          return mid + (maxCenterY - mid) * headBias;
+        })()
       : speechPlaqueCenterAboveHead(plaque, centerX, headTopY, gap).y;
   return { x: centerX, y };
 }
