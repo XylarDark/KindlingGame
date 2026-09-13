@@ -94,7 +94,9 @@ describe("speech stays off the models it belongs to", () => {
     const sync = between(src, "private syncCustomers(", "private makeHotspots(", "syncCustomers");
     expect(sync, "uses overhead layout").toMatch(/layoutCustomerSpeech\(/);
     expect(sync, "gated while walking in").toMatch(/customerSpeechShows\(true\)/);
-    expect(sync, "anchors on layout centre via pinShopSpeech").toMatch(/pinShopSpeech\(bubble, pin\.x, pin\.y\)/);
+    expect(sync, "customer order paints over HUD via HudScene attach").toMatch(
+      /pinCustomerSpeechOnHud\(bubble, pin\.x, pin\.y\)/,
+    );
     expect(sync, "no side pin helpers").not.toMatch(/pinSideSpeech|setSignPlaqueEdge/);
   });
 
@@ -141,6 +143,13 @@ describe("shop speech chip resolver", () => {
     expect(src).toContain("resolveShopChips");
     expect(src).toContain("placeChip(placer");
     expect(src).toContain("pinShopSpeech");
+    expect(src).toContain("pinCustomerSpeechOnHud");
+    expect(src, "customer order only — lead/driver stay on pinShopSpeech").toMatch(
+      /pinCustomerSpeechOnHud\(bubble, pin\.x, pin\.y\)/,
+    );
+    expect(src, "key-lead and driver still use world pinShopSpeech").toMatch(
+      /pinShopSpeech\(this\.keyLeadBubble/,
+    );
   });
 
   it("anchors leadBubble above KEYLEAD slot head with headHang", () => {

@@ -87,7 +87,9 @@ import { HudScene } from "./HudScene";
 import type { ChipAabb, ChipPlacer } from "../ui/hud/chipCollision";
 import { beginChipFrame, placeChip } from "../ui/hud/placeChips";
 import { chipPriority } from "../ui/hud/slots";
+import { HUD_READOUT_DEPTH } from "../ui/hud/constants";
 import { designHudInset, readCssSafeArea } from "../ui/viewFit";
+import { worldToScreen } from "../ui/worldProject";
 import { addUiText } from "../ui/text";
 import { refitType } from "../ui/typekit";
 import {
@@ -126,6 +128,8 @@ const TABLET_LABEL_Y_NUDGE = -5;
 /** Wider side margin than default SIGN_PAD so long one-line speech is not edge-tight. */
 const SHOP_SPEECH_PAD_X = SIGN_PAD_X + 12;
 const SHOP_SPEECH_PAD_Y = SIGN_PAD_Y;
+/** ShopScene renders under HudScene — customer order speech reparents to HUD at this depth. */
+const SHOP_CUSTOMER_SPEECH_HUD_DEPTH = HUD_READOUT_DEPTH + 1;
 
 /** Concurrent customers the pool covers without mid-frame allocate (4 is typical peak). */
 const CUSTOMER_VISUAL_POOL = 4;
@@ -471,6 +475,35 @@ export class ShopScene extends Phaser.Scene {
     if (String(chip.text ?? "").trim().length === 0) return;
     chip.setAlpha(1).setVisible(true);
     const host = signContainer(chip);
+    host.setAlpha(1).setVisible(true);
+  }
+
+  /**
+   * Customer order plaque only — HudScene paints after ShopScene, so world depth cannot
+   * beat SCORE/clock. Reparent the sign host and project world plaque center each frame.
+   */
+  private pinCustomerSpeechOnHud(
+    chip: Phaser.GameObjects.Text,
+    worldCenterX: number,
+    worldCenterY: number,
+  ): void {
+    syncSignPlaque(chip);
+    const hud = this.scene.get("hud") as HudScene | undefined;
+    if (!hud?.sys.isActive()) {
+      this.pinShopSpeech(chip, worldCenterX, worldCenterY);
+      return;
+    }
+    const screen = worldToScreen(this.cameras.main, worldCenterX, worldCenterY);
+    const host = signContainer(chip);
+    if (host.scene !== hud) {
+      host.scene?.sys.displayList.remove(host);
+      hud.add.existing(host);
+    }
+    setSignScrollFactor(chip, 0, 0);
+    setSignPlaqueCenter(chip, screen.x, screen.y);
+    chip.setDepth(SHOP_CUSTOMER_SPEECH_HUD_DEPTH);
+    if (String(chip.text ?? "").trim().length === 0) return;
+    chip.setAlpha(1).setVisible(true);
     host.setAlpha(1).setVisible(true);
   }
 
@@ -974,7 +1007,7 @@ export class ShopScene extends Phaser.Scene {
         const pin = layout
           ? { x: layout.x, y: layout.y }
           : speechPlaqueAboveHead(bubble, sprite.x, standingPersonHeadTop(sprite));
-        this.pinShopSpeech(bubble, pin.x, pin.y);
+        this.pinCustomerSpeechOnHud(bubble, pin.x, pin.y);
       } else {
         bubble.setVisible(false);
       }
