@@ -91,7 +91,7 @@ describe("speech stays off the models it belongs to", () => {
     const sync = between(src, "private syncCustomers(", "private makeHotspots(", "syncCustomers");
     expect(sync, "uses overhead layout").toMatch(/layoutCustomerSpeech\(/);
     expect(sync, "gated while walking in").toMatch(/customerSpeechShows\(true\)/);
-    expect(sync, "anchors on layout centre via plaque center").toMatch(/setSignPlaqueCenter\(bubble, layout\.x, layout\.y\)/);
+    expect(sync, "anchors on layout centre via pinShopSpeech").toMatch(/pinShopSpeech\(bubble, pin\.x, pin\.y\)/);
     expect(sync, "no side pin helpers").not.toMatch(/pinSideSpeech|setSignPlaqueEdge/);
   });
 
@@ -149,13 +149,15 @@ describe("shop speech chip resolver", () => {
     );
     expect(resolve, "registers tablet, TVs, and people as dodge obstacles").toMatch(/placer\.register\([\s\S]*"tablet"/);
     expect(resolve, "registers tablet, TVs, and people as dodge obstacles").toContain("tvRowAabb");
-    expect(resolve, "registers tablet, TVs, and people as dodge obstacles").toContain("spriteBodyAabb");
+    expect(resolve, "registers keyLead/driver bodies, not customer speech speakers").toContain("spriteBodyAabb");
+    expect(resolve, "does not register customer bodies as speech blockers").not.toMatch(/customer-\$\{/);
     expect(resolve, "head-hang for speech chips").toMatch(
       /placeShopChip\([\s\S]*"leadBubble"[\s\S]*true,\s*\)/,
     );
     expect(src, "head-hung speech pins preferred center when dodge misses").toMatch(
-      /if \(headHang\)[\s\S]*setSignPlaqueCenter\(chip, preferredX, preferredY\)/,
+      /if \(headHang\)[\s\S]*pinShopSpeech\(chip, preferredX, preferredY\)/,
     );
+    expect(src, "world speech uses scrollFactor 1 like door prompt").toContain("setSignScrollFactor");
     expect(src, "settled customers fall back to above-head pin without layout").toMatch(
       /speechPlaqueAboveHead\(bubble, sprite\.x, standingPersonHeadTop\(sprite\)\)/,
     );

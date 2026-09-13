@@ -379,11 +379,10 @@ export class HudReadouts {
    */
   registerShopHudObstacles(placer: ChipPlacer): void {
     if (!this.readoutsInShop || !this.scoreText.visible) return;
-    placer.register(
-      "scoreClock",
-      unionAabb([textInkAabb(this.scoreCaption), textInkAabb(this.scoreText), textInkAabb(this.clockText)]),
-      chipPriority("scoreClock"),
-    );
+    const scorePriority = chipPriority("scoreClock");
+    placer.register("scoreCaption", textInkAabb(this.scoreCaption), scorePriority);
+    placer.register("scoreValue", textInkAabb(this.scoreText), scorePriority);
+    placer.register("clock", textInkAabb(this.clockText), scorePriority);
     const shop = this.scene.scene.get("shop") as Phaser.Scene | undefined;
     if (!shop?.sys.isActive()) return;
     const cam = shop.cameras.main;

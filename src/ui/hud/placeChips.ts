@@ -84,7 +84,8 @@ export function placeChip(
     headHang,
   );
   if (!slot) {
-    setSignCopy(host, "");
+    // headHang callers pin at the preferred center on miss — never wipe copy here.
+    if (!headHang) setSignCopy(host, "");
     return false;
   }
   setSignPosition(host, slot.x, slot.y);

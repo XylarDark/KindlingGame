@@ -92,6 +92,10 @@ describe("placeChips collision math", () => {
     expect(placeChipsSrc).toContain("preferredY - mid.midY");
   });
 
+  it("headHang miss keeps copy so callers can pin at the preferred center", () => {
+    expect(placeChipsSrc).toMatch(/if \(!headHang\) setSignCopy\(host, ""\)/);
+  });
+
   it("preferred plaque center converts to host before collision search", () => {
     const plaque: ChipPlaqueExtents = {
       panelW: 100,

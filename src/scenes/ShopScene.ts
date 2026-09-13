@@ -63,6 +63,7 @@ import {
   setSignCopy,
   setSignPlaqueCenter,
   setSignPosition,
+  setSignScrollFactor,
   signPlaqueCenterWorld,
   signPlaqueExtents,
   signPlaqueMid,
@@ -366,7 +367,7 @@ export class ShopScene extends Phaser.Scene {
           keyLeadSlotHeadTop(),
           CUSTOMER_SPEECH_GAP,
         );
-        setSignPlaqueCenter(this.keyLeadBubble, lead.x, lead.y);
+        this.pinShopSpeech(this.keyLeadBubble, lead.x, lead.y);
       }
       this.lastKeyLeadPanelH = panelH;
     } else {
@@ -396,7 +397,7 @@ export class ShopScene extends Phaser.Scene {
           this.driver.x,
           standingPersonHeadTop(this.driver),
         );
-        setSignPlaqueCenter(this.driverBubble, driver.x, driver.y);
+        this.pinShopSpeech(this.driverBubble, driver.x, driver.y);
       }
       this.lastDriverPanelH = panelH;
     } else {
@@ -445,6 +446,15 @@ export class ShopScene extends Phaser.Scene {
     this.resolveShopChips(snap, ordered);
   }
 
+  /** World speech — SF1 host depth + above-head center (door prompt pattern). */
+  private pinShopSpeech(chip: Phaser.GameObjects.Text, centerX: number, centerY: number): void {
+    setSignScrollFactor(chip, 1, 1);
+    syncSignPlaque(chip);
+    setSignPlaqueCenter(chip, centerX, centerY);
+    setSignScrollFactor(chip, 1, 1);
+    if (String(chip.text ?? "").trim().length > 0) chip.setVisible(true);
+  }
+
   private placeShopChip(
     placer: ChipPlacer,
     id: string,
@@ -455,15 +465,20 @@ export class ShopScene extends Phaser.Scene {
     alt?: { x: number; y: number },
     headHang = false,
   ): void {
-    if (placeChip(placer, id, chip, preferredX, preferredY, priority, headHang)) return;
-    if (alt && placeChip(placer, id, chip, alt.x, alt.y, priority, headHang)) return;
+    if (placeChip(placer, id, chip, preferredX, preferredY, priority, headHang)) {
+      setSignScrollFactor(chip, 1, 1);
+      syncSignPlaque(chip);
+      if (String(chip.text ?? "").trim().length > 0) chip.setVisible(true);
+      return;
+    }
+    if (alt && placeChip(placer, id, chip, alt.x, alt.y, priority, headHang)) {
+      setSignScrollFactor(chip, 1, 1);
+      syncSignPlaque(chip);
+      if (String(chip.text ?? "").trim().length > 0) chip.setVisible(true);
+      return;
+    }
     if (headHang) {
-      const copy = String(chip.text ?? "").trim();
-      if (copy.length > 0) {
-        syncSignPlaque(chip);
-        setSignPlaqueCenter(chip, preferredX, preferredY);
-        chip.setVisible(true);
-      }
+      if (String(chip.text ?? "").trim().length > 0) this.pinShopSpeech(chip, preferredX, preferredY);
       return;
     }
     setSignCopy(chip, "");
@@ -486,17 +501,10 @@ export class ShopScene extends Phaser.Scene {
     placer.register("tvRow", tvRowAabb(), 58);
     if (this.keyLead.visible) placer.register("keyLead", spriteBodyAabb(this.keyLead), 55);
     if (this.driver.visible) placer.register("driver", spriteBodyAabb(this.driver), 55);
-    for (const visual of this.customers.values()) {
-      if (visual.sprite.visible) {
-        placer.register(`customer-${visual.orderId}`, spriteBodyAabb(visual.sprite), 55);
-      }
-    }
 
     for (const customer of ordered) {
       const visual = this.customers.get(customer.orderId);
-      if (!visual?.bubble.visible) continue;
-      const layout = this.customerLayoutById.get(customer.orderId);
-      if (!layout) continue;
+      if (!visual?.bubble.visible || !String(visual.bubble.text ?? "").trim()) continue;
       const priority = 50 - customer.slot;
       const headTop = standingPersonHeadTop(visual.sprite);
       const preferred = speechPlaqueAboveHead(visual.bubble, visual.sprite.x, headTop);
@@ -981,15 +989,12 @@ export class ShopScene extends Phaser.Scene {
         Math.abs(customer.x - customerSlotX(customer.slot)) < 1 && customerSpeechShows(true);
       const layout = this.customerLayoutById.get(customer.orderId);
       if (customer.bubble && settled) {
-        bubble.setAlpha(1).setVisible(true);
+        bubble.setAlpha(1);
         if (bubble.text !== customer.bubble) bubble.setText(customer.bubble);
-        if (layout) {
-          setSignPlaqueCenter(bubble, layout.x, layout.y);
-        } else {
-          syncSignPlaque(bubble);
-          const pin = speechPlaqueAboveHead(bubble, sprite.x, standingPersonHeadTop(sprite));
-          setSignPlaqueCenter(bubble, pin.x, pin.y);
-        }
+        const pin = layout
+          ? { x: layout.x, y: layout.y }
+          : speechPlaqueAboveHead(bubble, sprite.x, standingPersonHeadTop(sprite));
+        this.pinShopSpeech(bubble, pin.x, pin.y);
       } else {
         bubble.setVisible(false);
       }
