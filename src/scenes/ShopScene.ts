@@ -271,13 +271,12 @@ export class ShopScene extends Phaser.Scene {
     this.queueBadge = addSignText(this, 0, 0, "", {
       size: typeRolePx("hudSmall"),
       typeRole: "hudSmall",
+      align: "center",
       fontStyle: "700",
-      stroke: Color.inkHex,
-      strokeThickness: 6,
       noWrap: true,
       padX: SIGN_PAD_X,
-      padY: SIGN_PAD_Y,
-      inkShiftY: 2,
+      padY: SIGN_PAD_Y + 4,
+      inkShiftY: -4,
     })
       .setOrigin(0.5, 0.5)
       .setDepth(13)

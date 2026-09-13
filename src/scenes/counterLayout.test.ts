@@ -223,13 +223,14 @@ describe("ORDERS queue badge", () => {
     const badgeBlock = between(shop, "this.queueBadge = addSignText(", ".setVisible(false)", "queueBadge");
     expect(badgeBlock).toMatch(/\.setOrigin\(0\.5,\s*0\.5\)/);
     expect(badgeBlock).toContain("noWrap: true");
+    expect(badgeBlock).toContain('align: "center"');
     expect(badgeBlock).not.toContain("maxWidth:");
     expect(badgeBlock).not.toContain("maxHeight:");
-    expect(badgeBlock).toContain("stroke: Color.inkHex");
-    expect(badgeBlock).toContain("strokeThickness: 6");
+    expect(badgeBlock).not.toContain("stroke:");
+    expect(badgeBlock).not.toContain("strokeThickness:");
     expect(badgeBlock).toContain("padX: SIGN_PAD_X");
-    expect(badgeBlock).toContain("padY: SIGN_PAD_Y");
-    expect(badgeBlock).toContain("inkShiftY: 2");
+    expect(badgeBlock).toContain("padY: SIGN_PAD_Y + 4");
+    expect(badgeBlock).toContain("inkShiftY: -4");
     expect(shop).toContain("private pinQueueBadge(");
   });
 
