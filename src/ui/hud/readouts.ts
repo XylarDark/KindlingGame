@@ -251,7 +251,6 @@ export class HudReadouts {
       ...readoutOutline(HUD_SCORE_PX),
     })
       .setOrigin(1, 0.5)
-      .setScrollFactor(0)
       .setDepth(depth)
       .setVisible(false);
     this.shopScoreCaption = addUiText(shop, 0, 0, "SCORE", {
@@ -264,7 +263,6 @@ export class HudReadouts {
       ...readoutOutline(HUD_SCORE_PX),
     })
       .setOrigin(1, 0.5)
-      .setScrollFactor(0)
       .setDepth(depth)
       .setVisible(false);
     this.shopClockText = addUiText(shop, 0, 0, "", {
@@ -274,9 +272,26 @@ export class HudReadouts {
       ...readoutOutline(HUD_READOUT_PX),
     })
       .setOrigin(0, 0.5)
-      .setScrollFactor(0)
       .setDepth(depth)
       .setVisible(false);
+  }
+
+  /** World-space counter row — SF1 tracks COUNTER_SIGN under shop cam zoom. */
+  private placeShopCounterReadouts(): void {
+    if (!this.shopScoreText || !this.shopScoreCaption || !this.shopClockText) return;
+    const leftX = COUNTER_SIGN.x - COUNTER_SIGN.w / 2 - HUD_SIGN_GAP;
+    const rightX = COUNTER_SIGN.x + COUNTER_SIGN.w / 2 + HUD_SIGN_GAP;
+    const y = COUNTER_SIGN.y;
+    const valueW = this.shopScoreText.width;
+    const captionW = this.shopScoreCaption.width;
+    let gap = HUD_SCORE_GAP;
+    const signInnerLeft = COUNTER_SIGN.x - COUNTER_SIGN.w / 2;
+    while (gap > 4 && leftX - valueW - gap - captionW < signInnerLeft - 8) {
+      gap -= 2;
+    }
+    this.shopScoreText.setOrigin(1, 0.5).setPosition(leftX, y);
+    this.shopScoreCaption.setOrigin(1, 0.5).setPosition(leftX - valueW - gap, y);
+    this.shopClockText.setOrigin(0, 0.5).setPosition(rightX, y);
   }
 
   private syncShopReadoutMirror(): void {
@@ -286,13 +301,7 @@ export class HudReadouts {
     this.shopScoreText.setText(this.scoreText.text);
     this.shopScoreCaption.setText(this.scoreCaption.text);
     this.shopClockText.setText(this.clockText.text);
-    for (const [src, dst] of [
-      [this.scoreText, this.shopScoreText],
-      [this.scoreCaption, this.shopScoreCaption],
-      [this.clockText, this.shopClockText],
-    ] as const) {
-      dst.setOrigin(src.originX, src.originY).setPosition(src.x, src.y);
-    }
+    this.placeShopCounterReadouts();
   }
 
   matchCaptionToValue(): void {

@@ -134,12 +134,23 @@ describe("HUD chip resolver wiring", () => {
     expect(read("../ui/hud/constants.ts")).toContain("SHOP_COUNTER_READOUT_DEPTH = 9");
     expect(readouts).toContain("ensureShopReadouts");
     expect(readouts).toContain("syncShopReadoutMirror");
+    expect(readouts).toContain("placeShopCounterReadouts");
     expect(readouts).toContain("shopReadoutsLayerActive");
     const chrome = between(readouts, "paintReadoutChrome(atDoor: boolean, showId: boolean", "\n  paintDoorTitle(", "paintReadoutChrome");
     expect(chrome).toContain("shopLayer");
     expect(chrome).toMatch(/showHudRow = !hide && !shopLayer/);
     expect(readouts).toContain("this.scene.scene.get(\"shop\")");
     expect(readouts).toContain("SHOP_COUNTER_READOUT_DEPTH");
+    const ensure = between(readouts, "private ensureShopReadouts(): void {", "\n  /** World-space counter row", "ensureShopReadouts");
+    expect(ensure).not.toContain("setScrollFactor(0)");
+    const mirror = between(readouts, "private syncShopReadoutMirror(): void {", "\n  matchCaptionToValue(): void {", "syncShopReadoutMirror");
+    expect(mirror).toContain("placeShopCounterReadouts()");
+    expect(mirror).not.toMatch(/src\.x|src\.y/);
+    const world = between(readouts, "private placeShopCounterReadouts(): void {", "\n  private syncShopReadoutMirror", "placeShopCounterReadouts");
+    expect(world).toContain("COUNTER_SIGN.x - COUNTER_SIGN.w / 2 - HUD_SIGN_GAP");
+    expect(world).toContain("COUNTER_SIGN.x + COUNTER_SIGN.w / 2 + HUD_SIGN_GAP");
+    expect(world).toContain("COUNTER_SIGN.y");
+    expect(world).toMatch(/while \(gap > 4/);
   });
 
   it("exposes shop HUD obstacle seeding for ShopScene chip resolve", () => {
