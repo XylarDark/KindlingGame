@@ -213,7 +213,7 @@ describe("shop scene uses exported placement helpers", () => {
   it("imports speech placement helpers from plaquePlacementPhaser", () => {
     expect(shopSrc).toContain('from "../ui/plaquePlacementPhaser"');
     expect(shopSrc).toContain("keyLeadSpeechPlaqueAboveHead(");
-    expect(shopSrc).toContain("standingPersonHeadTop(this.keyLead)");
+    expect(shopSrc).toContain("modelHeadTop(this.keyLead)");
     expect(shopSrc).toContain("speechPlaqueAboveHead(");
     expect(placementSrc).toContain("keyLeadSpeechPlaqueAboveHead(");
     expect(placementSrc).toContain("leadSpeechPlaqueCenter(");

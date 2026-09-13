@@ -79,6 +79,7 @@ import {
 import { aboveHeadBand, plaqueAabbFromCenter } from "../ui/plaquePlacement";
 import {
   keyLeadSpeechPlaqueAboveHead,
+  modelHeadTop,
   speechPlaqueAboveHead,
   spriteBodyAabb,
   standingPersonHeadTop,
@@ -382,7 +383,7 @@ export class ShopScene extends Phaser.Scene {
       const lead = keyLeadSpeechPlaqueAboveHead(
         this.keyLeadBubble,
         this.keyLead.x,
-        standingPersonHeadTop(this.keyLead),
+        modelHeadTop(this.keyLead),
       );
       this.pinShopSpeech(this.keyLeadBubble, lead.x, lead.y);
       this.lastKeyLeadPanelH = signPlaqueExtents(this.keyLeadBubble).panelH;
@@ -514,7 +515,7 @@ export class ShopScene extends Phaser.Scene {
       const lead = keyLeadSpeechPlaqueAboveHead(
         this.keyLeadBubble,
         this.keyLead.x,
-        standingPersonHeadTop(this.keyLead),
+        modelHeadTop(this.keyLead),
       );
       this.placeShopChip(
         placer,
