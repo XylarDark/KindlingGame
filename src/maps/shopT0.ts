@@ -126,7 +126,7 @@ export const CUSTOMER_SPEECH_H = 83;
 /** Daylight between stacked speech / feedback chips, and above a model's head when hanging. */
 export const CUSTOMER_SPEECH_GAP = 14;
 /** Key-lead holding/callout clearance above the hat line — door prompt feel. */
-export const SHOP_KEY_LEAD_SPEECH_GAP = 45;
+export const SHOP_KEY_LEAD_SPEECH_GAP = 20;
 /** @deprecated Side chips removed — kept for width math in legacy callers. */
 export const CUSTOMER_SPEECH_SIDE_GAP = 12;
 /** Hair sits this far below the counter front so heads stay fully visible. */

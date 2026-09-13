@@ -122,6 +122,8 @@ const TABLET_LABEL_INSET = 2;
 /** Wider side margin than default SIGN_PAD so long one-line speech is not edge-tight. */
 const SHOP_SPEECH_PAD_X = SIGN_PAD_X + 12;
 const SHOP_SPEECH_PAD_Y = SIGN_PAD_Y;
+/** Customer order ink sits higher inside the plaque chrome — not key-lead speech. */
+const CUSTOMER_SPEECH_INK_RAISE = 15;
 
 /** Concurrent customers the pool covers without mid-frame allocate (4 is typical peak). */
 const CUSTOMER_VISUAL_POOL = 4;
@@ -275,6 +277,7 @@ export class ShopScene extends Phaser.Scene {
       .setOrigin(1, 0)
       .setDepth(13)
       .setVisible(false);
+    setSignScrollFactor(this.queueBadge, 1, 1);
     this.pinQueueBadge(tab);
 
     this.targetCallout = addSignText(this, 0, 0, "", {
@@ -656,15 +659,19 @@ export class ShopScene extends Phaser.Scene {
     this.tabletLabel.setPosition(x, y);
   }
 
-  /** Top-right of the ORDERS tablet screen — re-pin after every sync so plaque layout cannot drift. */
+  /** Top-right of the ORDERS tablet screen — plaque center from panel size, not host locals. */
   private pinQueueBadge(tab: ReturnType<typeof tabletLayout>, badgeInset = 6): void {
+    setSignScrollFactor(this.queueBadge, 1, 1);
     syncSignPlaque(this.queueBadge);
     const ext = signPlaqueExtents(this.queueBadge);
-    setSignPosition(
+    const screenRight = tab.screenLeft + tab.screenW - badgeInset;
+    const screenTop = tab.screenTop + badgeInset;
+    setSignPlaqueCenter(
       this.queueBadge,
-      tab.screenLeft + tab.screenW - badgeInset - ext.rightLocal,
-      tab.screenTop + badgeInset - ext.topLocal,
+      screenRight - ext.panelW / 2,
+      screenTop + ext.panelH / 2,
     );
+    setSignScrollFactor(this.queueBadge, 1, 1);
   }
 
   /**
@@ -832,6 +839,7 @@ export class ShopScene extends Phaser.Scene {
       noWrap: true,
       padX: SHOP_SPEECH_PAD_X,
       padY: SHOP_SPEECH_PAD_Y,
+      inkShiftY: CUSTOMER_SPEECH_INK_RAISE,
       maxWidth: CUSTOMER_SPEECH_MAX_W,
       maxHeight: CUSTOMER_SPEECH_H,
     })

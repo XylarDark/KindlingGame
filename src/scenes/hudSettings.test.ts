@@ -77,6 +77,7 @@ describe("settings cog panel", () => {
     expect(create).toContain('this.cogHit.on("pointerdown", toggleSettings)');
     expect(create).not.toContain("this.cog.on(\"pointerdown\"");
     expect(create).toMatch(/\.setDisplaySize\(cogSize, cogSize\)/);
+    expect(settings).toContain("HUD_COG_DISPLAY_SIZE");
   });
 
   it("anchors settings chrome to the live HUD viewport — cog hit only", () => {

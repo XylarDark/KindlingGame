@@ -202,6 +202,8 @@ export function minDesignPx(
 
 /** Design pixels so a HUD control stays ≥ {@link MIN_CSS_TOUCH_PX} after the worst Y scale. */
 export const HUD_TOUCH_MIN_DESIGN = minDesignPx(MIN_CSS_TOUCH_PX, "y");
+/** Settings cog display size — 25% smaller than the touch-floor box. */
+export const HUD_COG_DISPLAY_SIZE = HUD_TOUCH_MIN_DESIGN * 0.75;
 
 export function designSafeInset(view: ViewSize, css: SafeInset): SafeInset {
   return {

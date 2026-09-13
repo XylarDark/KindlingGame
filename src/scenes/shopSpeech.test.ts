@@ -118,6 +118,9 @@ describe("speech stays off the models it belongs to", () => {
     expect(make, "customer order stays single-line with wider pad").toMatch(
       /noWrap: true[\s\S]*padX: SHOP_SPEECH_PAD_X/,
     );
+    expect(make, "customer ink raised inside the plaque chrome").toMatch(
+      /inkShiftY: CUSTOMER_SPEECH_INK_RAISE/,
+    );
     expect(sync, "look guarded before applyPersonTexture").toMatch(
       /if \(visual\.look !== customer\.look\)[\s\S]*applyPersonTexture\(visual\.sprite, customer\.look\)/,
     );

@@ -10,7 +10,7 @@ import { addUiText } from "../text";
 import { settingsGeom, type SettingsGeom } from "../settingsGeom";
 import { Color, HUD_TYPE_FIT, MENU_TYPE_FIT } from "../theme";
 import type { SafeInset } from "../viewFit";
-import { hudSceneViewport, HUD_TOUCH_MIN_DESIGN } from "../viewFit";
+import { hudSceneViewport, HUD_COG_DISPLAY_SIZE } from "../viewFit";
 import { type ChipPlacer } from "./placeChips";
 import { chipPriority } from "./slots";
 import {
@@ -304,7 +304,7 @@ export class HudSettings {
 
     const cogX = GAME_WIDTH - 24;
     const cogY = GAME_HEIGHT - 20;
-    const cogSize = HUD_TOUCH_MIN_DESIGN;
+    const cogSize = HUD_COG_DISPLAY_SIZE;
     this.cog = this.scene.add
       .image(cogX, cogY, "tex-cog")
       .setOrigin(1, 1)
@@ -327,7 +327,7 @@ export class HudSettings {
   layout(inset: SafeInset): void {
     const { width: viewW, height: viewH } = hudSceneViewport(this.scene);
     this.syncViewportChrome(viewW, viewH);
-    const cogSize = HUD_TOUCH_MIN_DESIGN;
+    const cogSize = HUD_COG_DISPLAY_SIZE;
     let cogX = viewW - 24 - inset.right;
     const cogY = viewH - 20 - inset.bottom;
     this.cog.setPosition(cogX, cogY);

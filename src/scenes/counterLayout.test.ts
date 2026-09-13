@@ -231,8 +231,11 @@ describe("ORDERS queue badge", () => {
     expect(sync).toContain("this.pinQueueBadge(tab)");
     const pin = between(shop, "private pinQueueBadge(", "\n  }", "pinQueueBadge");
     expect(pin).toContain("syncSignPlaque(this.queueBadge)");
-    expect(pin).toContain("tab.screenLeft + tab.screenW - badgeInset - ext.rightLocal");
-    expect(pin).toContain("tab.screenTop + badgeInset - ext.topLocal");
+    expect(pin).toContain("setSignScrollFactor(this.queueBadge, 1, 1)");
+    expect(pin).toContain("setSignPlaqueCenter(");
+    expect(pin).toContain("this.queueBadge");
+    expect(pin).toContain("screenRight - ext.panelW / 2");
+    expect(pin).toContain("screenTop + ext.panelH / 2");
   });
 });
 

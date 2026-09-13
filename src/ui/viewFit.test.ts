@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import {
   GAME_ASPECT,
+  HUD_COG_DISPLAY_SIZE,
   HUD_TOUCH_MIN_DESIGN,
   MIN_CSS_TOUCH_PX,
   POPULAR_MOBILE_LANDSCAPE,
@@ -195,6 +196,10 @@ describe("HUD touch after scale", () => {
       expect(cssPxFromDesign(HUD_TOUCH_MIN_DESIGN, "y", view)).toBeGreaterThanOrEqual(MIN_CSS_TOUCH_PX - 0.5);
     }
   });
+
+  it("shrinks the settings cog display to 75% of the touch-floor box", () => {
+    expect(HUD_COG_DISPLAY_SIZE).toBe(HUD_TOUCH_MIN_DESIGN * 0.75);
+  });
 });
 
 describe("clientToGame pointer mapping", () => {
@@ -224,7 +229,7 @@ describe("settings cog viewport geometry", () => {
       const viewW = Math.round(GAME_WIDTH * scale);
       const viewH = Math.round(GAME_HEIGHT * scale);
       const cogRight = settingsCogX(viewW, 0);
-      expect(cogInsideHudViewport(cogRight, HUD_TOUCH_MIN_DESIGN, viewW)).toBe(true);
+      expect(cogInsideHudViewport(cogRight, HUD_COG_DISPLAY_SIZE, viewW)).toBe(true);
       expect(GAME_WIDTH - 24).toBeGreaterThan(viewW);
       expect(cogRight).toBeLessThanOrEqual(viewW);
       expect(viewH).toBeGreaterThan(600);

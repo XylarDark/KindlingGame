@@ -35,9 +35,12 @@ export interface SignTextOptions extends UiTextOptions {
   padX?: number;
   /** @deprecated Prefer {@link padVariant}. */
   padY?: number;
+  /** Raise (+) or lower (−) glyph ink inside the plaque without moving the chrome. */
+  inkShiftY?: number;
 }
 
 const SIGN_PAD = "signPad";
+const SIGN_INK_SHIFT = "signInkShiftY";
 
 function signPads(text: Phaser.GameObjects.Text): { x: number; y: number } {
   const custom = text.getData(SIGN_PAD) as { x: number; y: number } | undefined;
@@ -364,8 +367,9 @@ function layoutPlaque(entry: SignPlaqueEntry): void {
   const tex = plaqueTextureForAccent(accent);
   if (plaque.texture.key !== tex) plaque.setTexture(tex);
 
+  const inkShiftY = (text.getData(SIGN_INK_SHIFT) as number | undefined) ?? 0;
   const textX = -w * text.originX;
-  const textY = -h * text.originY;
+  const textY = -h * text.originY - inkShiftY;
   const plaqueCenter = plaqueCenterFromGlyphs(text, layout);
   // Always repair inner layout — patched setPosition must not leave glyphs orphaned at (0,0).
   entry.setTextLocal(textX, textY);
@@ -384,7 +388,7 @@ function layoutPlaque(entry: SignPlaqueEntry): void {
     return;
   }
 
-  const key = [copy, w, h, text.originX, text.originY, accent, text.depth, tex, pad.x, pad.y].join(":");
+  const key = [copy, w, h, text.originX, text.originY, accent, text.depth, tex, pad.x, pad.y, inkShiftY].join(":");
   if (key === entry.lastLayoutKey) {
     entry.dirty = false;
     return;
@@ -407,7 +411,7 @@ export function addSignText(
   content: string,
   options: SignTextOptions = {},
 ): Phaser.GameObjects.Text {
-  const { accent, padVariant, padX, padY, padding: _pad, ...style } = options;
+  const { accent, padVariant, padX, padY, inkShiftY, padding: _pad, ...style } = options;
   const host = scene.add.container(x, y);
   const text = makeType(scene, 0, 0, content, {
     ...(style as TypeStyle),
@@ -424,6 +428,7 @@ export function addSignText(
         ? { x: padX ?? SIGN_PAD_X, y: padY ?? SIGN_PAD_Y }
         : padForVariant("default");
   text.setData(SIGN_PAD, pads);
+  if (inkShiftY !== undefined) text.setData(SIGN_INK_SHIFT, inkShiftY);
 
   const plaque = makePlaqueNineSlice(scene, pads.x * 2 + 8, pads.y * 2 + 8, accent ?? SIGN_BORDER);
   host.add([plaque, text]);
