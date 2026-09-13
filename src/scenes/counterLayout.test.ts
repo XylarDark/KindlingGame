@@ -219,20 +219,31 @@ describe("SCORE caption type size", () => {
 });
 
 describe("ORDERS queue badge", () => {
-  it("pins the count badge to the tablet top-right bezel", () => {
+  it("pins the count badge to the tablet screen top-right with a readable box", () => {
     const badgeBlock = between(shop, "this.queueBadge = addSignText(", ".setVisible(false)", "queueBadge");
-    expect(badgeBlock).toMatch(/\.setOrigin\(1,\s*0\)/);
-    expect(badgeBlock).not.toMatch(/\.setOrigin\(0\.5\)/);
+    expect(badgeBlock).toMatch(/\.setOrigin\(0\.5,\s*0\.5\)/);
+    expect(badgeBlock).toContain("noWrap: true");
+    expect(badgeBlock).toContain('align: "center"');
+    expect(badgeBlock).not.toContain("maxWidth:");
+    expect(badgeBlock).not.toContain("maxHeight:");
+    expect(badgeBlock).not.toContain("stroke:");
+    expect(badgeBlock).not.toContain("strokeThickness:");
+    expect(badgeBlock).toContain("padX: SIGN_PAD_X");
+    expect(badgeBlock).toContain("padY: SIGN_PAD_Y + 4");
+    expect(badgeBlock).toContain("inkShiftY: -4");
     expect(shop).toContain("private pinQueueBadge(");
   });
 
   it("reapplies badge position on syncTablet so layout cannot drift", () => {
     const sync = between(shop, "private syncTablet(snap: SimSnapshot, pulse: number, flash: boolean): void {", "\n  }", "syncTablet");
+    expect(sync).toContain("this.queueBadge.setVisible(count >= 1)");
     expect(sync).toContain("this.pinQueueBadge(tab)");
     const pin = between(shop, "private pinQueueBadge(", "\n  }", "pinQueueBadge");
+    expect(pin).toContain("setSignScrollFactor(this.queueBadge, 1, 1)");
     expect(pin).toContain("syncSignPlaque(this.queueBadge)");
-    expect(pin).toContain("tab.left + tab.w - badgeInset - ext.rightLocal");
-    expect(pin).toContain("tab.top + badgeInset - ext.topLocal");
+    expect(pin).toContain("tab.left + tab.w");
+    expect(pin).toContain("tab.top");
+    expect(pin).toContain("setSignPlaqueCenter(this.queueBadge, cornerX, cornerY)");
   });
 });
 
