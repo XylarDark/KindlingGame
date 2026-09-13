@@ -125,7 +125,7 @@ export const BENCH = {
 export const CUSTOMER_SPEECH_H = 83;
 /** Daylight between stacked speech / feedback chips, and above a model's head when hanging. */
 export const CUSTOMER_SPEECH_GAP = 14;
-/** Clearance above the key-lead hat line — plaque bottom sits headTop − gap (same feel as customer speech). */
+/** Edge clearance in the head↔TV band when centering the key-lead holding plaque. */
 export const SHOP_KEY_LEAD_SPEECH_GAP = 14;
 /** @deprecated Side chips removed — kept for width math in legacy callers. */
 export const CUSTOMER_SPEECH_SIDE_GAP = 12;

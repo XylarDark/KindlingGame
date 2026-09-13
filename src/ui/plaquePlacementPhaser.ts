@@ -1,5 +1,10 @@
 import Phaser from "phaser";
-import { PERSON_DISPLAY_MAX_H, SHOP_KEY_LEAD_SPEECH_GAP } from "../maps/shopT0";
+import {
+  PERSON_DISPLAY_MAX_H,
+  SHOP_KEY_LEAD_SPEECH_GAP,
+  TV_GRID_TOP,
+  TV_H,
+} from "../maps/shopT0";
 import type { ChipAabb } from "./hud/chipCollision";
 import { leadSpeechPlaqueCenterFromExtents } from "./plaquePlacement";
 import { signPlaqueExtents, signPlaqueMid, signYAbove, syncSignPlaque } from "./signText";
@@ -17,13 +22,19 @@ export function speechPlaqueAboveHead(
   return { x: centerX, y: hostY + mid.midY };
 }
 
-/** Key-lead callouts — whole plaque hangs above the hat line with {@link SHOP_KEY_LEAD_SPEECH_GAP}. */
+/** Key-lead callouts — centered in the head↔TV band for even air above and below the plaque. */
 export function keyLeadSpeechPlaqueAboveHead(
   chip: Phaser.GameObjects.Text,
   centerX: number,
   headTopY: number,
 ): { x: number; y: number } {
-  return speechPlaqueAboveHead(chip, centerX, headTopY, SHOP_KEY_LEAD_SPEECH_GAP);
+  return leadSpeechPlaqueCenter(
+    chip,
+    centerX,
+    headTopY,
+    TV_GRID_TOP + TV_H,
+    SHOP_KEY_LEAD_SPEECH_GAP,
+  );
 }
 
 /** Phaser adapter — key-lead band between head top and TV row bottom. */
