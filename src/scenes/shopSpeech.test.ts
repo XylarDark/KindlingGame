@@ -85,7 +85,10 @@ describe("speech stays off the models it belongs to", () => {
   it("draws lobby customers in front of the baked counter face", () => {
     const make = between(src, "private makeCustomerVisual(", "return { sprite, bubble, feedback", "makeCustomerVisual");
     expect(make, "customer sprite depth above counter RT (7)").toMatch(/\.setDepth\(8\)/);
-    expect(make, "speech chips above the sprite").toMatch(/\.setDepth\(10\)/);
+    expect(make, "customer order bubble lives on HudScene above readouts").toMatch(
+      /addSignText\(hud,[\s\S]*SHOP_CUSTOMER_SPEECH_HUD_DEPTH/,
+    );
+    expect(make, "feedback stays on shop above the sprite").toMatch(/addSignText\(this,[\s\S]*\.setDepth\(10\)/);
     const sync = between(src, "private syncCustomers(", "private makeHotspots(", "syncCustomers");
     expect(sync, "feet Y from measured displayHeight").toMatch(/customerFeetY\(sprite\.displayHeight\)/);
   });
@@ -149,6 +152,9 @@ describe("shop speech chip resolver", () => {
     );
     expect(src, "key-lead and driver still use world pinShopSpeech").toMatch(
       /pinShopSpeech\(this\.keyLeadBubble/,
+    );
+    expect(src, "customer order projects world center to HUD screen space").toMatch(
+      /worldToScreen\(this\.cameras\.main, worldCenterX, worldCenterY\)/,
     );
   });
 

@@ -194,6 +194,7 @@ export class ShopScene extends Phaser.Scene {
   /** Ordered settled ids + quantized x — layoutCustomerSpeech only when this changes. */
   private lastCustomerLayoutKey = "";
   private customerLayoutById = new Map<string, ReturnType<typeof layoutCustomerSpeech>[number]>();
+  private customerPoolWarmed = false;
   private onPreRenderLighting = (): void => {
     if (!this.sys.isActive() || this.sys.isSleeping()) return;
     this.syncLighting(getSim().gameMs());
@@ -223,7 +224,6 @@ export class ShopScene extends Phaser.Scene {
       this.events.off(Phaser.Scenes.Events.PRE_RENDER, this.onPreRenderLighting);
     });
     this.makeHotspots();
-    this.warmCustomerPool();
     if (layoutDebugEnabled()) {
       this.layoutDebugGfx = this.add.graphics().setDepth(99);
     }
@@ -357,7 +357,16 @@ export class ShopScene extends Phaser.Scene {
     });
   }
 
+  private ensureCustomerPoolWarm(): void {
+    if (this.customerPoolWarmed) return;
+    const hud = this.scene.get("hud") as HudScene | undefined;
+    if (!hud?.sys?.isActive()) return;
+    this.customerPoolWarmed = true;
+    this.warmCustomerPool();
+  }
+
   private sync(snap: SimSnapshot): void {
+    this.ensureCustomerPoolWarm();
     const sky = skyAt(snap.gameMs);
     const skyKey = skyVisualDirtyKey(sky);
     if (skyKey !== this.lastSkyKey) {
@@ -479,8 +488,7 @@ export class ShopScene extends Phaser.Scene {
   }
 
   /**
-   * Customer order plaque only — HudScene paints after ShopScene, so world depth cannot
-   * beat SCORE/clock. Reparent the sign host and project world plaque center each frame.
+   * Customer order plaque only — chip lives on HudScene; project world center each frame.
    */
   private pinCustomerSpeechOnHud(
     chip: Phaser.GameObjects.Text,
@@ -494,17 +502,14 @@ export class ShopScene extends Phaser.Scene {
       return;
     }
     const screen = worldToScreen(this.cameras.main, worldCenterX, worldCenterY);
-    const host = signContainer(chip);
-    if (host.scene !== hud) {
-      host.scene?.sys.displayList.remove(host);
-      hud.add.existing(host);
-    }
     setSignScrollFactor(chip, 0, 0);
     setSignPlaqueCenter(chip, screen.x, screen.y);
     chip.setDepth(SHOP_CUSTOMER_SPEECH_HUD_DEPTH);
     if (String(chip.text ?? "").trim().length === 0) return;
     chip.setAlpha(1).setVisible(true);
+    const host = signContainer(chip);
     host.setAlpha(1).setVisible(true);
+    hud.sys.displayList.bringToTop(host);
   }
 
   private placeShopChip(
@@ -861,7 +866,8 @@ export class ShopScene extends Phaser.Scene {
       if (id) getSim().shopClick({ type: "customer", orderId: id });
     });
     wireHover(sprite);
-    const bubble = addSignText(this, -400, CUSTOMER_SPOT.y - PERSON_DISPLAY_H, "", {
+    const hud = this.scene.get("hud") as HudScene;
+    const bubble = addSignText(hud, -400, 0, "", {
       size: typeRolePx("speech"),
       typeRole: "speech",
       align: "center",
@@ -873,7 +879,7 @@ export class ShopScene extends Phaser.Scene {
       maxHeight: CUSTOMER_SPEECH_H,
     })
       .setOrigin(0.5)
-      .setDepth(10)
+      .setDepth(SHOP_CUSTOMER_SPEECH_HUD_DEPTH)
       .setVisible(false);
     const feedback = addSignText(this, -400, CUSTOMER_SPOT.y - PERSON_DISPLAY_H, "", {
       size: typeRolePx("hudSmall"),
