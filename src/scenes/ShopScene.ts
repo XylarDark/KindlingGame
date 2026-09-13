@@ -48,7 +48,7 @@ import {
 } from "../maps/shopT0";
 import { enableItemHit } from "../input/hit";
 import { ackTap, releaseTapAck } from "../input/tapAck";
-import { getSim } from "../session";
+import { consumePendingCaptureSeed, getSim } from "../session";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
 import { skyAt, skyVisualDirtyKey } from "../sim/dayNight";
 import type { Sku } from "../sim/catalog";
@@ -64,6 +64,7 @@ import {
   setSignPlaqueCenter,
   setSignPosition,
   setSignScrollFactor,
+  signContainer,
   signPlaqueCenterWorld,
   signPlaqueExtents,
   signPlaqueMid,
@@ -83,7 +84,7 @@ import {
 import { HudScene } from "./HudScene";
 import type { ChipAabb, ChipPlacer } from "../ui/hud/chipCollision";
 import { beginChipFrame, placeChip } from "../ui/hud/placeChips";
-import { chipPriority, speechSlotId } from "../ui/hud/slots";
+import { chipPriority } from "../ui/hud/slots";
 import { designHudInset, readCssSafeArea } from "../ui/viewFit";
 import { addUiText } from "../ui/text";
 import {
@@ -315,6 +316,10 @@ export class ShopScene extends Phaser.Scene {
   }
 
   update(): void {
+    if (consumePendingCaptureSeed()) {
+      this.lastCustomerLayoutKey = "";
+      this.customerLayoutById.clear();
+    }
     this.sync(getSim().snapshot());
   }
 
@@ -438,12 +443,9 @@ export class ShopScene extends Phaser.Scene {
 
     this.syncTablet(snap, tabletPulse, next?.kind === "tablet");
     this.syncTargetCallout(snap);
-    const ordered = [...snap.customers]
-      .filter((c) => Math.abs(c.x - customerSlotX(c.slot)) < 1 && customerSpeechShows(true))
-      .sort((a, b) => a.slot - b.slot);
     this.syncCustomers(snap.customers, pulse, next?.kind === "customer" ? next.orderId : null);
     this.syncOutgoing(snap);
-    this.resolveShopChips(snap, ordered);
+    this.resolveShopChips(snap);
   }
 
   /** World speech — SF1 host depth + above-head center (door prompt pattern). */
@@ -452,7 +454,10 @@ export class ShopScene extends Phaser.Scene {
     syncSignPlaque(chip);
     setSignPlaqueCenter(chip, centerX, centerY);
     setSignScrollFactor(chip, 1, 1);
-    if (String(chip.text ?? "").trim().length > 0) chip.setVisible(true);
+    if (String(chip.text ?? "").trim().length === 0) return;
+    chip.setAlpha(1).setVisible(true);
+    const host = signContainer(chip);
+    host.setAlpha(1).setVisible(true);
   }
 
   private placeShopChip(
@@ -465,29 +470,18 @@ export class ShopScene extends Phaser.Scene {
     alt?: { x: number; y: number },
     headHang = false,
   ): void {
-    if (placeChip(placer, id, chip, preferredX, preferredY, priority, headHang)) {
-      setSignScrollFactor(chip, 1, 1);
-      syncSignPlaque(chip);
-      if (String(chip.text ?? "").trim().length > 0) chip.setVisible(true);
-      return;
-    }
-    if (alt && placeChip(placer, id, chip, alt.x, alt.y, priority, headHang)) {
-      setSignScrollFactor(chip, 1, 1);
-      syncSignPlaque(chip);
-      if (String(chip.text ?? "").trim().length > 0) chip.setVisible(true);
-      return;
-    }
+    // Above-head shop speech lives in world space (SF1). Screen-space placeChip dodges
+    // would overwrite syncCustomers pins and shove plaques off the zoomed shop camera.
     if (headHang) {
       if (String(chip.text ?? "").trim().length > 0) this.pinShopSpeech(chip, preferredX, preferredY);
       return;
     }
+    if (placeChip(placer, id, chip, preferredX, preferredY, priority, headHang)) return;
+    if (alt && placeChip(placer, id, chip, alt.x, alt.y, priority, headHang)) return;
     setSignCopy(chip, "");
   }
 
-  private resolveShopChips(
-    snap: SimSnapshot,
-    ordered: readonly { orderId: string; slot: number }[],
-  ): void {
+  private resolveShopChips(snap: SimSnapshot): void {
     if (snap.playerRole !== "keyLead") return;
     const inset = designHudInset(readCssSafeArea(document.getElementById("game-root")));
     const placer = beginChipFrame(this.game, inset, GAME_WIDTH, GAME_HEIGHT);
@@ -501,50 +495,6 @@ export class ShopScene extends Phaser.Scene {
     placer.register("tvRow", tvRowAabb(), 58);
     if (this.keyLead.visible) placer.register("keyLead", spriteBodyAabb(this.keyLead), 55);
     if (this.driver.visible) placer.register("driver", spriteBodyAabb(this.driver), 55);
-
-    for (const customer of ordered) {
-      const visual = this.customers.get(customer.orderId);
-      if (!visual?.bubble.visible || !String(visual.bubble.text ?? "").trim()) continue;
-      const priority = 50 - customer.slot;
-      const headTop = standingPersonHeadTop(visual.sprite);
-      const preferred = speechPlaqueAboveHead(visual.bubble, visual.sprite.x, headTop);
-      this.placeShopChip(
-        placer,
-        speechSlotId(customer.orderId),
-        visual.bubble,
-        preferred.x,
-        preferred.y,
-        priority,
-        undefined,
-        true,
-      );
-      if (
-        visual.feedback.visible &&
-        String(visual.feedback.text).trim() &&
-        visual.bubble.visible &&
-        String(visual.bubble.text).trim()
-      ) {
-        syncSignPlaque(visual.bubble);
-        const bubbleMid = signPlaqueMid(visual.bubble);
-        const bubbleBottom =
-          signPlaqueCenterWorld(visual.bubble).y +
-          signPlaqueExtents(visual.bubble).bottomLocal -
-          bubbleMid.midY;
-        const feedbackPreferred = speechPlaqueAboveHead(visual.feedback, visual.sprite.x, bubbleBottom);
-        this.placeShopChip(
-          placer,
-          `${speechSlotId(customer.orderId)}-fb`,
-          visual.feedback,
-          feedbackPreferred.x,
-          feedbackPreferred.y,
-          priority - 1,
-          undefined,
-          true,
-        );
-      } else if (visual.feedback.visible && !String(visual.bubble.text).trim()) {
-        setSignCopy(visual.feedback, "");
-      }
-    }
 
     if (this.keyLeadBubble.visible) {
       const lead = speechPlaqueAboveHead(
@@ -1009,7 +959,7 @@ export class ShopScene extends Phaser.Scene {
           signPlaqueExtents(bubble).bottomLocal -
           signPlaqueMid(bubble).midY;
         const fbPreferred = speechPlaqueAboveHead(feedback, sprite.x, bubbleBottom);
-        setSignPlaqueCenter(feedback, fbPreferred.x, fbPreferred.y);
+        this.pinShopSpeech(feedback, fbPreferred.x, fbPreferred.y);
       } else {
         feedback.setVisible(false);
       }

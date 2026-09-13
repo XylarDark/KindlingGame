@@ -132,7 +132,7 @@ describe("shop speech chip resolver", () => {
   it("runs resolveShopChips after customer sync with placeChip", () => {
     expect(src).toContain("resolveShopChips");
     expect(src).toContain("placeChip(placer");
-    expect(src).toContain("speechSlotId");
+    expect(src).toContain("pinShopSpeech");
   });
 
   it("anchors leadBubble above KEYLEAD slot head with headHang", () => {
@@ -144,8 +144,11 @@ describe("shop speech chip resolver", () => {
       /speechPlaqueAboveHead\([\s\S]*this\.driverBubble,[\s\S]*this\.driver\.x,[\s\S]*standingPersonHeadTop\(this\.driver\)/,
     );
     expect(resolve, "seeds HUD obstacles before shop chips land").toMatch(/prepareShopChipObstacles\(placer\)/);
-    expect(resolve, "customer speech pinned on sprite x with tallest hat head line").toMatch(
-      /standingPersonHeadTop\(visual\.sprite\)[\s\S]*visual\.sprite\.x/,
+    expect(resolve, "customer speech owned by syncCustomers — not re-placed in resolver").not.toMatch(
+      /for \(const customer of ordered\)/,
+    );
+    expect(src, "customer speech pinned on sprite x with tallest hat head line").toMatch(
+      /standingPersonHeadTop\(sprite\)/,
     );
     expect(resolve, "registers tablet, TVs, and people as dodge obstacles").toMatch(/placer\.register\([\s\S]*"tablet"/);
     expect(resolve, "registers tablet, TVs, and people as dodge obstacles").toContain("tvRowAabb");
@@ -154,9 +157,10 @@ describe("shop speech chip resolver", () => {
     expect(resolve, "head-hang for speech chips").toMatch(
       /placeShopChip\([\s\S]*"leadBubble"[\s\S]*true,\s*\)/,
     );
-    expect(src, "head-hung speech pins preferred center when dodge misses").toMatch(
+    expect(src, "head-hung speech always pins in world space — no screen-space placeChip").toMatch(
       /if \(headHang\)[\s\S]*pinShopSpeech\(chip, preferredX, preferredY\)/,
     );
+    expect(src, "capture seed deferred to first live shop frame").toContain("consumePendingCaptureSeed");
     expect(src, "world speech uses scrollFactor 1 like door prompt").toContain("setSignScrollFactor");
     expect(src, "settled customers fall back to above-head pin without layout").toMatch(
       /speechPlaqueAboveHead\(bubble, sprite\.x, standingPersonHeadTop\(sprite\)\)/,

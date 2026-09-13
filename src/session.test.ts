@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { beginPlay, getSim, shouldShowHowTo, startSession } from "./session";
+import { beginPlay, consumePendingCaptureSeed, getSim, shouldShowHowTo, startSession } from "./session";
+import { customerSlotX } from "./maps/shopT0";
 import { SHIFT_MS } from "./sim/constants";
 
 describe("shouldShowHowTo", () => {
@@ -20,6 +21,24 @@ describe("shouldShowHowTo", () => {
   it("forces welcome then how-to when ?howto=1", () => {
     vi.stubGlobal("location", { search: "?howto=1" });
     expect(shouldShowHowTo()).toBe(true);
+  });
+});
+
+describe("capture seed deferral", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("queues capture at beginPlay and applies on consume", () => {
+    vi.stubGlobal("location", { search: "?capture=shop-counter&howto=0" });
+    startSession(2);
+    beginPlay();
+    expect(getSim().snapshot().customers).toHaveLength(0);
+    expect(consumePendingCaptureSeed()).toBe(true);
+    expect(consumePendingCaptureSeed()).toBe(false);
+    const c = getSim().snapshot().customers[0];
+    expect(c?.bubble).toMatch(/I want /);
+    expect(Math.abs((c?.x ?? 0) - customerSlotX(0))).toBeLessThan(2);
   });
 });
 
