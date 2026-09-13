@@ -186,7 +186,7 @@ export function customerSlotX(index: number): number {
 /** Daylight left between one chip and the next. */
 export const CUSTOMER_SPEECH_PAD = 8;
 /** Widest a chip draws when the floor is quiet enough to give it the room (~+25%). */
-export const CUSTOMER_SPEECH_MAX_W = 350;
+export const CUSTOMER_SPEECH_MAX_W = 560;
 /** Narrowest side chip when neighbours leave little room (~+25%). */
 export const CUSTOMER_SPEECH_MIN_W = 150;
 

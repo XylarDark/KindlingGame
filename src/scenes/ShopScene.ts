@@ -70,6 +70,7 @@ import {
   signPlaqueMid,
   syncSignPlaque,
 } from "../ui/signText";
+import { SIGN_PAD_X, SIGN_PAD_Y } from "../ui/signPlaque";
 import {
   layoutDebugEnabled,
   paintLayoutDebug,
@@ -88,6 +89,7 @@ import { beginChipFrame, placeChip } from "../ui/hud/placeChips";
 import { chipPriority } from "../ui/hud/slots";
 import { designHudInset, readCssSafeArea } from "../ui/viewFit";
 import { addUiText } from "../ui/text";
+import { refitType } from "../ui/typekit";
 import {
   Color,
   HUD_SCORE_PX,
@@ -116,7 +118,14 @@ const TABLET_LABEL_PX = HUD_SCORE_PX;
  * that slack was invisible; against a 44px seed it costs real type size, so the box is
  * now the screen minus a hairline that keeps the glyphs off the bezel.
  */
-const TABLET_LABEL_INSET = 4;
+const TABLET_LABEL_INSET = 2;
+/** Nudge ORDERS right so clamp-fit glyphs clear the BAG rack on the tablet's left. */
+const TABLET_LABEL_X_NUDGE = 8;
+/** Lift slightly within the screen — geometric centre reads low on landscape tablets. */
+const TABLET_LABEL_Y_NUDGE = -5;
+/** Wider side margin than default SIGN_PAD so long one-line speech is not edge-tight. */
+const SHOP_SPEECH_PAD_X = SIGN_PAD_X + 12;
+const SHOP_SPEECH_PAD_Y = SIGN_PAD_Y;
 
 /** Concurrent customers the pool covers without mid-frame allocate (4 is typical peak). */
 const CUSTOMER_VISUAL_POOL = 4;
@@ -235,7 +244,7 @@ export class ShopScene extends Phaser.Scene {
 
     const tab = tabletLayout();
     this.tabletScreen = this.add.graphics().setDepth(10);
-    this.tabletLabel = addUiText(this, TABLET.x, tab.screenTop + tab.screenH / 2, "ORDERS", {
+    this.tabletLabel = addUiText(this, 0, 0, "ORDERS", {
       size: typeRolePx("hudTitle"),
       typeRole: "hudTitle",
       color: Color.creamHex,
@@ -251,6 +260,7 @@ export class ShopScene extends Phaser.Scene {
     })
       .setOrigin(0.5)
       .setDepth(11);
+    this.pinTabletLabel(tab);
 
     this.tabletHit = this.add.rectangle(TABLET.x, TABLET.y, TABLET_W, TABLET_H, 0x000000, 0.001).setDepth(12);
     enableItemHit(this.tabletHit);
@@ -289,7 +299,10 @@ export class ShopScene extends Phaser.Scene {
       typeRole: "speech",
       align: "center",
       fontStyle: "600",
-      maxWidth: typeRoleBox(440, "speech"),
+      noWrap: true,
+      padX: SHOP_SPEECH_PAD_X,
+      padY: SHOP_SPEECH_PAD_Y,
+      maxWidth: typeRoleBox(660, "speech"),
       maxHeight: typeRoleBox(104, "speech"),
     })
       .setOrigin(0.5, 0.5)
@@ -361,7 +374,10 @@ export class ShopScene extends Phaser.Scene {
     this.keyLeadBubble.setVisible(showKeyLeadBubble);
     if (showKeyLeadBubble) {
       const textDirty = this.keyLeadBubble.text !== callout;
-      if (textDirty) this.keyLeadBubble.setText(callout);
+      if (textDirty) {
+        this.keyLeadBubble.setText(callout);
+        refitType(this.keyLeadBubble);
+      }
       syncSignPlaque(this.keyLeadBubble);
       const lead = keyLeadSpeechPlaqueAboveHead(
         this.keyLeadBubble,
@@ -385,7 +401,10 @@ export class ShopScene extends Phaser.Scene {
     this.driverBubble.setVisible(showDriverBubble);
     if (showDriverBubble) {
       const driverTextDirty = this.driverBubble.text !== driverLine;
-      if (driverTextDirty) this.driverBubble.setText(driverLine);
+      if (driverTextDirty) {
+        this.driverBubble.setText(driverLine);
+        refitType(this.driverBubble);
+      }
       this.driverBubble.setAlpha(1);
       syncSignPlaque(this.driverBubble);
       const panelH = signPlaqueExtents(this.driverBubble).panelH;
@@ -634,6 +653,13 @@ export class ShopScene extends Phaser.Scene {
     this.pinQueueBadge(tab);
   }
 
+  /** Centre ORDERS inside the tablet screen with a slight right/up nudge for bag clearance. */
+  private pinTabletLabel(tab: ReturnType<typeof tabletLayout>): void {
+    const x = TABLET.x + TABLET_LABEL_X_NUDGE;
+    const y = tab.screenTop + (tab.screenH - tab.homeH) / 2 + TABLET_LABEL_Y_NUDGE;
+    this.tabletLabel.setPosition(x, y);
+  }
+
   /** Top-right of the ORDERS tablet bezel — re-pin after every sync so plaque layout cannot drift. */
   private pinQueueBadge(tab: ReturnType<typeof tabletLayout>, badgeInset = 6): void {
     syncSignPlaque(this.queueBadge);
@@ -779,6 +805,7 @@ export class ShopScene extends Phaser.Scene {
   /** Boot warm under the loading gate — first walk-in must not raster + plaque on one frame. */
   private warmCustomerSpeech(visual: CustomerVisual): void {
     visual.bubble.setText("Welcome in!");
+    refitType(visual.bubble);
     visual.feedback.setText("Thanks!");
     visual.bubble.setVisible(true);
     visual.feedback.setVisible(true);
@@ -806,6 +833,9 @@ export class ShopScene extends Phaser.Scene {
       typeRole: "speech",
       align: "center",
       fontStyle: "600",
+      noWrap: true,
+      padX: SHOP_SPEECH_PAD_X,
+      padY: SHOP_SPEECH_PAD_Y,
       maxWidth: CUSTOMER_SPEECH_MAX_W,
       maxHeight: CUSTOMER_SPEECH_H,
     })
@@ -883,7 +913,10 @@ export class ShopScene extends Phaser.Scene {
       if (!customer.bubble) continue;
       let visual = this.customers.get(customer.orderId);
       if (!visual) visual = this.acquireCustomerVisual(customer.orderId, customer.look);
-      if (visual.bubble.text !== customer.bubble) visual.bubble.setText(customer.bubble);
+      if (visual.bubble.text !== customer.bubble) {
+        visual.bubble.setText(customer.bubble);
+        refitType(visual.bubble);
+      }
       syncSignPlaque(visual.bubble);
     }
 
@@ -934,7 +967,10 @@ export class ShopScene extends Phaser.Scene {
       const layout = this.customerLayoutById.get(customer.orderId);
       if (customer.bubble && settled) {
         bubble.setAlpha(1);
-        if (bubble.text !== customer.bubble) bubble.setText(customer.bubble);
+        if (bubble.text !== customer.bubble) {
+          bubble.setText(customer.bubble);
+          refitType(bubble);
+        }
         const pin = layout
           ? { x: layout.x, y: layout.y }
           : speechPlaqueAboveHead(bubble, sprite.x, standingPersonHeadTop(sprite));

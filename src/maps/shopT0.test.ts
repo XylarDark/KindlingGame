@@ -144,7 +144,7 @@ describe("customer standing slots", () => {
   it("gives an overhead chip the room its horizontal span leaves it", () => {
     expect(customerSpeechWidth(Infinity), "open span").toBe(CUSTOMER_SPEECH_MAX_W);
     expect(customerSpeechWidth(CUSTOMER_SPEECH_MIN_W), "tight span").toBe(CUSTOMER_SPEECH_MIN_W);
-    expect(customerSpeechWidth(400), "cap at max").toBe(CUSTOMER_SPEECH_MAX_W);
+    expect(customerSpeechWidth(600), "cap at max").toBe(CUSTOMER_SPEECH_MAX_W);
   });
 
   it("holds speech back while its owner is still crossing the floor", () => {
