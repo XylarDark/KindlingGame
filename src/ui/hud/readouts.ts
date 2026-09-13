@@ -31,6 +31,7 @@ import {
   SCORE_POP_POOL,
   SCORE_POP_RISE_MS,
   SCORE_POP_SCALE_MS,
+  SHOP_COUNTER_READOUT_DEPTH,
 } from "./constants";
 import type { ChipPlacer } from "./chipCollision";
 import { placeChip, textInkAabb, unionAabb } from "./placeChips";
@@ -80,6 +81,11 @@ export class HudReadouts {
   readoutCorner: ReadoutCorner = { left: 28, right: GAME_WIDTH - 28, top: HUD_CORNER_TOP };
   private lastDoorTitle = "";
   private lastReadoutsHidden: boolean | null = null;
+  /** Shop-owned counter row — HudScene duplicates hide while this is active. */
+  private lastShopReadoutsLayer: boolean | null = null;
+  private shopScoreText?: Phaser.GameObjects.Text;
+  private shopScoreCaption?: Phaser.GameObjects.Text;
+  private shopClockText?: Phaser.GameObjects.Text;
   private scorePopPool: Phaser.GameObjects.Text[] = [];
   private scorePopFree: Phaser.GameObjects.Text[] = [];
 
@@ -197,9 +203,7 @@ export class HudReadouts {
       this.scoreText.setOrigin(0, 0.5).setPosition(left + captionW + HUD_SCORE_GAP, top);
       this.clockText.setOrigin(1, 0.5).setPosition(clockEdge, top);
       this.scorePopLayer.setPosition(left + captionW + HUD_SCORE_GAP + valueW / 2, top - 46);
-      return;
-    }
-    if (this.readoutsInShop) {
+    } else if (this.readoutsInShop) {
       const { signLeft, signRight, y } = this.counterSignReadoutAnchors();
       let gap = HUD_SCORE_GAP;
       const signInnerLeft = COUNTER_SIGN.x - COUNTER_SIGN.w / 2;
@@ -210,20 +214,94 @@ export class HudReadouts {
       this.scoreCaption.setOrigin(1, 0.5).setPosition(signLeft - valueW - gap, y);
       this.clockText.setOrigin(0, 0.5).setPosition(signRight, y);
       this.scorePopLayer.setPosition(signLeft, y - 46);
-      return;
+    } else {
+      const { left, top } = this.readoutCorner;
+      this.scoreCaption.setOrigin(0, 0.5).setPosition(left, top);
+      const valueX = left + this.scoreCaption.width + HUD_SCORE_GAP;
+      this.scoreText.setOrigin(0, 0.5).setPosition(valueX, top);
+      const clockX = valueX + valueW + HUD_SCORE_GAP;
+      this.clockText.setOrigin(0, 0.5).setPosition(clockX, top);
+      this.scorePopLayer.setPosition(clockX + this.clockText.width + 16, top);
     }
-    const { left, top } = this.readoutCorner;
-    this.scoreCaption.setOrigin(0, 0.5).setPosition(left, top);
-    const valueX = left + this.scoreCaption.width + HUD_SCORE_GAP;
-    this.scoreText.setOrigin(0, 0.5).setPosition(valueX, top);
-    const clockX = valueX + valueW + HUD_SCORE_GAP;
-    this.clockText.setOrigin(0, 0.5).setPosition(clockX, top);
-    this.scorePopLayer.setPosition(clockX + this.clockText.width + 16, top);
+    this.syncShopReadoutMirror();
   }
 
   /** Force paintReadoutChrome to re-apply visibility when porch mode toggles. */
   resetReadoutChromeCache(): void {
     this.lastReadoutsHidden = null;
+    this.lastShopReadoutsLayer = null;
+  }
+
+  /** Counter SCORE/clock live in ShopScene so speech (depth 10) paints above them. */
+  private shopReadoutsLayerActive(atDoor: boolean, hide: boolean): boolean {
+    return this.readoutsInShop && !atDoor && !hide;
+  }
+
+  private ensureShopReadouts(): void {
+    if (this.shopScoreText) return;
+    const shop = this.scene.scene.get("shop") as Phaser.Scene | undefined;
+    if (!shop?.sys.isActive()) return;
+    const depth = SHOP_COUNTER_READOUT_DEPTH;
+    this.shopScoreText = addUiText(shop, 0, 0, "", {
+      size: typeRolePx("hudTitle"),
+      typeRole: "hudTitle",
+      color: Color.creamHex,
+      fontStyle: "700",
+      align: "right",
+      ...readoutOutline(HUD_SCORE_PX),
+    })
+      .setOrigin(1, 0.5)
+      .setDepth(depth)
+      .setVisible(false);
+    this.shopScoreCaption = addUiText(shop, 0, 0, "SCORE", {
+      size: typeRolePx("hudTitle"),
+      typeRole: "hudTitle",
+      color: Color.creamHex,
+      fontStyle: "700",
+      align: "right",
+      letterSpacing: 2,
+      ...readoutOutline(HUD_SCORE_PX),
+    })
+      .setOrigin(1, 0.5)
+      .setDepth(depth)
+      .setVisible(false);
+    this.shopClockText = addUiText(shop, 0, 0, "", {
+      size: typeClockPx(),
+      color: Color.creamHex,
+      fontStyle: "700",
+      ...readoutOutline(HUD_READOUT_PX),
+    })
+      .setOrigin(0, 0.5)
+      .setDepth(depth)
+      .setVisible(false);
+  }
+
+  /** World-space counter row — SF1 tracks COUNTER_SIGN under shop cam zoom. */
+  private placeShopCounterReadouts(): void {
+    if (!this.shopScoreText || !this.shopScoreCaption || !this.shopClockText) return;
+    const leftX = COUNTER_SIGN.x - COUNTER_SIGN.w / 2 - HUD_SIGN_GAP;
+    const rightX = COUNTER_SIGN.x + COUNTER_SIGN.w / 2 + HUD_SIGN_GAP;
+    const y = COUNTER_SIGN.y;
+    const valueW = this.shopScoreText.width;
+    const captionW = this.shopScoreCaption.width;
+    let gap = HUD_SCORE_GAP;
+    const signInnerLeft = COUNTER_SIGN.x - COUNTER_SIGN.w / 2;
+    while (gap > 4 && leftX - valueW - gap - captionW < signInnerLeft - 8) {
+      gap -= 2;
+    }
+    this.shopScoreText.setOrigin(1, 0.5).setPosition(leftX, y);
+    this.shopScoreCaption.setOrigin(1, 0.5).setPosition(leftX - valueW - gap, y);
+    this.shopClockText.setOrigin(0, 0.5).setPosition(rightX, y);
+  }
+
+  private syncShopReadoutMirror(): void {
+    if (!this.readoutsInShop || this.readoutsAtDoor) return;
+    this.ensureShopReadouts();
+    if (!this.shopScoreText || !this.shopScoreCaption || !this.shopClockText) return;
+    this.shopScoreText.setText(this.scoreText.text);
+    this.shopScoreCaption.setText(this.scoreCaption.text);
+    this.shopClockText.setText(this.clockText.text);
+    this.placeShopCounterReadouts();
   }
 
   matchCaptionToValue(): void {
@@ -233,20 +311,43 @@ export class HudReadouts {
     const outline = readoutOutline(px);
     this.scoreCaption.setStroke(outline.stroke, outline.strokeThickness);
     retypeSize(this.scoreCaption, px);
+    if (this.shopScoreCaption) {
+      this.shopScoreCaption.setStroke(outline.stroke, outline.strokeThickness);
+      retypeSize(this.shopScoreCaption, px);
+    }
   }
 
   paintReadoutChrome(atDoor: boolean, showId: boolean, chrome: HudReadoutsChrome): void {
     // Door/ID: SCORE top-left and clock top-right for the whole porch visit.
     const hide = !atDoor && showId;
+    const shopLayer = this.shopReadoutsLayerActive(atDoor, hide);
     const readoutDepth = atDoor ? HUD_DOOR_READOUT_DEPTH : HUD_READOUT_DEPTH;
     this.scoreText.setDepth(readoutDepth);
     this.scoreCaption.setDepth(readoutDepth);
     this.clockText.setDepth(readoutDepth);
-    if (hide === this.lastReadoutsHidden) return;
+    if (shopLayer) {
+      this.ensureShopReadouts();
+      this.syncShopReadoutMirror();
+      this.shopScoreText?.setVisible(true);
+      this.shopScoreCaption?.setVisible(true);
+      this.shopClockText?.setVisible(true);
+      this.scoreText.setVisible(false);
+      this.scoreCaption.setVisible(false);
+      this.clockText.setVisible(false);
+    }
+    const visibilityChanged = hide !== this.lastReadoutsHidden || shopLayer !== this.lastShopReadoutsLayer;
+    if (!visibilityChanged) return;
     this.lastReadoutsHidden = hide;
-    this.scoreText.setVisible(!hide);
-    this.scoreCaption.setVisible(!hide);
-    this.clockText.setVisible(!hide);
+    this.lastShopReadoutsLayer = shopLayer;
+    const showHudRow = !hide && !shopLayer;
+    if (!shopLayer) {
+      this.scoreText.setVisible(showHudRow);
+      this.scoreCaption.setVisible(showHudRow);
+      this.clockText.setVisible(showHudRow);
+      this.shopScoreText?.setVisible(false);
+      this.shopScoreCaption?.setVisible(false);
+      this.shopClockText?.setVisible(false);
+    }
     chrome.cog.setVisible(!hide);
     this.scorePopLayer.setVisible(!hide);
     if (hide) {
