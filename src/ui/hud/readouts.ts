@@ -373,6 +373,43 @@ export class HudReadouts {
     if (!this.scorePopFree.includes(label)) this.scorePopFree.push(label);
   }
 
+  /**
+   * SCORE, clock, and counter KINDLING strip — shop speech resolves in the same chip
+   * frame before HudScene, so ShopScene seeds these obstacles first.
+   */
+  registerShopHudObstacles(placer: ChipPlacer): void {
+    if (!this.readoutsInShop || !this.scoreText.visible) return;
+    placer.register(
+      "scoreClock",
+      unionAabb([textInkAabb(this.scoreCaption), textInkAabb(this.scoreText), textInkAabb(this.clockText)]),
+      chipPriority("scoreClock"),
+    );
+    const shop = this.scene.scene.get("shop") as Phaser.Scene | undefined;
+    if (!shop?.sys.isActive()) return;
+    const cam = shop.cameras.main;
+    const cs = COUNTER_SIGN;
+    const left = cs.x - cs.w / 2;
+    const right = cs.x + cs.w / 2;
+    const top = cs.y - cs.h / 2;
+    const bottom = cs.y + cs.h / 2;
+    const corners = [
+      worldToScreen(cam, left, top),
+      worldToScreen(cam, right, top),
+      worldToScreen(cam, left, bottom),
+      worldToScreen(cam, right, bottom),
+    ];
+    placer.register(
+      "counterSign",
+      {
+        left: Math.min(...corners.map((p) => p.x)),
+        top: Math.min(...corners.map((p) => p.y)),
+        right: Math.max(...corners.map((p) => p.x)),
+        bottom: Math.max(...corners.map((p) => p.y)),
+      },
+      chipPriority("scoreClock"),
+    );
+  }
+
   /** Register score row and resolve cover / door-title plaques through the frame placer. */
   resolvePlaqueSlots(placer: ChipPlacer, atDoor: boolean): void {
     if (this.scoreText.visible) {

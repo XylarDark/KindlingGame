@@ -64,14 +64,11 @@ describe("speech stays off the models it belongs to", () => {
     expect(sync, "no unconditional key-lead setText").not.toMatch(/keyLeadBubble[\s\S]*?\.setText\(callout \?\? ""\)/);
     expect(sync, "pin key-lead only when shown").toMatch(/if \(showKeyLeadBubble\)/);
     expect(sync, "pin driver only when shown").toMatch(/if \(showDriverBubble\)/);
-    expect(sync, "key-lead pin uses slot head above-head center, not live sprite").toMatch(
-      /speechPlaqueAboveHead\(this\.keyLeadBubble, KEYLEAD\.x, keyLeadSlotHeadTop\(\)/,
+    expect(sync, "key-lead pin uses slot head above-head center").toMatch(
+      /speechPlaqueAboveHead\([\s\S]*this\.keyLeadBubble,[\s\S]*this\.keyLead\.x,[\s\S]*keyLeadSlotHeadTop\(\)/,
     );
-    expect(sync, "key-lead pin does not track live sprite x/y").not.toMatch(
-      /speechPlaqueAboveHead\([\s\S]*this\.keyLead\.(x|y)/,
-    );
-    expect(sync, "driver pin uses head-above helper").toMatch(
-      /speechPlaqueAboveHead\(this\.driverBubble, DRIVER\.x, modelHeadTop\(this\.driver\)\)/,
+    expect(sync, "driver pin uses standing head line on live sprite x").toMatch(
+      /speechPlaqueAboveHead\([\s\S]*this\.driverBubble,[\s\S]*this\.driver\.x,[\s\S]*standingPersonHeadTop\(this\.driver\)/,
     );
     expect(sync, "tracks key-lead bubble visibility for re-pin").toContain("lastShowKeyLeadBubble");
     expect(sync, "tracks driver bubble visibility for re-pin").toContain("lastShowDriverBubble");
@@ -140,20 +137,24 @@ describe("shop speech chip resolver", () => {
 
   it("anchors leadBubble above KEYLEAD slot head with headHang", () => {
     const resolve = between(src, "private resolveShopChips(", "\n  }", "resolveShopChips");
-    expect(resolve, "lead preferred above slot head center, not live sprite").toMatch(
-      /speechPlaqueAboveHead\(this\.keyLeadBubble, KEYLEAD\.x, keyLeadSlotHeadTop\(\)/,
+    expect(resolve, "lead preferred above slot head on live keyLead x").toMatch(
+      /speechPlaqueAboveHead\([\s\S]*this\.keyLeadBubble,[\s\S]*this\.keyLead\.x,[\s\S]*keyLeadSlotHeadTop\(\)/,
     );
-    expect(resolve, "lead resolver does not track live keyLead x").not.toMatch(
-      /speechPlaqueAboveHead\([\s\S]*this\.keyLead\.x/,
+    expect(resolve, "driver preferred via standingPersonHeadTop on live x").toMatch(
+      /speechPlaqueAboveHead\([\s\S]*this\.driverBubble,[\s\S]*this\.driver\.x,[\s\S]*standingPersonHeadTop\(this\.driver\)/,
     );
-    expect(resolve, "driver preferred via speechPlaqueAboveHead").toMatch(
-      /speechPlaqueAboveHead\(this\.driverBubble, DRIVER\.x, modelHeadTop\(this\.driver\)\)/,
+    expect(resolve, "seeds HUD obstacles before shop chips land").toMatch(/prepareShopChipObstacles\(placer\)/);
+    expect(resolve, "customer speech pinned on sprite x with tallest hat head line").toMatch(
+      /standingPersonHeadTop\(visual\.sprite\)[\s\S]*visual\.sprite\.x/,
     );
     expect(resolve, "registers tablet, TVs, and people as dodge obstacles").toMatch(/placer\.register\([\s\S]*"tablet"/);
     expect(resolve, "registers tablet, TVs, and people as dodge obstacles").toContain("tvRowAabb");
     expect(resolve, "registers tablet, TVs, and people as dodge obstacles").toContain("spriteBodyAabb");
     expect(resolve, "head-hang for speech chips").toMatch(
       /placeShopChip\([\s\S]*"leadBubble"[\s\S]*true,\s*\)/,
+    );
+    expect(src, "head-hung speech keeps copy when dodge misses").toMatch(
+      /if \(!headHang\) setSignCopy\(chip, ""\)/,
     );
     expect(resolve, "does not chase live keyLead x with magic offset").not.toMatch(/this\.keyLead\.x - 168/);
   });

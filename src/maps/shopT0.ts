@@ -270,10 +270,7 @@ export function layoutCustomerSpeech(
     );
     if (halfRoom < CUSTOMER_SPEECH_MIN_W / 2) continue;
     const w = customerSpeechWidth(halfRoom * 2);
-    const x = Math.min(
-      CUSTOMER_BUBBLE_MAX_X - w / 2,
-      Math.max(CUSTOMER_BUBBLE_MIN_X + w / 2, customer.x),
-    );
+    const x = customer.x;
     let y = customerSpeechCenterY(headTop, bubbleH);
     const box: CustomerSpeechBox = {
       orderId: customer.orderId,

@@ -75,10 +75,11 @@ import {
 } from "../ui/layoutDebug";
 import { aboveHeadBand, plaqueAabbFromCenter } from "../ui/plaquePlacement";
 import {
-  modelHeadTop,
   speechPlaqueAboveHead,
   spriteBodyAabb,
+  standingPersonHeadTop,
 } from "../ui/plaquePlacementPhaser";
+import { HudScene } from "./HudScene";
 import type { ChipAabb, ChipPlacer } from "../ui/hud/chipCollision";
 import { beginChipFrame, placeChip } from "../ui/hud/placeChips";
 import { chipPriority, speechSlotId } from "../ui/hud/slots";
@@ -359,7 +360,12 @@ export class ShopScene extends Phaser.Scene {
       const becameVisible = showKeyLeadBubble && !this.lastShowKeyLeadBubble;
       const sizeDirty = panelH !== this.lastKeyLeadPanelH;
       if (textDirty || becameVisible || sizeDirty) {
-        const lead = speechPlaqueAboveHead(this.keyLeadBubble, KEYLEAD.x, keyLeadSlotHeadTop(), CUSTOMER_SPEECH_GAP);
+        const lead = speechPlaqueAboveHead(
+          this.keyLeadBubble,
+          this.keyLead.x,
+          keyLeadSlotHeadTop(),
+          CUSTOMER_SPEECH_GAP,
+        );
         setSignPlaqueCenter(this.keyLeadBubble, lead.x, lead.y);
       }
       this.lastKeyLeadPanelH = panelH;
@@ -385,7 +391,11 @@ export class ShopScene extends Phaser.Scene {
       const becameVisible = showDriverBubble && !this.lastShowDriverBubble;
       const sizeDirty = panelH !== this.lastDriverPanelH;
       if (driverTextDirty || becameVisible || sizeDirty) {
-        const driver = speechPlaqueAboveHead(this.driverBubble, DRIVER.x, modelHeadTop(this.driver));
+        const driver = speechPlaqueAboveHead(
+          this.driverBubble,
+          this.driver.x,
+          standingPersonHeadTop(this.driver),
+        );
         setSignPlaqueCenter(this.driverBubble, driver.x, driver.y);
       }
       this.lastDriverPanelH = panelH;
@@ -447,7 +457,8 @@ export class ShopScene extends Phaser.Scene {
   ): void {
     if (placeChip(placer, id, chip, preferredX, preferredY, priority, headHang)) return;
     if (alt && placeChip(placer, id, chip, alt.x, alt.y, priority, headHang)) return;
-    setSignCopy(chip, "");
+    // Head-hung speech keeps syncCustomers' above-head pin — never wipe copy on HUD dodge miss.
+    if (!headHang) setSignCopy(chip, "");
   }
 
   private resolveShopChips(
@@ -457,6 +468,7 @@ export class ShopScene extends Phaser.Scene {
     if (snap.playerRole !== "keyLead") return;
     const inset = designHudInset(readCssSafeArea(document.getElementById("game-root")));
     const placer = beginChipFrame(this.game, inset, GAME_WIDTH, GAME_HEIGHT);
+    (this.scene.get("hud") as HudScene | undefined)?.prepareShopChipObstacles(placer);
     const tab = tabletLayout();
     placer.register(
       "tablet",
@@ -478,8 +490,8 @@ export class ShopScene extends Phaser.Scene {
       const layout = this.customerLayoutById.get(customer.orderId);
       if (!layout) continue;
       const priority = 50 - customer.slot;
-      const headTop = modelHeadTop(visual.sprite);
-      const preferred = speechPlaqueAboveHead(visual.bubble, layout.x, headTop);
+      const headTop = standingPersonHeadTop(visual.sprite);
+      const preferred = speechPlaqueAboveHead(visual.bubble, visual.sprite.x, headTop);
       this.placeShopChip(
         placer,
         speechSlotId(customer.orderId),
@@ -502,7 +514,7 @@ export class ShopScene extends Phaser.Scene {
           signPlaqueCenterWorld(visual.bubble).y +
           signPlaqueExtents(visual.bubble).bottomLocal -
           bubbleMid.midY;
-        const feedbackPreferred = speechPlaqueAboveHead(visual.feedback, layout.x, bubbleBottom);
+        const feedbackPreferred = speechPlaqueAboveHead(visual.feedback, visual.sprite.x, bubbleBottom);
         this.placeShopChip(
           placer,
           `${speechSlotId(customer.orderId)}-fb`,
@@ -519,7 +531,12 @@ export class ShopScene extends Phaser.Scene {
     }
 
     if (this.keyLeadBubble.visible) {
-      const lead = speechPlaqueAboveHead(this.keyLeadBubble, KEYLEAD.x, keyLeadSlotHeadTop(), CUSTOMER_SPEECH_GAP);
+      const lead = speechPlaqueAboveHead(
+        this.keyLeadBubble,
+        this.keyLead.x,
+        keyLeadSlotHeadTop(),
+        CUSTOMER_SPEECH_GAP,
+      );
       this.placeShopChip(
         placer,
         "leadBubble",
@@ -532,7 +549,11 @@ export class ShopScene extends Phaser.Scene {
       );
     }
     if (this.driverBubble.visible) {
-      const driver = speechPlaqueAboveHead(this.driverBubble, DRIVER.x, modelHeadTop(this.driver));
+      const driver = speechPlaqueAboveHead(
+        this.driverBubble,
+        this.driver.x,
+        standingPersonHeadTop(this.driver),
+      );
       this.placeShopChip(
         placer,
         "driverBubble",
@@ -964,7 +985,7 @@ export class ShopScene extends Phaser.Scene {
           signPlaqueCenterWorld(bubble).y +
           signPlaqueExtents(bubble).bottomLocal -
           signPlaqueMid(bubble).midY;
-        const fbPreferred = speechPlaqueAboveHead(feedback, layout.x, bubbleBottom);
+        const fbPreferred = speechPlaqueAboveHead(feedback, sprite.x, bubbleBottom);
         setSignPlaqueCenter(feedback, fbPreferred.x, fbPreferred.y);
       } else {
         feedback.setVisible(false);

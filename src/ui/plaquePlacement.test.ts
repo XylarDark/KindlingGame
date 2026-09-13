@@ -197,9 +197,10 @@ describe("HUD toast / instruction top-center", () => {
 describe("shop scene uses exported placement helpers", () => {
   const shopSrc = readScene("../scenes/ShopScene.ts");
 
-  it("imports leadSpeechPlaqueCenter from plaquePlacementPhaser", () => {
+  it("imports speech placement helpers from plaquePlacementPhaser", () => {
     expect(shopSrc).toContain('from "../ui/plaquePlacementPhaser"');
     expect(shopSrc).toContain("speechPlaqueAboveHead(");
+    expect(shopSrc).toContain("standingPersonHeadTop(");
     expect(shopSrc).toContain("keyLeadSlotHeadTop()");
     expect(shopSrc).not.toMatch(/function leadSpeechPlaqueCenter\(/);
   });

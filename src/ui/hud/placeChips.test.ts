@@ -76,12 +76,14 @@ describe("placeChips collision math", () => {
     expect(aabbOverlap(a, expandAabb(b, CHIP_GAP))).toBe(true);
   });
 
-  it("headHang mode never tries a downward dodge offset", () => {
+  it("headHang mode stacks upward only — no sideways dodge onto HUD", () => {
     const placer = new ChipPlacer(safe, 500, 500);
     const plaque = plaque200x40();
     const offsets = placer.candidateOffsets(plaque, true);
     expect(offsets.some((o) => o.dy > 0)).toBe(false);
     expect(offsets.some((o) => o.dy < 0)).toBe(true);
+    expect(offsets.every((o) => o.dx === 0)).toBe(true);
+    expect(offsets.length).toBeGreaterThanOrEqual(8);
   });
 
   it("placeChip documents and applies plaque-center preferred coords", () => {
