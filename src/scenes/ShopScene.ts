@@ -127,6 +127,8 @@ const TABLET_LABEL_Y_NUDGE = -5;
 /** Wider side margin than default SIGN_PAD so long one-line speech is not edge-tight. */
 const SHOP_SPEECH_PAD_X = SIGN_PAD_X + 12;
 const SHOP_SPEECH_PAD_Y = SIGN_PAD_Y;
+/** Chip-local — lift key-lead ink so descenders clear the plaque bottom ring. */
+const KEY_LEAD_INK_SHIFT_Y = -6;
 
 /** Concurrent customers the pool covers without mid-frame allocate (4 is typical peak). */
 const CUSTOMER_VISUAL_POOL = 4;
@@ -303,6 +305,7 @@ export class ShopScene extends Phaser.Scene {
       noWrap: true,
       padX: SHOP_SPEECH_PAD_X,
       padY: SHOP_SPEECH_PAD_Y,
+      inkShiftY: KEY_LEAD_INK_SHIFT_Y,
       maxWidth: typeRoleBox(660, "speech"),
       maxHeight: typeRoleBox(104, "speech"),
     })

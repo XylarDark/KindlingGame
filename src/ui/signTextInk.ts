@@ -135,11 +135,16 @@ export function inkInsidePlaque(
   plaque: PlaqueLayout,
   pad: InkPad = { x: SIGN_PAD_X, y: SIGN_PAD_Y },
   tolerance = INK_PAD_TOLERANCE,
+  inkShiftY = 0,
 ): { ok: true } | { ok: false; reason: string } {
   const { width: w, height: h } = glyph;
   if (w <= 0 || h <= 0) return { ok: false, reason: "empty glyph box" };
   if (plaque.width <= 0 || plaque.height <= 0) return { ok: false, reason: "empty plaque box" };
   const ink = glyphAabb(glyph);
+  if (inkShiftY !== 0) {
+    ink.top += inkShiftY;
+    ink.bottom += inkShiftY;
+  }
   const panel = plaqueAabb(plaque);
   if (ink.top < panel.top + pad.y - tolerance) return { ok: false, reason: "top-clipped ink" };
   if (ink.left < panel.left + pad.x - tolerance) return { ok: false, reason: "left-clipped ink" };

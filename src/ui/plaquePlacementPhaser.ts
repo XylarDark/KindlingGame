@@ -1,9 +1,9 @@
 import Phaser from "phaser";
 import {
   PERSON_DISPLAY_MAX_H,
+  SHOP_KEY_LEAD_BAND_HEAD_BIAS,
   SHOP_KEY_LEAD_SPEECH_GAP,
-  TV_GRID_TOP,
-  TV_H,
+  TV_VISIBLE_BOTTOM,
 } from "../maps/shopT0";
 import type { ChipAabb } from "./hud/chipCollision";
 import { leadSpeechPlaqueCenterFromExtents } from "./plaquePlacement";
@@ -22,7 +22,7 @@ export function speechPlaqueAboveHead(
   return { x: centerX, y: hostY + mid.midY };
 }
 
-/** Key-lead callouts — centered in the head↔TV band for even air above and below the plaque. */
+/** Key-lead callouts — head↔TV band with bias toward the live hat for even visual air. */
 export function keyLeadSpeechPlaqueAboveHead(
   chip: Phaser.GameObjects.Text,
   centerX: number,
@@ -32,8 +32,9 @@ export function keyLeadSpeechPlaqueAboveHead(
     chip,
     centerX,
     headTopY,
-    TV_GRID_TOP + TV_H,
+    TV_VISIBLE_BOTTOM,
     SHOP_KEY_LEAD_SPEECH_GAP,
+    SHOP_KEY_LEAD_BAND_HEAD_BIAS,
   );
 }
 
@@ -44,10 +45,11 @@ export function leadSpeechPlaqueCenter(
   headTopY: number,
   tvBottomY: number,
   gap = 14,
+  headBias = 0,
 ): { x: number; y: number } {
   syncSignPlaque(chip);
   const ext = signPlaqueExtents(chip);
-  return leadSpeechPlaqueCenterFromExtents(ext, centerX, headTopY, tvBottomY, gap);
+  return leadSpeechPlaqueCenterFromExtents(ext, centerX, headTopY, tvBottomY, gap, headBias);
 }
 
 /** Bottom-anchored person sprite head top without getBounds(). */

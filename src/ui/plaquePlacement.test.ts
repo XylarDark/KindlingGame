@@ -13,11 +13,11 @@ import {
   customerSpeechCenterY,
   KEYLEAD,
   keyLeadSlotHeadTop,
+  SHOP_KEY_LEAD_BAND_HEAD_BIAS,
   SHOP_KEY_LEAD_SPEECH_GAP,
   layoutCustomerSpeech,
   PERSON_DISPLAY_MAX_H,
-  TV_GRID_TOP,
-  TV_H,
+  TV_VISIBLE_BOTTOM,
 } from "../maps/shopT0";
 import { GAME_WIDTH } from "../sim/constants";
 import { GameSim } from "../sim/gameSim";
@@ -67,17 +67,18 @@ describe("plaque placement contract helpers", () => {
     expect(aboveHead(aabb, headTop, gap).ok).toBe(false);
   });
 
-  it("key-lead slot geometry centers in the head↔TV band with even air", () => {
+  it("key-lead slot geometry biases band midpoint toward the hat", () => {
     const headTop = keyLeadSlotHeadTop();
-    const tvBottom = TV_GRID_TOP + TV_H;
+    const tvBottom = TV_VISIBLE_BOTTOM;
     const gap = SHOP_KEY_LEAD_SPEECH_GAP;
+    const bias = SHOP_KEY_LEAD_BAND_HEAD_BIAS;
     const plaque = mockSpeechPlaque(320, 48);
-    const center = leadSpeechPlaqueCenterFromExtents(plaque, KEYLEAD.x, headTop, tvBottom, gap);
-    const aabb = plaqueAabbFromCenter(center.x, center.y, plaque);
+    const minCenterY = tvBottom + gap + plaque.panelH / 2;
+    const maxCenterY = headTop - gap - plaque.panelH / 2;
+    const mid = (minCenterY + maxCenterY) / 2;
+    const center = leadSpeechPlaqueCenterFromExtents(plaque, KEYLEAD.x, headTop, tvBottom, gap, bias);
     expect(center.x).toBe(KEYLEAD.x);
-    const airAbove = aabb.top - tvBottom;
-    const airBelow = headTop - aabb.bottom;
-    expect(airAbove).toBeCloseTo(airBelow, 0);
+    expect(center.y).toBeCloseTo(mid + (maxCenterY - mid) * bias, 0);
   });
 
   it("topCenter passes for HUD instruction geometry at inset 0", () => {
@@ -100,22 +101,23 @@ describe("shop capture seed geometry", () => {
     vi.unstubAllGlobals();
   });
 
-  it("shop-holding key-lead speech sits mid-band with even air above and below", () => {
+  it("shop-holding key-lead speech biases mid-band toward the hat", () => {
     const sim = GameSim.create({ seed: 2, autoSpawn: false });
     vi.stubGlobal("location", { search: "?capture=shop-holding" });
     applyCaptureSeed(sim);
 
     const headTop = keyLeadSlotHeadTop();
-    const tvBottom = TV_GRID_TOP + TV_H;
+    const tvBottom = TV_VISIBLE_BOTTOM;
     const gap = SHOP_KEY_LEAD_SPEECH_GAP;
+    const bias = SHOP_KEY_LEAD_BAND_HEAD_BIAS;
     for (const panelH of [40, 48, 56, 64]) {
       const plaque = mockSpeechPlaque(360, panelH);
-      const center = leadSpeechPlaqueCenterFromExtents(plaque, KEYLEAD.x, headTop, tvBottom, gap);
-      const aabb = plaqueAabbFromCenter(center.x, center.y, plaque);
+      const minCenterY = tvBottom + gap + panelH / 2;
+      const maxCenterY = headTop - gap - panelH / 2;
+      const mid = (minCenterY + maxCenterY) / 2;
+      const center = leadSpeechPlaqueCenterFromExtents(plaque, KEYLEAD.x, headTop, tvBottom, gap, bias);
       expect(center.x).toBe(KEYLEAD.x);
-      const airAbove = aabb.top - tvBottom;
-      const airBelow = headTop - aabb.bottom;
-      expect(airAbove, `panelH=${panelH}`).toBeCloseTo(airBelow, 0);
+      expect(center.y, `panelH=${panelH}`).toBeCloseTo(mid + (maxCenterY - mid) * bias, 0);
     }
     expect(sim.snapshot().keyLeadLine).toMatch(/Holding/);
   });
@@ -217,7 +219,7 @@ describe("shop scene uses exported placement helpers", () => {
     expect(shopSrc).toContain("speechPlaqueAboveHead(");
     expect(placementSrc).toContain("keyLeadSpeechPlaqueAboveHead(");
     expect(placementSrc).toContain("leadSpeechPlaqueCenter(");
-    expect(placementSrc).toContain("TV_GRID_TOP + TV_H");
+    expect(placementSrc).toContain("TV_VISIBLE_BOTTOM");
     expect(placementSrc).toContain("SHOP_KEY_LEAD_SPEECH_GAP");
   });
 });

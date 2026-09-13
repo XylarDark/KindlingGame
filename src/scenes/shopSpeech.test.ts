@@ -48,7 +48,7 @@ describe("speech stays off the models it belongs to", () => {
       /keyLeadBubble = addSignText[\s\S]*?\.setOrigin\(0\.5, 0\.5\)/,
     );
     expect(src, "key-lead holding copy stays single-line with room to breathe").toMatch(
-      /keyLeadBubble = addSignText[\s\S]*noWrap: true[\s\S]*padX: SHOP_SPEECH_PAD_X[\s\S]*typeRoleBox\(660, "speech"\)/,
+      /keyLeadBubble = addSignText[\s\S]*noWrap: true[\s\S]*padX: SHOP_SPEECH_PAD_X[\s\S]*inkShiftY: KEY_LEAD_INK_SHIFT_Y[\s\S]*typeRoleBox\(660, "speech"\)/,
     );
     expect(src, "driver bubble centered above head").toMatch(
       /driverBubble = addSignText[\s\S]*?\.setOrigin\(0\.5, 0\.5\)/,

@@ -127,6 +127,11 @@ export const CUSTOMER_SPEECH_H = 83;
 export const CUSTOMER_SPEECH_GAP = 14;
 /** Edge clearance in the head↔TV band when centering the key-lead holding plaque. */
 export const SHOP_KEY_LEAD_SPEECH_GAP = 14;
+/**
+ * Pull the key-lead holding plaque toward the live hat after band midpoint — 0 is pure
+ * center, 1 sits on the head-adjacent max. Tune for even visual air vs sprites.
+ */
+export const SHOP_KEY_LEAD_BAND_HEAD_BIAS = 0.35;
 /** @deprecated Side chips removed — kept for width math in legacy callers. */
 export const CUSTOMER_SPEECH_SIDE_GAP = 12;
 /** Hair sits this far below the counter front so heads stay fully visible. */
@@ -329,6 +334,10 @@ export const TV_GRID_MID = KEYLEAD.x;
 export const TV_GRID_LEFT = Math.floor(TV_GRID_MID - TV_GRID_W / 2);
 /** Keep the bank on the wall under the cans; taller TV_H lifts the top (bottom stays). */
 export const TV_GRID_TOP = TV_BASE_TOP + TV_BASE_H - TV_H;
+/** tvBezel mount rail below the TV chassis (PX + PX×2 in shopInterior). */
+export const TV_MOUNT_DROP = 12;
+/** Visible TV bottom for key-lead band math — chassis plus mount rail. */
+export const TV_VISIBLE_BOTTOM = TV_GRID_TOP + TV_H + TV_MOUNT_DROP;
 
 /** Grey-over-white chair rail; the pass-through oak sill sits on this band. */
 export const CHAIR_RAIL_Y = COUNTER_TOP - 114;

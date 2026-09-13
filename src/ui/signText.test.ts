@@ -101,7 +101,7 @@ describe("sign text ink contract", () => {
     const layoutEnd = helper.indexOf("\n}", layoutStart);
     if (layoutEnd === -1) throw new Error("layoutPlaque end not found");
     const layout = helper.slice(layoutStart, layoutEnd);
-    expect(layout).toMatch(/inkFitsPlaque\([\s\S]*,\s*pad,\s*\)/);
+    expect(layout).toMatch(/inkFitsPlaque\([\s\S]*,\s*pad,\s*undefined,\s*inkShiftY,\s*\)/);
     expect(layout).toMatch(/inkFitsPlaque\(\s*layout,/);
   });
 
@@ -247,7 +247,7 @@ describe("text boxes are all the counter plaque", () => {
     const layoutEnd = helper.indexOf("\n}", layoutStart);
     if (layoutEnd === -1) throw new Error("layoutPlaque end not found");
     const layout = helper.slice(layoutStart, layoutEnd);
-    expect(layout).toContain("setTextLocal(textX, textY)");
+    expect(layout).toContain("setTextLocal(textX, textY + inkShiftY)");
     expect(layout).not.toMatch(/text\.setPosition\(textX, textY\)/);
   });
 
@@ -257,8 +257,8 @@ describe("text boxes are all the counter plaque", () => {
     const layoutEnd = helper.indexOf("\n}", layoutStart);
     if (layoutEnd === -1) throw new Error("layoutPlaque end not found");
     const layout = helper.slice(layoutStart, layoutEnd);
-    expect(layout).toContain("setTextLocal(textX, textY)");
-    expect(layout).toMatch(/setTextLocal\(textX, textY\)[\s\S]*if \(key === entry\.lastLayoutKey\)/);
+    expect(layout).toContain("setTextLocal(textX, textY + inkShiftY)");
+    expect(layout).toMatch(/setTextLocal\(textX, textY \+ inkShiftY\)[\s\S]*if \(key === entry\.lastLayoutKey\)/);
   });
 
   it("patched setPosition moves the host only — never zeroes inner glyph locals", () => {
