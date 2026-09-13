@@ -106,6 +106,6 @@ describe("mobile text ramp gating", () => {
   it("does not oversize desktop stages", () => {
     const hints = { coarsePointer: false as const, viewportCssWidth: 1920 };
     expect(scaleMsgPx(20, 1, hints)).toBe("25px");
-    expect(scaleChromePx(28.8, 1, hints)).toBe("28.8px");
+    expect(scaleChromePx(26.4, 1, hints)).toBe("26.4px");
   });
 });

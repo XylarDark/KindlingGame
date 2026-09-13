@@ -47,8 +47,8 @@ describe("speech stays off the models it belongs to", () => {
     expect(src, "key-lead bubble centered above head band").toMatch(
       /keyLeadBubble = addSignText[\s\S]*?\.setOrigin\(0\.5, 0\.5\)/,
     );
-    expect(src, "key-lead holding copy stays single-line").toMatch(
-      /keyLeadBubble = addSignText[\s\S]*noWrap: true[\s\S]*typeRoleBox\(540, "speech"\)/,
+    expect(src, "key-lead holding copy stays single-line with room to breathe").toMatch(
+      /keyLeadBubble = addSignText[\s\S]*noWrap: true[\s\S]*padX: SHOP_SPEECH_PAD_X[\s\S]*typeRoleBox\(660, "speech"\)/,
     );
     expect(src, "driver bubble centered above head").toMatch(
       /driverBubble = addSignText[\s\S]*?\.setOrigin\(0\.5, 0\.5\)/,
@@ -115,7 +115,9 @@ describe("speech stays off the models it belongs to", () => {
     );
     const make = between(src, "private makeCustomerVisual(", "return { sprite, bubble, feedback", "makeCustomerVisual");
     expect(make, "fixed speech token at build").toMatch(/typeRole: "speech"/);
-    expect(make, "customer order stays single-line").toMatch(/noWrap: true/);
+    expect(make, "customer order stays single-line with wider pad").toMatch(
+      /noWrap: true[\s\S]*padX: SHOP_SPEECH_PAD_X/,
+    );
     expect(sync, "look guarded before applyPersonTexture").toMatch(
       /if \(visual\.look !== customer\.look\)[\s\S]*applyPersonTexture\(visual\.sprite, customer\.look\)/,
     );

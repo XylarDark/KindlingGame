@@ -70,6 +70,7 @@ import {
   signPlaqueMid,
   syncSignPlaque,
 } from "../ui/signText";
+import { SIGN_PAD_X, SIGN_PAD_Y } from "../ui/signPlaque";
 import {
   layoutDebugEnabled,
   paintLayoutDebug,
@@ -117,11 +118,14 @@ const TABLET_LABEL_PX = HUD_SCORE_PX;
  * that slack was invisible; against a 44px seed it costs real type size, so the box is
  * now the screen minus a hairline that keeps the glyphs off the bezel.
  */
-const TABLET_LABEL_INSET = 4;
+const TABLET_LABEL_INSET = 2;
 /** Nudge ORDERS right so clamp-fit glyphs clear the BAG rack on the tablet's left. */
-const TABLET_LABEL_X_NUDGE = 10;
+const TABLET_LABEL_X_NUDGE = 8;
 /** Lift slightly within the screen — geometric centre reads low on landscape tablets. */
-const TABLET_LABEL_Y_NUDGE = -3;
+const TABLET_LABEL_Y_NUDGE = -5;
+/** Wider side margin than default SIGN_PAD so long one-line speech is not edge-tight. */
+const SHOP_SPEECH_PAD_X = SIGN_PAD_X + 12;
+const SHOP_SPEECH_PAD_Y = SIGN_PAD_Y;
 
 /** Concurrent customers the pool covers without mid-frame allocate (4 is typical peak). */
 const CUSTOMER_VISUAL_POOL = 4;
@@ -296,7 +300,9 @@ export class ShopScene extends Phaser.Scene {
       align: "center",
       fontStyle: "600",
       noWrap: true,
-      maxWidth: typeRoleBox(540, "speech"),
+      padX: SHOP_SPEECH_PAD_X,
+      padY: SHOP_SPEECH_PAD_Y,
+      maxWidth: typeRoleBox(660, "speech"),
       maxHeight: typeRoleBox(104, "speech"),
     })
       .setOrigin(0.5, 0.5)
@@ -828,6 +834,8 @@ export class ShopScene extends Phaser.Scene {
       align: "center",
       fontStyle: "600",
       noWrap: true,
+      padX: SHOP_SPEECH_PAD_X,
+      padY: SHOP_SPEECH_PAD_Y,
       maxWidth: CUSTOMER_SPEECH_MAX_W,
       maxHeight: CUSTOMER_SPEECH_H,
     })

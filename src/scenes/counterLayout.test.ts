@@ -258,7 +258,7 @@ describe("ORDERS type size", () => {
     // pixel of box is type size — an 8px inset a side, which is what this replaced, cost
     // 2px of rendered type. Clamp-fit sizes down from the ceiling, so the seed is a
     // cap and the rendered size has to be read off the live object, never assumed from here.
-    expect(ORDERS_INSET).toBeLessThanOrEqual(4);
+    expect(ORDERS_INSET).toBeLessThanOrEqual(2);
     expect(tab.screenW - ORDERS_INSET * 2).toBeGreaterThanOrEqual(136);
     // Caps tracking would have spent ~8% of that width on the gaps between six letters.
     expect(ordersBlock).toContain("letterSpacing: 0");
