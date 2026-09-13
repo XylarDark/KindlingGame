@@ -49,7 +49,7 @@ const DOOR_PROMPT_MAX_W = 680;
 /** Two wrapped lines at the door prompt seed (hudTitle) with default pad. */
 const DOOR_PROMPT_MAX_H = 120;
 /** Clearance between customer head top and prompt plaque bottom. */
-const DOOR_HEAD_GAP = 120;
+const DOOR_HEAD_GAP = 60;
 /** Renders above flashing customer (11) and bag (12) during ask/hand steps. */
 const DOOR_PROMPT_DEPTH = 14;
 

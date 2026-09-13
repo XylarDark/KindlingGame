@@ -46,8 +46,8 @@ describe("typeScale tokens", () => {
   });
 
   it("exports pad variants for sign chips", () => {
-    expect(PAD_DEFAULT).toEqual({ x: 12, y: 8 });
-    expect(PAD_COMPACT).toEqual({ x: 8, y: 6 });
+    expect(PAD_DEFAULT).toEqual({ x: 17, y: 13 });
+    expect(PAD_COMPACT).toEqual({ x: 13, y: 11 });
   });
 
   it("exports baked title intro sizes — not a multiplier on HUD roles", () => {

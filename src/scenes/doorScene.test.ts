@@ -163,7 +163,7 @@ describe("doorstep prompt", () => {
 
   it("uses a wide prompt box for hudTitle instruction copy", () => {
     expect(constant("DOOR_PROMPT_MAX_W")).toBeGreaterThanOrEqual(640);
-    expect(constant("DOOR_HEAD_GAP")).toBeGreaterThanOrEqual(100);
+    expect(constant("DOOR_HEAD_GAP")).toBeGreaterThanOrEqual(50);
   });
 
   it("derives headTop through standingPersonHeadTop (tallest hat frame)", () => {
