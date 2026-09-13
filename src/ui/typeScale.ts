@@ -33,9 +33,9 @@ const ROLE_BASE: Record<TypeRole, number> = {
 const CLOCK_BASE_PX = HUD_READOUT_PX;
 
 /** Default plaque padding — counter chips, toast, settings. */
-export const PAD_DEFAULT = { x: 17, y: 13 } as const;
+export const PAD_DEFAULT = { x: 27, y: 23 } as const;
 /** Compact plaque padding — drive / door callouts. */
-export const PAD_COMPACT = { x: 13, y: 11 } as const;
+export const PAD_COMPACT = { x: 23, y: 21 } as const;
 
 export type PadVariant = "default" | "compact";
 

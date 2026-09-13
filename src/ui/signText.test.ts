@@ -68,7 +68,7 @@ describe("sign text ink contract", () => {
   });
 
   it("validates compact drive chip pads — not the default SIGN_PAD constants", () => {
-    const compact = { x: 13, y: 11 };
+    const compact = { x: 23, y: 21 };
     const glyph = mockGlyph(120, 48, 0.5, 1);
     const panelW = 120 + compact.x * 2;
     const panelH = 48 + compact.y * 2;
@@ -231,7 +231,7 @@ describe("text boxes are all the counter plaque", () => {
 
   it("compact pad variant resolves through padForVariant", () => {
     const typeScale = read("./typeScale.ts");
-    expect(typeScale).toContain('PAD_COMPACT = { x: 13, y: 11 }');
+    expect(typeScale).toContain('PAD_COMPACT = { x: 23, y: 21 }');
     expect(helper).toContain('padVariant !== undefined');
     expect(helper).not.toMatch(/layoutPlaque[\s\S]*throw new Error/);
   });
