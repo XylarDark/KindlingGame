@@ -457,8 +457,16 @@ export class ShopScene extends Phaser.Scene {
   ): void {
     if (placeChip(placer, id, chip, preferredX, preferredY, priority, headHang)) return;
     if (alt && placeChip(placer, id, chip, alt.x, alt.y, priority, headHang)) return;
-    // Head-hung speech keeps syncCustomers' above-head pin — never wipe copy on HUD dodge miss.
-    if (!headHang) setSignCopy(chip, "");
+    if (headHang) {
+      const copy = String(chip.text ?? "").trim();
+      if (copy.length > 0) {
+        syncSignPlaque(chip);
+        setSignPlaqueCenter(chip, preferredX, preferredY);
+        chip.setVisible(true);
+      }
+      return;
+    }
+    setSignCopy(chip, "");
   }
 
   private resolveShopChips(
@@ -936,17 +944,19 @@ export class ShopScene extends Phaser.Scene {
       })
       .join("|");
     if (layoutKey !== this.lastCustomerLayoutKey) {
-      this.lastCustomerLayoutKey = layoutKey;
-      this.customerLayoutById = new Map(
-        layoutCustomerSpeech(
-          ordered.map((c) => {
-            const visual = this.customers.get(c.orderId);
-            const h =
-              c.bubble && visual ? signPlaqueExtents(visual.bubble).panelH : CUSTOMER_SPEECH_H;
-            return { orderId: c.orderId, x: c.x, h };
-          }),
-        ).map((box) => [box.orderId, box]),
+      const boxes = layoutCustomerSpeech(
+        ordered.map((c) => {
+          const visual = this.customers.get(c.orderId);
+          const h =
+            c.bubble && visual ? signPlaqueExtents(visual.bubble).panelH : CUSTOMER_SPEECH_H;
+          return { orderId: c.orderId, x: c.x, h };
+        }),
       );
+      // Do not cache an empty layout for active speakers — a miss retries next frame.
+      if (boxes.length > 0 || ordered.length === 0) {
+        this.lastCustomerLayoutKey = layoutKey;
+        this.customerLayoutById = new Map(boxes.map((box) => [box.orderId, box]));
+      }
     }
 
     for (const customer of list) {
@@ -967,11 +977,19 @@ export class ShopScene extends Phaser.Scene {
         sprite.setAlpha(1);
         sprite.clearTint();
       }
+      const settled =
+        Math.abs(customer.x - customerSlotX(customer.slot)) < 1 && customerSpeechShows(true);
       const layout = this.customerLayoutById.get(customer.orderId);
-      if (layout && customer.bubble) {
+      if (customer.bubble && settled) {
         bubble.setAlpha(1).setVisible(true);
         if (bubble.text !== customer.bubble) bubble.setText(customer.bubble);
-        setSignPlaqueCenter(bubble, layout.x, layout.y);
+        if (layout) {
+          setSignPlaqueCenter(bubble, layout.x, layout.y);
+        } else {
+          syncSignPlaque(bubble);
+          const pin = speechPlaqueAboveHead(bubble, sprite.x, standingPersonHeadTop(sprite));
+          setSignPlaqueCenter(bubble, pin.x, pin.y);
+        }
       } else {
         bubble.setVisible(false);
       }

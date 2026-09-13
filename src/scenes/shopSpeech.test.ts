@@ -153,8 +153,11 @@ describe("shop speech chip resolver", () => {
     expect(resolve, "head-hang for speech chips").toMatch(
       /placeShopChip\([\s\S]*"leadBubble"[\s\S]*true,\s*\)/,
     );
-    expect(src, "head-hung speech keeps copy when dodge misses").toMatch(
-      /if \(!headHang\) setSignCopy\(chip, ""\)/,
+    expect(src, "head-hung speech pins preferred center when dodge misses").toMatch(
+      /if \(headHang\)[\s\S]*setSignPlaqueCenter\(chip, preferredX, preferredY\)/,
+    );
+    expect(src, "settled customers fall back to above-head pin without layout").toMatch(
+      /speechPlaqueAboveHead\(bubble, sprite\.x, standingPersonHeadTop\(sprite\)\)/,
     );
     expect(resolve, "does not chase live keyLead x with magic offset").not.toMatch(/this\.keyLead\.x - 168/);
   });
@@ -205,6 +208,17 @@ describe("overhead speech collision layout", () => {
 
   it("leaves daylight above heads", () => {
     expect(CUSTOMER_SPEECH_GAP).toBeGreaterThanOrEqual(14);
+  });
+
+  it("never drops a settled speaker when the plaque is taller than CUSTOMER_SPEECH_H", () => {
+    const headTop = CUSTOMER_SPOT.y - PERSON_DISPLAY_MAX_H;
+    const maxBottom = headTop - CUSTOMER_SPEECH_GAP;
+    for (const h of [120, 180, 240]) {
+      const boxes = layoutCustomerSpeech([{ orderId: `tall-${h}`, x: customerSlotX(0), h }]);
+      expect(boxes, `panelH=${h}`).toHaveLength(1);
+      expect(boxes[0]!.x).toBe(customerSlotX(0));
+      expect(boxes[0]!.y + boxes[0]!.h / 2).toBeLessThanOrEqual(maxBottom + 0.01);
+    }
   });
 });
 

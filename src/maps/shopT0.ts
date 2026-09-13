@@ -281,12 +281,21 @@ export function layoutCustomerSpeech(
       side: "right",
     };
     let guard = 0;
-    while (placed.some((other) => rectsOverlap(box, other)) && guard++ < 8) {
+    while (placed.some((other) => rectsOverlap(box, other)) && guard++ < 12) {
       y -= bubbleH + CUSTOMER_SPEECH_PAD;
       box.y = y;
     }
-    // Plaque bottom must sit above the head line with gap — not on the face or counter lip.
-    if (box.y + box.h / 2 > headTop - CUSTOMER_SPEECH_GAP) continue;
+    // Tall plaques: snap bottom to the head-clearance line, then stack up if neighbours overlap.
+    const maxBottom = headTop - CUSTOMER_SPEECH_GAP;
+    if (box.y + box.h / 2 > maxBottom) {
+      y = maxBottom - bubbleH / 2;
+      box.y = y;
+      guard = 0;
+      while (placed.some((other) => rectsOverlap(box, other)) && guard++ < 12) {
+        y -= bubbleH + CUSTOMER_SPEECH_PAD;
+        box.y = y;
+      }
+    }
     placed.push(box);
   }
   return placed;
