@@ -65,8 +65,8 @@ export const Color = {
  * {@link scaleChromePx} + `fitTypeToBox` `minCssFloor` / `maxCssCeiling`.
  */
 /** SCORE digits and caption — exported for tablet ORDERS parity. */
-export const HUD_SCORE_PX = 44;
-export const HUD_READOUT_PX = 40;
+export const HUD_SCORE_PX = 35.2;
+export const HUD_READOUT_PX = 32;
 export const HUD_COG_CAPTION_PX = 18 * 1.25;
 
 export const Type = {
