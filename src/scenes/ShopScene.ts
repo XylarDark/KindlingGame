@@ -77,6 +77,7 @@ import {
 } from "../ui/layoutDebug";
 import { aboveHeadBand, plaqueAabbFromCenter } from "../ui/plaquePlacement";
 import {
+  keyLeadSpeechPlaqueAboveHead,
   speechPlaqueAboveHead,
   spriteBodyAabb,
   standingPersonHeadTop,
@@ -362,19 +363,13 @@ export class ShopScene extends Phaser.Scene {
       const textDirty = this.keyLeadBubble.text !== callout;
       if (textDirty) this.keyLeadBubble.setText(callout);
       syncSignPlaque(this.keyLeadBubble);
-      const panelH = signPlaqueExtents(this.keyLeadBubble).panelH;
-      const becameVisible = showKeyLeadBubble && !this.lastShowKeyLeadBubble;
-      const sizeDirty = panelH !== this.lastKeyLeadPanelH;
-      if (textDirty || becameVisible || sizeDirty) {
-        const lead = speechPlaqueAboveHead(
-          this.keyLeadBubble,
-          this.keyLead.x,
-          keyLeadSlotHeadTop(),
-          CUSTOMER_SPEECH_GAP,
-        );
-        this.pinShopSpeech(this.keyLeadBubble, lead.x, lead.y);
-      }
-      this.lastKeyLeadPanelH = panelH;
+      const lead = keyLeadSpeechPlaqueAboveHead(
+        this.keyLeadBubble,
+        this.keyLead.x,
+        standingPersonHeadTop(this.keyLead),
+      );
+      this.pinShopSpeech(this.keyLeadBubble, lead.x, lead.y);
+      this.lastKeyLeadPanelH = signPlaqueExtents(this.keyLeadBubble).panelH;
     } else {
       this.lastKeyLeadPanelH = -1;
     }
@@ -497,11 +492,10 @@ export class ShopScene extends Phaser.Scene {
     if (this.driver.visible) placer.register("driver", spriteBodyAabb(this.driver), 55);
 
     if (this.keyLeadBubble.visible) {
-      const lead = speechPlaqueAboveHead(
+      const lead = keyLeadSpeechPlaqueAboveHead(
         this.keyLeadBubble,
         this.keyLead.x,
-        keyLeadSlotHeadTop(),
-        CUSTOMER_SPEECH_GAP,
+        standingPersonHeadTop(this.keyLead),
       );
       this.placeShopChip(
         placer,

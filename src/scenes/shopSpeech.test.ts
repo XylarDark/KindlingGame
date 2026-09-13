@@ -64,8 +64,8 @@ describe("speech stays off the models it belongs to", () => {
     expect(sync, "no unconditional key-lead setText").not.toMatch(/keyLeadBubble[\s\S]*?\.setText\(callout \?\? ""\)/);
     expect(sync, "pin key-lead only when shown").toMatch(/if \(showKeyLeadBubble\)/);
     expect(sync, "pin driver only when shown").toMatch(/if \(showDriverBubble\)/);
-    expect(sync, "key-lead pin uses slot head above-head center").toMatch(
-      /speechPlaqueAboveHead\([\s\S]*this\.keyLeadBubble,[\s\S]*this\.keyLead\.x,[\s\S]*keyLeadSlotHeadTop\(\)/,
+    expect(sync, "key-lead pin uses live sprite head with door-like gap").toMatch(
+      /keyLeadSpeechPlaqueAboveHead\([\s\S]*this\.keyLeadBubble,[\s\S]*this\.keyLead\.x,[\s\S]*standingPersonHeadTop\(this\.keyLead\)/,
     );
     expect(sync, "driver pin uses standing head line on live sprite x").toMatch(
       /speechPlaqueAboveHead\([\s\S]*this\.driverBubble,[\s\S]*this\.driver\.x,[\s\S]*standingPersonHeadTop\(this\.driver\)/,
@@ -137,8 +137,8 @@ describe("shop speech chip resolver", () => {
 
   it("anchors leadBubble above KEYLEAD slot head with headHang", () => {
     const resolve = between(src, "private resolveShopChips(", "\n  }", "resolveShopChips");
-    expect(resolve, "lead preferred above slot head on live keyLead x").toMatch(
-      /speechPlaqueAboveHead\([\s\S]*this\.keyLeadBubble,[\s\S]*this\.keyLead\.x,[\s\S]*keyLeadSlotHeadTop\(\)/,
+    expect(resolve, "lead preferred above live keyLead head on sprite x").toMatch(
+      /keyLeadSpeechPlaqueAboveHead\([\s\S]*this\.keyLeadBubble,[\s\S]*this\.keyLead\.x,[\s\S]*standingPersonHeadTop\(this\.keyLead\)/,
     );
     expect(resolve, "driver preferred via standingPersonHeadTop on live x").toMatch(
       /speechPlaqueAboveHead\([\s\S]*this\.driverBubble,[\s\S]*this\.driver\.x,[\s\S]*standingPersonHeadTop\(this\.driver\)/,

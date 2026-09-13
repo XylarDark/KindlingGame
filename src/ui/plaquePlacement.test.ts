@@ -92,18 +92,20 @@ describe("shop capture seed geometry", () => {
     vi.unstubAllGlobals();
   });
 
-  it("shop-holding speech sits above KEYLEAD slot head center", () => {
+  it("shop-holding key-lead speech clears the hat line with door-like gap", () => {
     const sim = GameSim.create({ seed: 2, autoSpawn: false });
     vi.stubGlobal("location", { search: "?capture=shop-holding" });
     applyCaptureSeed(sim);
 
     const headTop = keyLeadSlotHeadTop();
+    const gap = 60;
     for (const panelH of [40, 48, 56, 64]) {
       const plaque = mockSpeechPlaque(360, panelH);
-      const center = speechPlaqueCenterAboveHead(plaque, KEYLEAD.x, headTop, CUSTOMER_SPEECH_GAP);
+      const center = speechPlaqueCenterAboveHead(plaque, KEYLEAD.x, headTop, gap);
       const aabb = plaqueAabbFromCenter(center.x, center.y, plaque);
-      assertPlacement(aboveHead(aabb, headTop, CUSTOMER_SPEECH_GAP), `panelH=${panelH}`);
+      assertPlacement(aboveHead(aabb, headTop, gap), `panelH=${panelH}`);
       expect(center.x).toBe(KEYLEAD.x);
+      expect(aabb.bottom).toBeLessThanOrEqual(headTop - gap + 1);
     }
     expect(sim.snapshot().keyLeadLine).toMatch(/Holding/);
   });
@@ -196,12 +198,14 @@ describe("HUD toast / instruction top-center", () => {
 
 describe("shop scene uses exported placement helpers", () => {
   const shopSrc = readScene("../scenes/ShopScene.ts");
+  const placementSrc = readScene("../ui/plaquePlacementPhaser.ts");
 
   it("imports speech placement helpers from plaquePlacementPhaser", () => {
     expect(shopSrc).toContain('from "../ui/plaquePlacementPhaser"');
+    expect(shopSrc).toContain("keyLeadSpeechPlaqueAboveHead(");
+    expect(shopSrc).toContain("standingPersonHeadTop(this.keyLead)");
     expect(shopSrc).toContain("speechPlaqueAboveHead(");
-    expect(shopSrc).toContain("standingPersonHeadTop(");
-    expect(shopSrc).toContain("keyLeadSlotHeadTop()");
-    expect(shopSrc).not.toMatch(/function leadSpeechPlaqueCenter\(/);
+    expect(placementSrc).toContain("keyLeadSpeechPlaqueAboveHead(");
+    expect(placementSrc).toContain("SHOP_KEY_LEAD_SPEECH_GAP");
   });
 });

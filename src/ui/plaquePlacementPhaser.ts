@@ -1,5 +1,10 @@
 import Phaser from "phaser";
-import { PERSON_DISPLAY_MAX_H } from "../maps/shopT0";
+import {
+  PERSON_DISPLAY_MAX_H,
+  SHOP_KEY_LEAD_SPEECH_GAP,
+  TV_GRID_TOP,
+  TV_H,
+} from "../maps/shopT0";
 import type { ChipAabb } from "./hud/chipCollision";
 import { leadSpeechPlaqueCenterFromExtents } from "./plaquePlacement";
 import { signPlaqueExtents, signPlaqueMid, signYAbove, syncSignPlaque } from "./signText";
@@ -15,6 +20,21 @@ export function speechPlaqueAboveHead(
   const mid = signPlaqueMid(chip);
   const hostY = signYAbove(chip, headTopY, gap);
   return { x: centerX, y: hostY + mid.midY };
+}
+
+/** Key-lead callouts — door-like gap, centered in the head↔TV band when it fits. */
+export function keyLeadSpeechPlaqueAboveHead(
+  chip: Phaser.GameObjects.Text,
+  centerX: number,
+  headTopY: number,
+): { x: number; y: number } {
+  return leadSpeechPlaqueCenter(
+    chip,
+    centerX,
+    headTopY,
+    TV_GRID_TOP + TV_H,
+    SHOP_KEY_LEAD_SPEECH_GAP,
+  );
 }
 
 /** Phaser adapter — key-lead band between head top and TV row bottom. */
