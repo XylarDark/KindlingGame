@@ -222,7 +222,7 @@ describe("ORDERS queue badge", () => {
   it("pins the count badge to the tablet screen top-right with a readable box", () => {
     const badgeBlock = between(shop, "this.queueBadge = addSignText(", ".setVisible(false)", "queueBadge");
     expect(badgeBlock).toMatch(/\.setOrigin\(0\.5,\s*0\.5\)/);
-    expect(badgeBlock).toContain('maxWidth: typeRoleBox(88, "hudSmall")');
+    expect(badgeBlock).toContain('maxWidth: typeRoleBox(110, "hudSmall")');
     expect(badgeBlock).toContain('maxHeight: typeRoleBox(44, "hudSmall")');
     expect(shop).toContain("private pinQueueBadge(");
   });

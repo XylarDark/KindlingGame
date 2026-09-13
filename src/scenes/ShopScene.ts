@@ -272,7 +272,7 @@ export class ShopScene extends Phaser.Scene {
       size: typeRolePx("hudSmall"),
       typeRole: "hudSmall",
       fontStyle: "700",
-      maxWidth: typeRoleBox(88, "hudSmall"),
+      maxWidth: typeRoleBox(110, "hudSmall"),
       maxHeight: typeRoleBox(44, "hudSmall"),
     })
       .setOrigin(0.5, 0.5)
