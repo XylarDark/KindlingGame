@@ -274,6 +274,8 @@ export class ShopScene extends Phaser.Scene {
       fontStyle: "700",
       maxWidth: typeRoleBox(110, "hudSmall"),
       maxHeight: typeRoleBox(44, "hudSmall"),
+      padX: SIGN_PAD_X + 28,
+      padY: SIGN_PAD_Y,
     })
       .setOrigin(0.5, 0.5)
       .setDepth(13)
@@ -647,7 +649,7 @@ export class ShopScene extends Phaser.Scene {
     // screen minus 16, which would have quietly undone TABLET_LABEL_INSET.
     this.tabletLabel.setAlpha(1);
     this.tabletLabel.setColor(Color.creamHex);
-    this.queueBadge.setVisible(count > 1);
+    this.queueBadge.setVisible(count >= 1);
     if (this.queueBadge.visible && this.queueBadge.text !== String(count)) {
       this.queueBadge.setText(String(count));
     }

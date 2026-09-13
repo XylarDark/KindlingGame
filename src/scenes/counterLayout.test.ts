@@ -224,11 +224,14 @@ describe("ORDERS queue badge", () => {
     expect(badgeBlock).toMatch(/\.setOrigin\(0\.5,\s*0\.5\)/);
     expect(badgeBlock).toContain('maxWidth: typeRoleBox(110, "hudSmall")');
     expect(badgeBlock).toContain('maxHeight: typeRoleBox(44, "hudSmall")');
+    expect(badgeBlock).toContain("padX: SIGN_PAD_X + 28");
+    expect(badgeBlock).toContain("padY: SIGN_PAD_Y");
     expect(shop).toContain("private pinQueueBadge(");
   });
 
   it("reapplies badge position on syncTablet so layout cannot drift", () => {
     const sync = between(shop, "private syncTablet(snap: SimSnapshot, pulse: number, flash: boolean): void {", "\n  }", "syncTablet");
+    expect(sync).toContain("this.queueBadge.setVisible(count >= 1)");
     expect(sync).toContain("this.pinQueueBadge(tab)");
     const pin = between(shop, "private pinQueueBadge(", "\n  }", "pinQueueBadge");
     expect(pin).toContain("setSignScrollFactor(this.queueBadge, 1, 1)");
