@@ -272,12 +272,13 @@ export class ShopScene extends Phaser.Scene {
       size: typeRolePx("hudSmall"),
       typeRole: "hudSmall",
       fontStyle: "700",
-      maxWidth: 48,
-      maxHeight: 28,
+      maxWidth: typeRoleBox(72, "hudSmall"),
+      maxHeight: typeRoleBox(44, "hudSmall"),
     })
-      .setOrigin(1, 0)
+      .setOrigin(0.5, 0.5)
       .setDepth(13)
       .setVisible(false);
+    setSignScrollFactor(this.queueBadge, 1, 1);
     this.pinQueueBadge(tab);
 
     this.targetCallout = addSignText(this, 0, 0, "", {
@@ -660,15 +661,19 @@ export class ShopScene extends Phaser.Scene {
     this.tabletLabel.setPosition(x, y);
   }
 
-  /** Top-right of the ORDERS tablet bezel — re-pin after every sync so plaque layout cannot drift. */
+  /** Top-right of the ORDERS tablet screen — re-pin after every sync so plaque layout cannot drift. */
   private pinQueueBadge(tab: ReturnType<typeof tabletLayout>, badgeInset = 6): void {
+    setSignScrollFactor(this.queueBadge, 1, 1);
     syncSignPlaque(this.queueBadge);
     const ext = signPlaqueExtents(this.queueBadge);
-    setSignPosition(
+    const screenRight = tab.screenLeft + tab.screenW - badgeInset;
+    const screenTop = tab.screenTop + badgeInset;
+    setSignPlaqueCenter(
       this.queueBadge,
-      tab.left + tab.w - badgeInset - ext.rightLocal,
-      tab.top + badgeInset - ext.topLocal,
+      screenRight - ext.panelW / 2,
+      screenTop + ext.panelH / 2,
     );
+    setSignScrollFactor(this.queueBadge, 1, 1);
   }
 
   /**
