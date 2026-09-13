@@ -67,10 +67,10 @@ describe("plaque placement contract helpers", () => {
   it("aboveHead passes for key-lead slot geometry centered on KEYLEAD", () => {
     const headTop = keyLeadSlotHeadTop();
     const plaque = mockSpeechPlaque(320, 48);
-    const center = speechPlaqueCenterAboveHead(plaque, KEYLEAD.x, headTop, CUSTOMER_SPEECH_GAP);
+    const center = speechPlaqueCenterAboveHead(plaque, KEYLEAD.x, headTop, SHOP_KEY_LEAD_SPEECH_GAP);
     const aabb = plaqueAabbFromCenter(center.x, center.y, plaque);
     expect(center.x).toBe(KEYLEAD.x);
-    assertPlacement(aboveHead(aabb, headTop, CUSTOMER_SPEECH_GAP), "key-lead above slot head");
+    assertPlacement(aboveHead(aabb, headTop, SHOP_KEY_LEAD_SPEECH_GAP), "key-lead above slot head");
   });
 
   it("topCenter passes for HUD instruction geometry at inset 0", () => {
@@ -93,7 +93,7 @@ describe("shop capture seed geometry", () => {
     vi.unstubAllGlobals();
   });
 
-  it("shop-holding key-lead speech clears the hat line with door-like gap", () => {
+  it("shop-holding key-lead speech clears the hat line above-head", () => {
     const sim = GameSim.create({ seed: 2, autoSpawn: false });
     vi.stubGlobal("location", { search: "?capture=shop-holding" });
     applyCaptureSeed(sim);
@@ -207,6 +207,7 @@ describe("shop scene uses exported placement helpers", () => {
     expect(shopSrc).toContain("standingPersonHeadTop(this.keyLead)");
     expect(shopSrc).toContain("speechPlaqueAboveHead(");
     expect(placementSrc).toContain("keyLeadSpeechPlaqueAboveHead(");
+    expect(placementSrc).toContain("speechPlaqueAboveHead(chip, centerX, headTopY, SHOP_KEY_LEAD_SPEECH_GAP)");
     expect(placementSrc).toContain("SHOP_KEY_LEAD_SPEECH_GAP");
   });
 });
