@@ -5,6 +5,7 @@ import { GAME_HEIGHT, GAME_WIDTH } from "../../sim/constants";
 import type { SimSnapshot } from "../../sim/gameSim";
 import { formatSlaClock } from "../copy";
 import { parseFontPx, retypeSize } from "../typekit";
+import { SIGN_PAD_X } from "../signPlaque";
 import {
   addSignText,
   setSignAccent,
@@ -333,6 +334,7 @@ export class HudReadouts {
         size: typeRolePx("hudBody"),
         typeRole: "hudBody",
         fontStyle: "700",
+        padX: SIGN_PAD_X + 5,
         maxWidth: typeRoleBox(160, "hudBody"),
         maxHeight: typeRoleBox(40, "hudBody"),
       })

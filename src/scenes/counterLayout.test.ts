@@ -89,14 +89,12 @@ const scoreBox = scoreBlock.includes("typeRole:") ? FIXED_SCORE_VALUE : boxOf(sc
 const captionBox = captionBlock.includes("typeRole:") ? FIXED_SCORE_CAPTION : boxOf(captionBlock, "SCORE caption");
 const clockBox = clockBlock.includes("typeClockPx") ? FIXED_CLOCK : boxOf(clockBlock, "clock");
 const popBox = popBlock.includes("typeRoleBox")
-  ? { w: Math.round(160 * 1.25), h: Math.round(40 * 1.25) }
+  ? { w: Math.round(160 * 1.25) + 10, h: Math.round(40 * 1.25) }
   : boxOf(popBlock, "score pop");
 const POP_LIFT = number(placeReadouts, /scorePopLayer\.setPosition\(signLeft, y - (\d+)\)/, "pop lift");
 const popTween = between(readouts, "spawnScorePop(delta: number, screen?: { x: number; y: number }): void {", "\n  }", "spawnScorePop");
 const POP_RISE = number(popTween, /y: \{ from: 0, to: -(\d+) \}/, "pop rise");
 const ORDERS_INSET = number(shop, /const TABLET_LABEL_INSET = (\d+);/, "TABLET_LABEL_INSET");
-const ORDERS_X_NUDGE = number(shop, /const TABLET_LABEL_X_NUDGE = (\d+);/, "TABLET_LABEL_X_NUDGE");
-const ORDERS_Y_NUDGE = number(shop, /const TABLET_LABEL_Y_NUDGE = (-?\d+);/, "TABLET_LABEL_Y_NUDGE");
 
 const tab = tabletLayout();
 /**
@@ -127,8 +125,8 @@ const scorePop: Rect = {
 };
 const scoreGroup = union([scoreValue, scoreCaption, scorePop]);
 const ordersLabel = centred(
-  TABLET.x + ORDERS_X_NUDGE,
-  tab.screenTop + (tab.screenH - tab.homeH) / 2 + ORDERS_Y_NUDGE,
+  TABLET.x,
+  tab.screenTop + (tab.screenH - tab.homeH) / 2,
   tab.screenW - ORDERS_INSET * 2,
   tab.screenH - ORDERS_INSET * 2,
 );
@@ -221,7 +219,7 @@ describe("SCORE caption type size", () => {
 });
 
 describe("ORDERS queue badge", () => {
-  it("pins the count badge to the tablet top-right bezel", () => {
+  it("pins the count badge to the tablet screen top-right", () => {
     const badgeBlock = between(shop, "this.queueBadge = addSignText(", ".setVisible(false)", "queueBadge");
     expect(badgeBlock).toMatch(/\.setOrigin\(1,\s*0\)/);
     expect(badgeBlock).not.toMatch(/\.setOrigin\(0\.5\)/);
@@ -233,8 +231,8 @@ describe("ORDERS queue badge", () => {
     expect(sync).toContain("this.pinQueueBadge(tab)");
     const pin = between(shop, "private pinQueueBadge(", "\n  }", "pinQueueBadge");
     expect(pin).toContain("syncSignPlaque(this.queueBadge)");
-    expect(pin).toContain("tab.left + tab.w - badgeInset - ext.rightLocal");
-    expect(pin).toContain("tab.top + badgeInset - ext.topLocal");
+    expect(pin).toContain("tab.screenLeft + tab.screenW - badgeInset - ext.rightLocal");
+    expect(pin).toContain("tab.screenTop + badgeInset - ext.topLocal");
   });
 });
 
@@ -246,9 +244,10 @@ describe("ORDERS type size", () => {
     expect(ordersBlock).toContain('typeRolePx("hudTitle")');
   });
 
-  it("pins ORDERS inside the tablet screen with a bag-clearance nudge", () => {
+  it("pins ORDERS centred inside the tablet screen", () => {
     expect(shop).toContain("private pinTabletLabel(");
-    expect(shop).toContain("TABLET_LABEL_X_NUDGE");
+    expect(shop).not.toContain("TABLET_LABEL_X_NUDGE");
+    expect(shop).not.toContain("TABLET_LABEL_Y_NUDGE");
     expect(shop).toContain("this.pinTabletLabel(tab)");
   });
 

@@ -13,6 +13,7 @@ import {
   customerSpeechCenterY,
   KEYLEAD,
   keyLeadSlotHeadTop,
+  SHOP_KEY_LEAD_SPEECH_GAP,
   layoutCustomerSpeech,
   PERSON_DISPLAY_MAX_H,
 } from "../maps/shopT0";
@@ -98,7 +99,7 @@ describe("shop capture seed geometry", () => {
     applyCaptureSeed(sim);
 
     const headTop = keyLeadSlotHeadTop();
-    const gap = 60;
+    const gap = SHOP_KEY_LEAD_SPEECH_GAP;
     for (const panelH of [40, 48, 56, 64]) {
       const plaque = mockSpeechPlaque(360, panelH);
       const center = speechPlaqueCenterAboveHead(plaque, KEYLEAD.x, headTop, gap);

@@ -39,6 +39,7 @@ describe("HUD sign attachment guards", () => {
     const warm = between(readouts, "warmScorePopPool(): void {", "\n  }", "warmScorePopPool");
     expect(warm).toContain("this.scorePopLayer.add(signContainer(label))");
     expect(warm).not.toMatch(/this\.scorePopLayer\.add\(label\)/);
+    expect(warm).toContain("padX: SIGN_PAD_X + 5");
   });
 
   it("tweens the score pop host so plaque and glyphs rise together", () => {
