@@ -129,7 +129,7 @@ describe("shop capture seed geometry", () => {
 describe("door prompt placement contract", () => {
   const doorSrc = readScene("../scenes/DoorScene.ts");
   const readoutsSrc = readScene("../ui/hud/readouts.ts");
-  const DOOR_HEAD_GAP = 120;
+  const DOOR_HEAD_GAP = 60;
   const CUSTOMER_X = 960 + 200;
   /** Door floor feet + 8 — matches DoorScene floorY seed. */
   const DOOR_FLOOR_Y = 838;

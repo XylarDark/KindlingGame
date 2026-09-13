@@ -15,8 +15,8 @@ export const SIGN_BORDER_W = 4;
 export const SIGN_FRAME_W = SIGN_EDGE_W + SIGN_BORDER_W;
 
 /** White margin around glyphs — panel grows by this, not Phaser Text padding. */
-export const SIGN_PAD_X = 12;
-export const SIGN_PAD_Y = 8;
+export const SIGN_PAD_X = 17;
+export const SIGN_PAD_Y = 13;
 
 export const PLAQUE_TEX = "sign-plaque";
 export const PLAQUE_TEX_LIME = "sign-plaque-lime";
