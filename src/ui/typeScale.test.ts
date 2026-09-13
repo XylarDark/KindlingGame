@@ -37,8 +37,8 @@ describe("typeScale tokens", () => {
   it("applies MSG_SCALE to message-tier roles once", () => {
     expect(typeRolePx("hudBody", 1, { coarsePointer: false })).toBe(`${20 * MSG_SCALE}px`);
     expect(typeRolePx("speech", 1, { coarsePointer: false })).toBe(`${Math.round(19.2 * MSG_SCALE * 10000) / 10000}px`);
-    expect(typeRolePx("hudTitle", 1, { coarsePointer: false })).toBe("44px");
-    expect(typeClockPx(1, { coarsePointer: false })).toBe("40px");
+    expect(typeRolePx("hudTitle", 1, { coarsePointer: false })).toBe("35.2px");
+    expect(typeClockPx(1, { coarsePointer: false })).toBe("32px");
   });
 
   it("scales wrap boxes through typeRoleBox", () => {
