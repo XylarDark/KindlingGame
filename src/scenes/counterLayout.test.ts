@@ -95,8 +95,6 @@ const POP_LIFT = number(placeReadouts, /scorePopLayer\.setPosition\(signLeft, y 
 const popTween = between(readouts, "spawnScorePop(delta: number, screen?: { x: number; y: number }): void {", "\n  }", "spawnScorePop");
 const POP_RISE = number(popTween, /y: \{ from: 0, to: -(\d+) \}/, "pop rise");
 const ORDERS_INSET = number(shop, /const TABLET_LABEL_INSET = (\d+);/, "TABLET_LABEL_INSET");
-const ORDERS_X_NUDGE = number(shop, /const TABLET_LABEL_X_NUDGE = (\d+);/, "TABLET_LABEL_X_NUDGE");
-const ORDERS_Y_NUDGE = number(shop, /const TABLET_LABEL_Y_NUDGE = (-?\d+);/, "TABLET_LABEL_Y_NUDGE");
 
 const tab = tabletLayout();
 /**
@@ -127,8 +125,8 @@ const scorePop: Rect = {
 };
 const scoreGroup = union([scoreValue, scoreCaption, scorePop]);
 const ordersLabel = centred(
-  TABLET.x + ORDERS_X_NUDGE,
-  tab.screenTop + (tab.screenH - tab.homeH) / 2 + ORDERS_Y_NUDGE,
+  tab.screenLeft + tab.screenW / 2,
+  tab.screenTop + (tab.screenH - tab.homeH) / 2,
   tab.screenW - ORDERS_INSET * 2,
   tab.screenH - ORDERS_INSET * 2,
 );
@@ -246,9 +244,12 @@ describe("ORDERS type size", () => {
     expect(ordersBlock).toContain('typeRolePx("hudTitle")');
   });
 
-  it("pins ORDERS inside the tablet screen with a bag-clearance nudge", () => {
+  it("pins ORDERS at the centre of the tablet screen bounds", () => {
     expect(shop).toContain("private pinTabletLabel(");
-    expect(shop).toContain("TABLET_LABEL_X_NUDGE");
+    expect(shop).toContain("tab.screenLeft + tab.screenW / 2");
+    expect(shop).toContain("tab.screenTop + (tab.screenH - tab.homeH) / 2");
+    expect(shop).not.toContain("TABLET_LABEL_X_NUDGE");
+    expect(shop).not.toContain("TABLET_LABEL_Y_NUDGE");
     expect(shop).toContain("this.pinTabletLabel(tab)");
   });
 

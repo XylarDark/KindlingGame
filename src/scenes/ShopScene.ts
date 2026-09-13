@@ -120,10 +120,6 @@ const TABLET_LABEL_PX = HUD_SCORE_PX;
  * now the screen minus a hairline that keeps the glyphs off the bezel.
  */
 const TABLET_LABEL_INSET = 2;
-/** Nudge ORDERS right so clamp-fit glyphs clear the BAG rack on the tablet's left. */
-const TABLET_LABEL_X_NUDGE = 8;
-/** Lift slightly within the screen — geometric centre reads low on landscape tablets. */
-const TABLET_LABEL_Y_NUDGE = -5;
 /** Wider side margin than default SIGN_PAD so long one-line speech is not edge-tight. */
 const SHOP_SPEECH_PAD_X = SIGN_PAD_X + 12;
 const SHOP_SPEECH_PAD_Y = SIGN_PAD_Y;
@@ -657,10 +653,10 @@ export class ShopScene extends Phaser.Scene {
     this.pinQueueBadge(tab);
   }
 
-  /** Centre ORDERS inside the tablet screen with a slight right/up nudge for bag clearance. */
+  /** Centre ORDERS inside the tablet screen bounds from tabletLayout(). */
   private pinTabletLabel(tab: ReturnType<typeof tabletLayout>): void {
-    const x = TABLET.x + TABLET_LABEL_X_NUDGE;
-    const y = tab.screenTop + (tab.screenH - tab.homeH) / 2 + TABLET_LABEL_Y_NUDGE;
+    const x = tab.screenLeft + tab.screenW / 2;
+    const y = tab.screenTop + (tab.screenH - tab.homeH) / 2;
     this.tabletLabel.setPosition(x, y);
   }
 
