@@ -45,6 +45,7 @@ import { typeRoleBox, typeRolePx } from "../ui/typeScale";
 import { worldToScreen } from "../ui/worldProject";
 import {
   DRIVE_PIN_MAX_H,
+  DRIVE_PIN_PLAQUE_PAD,
   DRIVE_PIN_MAX_W,
   DRIVE_SHOP_CAP_MAX_W,
   DRIVE_VAN_MAX_W,
@@ -174,7 +175,9 @@ export class HudScene extends Phaser.Scene {
       typeRole: "hudBody",
       align: "center",
       fontStyle: "700",
-      ...driveChipSignOpts,
+      padX: DRIVE_PIN_PLAQUE_PAD,
+      padY: DRIVE_PIN_PLAQUE_PAD,
+      lineSpacing: Math.round(DRIVE_PIN_PLAQUE_PAD * 0.39),
       maxWidth: typeRoleBox(DRIVE_PIN_MAX_W, "hudBody"),
       maxHeight: typeRoleBox(DRIVE_PIN_MAX_H, "hudBody"),
     })
