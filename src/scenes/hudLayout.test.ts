@@ -159,16 +159,16 @@ describe("HUD chip resolver wiring", () => {
     expect(readouts).toContain('"counterSign"');
   });
 
-  it("places drive and door SCORE top-left with clock top-right", () => {
+  it("places drive SCORE inline top-left; door SCORE left and clock right", () => {
     const column = between(readouts, "layoutReadoutColumn(inset: SafeInset): void {", "\n  }", "layoutReadoutColumn");
     expect(column).toContain("SLOT_GUTTER");
     const place = between(readouts, "placeReadouts(): void {", "\n  }", "placeReadouts");
     expect(place).toMatch(/readoutsInShop && !this\.readoutsAtDoor[\s\S]*counterSignReadoutAnchors/);
     expect(place).toMatch(/this\.clockText\.setOrigin\(0, 0\.5\)\.setPosition\(signRight, y\)/);
-    expect(place).toMatch(/else[\s\S]*hudSceneViewport/);
-    expect(place).toMatch(/else[\s\S]*this\.scoreCaption\.setOrigin\(0, 0\.5\)\.setPosition\(left, top\)/);
-    expect(place).toMatch(/else[\s\S]*this\.clockText\.setOrigin\(1, 0\.5\)\.setPosition\(clockEdge, top\)/);
-    expect(place).not.toMatch(/clockX/);
+    expect(place).toMatch(/readoutsAtDoor[\s\S]*hudSceneViewport/);
+    expect(place).toMatch(/readoutsAtDoor[\s\S]*this\.scoreCaption\.setOrigin\(0, 0\.5\)\.setPosition\(left, top\)/);
+    expect(place).toMatch(/readoutsAtDoor[\s\S]*this\.clockText\.setOrigin\(1, 0\.5\)\.setPosition\(clockEdge, top\)/);
+    expect(place).toMatch(/this\.clockText\.setOrigin\(0, 0\.5\)\.setPosition\(clockX, top\)/);
   });
 
   it("resolves doorTitle top-center for the whole door visit", () => {

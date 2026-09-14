@@ -99,9 +99,10 @@ describe("HudScene paint dirty guards", () => {
     expect(fn).toContain("this.clockText.setVisible(showHudRow)");
     const place = between(readouts, "placeReadouts(): void {", "matchCaptionToValue(): void {", "placeReadouts");
     expect(place).toMatch(/readoutsInShop && !this\.readoutsAtDoor/);
-    expect(place).toMatch(/else[\s\S]*hudSceneViewport/);
-    expect(place).toMatch(/else[\s\S]*this\.scoreCaption\.setOrigin\(0, 0\.5\)\.setPosition\(left, top\)/);
-    expect(place).toMatch(/else[\s\S]*this\.clockText\.setOrigin\(1, 0\.5\)\.setPosition\(clockEdge, top\)/);
+    expect(place).toMatch(/readoutsAtDoor[\s\S]*hudSceneViewport/);
+    expect(place).toMatch(/readoutsAtDoor[\s\S]*this\.scoreCaption\.setOrigin\(0, 0\.5\)\.setPosition\(left, top\)/);
+    expect(place).toMatch(/readoutsAtDoor[\s\S]*this\.clockText\.setOrigin\(1, 0\.5\)\.setPosition\(clockEdge, top\)/);
+    expect(place).toMatch(/this\.clockText\.setOrigin\(0, 0\.5\)\.setPosition\(clockX, top\)/);
     expect(src).toContain("resetReadoutChromeCache");
   });
 

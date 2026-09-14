@@ -204,7 +204,7 @@ export class HudReadouts {
       this.scoreCaption.setOrigin(1, 0.5).setPosition(signLeft - valueW - gap, y);
       this.clockText.setOrigin(0, 0.5).setPosition(signRight, y);
       this.scorePopLayer.setPosition(signLeft, y - 46);
-    } else {
+    } else if (this.readoutsAtDoor) {
       const inset = designHudInset(readCssSafeArea(document.getElementById("game-root")));
       const { width: viewW } = hudSceneViewport(this.scene);
       const top = this.readoutCorner.top;
@@ -214,6 +214,14 @@ export class HudReadouts {
       this.scoreText.setOrigin(0, 0.5).setPosition(left + captionW + HUD_SCORE_GAP, top);
       this.clockText.setOrigin(1, 0.5).setPosition(clockEdge, top);
       this.scorePopLayer.setPosition(left + captionW + HUD_SCORE_GAP + valueW / 2, top - 46);
+    } else {
+      const { left, top } = this.readoutCorner;
+      this.scoreCaption.setOrigin(0, 0.5).setPosition(left, top);
+      const valueX = left + captionW + HUD_SCORE_GAP;
+      this.scoreText.setOrigin(0, 0.5).setPosition(valueX, top);
+      const clockX = valueX + valueW + HUD_SCORE_GAP;
+      this.clockText.setOrigin(0, 0.5).setPosition(clockX, top);
+      this.scorePopLayer.setPosition(clockX + this.clockText.width + 16, top);
     }
     this.syncShopReadoutMirror();
   }
@@ -511,7 +519,7 @@ export class HudReadouts {
           unionAabb([textInkAabb(this.scoreCaption), textInkAabb(this.scoreText), textInkAabb(this.clockText)]),
           chipPriority("scoreClock"),
         );
-      } else {
+      } else if (atDoor) {
         placer.register(
           "scoreClock",
           unionAabb([textInkAabb(this.scoreCaption), textInkAabb(this.scoreText)]),
@@ -520,6 +528,12 @@ export class HudReadouts {
         if (this.clockText.visible) {
           placer.register("scoreClock", textInkAabb(this.clockText), chipPriority("scoreClock"));
         }
+      } else {
+        placer.register(
+          "scoreClock",
+          unionAabb([textInkAabb(this.scoreCaption), textInkAabb(this.scoreText), textInkAabb(this.clockText)]),
+          chipPriority("scoreClock"),
+        );
       }
     }
     const coverY = this.readoutCorner.top + 40;
