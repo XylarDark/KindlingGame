@@ -131,8 +131,10 @@ describe("HudScene paint dirty guards", () => {
     expect(src).toContain("placeInstructionChip");
     expect(src).toContain("clampSignPlaqueCenter");
     const resolve = src.slice(src.indexOf("private resolveHudChips"), src.indexOf("private syncShopVisibility"));
-    expect(resolve).toMatch(/placeChip\([\s\S]*"toast"[\s\S]*inset\.top \+ SCREEN_CHIP_MARGIN/);
-    expect(resolve).toMatch(/placeChip\([\s\S]*"pad"[\s\S]*viewW \/ 2/);
+    expect(resolve).toMatch(/toastY = inset\.top \+ SCREEN_CHIP_MARGIN/);
+    expect(resolve).toContain('placeChip(placer, "toast"');
+    expect(resolve).not.toContain('placeChip(placer, "pad"');
+    expect(src).toContain("const showPad = false");
     const callouts = src.slice(src.indexOf("private paintDriveCallouts"), src.indexOf("private tutorialFlashHint"));
     expect(callouts).toContain("drivePinLabel.setVisible(false)");
     expect(callouts).not.toContain("clampSignPlaqueCenter(this.drivePinLabel");
