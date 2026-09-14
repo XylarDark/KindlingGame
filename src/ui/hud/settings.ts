@@ -19,6 +19,7 @@ import {
   SET_BTN_CAP_PX,
   SET_BTN_LABEL_PX,
   SET_BTN_W,
+  HUD_COG_SIZE_SCALE,
   SET_HINT_H,
   SET_HINT_PX,
   SET_PAD,
@@ -304,7 +305,7 @@ export class HudSettings {
 
     const cogX = GAME_WIDTH - 24;
     const cogY = GAME_HEIGHT - 20;
-    const cogSize = HUD_TOUCH_MIN_DESIGN;
+    const cogSize = HUD_TOUCH_MIN_DESIGN * HUD_COG_SIZE_SCALE;
     this.cog = this.scene.add
       .image(cogX, cogY, "tex-cog")
       .setOrigin(1, 1)
@@ -327,7 +328,7 @@ export class HudSettings {
   layout(inset: SafeInset): void {
     const { width: viewW, height: viewH } = hudSceneViewport(this.scene);
     this.syncViewportChrome(viewW, viewH);
-    const cogSize = HUD_TOUCH_MIN_DESIGN;
+    const cogSize = HUD_TOUCH_MIN_DESIGN * HUD_COG_SIZE_SCALE;
     let cogX = viewW - 24 - inset.right;
     const cogY = viewH - 20 - inset.bottom;
     this.cog.setPosition(cogX, cogY);
