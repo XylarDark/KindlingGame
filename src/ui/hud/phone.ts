@@ -14,7 +14,6 @@ import {
   MAP_INK,
   PHONE_APP,
   PHONE_CHASSIS,
-  PHONE_COG_GAP,
   PHONE_HEADER_H,
   PHONE_H,
   PHONE_MAP,
@@ -116,14 +115,14 @@ export class HudPhone {
 
   layout(
     inset: SafeInset,
-    cogLeft: number,
-    cogTop: number,
+    _cogLeft: number,
+    _cogTop: number,
     viewW: number = GAME_WIDTH,
     viewH: number = GAME_HEIGHT,
   ): void {
-    const phoneRight = Math.min(viewW - 16 - inset.right, cogLeft - PHONE_COG_GAP);
-    const phoneBottom = Math.min(viewH - 16 - inset.bottom, cogTop - PHONE_COG_GAP);
-    this.phone.setPosition(phoneRight - PHONE_CHASSIS.w * 0.5, phoneBottom - PHONE_CHASSIS.h * 0.5);
+    const phoneRight = viewW - 16 - inset.right;
+    const phoneCenterY = inset.top + (viewH - inset.top - inset.bottom) / 2;
+    this.phone.setPosition(phoneRight - PHONE_CHASSIS.w * 0.5, phoneCenterY);
   }
 
   paintPhoneChrome(): void {

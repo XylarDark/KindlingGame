@@ -11,7 +11,7 @@ import { fitCityPanel } from "../../maps/cityMinimap";
 import { Color } from "../theme";
 
 /** Drive and door — pad inside each corner pocket before centering SCORE / clock. */
-export const DOOR_CORNER_READOUT_PAD = 20;
+export const DOOR_CORNER_READOUT_PAD = 10;
 /** Max width of each corner pocket used to optically center readouts. */
 export const DOOR_CORNER_POCKET_W = 280;
 
@@ -88,6 +88,8 @@ export const HUD_COG_CAPTION_BOX = {
   w: 240,
   h: Math.ceil(HUD_COG_CAPTION_PX * 1.4 + HUD_COG_CAPTION_PAD.y * 2),
 };
+/** Settings gear display scale — cog-only; touch hit tracks scaled display size. */
+export const HUD_COG_SIZE_SCALE = 0.8;
 
 /** Delivery phone — every dimension derived from PHONE_SCALE and phoneArt cells. */
 export const PHONE_W = PHONE_TEX.w * PHONE_SCALE;

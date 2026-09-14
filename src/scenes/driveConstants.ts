@@ -9,8 +9,15 @@ export const DRIVE_VAN_TEX_H = 104;
 export const DRIVE_CHIP_GAP = 14;
 
 /** Design-space chip box limits (passed through {@link typeRoleBox}). */
-export const DRIVE_PIN_MAX_W = 200;
-export const DRIVE_PIN_MAX_H = 76;
+export const DRIVE_PIN_MAX_W = 400;
+/** Two-line house title + customer/SLA row at hudBody. */
+export const DRIVE_PIN_MAX_H = 120;
+/** drivePinLabel: gap between house title row and customer/SLA row (decoupled from plaque pad). */
+export const DRIVE_PIN_LINE_SPACING = 10;
+/** drivePinLabel-only plaque margin (both axes); hug two-line copy without giant air. */
+export const DRIVE_PIN_PLAQUE_PAD = 28;
+/** Horizontal text padding so hug-ink width tracks longest name line + stroke. */
+export const DRIVE_PIN_INK_PAD_H = 14;
 export const DRIVE_VAN_MAX_W = 300;
 export const DRIVE_SHOP_CAP_MAX_W = 240;
 

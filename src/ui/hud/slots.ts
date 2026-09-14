@@ -19,14 +19,14 @@ export const SLOT_GUTTER = 12;
  * | toast         | Top-center safe inset | Instruction / status line |
  * | settings      | Bottom-right cog AABB | Settings chrome |
  * | phone         | Above settings or left of it | Drive call UI |
- * | pad           | Top-center (instruction) | Auto-drive nudge label |
+ * | pad           | (removed) | Auto-drive nudge pad + label removed from drive map |
  * | titleCards    | Top 55% | How-to 1–3; Title owns; HUD hidden |
  * | titleCta      | Below cards, center | OPEN THE SHOP |
  * | speech-*      | Above settled customer head | Counter order announce |
  * | leadBubble    | Between key-lead head and TVs | Shop fetch/hold callout |
  * | driverBubble  | Above driver head | Shop ready line |
  * | tvCallout     | Above targeted TV anchor | Shop strain hint |
- * | drivePin      | (hidden) | Removed — map stays clean on Drive |
+ * | drivePin      | Top-center safe inset | Active delivery house + customer + SLA |
  * | driveVan      | (hidden) | Removed — van toast banner off map |
  * | driveShop     | (hidden) | Removed — shop-lot caption off map |
  * | doorPrompt    | Above customer head (headHang) | Door action instructions |

@@ -11,6 +11,7 @@ const read = (rel: string): string => readFileSync(join(here, rel), "utf8").repl
 
 const hud = read("HudScene.ts");
 const readouts = read("../ui/hud/readouts.ts");
+const phone = read("../ui/hud/phone.ts");
 const settings = read("../ui/hud/settings.ts");
 const sign = read("../ui/signText.ts");
 const budget = read("../ui/renderBudget.ts");
@@ -171,7 +172,7 @@ describe("HUD chip resolver wiring", () => {
     expect(readouts).not.toContain("syncDriveReadoutScale");
     expect(readouts).not.toContain("DRIVE_HUD_SCORE_PX");
     const constants = read("../ui/hud/constants.ts");
-    expect(constants).toContain("DOOR_CORNER_READOUT_PAD");
+    expect(constants).toMatch(/DOOR_CORNER_READOUT_PAD = 10/);
     expect(constants).toContain("DOOR_CORNER_POCKET_W");
     expect(constants).not.toContain("DRIVE_HUD_READOUT_SCALE");
     const place = between(readouts, "placeReadouts(): void {", "\n  }", "placeReadouts");
@@ -199,6 +200,14 @@ describe("HUD chip resolver wiring", () => {
     const doorTitle = between(readouts, "paintDoorTitle(snap: SimSnapshot, atDoor: boolean", "\n  paintCover(", "paintDoorTitle");
     expect(doorTitle).toContain("setSignAccent(this.doorTitleText, Color.danger)");
     expect(doorTitle).toContain("HUD_DOOR_READOUT_DEPTH");
+  });
+
+  it("pins the delivery phone center-right on the HUD viewport", () => {
+    const layout = between(phone, "layout(", "\n  }", "phone layout");
+    expect(layout).toContain("viewW - 16 - inset.right");
+    expect(layout).toContain("inset.top + (viewH - inset.top - inset.bottom) / 2");
+    expect(layout).not.toContain("phoneBottom");
+    expect(layout).not.toContain("cogTop - PHONE_COG_GAP");
   });
 
   it("caps cover width so it cannot reach the shop lot mark", () => {

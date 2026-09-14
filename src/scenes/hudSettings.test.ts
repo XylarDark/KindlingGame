@@ -70,6 +70,11 @@ describe("settings cog panel", () => {
     expect(create).not.toContain("signContainer(this.cogCaption)");
   });
 
+  it("shrinks the settings cog 20% on every screen", () => {
+    expect(constants).toContain("HUD_COG_SIZE_SCALE = 0.8");
+    expect(settings).toContain("HUD_TOUCH_MIN_DESIGN * HUD_COG_SIZE_SCALE");
+  });
+
   it("uses a rectangle tap target for the cog — Image custom hitArea misses Phaser input on shrunk HUD cameras", () => {
     const create = between(settings, "create(): void {", "\n  }", "settings create");
     expect(create).toMatch(/this\.cog = this\.scene\.add[\s\S]*"tex-cog"/);
