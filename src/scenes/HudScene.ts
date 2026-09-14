@@ -45,6 +45,7 @@ import { typeRoleBox, typeRolePx } from "../ui/typeScale";
 import { worldToScreen } from "../ui/worldProject";
 import {
   DRIVE_PIN_MAX_H,
+  DRIVE_PIN_LINE_SPACING,
   DRIVE_PIN_PLAQUE_PAD,
   DRIVE_PIN_MAX_W,
   DRIVE_SHOP_CAP_MAX_W,
@@ -177,7 +178,7 @@ export class HudScene extends Phaser.Scene {
       fontStyle: "700",
       padX: DRIVE_PIN_PLAQUE_PAD,
       padY: DRIVE_PIN_PLAQUE_PAD,
-      lineSpacing: Math.round(DRIVE_PIN_PLAQUE_PAD * 0.39),
+      lineSpacing: DRIVE_PIN_LINE_SPACING,
       maxWidth: typeRoleBox(DRIVE_PIN_MAX_W, "hudBody"),
       maxHeight: typeRoleBox(DRIVE_PIN_MAX_H, "hudBody"),
     })
@@ -568,6 +569,9 @@ export class HudScene extends Phaser.Scene {
       typeRoleBox(DRIVE_PIN_MAX_W, "hudBody"),
       typeRoleBox(DRIVE_PIN_MAX_H, "hudBody"),
     );
+    // Bottom ink slack for hug-ink measure — descenders without inflating lineSpacing.
+    this.drivePinLabel.setPadding(0, 0, 0, DRIVE_PIN_LINE_SPACING);
+    this.drivePinLabel.updateText();
   }
 
   /** Active delivery line top-center; van/shop map captions stay off the drive map. */
