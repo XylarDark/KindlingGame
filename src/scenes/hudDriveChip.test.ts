@@ -6,6 +6,7 @@ import {
   DRIVE_CHIP_GAP,
   DRIVE_CHIP_PAD_X,
   DRIVE_CHIP_PAD_Y,
+  DRIVE_PIN_MAX_H,
   DRIVE_PIN_MAX_W,
   DRIVE_PIN_TEX_H,
   DRIVE_SHOP_CAP_MAX_W,
@@ -27,6 +28,7 @@ describe("drive HUD callout sizing", () => {
     expect(DRIVE_PIN_MAX_W).toBeGreaterThanOrEqual(160);
     expect(DRIVE_PIN_MAX_W).toBeLessThanOrEqual(480);
     expect(DRIVE_PIN_MAX_W).toBeGreaterThan(DRIVE_VAN_MAX_W);
+    expect(DRIVE_PIN_MAX_H).toBeGreaterThanOrEqual(100);
     expect(DRIVE_SHOP_CAP_MAX_W).toBeGreaterThanOrEqual(180);
     expect(DRIVE_CHIP_PAD_X).toBeLessThan(12);
     expect(DRIVE_CHIP_PAD_Y).toBeLessThan(8);
@@ -36,6 +38,10 @@ describe("drive HUD callout sizing", () => {
     const callouts = hud.slice(hud.indexOf("private paintDriveCallouts"), hud.indexOf("private tutorialFlashHint"));
     expect(callouts).toContain("placeInstructionChip(this.drivePinLabel");
     expect(create).toContain('typeRoleBox(DRIVE_PIN_MAX_W, "hudBody")');
+    expect(create).toContain('typeRoleBox(DRIVE_PIN_MAX_H, "hudBody")');
+    const refit = hud.slice(hud.indexOf("private refitDrivePinLabel("), hud.indexOf("private paintDriveCallouts"));
+    expect(refit).toContain("fitTypeToBox(");
+    expect(callouts).toContain("this.refitDrivePinLabel()");
     expect(create).toContain('typeRoleBox(DRIVE_VAN_MAX_W, "hudBody")');
     expect(create).toContain('typeRoleBox(DRIVE_SHOP_CAP_MAX_W, "hudBody")');
     expect(create).toContain("...driveChipSignOpts");
