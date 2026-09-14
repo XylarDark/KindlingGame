@@ -53,7 +53,7 @@ describe("HUD sign attachment guards", () => {
   it("anchors shop readouts to the counter sign box when readoutsInShop", () => {
     const place = between(readouts, "placeReadouts(): void {", "\n  }", "placeReadouts");
     const project = between(readouts, "counterSignReadoutAnchors(): { signLeft: number; signRight: number; y: number } {", "\n  }", "counterSignReadoutAnchors");
-    expect(place).toContain("if (this.readoutsInShop)");
+    expect(place).toContain("if (this.readoutsInShop && !this.readoutsAtDoor)");
     expect(place).toContain("counterSignReadoutAnchors()");
     expect(place).toContain("this.scoreText.setOrigin(1, 0.5).setPosition(signLeft, y)");
     expect(place).toContain("this.clockText.setOrigin(0, 0.5).setPosition(signRight, y)");
@@ -159,15 +159,16 @@ describe("HUD chip resolver wiring", () => {
     expect(readouts).toContain('"counterSign"');
   });
 
-  it("places drive SCORE row top-left and door SCORE left / clock right", () => {
+  it("places drive and door SCORE top-left with clock top-right", () => {
     const column = between(readouts, "layoutReadoutColumn(inset: SafeInset): void {", "\n  }", "layoutReadoutColumn");
     expect(column).toContain("SLOT_GUTTER");
     const place = between(readouts, "placeReadouts(): void {", "\n  }", "placeReadouts");
-    expect(place).toMatch(/readoutsInShop[\s\S]*counterSignReadoutAnchors/);
-    expect(place).toMatch(/this\.clockText\.setOrigin\(0, 0\.5\)\.setPosition\(clockX, top\)/);
-    expect(place).toMatch(/readoutsAtDoor[\s\S]*hudSceneViewport/);
-    expect(place).toMatch(/readoutsAtDoor[\s\S]*this\.scoreCaption\.setOrigin\(0, 0\.5\)\.setPosition\(left, top\)/);
-    expect(place).toMatch(/readoutsAtDoor[\s\S]*this\.clockText\.setOrigin\(1, 0\.5\)\.setPosition\(clockEdge, top\)/);
+    expect(place).toMatch(/readoutsInShop && !this\.readoutsAtDoor[\s\S]*counterSignReadoutAnchors/);
+    expect(place).toMatch(/this\.clockText\.setOrigin\(0, 0\.5\)\.setPosition\(signRight, y\)/);
+    expect(place).toMatch(/else[\s\S]*hudSceneViewport/);
+    expect(place).toMatch(/else[\s\S]*this\.scoreCaption\.setOrigin\(0, 0\.5\)\.setPosition\(left, top\)/);
+    expect(place).toMatch(/else[\s\S]*this\.clockText\.setOrigin\(1, 0\.5\)\.setPosition\(clockEdge, top\)/);
+    expect(place).not.toMatch(/clockX/);
   });
 
   it("resolves doorTitle top-center for the whole door visit", () => {
@@ -175,8 +176,9 @@ describe("HUD chip resolver wiring", () => {
     expect(resolve).toContain("atDoor && this.doorTitleText.visible");
     expect(resolve).toMatch(/let centerX = placer\.viewW \/ 2/);
     expect(resolve).toMatch(/setSignPlaqueCenter\(this\.doorTitleText, centerX, centerY\)/);
-    expect(resolve).toMatch(/atDoor[\s\S]*unionAabb\(\[textInkAabb\(this\.scoreCaption\), textInkAabb\(this\.scoreText\)\]\)/);
-    expect(resolve).toMatch(/atDoor[\s\S]*textInkAabb\(this\.clockText\)/);
+    expect(resolve).toMatch(/readoutsInShop && !atDoor[\s\S]*unionAabb\(\[[\s\S]*textInkAabb\(this\.clockText\)/);
+    expect(resolve).toMatch(/else[\s\S]*unionAabb\(\[textInkAabb\(this\.scoreCaption\), textInkAabb\(this\.scoreText\)\]\)/);
+    expect(resolve).toMatch(/else[\s\S]*textInkAabb\(this\.clockText\)/);
     expect(resolve).toContain("scoreRight + CHIP_GAP");
     expect(resolve).toContain("clockLeft - CHIP_GAP");
     expect(resolve).toContain("placer.viewW / 2");
