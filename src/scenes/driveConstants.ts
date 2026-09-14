@@ -16,6 +16,8 @@ export const DRIVE_PIN_MAX_H = 120;
 export const DRIVE_PIN_LINE_SPACING = 10;
 /** drivePinLabel-only plaque margin (both axes); hug two-line copy without giant air. */
 export const DRIVE_PIN_PLAQUE_PAD = 28;
+/** Horizontal text padding so hug-ink width tracks longest name line + stroke. */
+export const DRIVE_PIN_INK_PAD_H = 14;
 export const DRIVE_VAN_MAX_W = 300;
 export const DRIVE_SHOP_CAP_MAX_W = 240;
 
