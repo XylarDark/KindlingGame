@@ -26,6 +26,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { parseVitestEvidence } from './lib/vitestEvidence.mjs';
 import { describe, runStage, summarize } from './pipeline.mjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -51,19 +52,7 @@ const STAGES = [
     proves: 'The Vitest suite runs to completion and every test passes.',
     command: 'npm',
     args: ['test'],
-    evidence: ({ stdout, stderr }) => {
-      const combined = `${stdout}\n${stderr}`;
-
-      // Vitest prints "Tests  443 passed (443)", or "Tests  1 failed | 442 passed (443)".
-      const line = combined.match(/^\s*Tests\s+(.+?)\s*$/m);
-      const fileTotal = combined.match(/^\s*Test Files\s+.*\((\d+)\)\s*$/m);
-
-      // No counts means the suite did not run to completion. Reporting that as "passed" on the
-      // strength of an exit code is the exact trap this tool exists to avoid.
-      if (!line) return null;
-
-      return fileTotal ? `${line[1]} in ${fileTotal[1]} files` : line[1];
-    },
+    evidence: ({ stdout, stderr }) => parseVitestEvidence(stdout, stderr),
   },
   {
     id: 'build',

@@ -12,6 +12,14 @@
 
 import { spawnSync } from 'node:child_process';
 
+/** Remove ANSI SGR sequences so evidence regexes match CI Vitest output. */
+export function stripAnsi(text) {
+  return text.replace(/\u001B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, '');
+}
+
+/** Vitest can emit a large run log; keep the summary tail when capturing on CI. */
+const SPAWN_MAX_BUFFER = 10 * 1024 * 1024;
+
 /**
  * Static description of a stage, shared by every result shape.
  *
@@ -67,10 +75,11 @@ export function runStage(stage, cwd) {
     cwd,
     encoding: 'utf8',
     shell: process.platform === 'win32',
+    maxBuffer: SPAWN_MAX_BUFFER,
   });
 
-  const stdout = result.stdout || '';
-  const stderr = result.stderr || '';
+  const stdout = stripAnsi(result.stdout || '');
+  const stderr = stripAnsi(result.stderr || '');
   const code = result.status;
   const durationMs = Date.now() - started;
 
