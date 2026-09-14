@@ -1,5 +1,7 @@
 /** HTML overlay for boot warm-up and idle PWA update reload. */
 
+import { brand } from "./brand";
+
 export type LoadingMode = "boot" | "update";
 
 export type ShowLoadingOpts = {
@@ -8,7 +10,7 @@ export type ShowLoadingOpts = {
   stage?: string;
 };
 
-const BOOT_COPY = "Loading Kindling…";
+const BOOT_COPY = brand.loadingBoot;
 const UPDATE_COPY = "Updating…";
 
 let gateEl: HTMLElement | null = null;

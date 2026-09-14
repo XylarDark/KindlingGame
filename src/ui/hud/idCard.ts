@@ -4,6 +4,7 @@ import { applyPortraitTexture, portraitImageKey } from "../../art/peopleAtlas";
 import { getSim } from "../../session";
 import { ackTap } from "../../input/tapAck";
 import { enableItemHit } from "../../input/hit";
+import { brand } from "../brand";
 import { addUiText } from "../text";
 import { Color, HUD_TYPE_FIT } from "../theme";
 import { GAME_HEIGHT, GAME_WIDTH } from "../../sim/constants";
@@ -123,7 +124,7 @@ export class HudIdCard {
     this.idFurniture = this.scene.add.graphics();
     this.idSignature = this.scene.add.graphics();
 
-    this.idTitle = addUiText(this.scene, -halfW + ID_PAD, headerMid, "PROVINCE OF KINDLING", {
+    this.idTitle = addUiText(this.scene, -halfW + ID_PAD, headerMid, brand.idProvince, {
       size: ID_TITLE_PX,
       color: Color.creamHex,
       fontStyle: "700",

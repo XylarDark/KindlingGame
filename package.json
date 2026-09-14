@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite --host --port 5174 --strictPort",
     "build": "tsc --noEmit && vite build",
+    "build:embed": "tsc --noEmit && VITE_PORTFOLIO=1 vite build --mode embed",
+    "verify:all": "npm run verify && npm run build:embed",
     "preview": "vite preview --host",
     "test": "vitest run",
     "open": "npx tsx scripts/open-game.ts",

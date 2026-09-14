@@ -1,4 +1,5 @@
 import { isStandaloneDisplay } from "../shell";
+import { installCoachBodies } from "./brand";
 
 /** sessionStorage key — dismiss for this tab/session only ("Not now"). */
 export const INSTALL_COACH_DISMISSED_KEY = "kindling.installCoachDismissed";
@@ -154,10 +155,11 @@ export function installCoachCopy(opts: {
 }): InstallCoachCopy {
   const title = "Install for full screen";
   const secondary = "Not now";
+  const [iosBody, promptBody, androidBody, defaultBody] = installCoachBodies();
   if (opts.platform === "ios") {
     return {
       title,
-      body: "Safari keeps the address bar in a normal tab. Tap Share → Add to Home Screen for a chrome-free Kindling session.",
+      body: iosBody,
       primary: "Got it",
       secondary,
     };
@@ -165,7 +167,7 @@ export function installCoachCopy(opts: {
   if (opts.canPrompt) {
     return {
       title,
-      body: "Install Kindling to play without the browser bar — the reliable way to get a full-screen session on your phone.",
+      body: promptBody,
       primary: "Install",
       secondary,
     };
@@ -173,14 +175,14 @@ export function installCoachCopy(opts: {
   if (opts.platform === "android") {
     return {
       title,
-      body: "Add Kindling to your Home Screen (browser menu → Install app / Add to Home screen) for a chrome-free session. Settings also has Start fullscreen for this tab.",
+      body: androidBody,
       primary: "Got it",
       secondary,
     };
   }
   return {
     title,
-    body: "Add Kindling to your Home Screen for a chrome-free session. Or turn on Start fullscreen in Settings for this tab.",
+    body: defaultBody,
     primary: "Got it",
     secondary,
   };

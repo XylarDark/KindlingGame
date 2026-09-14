@@ -1,9 +1,10 @@
 import { MS_PER_GAME_MINUTE } from "../sim/constants";
+import { brand } from "./brand";
 
 /** Shared shop copy — title case, en dashes, no slang hours. */
-export const MARK = "KINDLING";
+export const MARK = brand.mark;
 export const HOURS = "Open\n9 AM – 11 PM";
-export const WELCOME_TITLE = "Welcome to Kindling Cannabis";
+export const WELCOME_TITLE = brand.welcomeTitle;
 export const WELCOME_HINT = "One shift as key-lead, then out on deliveries — tap to begin";
 export const PAUSE_HINT = "Paused — tap to start";
 export const HOWTO_HINT = "Tap, click, or press any key";
@@ -20,7 +21,7 @@ export const HOWTO_STEPS = [
   },
   {
     title: "Delivery run",
-    body: "Pack the same way, then tap the flashing driver. Stops: call → ASK ID → bag → photo. Empty van returns to Kindling. Ends 11 PM.",
+    body: `Pack the same way, then tap the flashing driver. Stops: call → ASK ID → bag → photo. Empty van returns to ${brand.howtoDeliveryReturn}. Ends 11 PM.`,
   },
 ] as const;
 
@@ -57,7 +58,7 @@ export function driverReadyCopy(bagCount: number): string {
   return "Tap me when you're ready to leave\n— or wait for another delivery.";
 }
 
-export const BACK_TO_SHOP_COPY = { label: "BACK TO SHOP", caption: "Return to Kindling" };
+export const BACK_TO_SHOP_COPY = { label: "BACK TO SHOP", caption: brand.backToShopCaption };
 
 export const RESULTS_NEW_DAY = { label: "NEW DAY", caption: "09:00 · score resets" };
 export const RESULTS_TITLE = { label: "TITLE", caption: "Back to welcome" };

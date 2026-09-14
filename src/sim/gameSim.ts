@@ -1,3 +1,16 @@
+import {
+  backAtShopBagsToast,
+  backAtShopToast,
+  brand,
+  deniedNextStopToast,
+  deniedReturnToShopToast,
+  driveToShopFirstToast,
+  dropNextStopToast,
+  dropReturnToShopToast,
+  headBackToShopHint,
+  headBackToShopToast,
+  parkedAtShopToast,
+} from "../ui/brand";
 import { createCatalog, skuById, type Sku } from "./catalog";
 import { formatGameClock, GameClock } from "./clock";
 import {
@@ -251,7 +264,7 @@ export class GameSim {
   score = 0;
   playerRole: PlayerRole = "keyLead";
   vehicle = tileToWorld(CITY.shopSpawn);
-  toast = "Welcome to Kindling. Watch the order screen.";
+  toast: string = brand.welcomeToast;
   /** Shop-only ORDERS tablet notice; toast stays for drive / doorstep. */
   ordersNotice: string | null = "Welcome — watch ORDERS.";
   targetCallout: { skuId: string; text: string } | null = null;
@@ -687,7 +700,7 @@ export class GameSim {
     if (this.playerRole !== "driver") return false;
     const shop = tileToWorld(CITY.shopSpawn);
     if (dist(this.vehicle.x, this.vehicle.y, shop.x, shop.y) > HANDOFF_RADIUS) {
-      this.toast = "Drive up to Kindling first.";
+      this.toast = driveToShopFirstToast();
       return false;
     }
     this.clearDropoff();
@@ -697,10 +710,10 @@ export class GameSim {
     // The driver is back on the floor, so bags the key lead packed can start their hour.
     this.startDeferredSlas();
     this.toast = served
-      ? `Back at Kindling. Key lead cleared ${served} at the counter.`
+      ? backAtShopToast(served)
       : this.runOrderIds.length
-        ? "Back at Kindling. Remaining bags stay in the car."
-        : "Back at Kindling. Watch the order screen.";
+        ? backAtShopBagsToast()
+        : backAtShopToast(0);
     return true;
   }
 
@@ -1477,7 +1490,7 @@ export class GameSim {
     }
     if (dist(this.vehicle.x, this.vehicle.y, target.x, target.y) <= HANDOFF_RADIUS) {
       this.parkHeading = stallRestHeading(this.vehicleHeading, SHOP_PARK_HEADING);
-      this.toast = "Parked at Kindling. Tap the shop to return.";
+      this.toast = parkedAtShopToast();
     }
   }
 
@@ -1768,7 +1781,7 @@ export class GameSim {
 
     const stopId = this.nextStopId();
     if (!stopId) {
-      this.toast = "Nothing in the car. Head back to Kindling.";
+      this.toast = headBackToShopToast();
       return;
     }
     const house = houseById(stopId);
@@ -1827,8 +1840,11 @@ export class GameSim {
         this.refreshDriveRoute();
         this.toast =
           this.runOrderIds.length === 0
-            ? `Denied (${SCORE_FAIL}). Van is heading back to Kindling.`
-            : `Denied (${SCORE_FAIL}). Next → ${this.nextStopId() ? houseTitle(this.nextStopId()!) : "Kindling"}.`;
+            ? deniedReturnToShopToast(SCORE_FAIL)
+            : deniedNextStopToast(
+                SCORE_FAIL,
+                this.nextStopId() ? houseTitle(this.nextStopId()!) : null,
+              );
         this.armDropoffInteract();
         return;
       }
@@ -1856,9 +1872,12 @@ export class GameSim {
         ? `Late drop (${SCORE_DELIVERY_LATE})`
         : `On-time (+${SCORE_DELIVERY_ON_TIME})`;
       if (this.runOrderIds.length === 0) {
-        this.toast = `${dropMsg}. Van is heading to Kindling — tap the shop when you arrive.`;
+        this.toast = dropReturnToShopToast(dropMsg);
       } else {
-        this.toast = `${dropMsg}. Next → ${this.nextStopId() ? houseTitle(this.nextStopId()!) : "Kindling"}.`;
+        this.toast = dropNextStopToast(
+          dropMsg,
+          this.nextStopId() ? houseTitle(this.nextStopId()!) : null,
+        );
       }
       this.armDropoffInteract();
     }
@@ -2003,7 +2022,7 @@ export class GameSim {
         const sku = skuById(this.catalog, order.skuId);
         return `→  ${destLabel(order)}   ·   ${order.customerName}   ·   ${sku?.name ?? ""}   ·   ${this.runOrderIds.length} bag${this.runOrderIds.length === 1 ? "" : "s"}`;
       }
-      return "Head back to Kindling";
+      return headBackToShopHint();
     }
     const order = this.focusOrder();
     if (!order) return "No open tickets";
