@@ -83,6 +83,8 @@ export const HUD_COG_CAPTION_BOX = {
   w: 240,
   h: Math.ceil(HUD_COG_CAPTION_PX * 1.4 + HUD_COG_CAPTION_PAD.y * 2),
 };
+/** Settings gear display scale — cog-only; touch hit tracks scaled display size. */
+export const HUD_COG_SIZE_SCALE = 0.8;
 
 /** Delivery phone — every dimension derived from PHONE_SCALE and phoneArt cells. */
 export const PHONE_W = PHONE_TEX.w * PHONE_SCALE;
