@@ -193,17 +193,7 @@ export class HudReadouts {
     this.matchCaptionToValue();
     const valueW = this.scoreText.width;
     const captionW = this.scoreCaption.width;
-    if (this.readoutsAtDoor) {
-      const inset = designHudInset(readCssSafeArea(document.getElementById("game-root")));
-      const { width: viewW } = hudSceneViewport(this.scene);
-      const top = this.readoutCorner.top;
-      const left = inset.left + SLOT_GUTTER;
-      const clockEdge = viewW - inset.right - SLOT_GUTTER - 4;
-      this.scoreCaption.setOrigin(0, 0.5).setPosition(left, top);
-      this.scoreText.setOrigin(0, 0.5).setPosition(left + captionW + HUD_SCORE_GAP, top);
-      this.clockText.setOrigin(1, 0.5).setPosition(clockEdge, top);
-      this.scorePopLayer.setPosition(left + captionW + HUD_SCORE_GAP + valueW / 2, top - 46);
-    } else if (this.readoutsInShop) {
+    if (this.readoutsInShop && !this.readoutsAtDoor) {
       const { signLeft, signRight, y } = this.counterSignReadoutAnchors();
       let gap = HUD_SCORE_GAP;
       const signInnerLeft = COUNTER_SIGN.x - COUNTER_SIGN.w / 2;
@@ -215,13 +205,15 @@ export class HudReadouts {
       this.clockText.setOrigin(0, 0.5).setPosition(signRight, y);
       this.scorePopLayer.setPosition(signLeft, y - 46);
     } else {
-      const { left, top } = this.readoutCorner;
+      const inset = designHudInset(readCssSafeArea(document.getElementById("game-root")));
+      const { width: viewW } = hudSceneViewport(this.scene);
+      const top = this.readoutCorner.top;
+      const left = inset.left + SLOT_GUTTER;
+      const clockEdge = viewW - inset.right - SLOT_GUTTER - 4;
       this.scoreCaption.setOrigin(0, 0.5).setPosition(left, top);
-      const valueX = left + this.scoreCaption.width + HUD_SCORE_GAP;
-      this.scoreText.setOrigin(0, 0.5).setPosition(valueX, top);
-      const clockX = valueX + valueW + HUD_SCORE_GAP;
-      this.clockText.setOrigin(0, 0.5).setPosition(clockX, top);
-      this.scorePopLayer.setPosition(clockX + this.clockText.width + 16, top);
+      this.scoreText.setOrigin(0, 0.5).setPosition(left + captionW + HUD_SCORE_GAP, top);
+      this.clockText.setOrigin(1, 0.5).setPosition(clockEdge, top);
+      this.scorePopLayer.setPosition(left + captionW + HUD_SCORE_GAP + valueW / 2, top - 46);
     }
     this.syncShopReadoutMirror();
   }
@@ -513,7 +505,13 @@ export class HudReadouts {
   /** Register score row and resolve cover / door-title plaques through the frame placer. */
   resolvePlaqueSlots(placer: ChipPlacer, atDoor: boolean): void {
     if (this.scoreText.visible) {
-      if (atDoor) {
+      if (this.readoutsInShop && !atDoor) {
+        placer.register(
+          "scoreClock",
+          unionAabb([textInkAabb(this.scoreCaption), textInkAabb(this.scoreText), textInkAabb(this.clockText)]),
+          chipPriority("scoreClock"),
+        );
+      } else {
         placer.register(
           "scoreClock",
           unionAabb([textInkAabb(this.scoreCaption), textInkAabb(this.scoreText)]),
@@ -522,12 +520,6 @@ export class HudReadouts {
         if (this.clockText.visible) {
           placer.register("scoreClock", textInkAabb(this.clockText), chipPriority("scoreClock"));
         }
-      } else {
-        placer.register(
-          "scoreClock",
-          unionAabb([textInkAabb(this.scoreCaption), textInkAabb(this.scoreText), textInkAabb(this.clockText)]),
-          chipPriority("scoreClock"),
-        );
       }
     }
     const coverY = this.readoutCorner.top + 40;
