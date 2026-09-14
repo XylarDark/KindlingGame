@@ -476,37 +476,13 @@ export class HudScene extends Phaser.Scene {
     this.readouts.paintDoorTitle(snap, atDoor, drop);
     this.readouts.paintCover(snap, atDoor, this.hudSettings.isOpen, this.resultsVisible);
     this.paintDriveCallouts(snap, driving, flashNext);
-    const showPad =
-      driving &&
-      !showPhone &&
-      !showId &&
-      !this.hudSettings.isOpen &&
-      !this.resultsVisible &&
-      snap.autoDriving;
-    this.padRing.setVisible(showPad);
-    this.padKnob.setVisible(showPad);
-    this.padLabel.setVisible(showPad);
-    if (showPad) {
-      const padLine = snap.run?.nextStopId ? "Auto · nudge pad" : "Auto · nudge to shop";
-      if (padLine !== this.lastPadLabel) {
-        this.lastPadLabel = padLine;
-        this.padLabel.setText(padLine);
-        syncSignPlaque(this.padLabel);
-      }
-      const inset = designHudInset(readCssSafeArea(document.getElementById("game-root")));
-      const { width: viewW, height: viewH } = hudSceneViewport(this);
-      this.placeInstructionChip(this.padLabel, inset, viewW, viewH);
-      const padFlash = !!flashNext && flashNext.kind === "gpsPin";
-      if (padFlash !== this.lastPadFlash) {
-        this.lastPadFlash = padFlash;
-        this.drawPad(padFlash);
-      }
-      if (this.pointerId === null) this.padKnob.setPosition(this.padCenter.x, this.padCenter.y);
-    } else {
-      this.lastPadLabel = "";
-      this.lastPadFlash = null;
-      if (this.pointerId !== null) this.pointerId = null;
-    }
+    const showPad = false;
+    this.padRing.setVisible(false);
+    this.padKnob.setVisible(false);
+    this.padLabel.setVisible(false);
+    this.lastPadLabel = "";
+    this.lastPadFlash = null;
+    if (this.pointerId !== null) this.pointerId = null;
     this.syncDriveScene(snap);
     this.syncDoorScene(snap);
     if (atDoor) this.readouts.placeReadouts();
@@ -544,13 +520,6 @@ export class HudScene extends Phaser.Scene {
       const toastPlaque = signPlaqueExtents(this.toastText);
       const toastY = inset.top + SCREEN_CHIP_MARGIN + toastPlaque.panelH / 2;
       placeChip(placer, "toast", this.toastText, viewW / 2, toastY, chipPriority("toast"));
-    }
-
-    if (showPad && this.padLabel.visible) {
-      syncSignPlaque(this.padLabel);
-      const padPlaque = signPlaqueExtents(this.padLabel);
-      const padY = inset.top + SCREEN_CHIP_MARGIN + padPlaque.panelH / 2;
-      placeChip(placer, "pad", this.padLabel, viewW / 2, padY, chipPriority("pad"));
     }
 
     if (showPhone && this.phoneWidget.phone.visible) {
