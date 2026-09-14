@@ -159,16 +159,28 @@ describe("HUD chip resolver wiring", () => {
     expect(readouts).toContain('"counterSign"');
   });
 
-  it("places drive and door SCORE top-left with clock top-right", () => {
-    const column = between(readouts, "layoutReadoutColumn(inset: SafeInset): void {", "\n  }", "layoutReadoutColumn");
-    expect(column).toContain("SLOT_GUTTER");
+  it("places shop counter readouts on the sign row only", () => {
     const place = between(readouts, "placeReadouts(): void {", "\n  }", "placeReadouts");
     expect(place).toMatch(/readoutsInShop && !this\.readoutsAtDoor[\s\S]*counterSignReadoutAnchors/);
     expect(place).toMatch(/this\.clockText\.setOrigin\(0, 0\.5\)\.setPosition\(signRight, y\)/);
-    expect(place).toMatch(/else[\s\S]*hudSceneViewport/);
-    expect(place).toMatch(/else[\s\S]*this\.scoreCaption\.setOrigin\(0, 0\.5\)\.setPosition\(left, top\)/);
-    expect(place).toMatch(/else[\s\S]*this\.clockText\.setOrigin\(1, 0\.5\)\.setPosition\(clockEdge, top\)/);
     expect(place).not.toMatch(/clockX/);
+  });
+
+  it("matches drive and door SCORE/clock size and corner pocket placement", () => {
+    expect(readouts).toContain("doorCornerReadoutAnchors");
+    expect(readouts).not.toContain("syncDriveReadoutScale");
+    expect(readouts).not.toContain("DRIVE_HUD_SCORE_PX");
+    const constants = read("../ui/hud/constants.ts");
+    expect(constants).toContain("DOOR_CORNER_READOUT_PAD");
+    expect(constants).toContain("DOOR_CORNER_POCKET_W");
+    expect(constants).not.toContain("DRIVE_HUD_READOUT_SCALE");
+    const place = between(readouts, "placeReadouts(): void {", "\n  }", "placeReadouts");
+    expect(place).toMatch(/else[\s\S]*doorCornerReadoutAnchors/);
+    expect(place).toMatch(/else[\s\S]*this\.clockText\.setOrigin\(1, 0\.5\)\.setPosition\(clockRight, rowY\)/);
+    const anchor = between(readouts, "export function doorCornerReadoutAnchors(", "\n}", "doorCornerReadoutAnchors");
+    expect(anchor).toContain("DOOR_CORNER_READOUT_PAD");
+    expect(anchor).toContain("(pocketW - scoreRowW) / 2");
+    expect(anchor).toContain("(pocketW - clockW) / 2");
   });
 
   it("resolves doorTitle top-center for the whole door visit", () => {
