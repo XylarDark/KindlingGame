@@ -1,3 +1,4 @@
+import { brand } from "../ui/brand";
 import { formatGameClock } from "./clock";
 import {
   SCORE_DELIVERY_LATE,
@@ -63,13 +64,13 @@ export function shiftVerdict(breakdown: ShiftBreakdown, under19Fails: number): s
   const sold =
     breakdown.inStore + breakdown.pickups + breakdown.deliveriesOnTime + breakdown.deliveriesLate;
   if (sold === 0) return "Quiet shift — the floor barely moved.";
-  return "Clean shift — Kindling stays open.";
+  return brand.shiftVerdictClean;
 }
 
 export function shiftResultsTitle(breakdown: ShiftBreakdown, under19Fails: number): string {
   if (under19Fails > 0) return "Shift closed — compliance hold";
   if (breakdown.fails >= 3) return "Shift closed — rough night";
-  return "End of shift — Kindling";
+  return brand.shiftTitleEnd;
 }
 
 export function buildShiftResults(

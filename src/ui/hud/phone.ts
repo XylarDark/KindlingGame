@@ -7,6 +7,7 @@ import type { SimSnapshot } from "../../sim/gameSim";
 import { ackTap, releaseTapAck } from "../../input/tapAck";
 import { addSignText, setSignAccent, signContainer } from "../signText";
 import { addUiText } from "../text";
+import { brand } from "../brand";
 import { Color, HUD_TYPE_FIT } from "../theme";
 import type { SafeInset } from "../viewFit";
 import { GAME_HEIGHT, GAME_WIDTH } from "../../sim/constants";
@@ -55,7 +56,7 @@ export class HudPhone {
       .setOrigin(0, 0);
     this.bakePhoneMap();
     this.phoneMap = this.scene.add.graphics();
-    this.phoneTitle = addUiText(this.scene, 0, PHONE_APP.y + PHONE_HEADER_H / 2, "KINDLING DELIVERY", {
+    this.phoneTitle = addUiText(this.scene, 0, PHONE_APP.y + PHONE_HEADER_H / 2, brand.deliveryHeader, {
       size: PHONE_TITLE_PX,
       color: Color.limeHex,
       fontStyle: "700",

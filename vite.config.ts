@@ -2,14 +2,15 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { defineConfig, type Plugin } from "vite";
 import { serviceWorkerBuildId, stampServiceWorkerSource } from "./src/pwaStamp.ts";
+import { portfolioEmbedGuard, portfolioIndexHtml, portfolioManifest } from "./vite.portfolio.ts";
 
 /** Rewrite dist/sw.js with a per-deploy id so Chrome/Safari treat it as a new worker. */
-function kindlingStampSw(): Plugin {
+function kindlingStampSw(outDir: string): Plugin {
   return {
     name: "kindling-stamp-sw",
     apply: "build",
     closeBundle() {
-      const swPath = join("dist", "sw.js");
+      const swPath = join(outDir, "sw.js");
       let source: string;
       try {
         source = readFileSync(swPath, "utf8");
@@ -23,8 +24,17 @@ function kindlingStampSw(): Plugin {
   };
 }
 
-export default defineConfig({
-  plugins: [kindlingStampSw()],
+export default defineConfig(({ mode }) => {
+  const portfolio = mode === "embed" || process.env.VITE_PORTFOLIO === "1";
+  const outDir = portfolio ? "dist/embed" : "dist";
+
+  return {
+  plugins: [
+    portfolioIndexHtml(portfolio),
+    portfolioManifest(outDir, portfolio),
+    portfolioEmbedGuard(outDir, portfolio),
+    kindlingStampSw(outDir),
+  ],
   base: "./",
   server: {
     // Pinned so the plain `npm run dev` serves the port every capture script expects.
@@ -41,6 +51,9 @@ export default defineConfig({
     port: 4173,
   },
   build: {
+    outDir,
+    // Main build clears dist/; embed build nests under dist/embed/ without wiping the main bundle.
+    emptyOutDir: !portfolio,
     target: "es2020",
     sourcemap: false,
     assetsInlineLimit: 4096,
@@ -52,4 +65,5 @@ export default defineConfig({
       },
     },
   },
+};
 });

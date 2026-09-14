@@ -106,7 +106,7 @@ describe("loading gate wiring", () => {
 
   it("loadingGate module exports show/hide with boot and update copy", () => {
     const src = read("src/ui/loadingGate.ts");
-    expect(src).toContain("Loading Kindling");
+    expect(src).toContain("brand.loadingBoot");
     expect(src).toContain("Updating");
     expect(src).toContain("export function showLoading");
     expect(src).toContain("export function hideLoading");
