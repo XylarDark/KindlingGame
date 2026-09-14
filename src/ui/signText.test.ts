@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { glyphAabb, inkInsidePlaque, measureInkHeight, measureInkWidth, plaqueCenterFromInkBox, tightInkLayout } from "./signTextInk";
-import { SIGN_PAD_X, SIGN_PAD_Y } from "./signPlaque";
+import { SIGN_FRAME_W, SIGN_PAD_X, SIGN_PAD_Y } from "./signPlaque";
 
 function read(path: string): string {
   const src = readFileSync(new URL(path, import.meta.url), "utf8").replace(/\r\n/g, "\n");
@@ -42,10 +42,10 @@ describe("sign text ink contract", () => {
     const glyph = mockGlyph(40, 16, 0.5, 0.5);
     const w = 40;
     const h = 16;
-    const panelW = w + SIGN_PAD_X * 2;
-    const panelH = h + SIGN_PAD_Y * 2;
+    const panelW = w + SIGN_PAD_X * 2 + SIGN_FRAME_W * 2;
+    const panelH = h + SIGN_PAD_Y * 2 + SIGN_FRAME_W * 2;
     const { top: inkTop } = glyphAabb(glyph);
-    const plaque = mockPlaque(0, inkTop + SIGN_PAD_Y - 2 + panelH / 2, panelW, panelH);
+    const plaque = mockPlaque(0, inkTop + SIGN_PAD_Y + SIGN_FRAME_W - 2 + panelH / 2, panelW, panelH);
     const result = inkInsidePlaque(glyph, plaque);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toBe("top-clipped ink");
@@ -55,12 +55,12 @@ describe("sign text ink contract", () => {
     const glyph = mockGlyph(40, 16, 0.5, 0.5);
     const w = 40;
     const h = 16;
-    const panelW = w + SIGN_PAD_X * 2;
-    const panelH = h + SIGN_PAD_Y * 2;
+    const panelW = w + SIGN_PAD_X * 2 + SIGN_FRAME_W * 2;
+    const panelH = h + SIGN_PAD_Y * 2 + SIGN_FRAME_W * 2;
     const { left, top } = glyphAabb(glyph);
     const plaque = mockPlaque(
-      left - SIGN_PAD_X + panelW / 2,
-      top - SIGN_PAD_Y + panelH / 2,
+      left - SIGN_PAD_X - SIGN_FRAME_W + panelW / 2,
+      top - SIGN_PAD_Y - SIGN_FRAME_W + panelH / 2,
       panelW,
       panelH,
     );
@@ -70,12 +70,12 @@ describe("sign text ink contract", () => {
   it("validates compact drive chip pads — not the default SIGN_PAD constants", () => {
     const compact = { x: 23, y: 21 };
     const glyph = mockGlyph(120, 48, 0.5, 1);
-    const panelW = 120 + compact.x * 2;
-    const panelH = 48 + compact.y * 2;
+    const panelW = 120 + compact.x * 2 + SIGN_FRAME_W * 2;
+    const panelH = 48 + compact.y * 2 + SIGN_FRAME_W * 2;
     const { left, top } = glyphAabb(glyph);
     const plaque = mockPlaque(
-      left - compact.x + panelW / 2,
-      top - compact.y + panelH / 2,
+      left - compact.x - SIGN_FRAME_W + panelW / 2,
+      top - compact.y - SIGN_FRAME_W + panelH / 2,
       panelW,
       panelH,
       0.5,
@@ -153,7 +153,7 @@ describe("text boxes are all the counter plaque", () => {
   it("sizes the 9-slice from glyph bounds + SIGN_PAD, not Phaser Text padding", () => {
     expect(helper).toContain("SIGN_PAD_X");
     expect(helper).toContain("SIGN_PAD_Y");
-    expect(helper).toMatch(/panelW = Math\.max\(8, w \+ pad\.x \* 2\)/);
+    expect(helper).toMatch(/panelW = Math\.max\(8, w \+ pad\.x \* 2 \+ SIGN_FRAME_W \* 2\)/);
     expect(helper).toContain("signPads(text)");
     expect(helper).toMatch(/padding: undefined/);
     expect(helper).toContain("glyphLocalBounds");
@@ -299,11 +299,12 @@ describe("tight ink measurement", () => {
       lineSpacing: 4,
       letterSpacing: 0,
       style: {
+        fontFamily: "Inter",
         fontSize: "19px",
-        metrics: { fontSize: 19 },
+        metrics: { fontSize: 19, ascent: 15, descent: 4 },
         strokeThickness: 0,
         wordWrapWidth: 330,
-        wordWrap: true,
+        wordWrap: { width: 330 },
         maxLines: 0,
         syncFont: () => {},
       },
@@ -311,6 +312,12 @@ describe("tight ink measurement", () => {
         measureText: (s: string) => ({ width: s === " " ? 4 : s.length * 9 }),
       },
       canvas: {},
+      setFontSize() {
+        return mockText;
+      },
+      getTextMetrics() {
+        return { fontSize: 23, ascent: 18, descent: 5 };
+      },
       updateText() {
         return mockText;
       },
@@ -318,10 +325,10 @@ describe("tight ink measurement", () => {
     } as unknown as Phaser.GameObjects.Text;
 
     expect(measureInkWidth(mockText, lines)).toBe(50);
-    expect(measureInkHeight(mockText, 1)).toBe(19);
+    expect(measureInkHeight(mockText, 1)).toBe(23);
     const layout = tightInkLayout(mockText);
     expect(layout.width).toBe(50);
-    expect(layout.height).toBe(19);
+    expect(layout.height).toBe(23);
   });
 
   it("keeps full width for copy that fills the wrap box", () => {
@@ -335,11 +342,12 @@ describe("tight ink measurement", () => {
       lineSpacing: 4,
       letterSpacing: 0,
       style: {
+        fontFamily: "Inter",
         fontSize: "19px",
-        metrics: { fontSize: 19 },
+        metrics: { fontSize: 19, ascent: 15, descent: 4 },
         strokeThickness: 0,
         wordWrapWidth: 330,
-        wordWrap: true,
+        wordWrap: { width: 330 },
         maxLines: 0,
         syncFont: () => {},
       },
@@ -347,6 +355,12 @@ describe("tight ink measurement", () => {
         measureText: (s: string) => ({ width: s === " " ? 4 : s.length * 6.2 }),
       },
       canvas: {},
+      setFontSize() {
+        return mockText;
+      },
+      getTextMetrics() {
+        return { fontSize: 23, ascent: 18, descent: 5 };
+      },
       updateText() {
         return mockText;
       },
@@ -359,6 +373,25 @@ describe("tight ink measurement", () => {
   it("centres plaque on ink box midpoints", () => {
     const ink = glyphAabb({ width: 80, height: 24, originX: 0.5, originY: 0.5 });
     expect(plaqueCenterFromInkBox(ink)).toEqual({ x: -40, y: -12 });
+  });
+
+  it("measures ink height from font metrics ascent+descent, not CSS fontSize alone", () => {
+    const mockText = {
+      padding: { left: 0, right: 0, top: 0, bottom: 0 },
+      lineSpacing: 4,
+      style: { fontFamily: "Inter", fontSize: "19.2px", strokeThickness: 0, syncFont: () => {} },
+      setFontSize() {
+        return mockText;
+      },
+      getTextMetrics() {
+        return { fontSize: 24, ascent: 19, descent: 5 };
+      },
+      updateText() {
+        return mockText;
+      },
+    } as unknown as Phaser.GameObjects.Text;
+    expect(measureInkHeight(mockText, 1)).toBe(24);
+    expect(measureInkHeight(mockText, 2)).toBe(24 + 4 + 24);
   });
 });
 

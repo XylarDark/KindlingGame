@@ -59,6 +59,7 @@ import { readyTally, receiptSlips } from "../ui/receipts";
 import { wireHover } from "../ui/chrome";
 import {
   addSignText,
+  applySignInkPad,
   setSignAccent,
   setSignCopy,
   setSignPlaqueCenter,
@@ -123,8 +124,8 @@ const TABLET_LABEL_INSET = 2;
 /** Wider side margin than default SIGN_PAD so long one-line speech is not edge-tight. */
 const SHOP_SPEECH_PAD_X = SIGN_PAD_X + 12;
 const SHOP_SPEECH_PAD_Y = SIGN_PAD_Y;
-/** Chip-local — lift key-lead ink so descenders clear the plaque bottom ring. */
-const KEY_LEAD_INK_SHIFT_Y = -6;
+/** Opt-in canvas slack so tight ink + setFixedSize do not crop descenders or side glyphs. */
+const SHOP_SPEECH_INK_PAD = { left: 5, top: 3, right: 6, bottom: 5 };
 
 /** Concurrent customers the pool covers without mid-frame allocate (4 is typical peak). */
 const CUSTOMER_VISUAL_POOL = 4;
@@ -305,7 +306,7 @@ export class ShopScene extends Phaser.Scene {
       noWrap: true,
       padX: SHOP_SPEECH_PAD_X,
       padY: SHOP_SPEECH_PAD_Y,
-      inkShiftY: KEY_LEAD_INK_SHIFT_Y,
+      inkPad: SHOP_SPEECH_INK_PAD,
       maxWidth: typeRoleBox(660, "speech"),
       maxHeight: typeRoleBox(104, "speech"),
     })
@@ -324,6 +325,9 @@ export class ShopScene extends Phaser.Scene {
       typeRole: "speech",
       align: "center",
       fontStyle: "600",
+      padX: SHOP_SPEECH_PAD_X,
+      padY: SHOP_SPEECH_PAD_Y,
+      inkPad: SHOP_SPEECH_INK_PAD,
       maxWidth: typeRoleBox(336, "speech"),
       maxHeight: typeRoleBox(124, "speech"),
     })
@@ -380,7 +384,7 @@ export class ShopScene extends Phaser.Scene {
       const textDirty = this.keyLeadBubble.text !== callout;
       if (textDirty) {
         this.keyLeadBubble.setText(callout);
-        refitType(this.keyLeadBubble);
+        this.refitShopSpeech(this.keyLeadBubble);
       }
       syncSignPlaque(this.keyLeadBubble);
       const lead = keyLeadSpeechPlaqueAboveHead(
@@ -407,7 +411,7 @@ export class ShopScene extends Phaser.Scene {
       const driverTextDirty = this.driverBubble.text !== driverLine;
       if (driverTextDirty) {
         this.driverBubble.setText(driverLine);
-        refitType(this.driverBubble);
+        this.refitShopSpeech(this.driverBubble);
       }
       this.driverBubble.setAlpha(1);
       syncSignPlaque(this.driverBubble);
@@ -805,10 +809,16 @@ export class ShopScene extends Phaser.Scene {
     }
   }
 
+  /** Typekit refit + speech ink pad — padding must survive clamp-fit. */
+  private refitShopSpeech(text: Phaser.GameObjects.Text): void {
+    refitType(text);
+    applySignInkPad(text);
+  }
+
   /** Boot warm under the loading gate — first walk-in must not raster + plaque on one frame. */
   private warmCustomerSpeech(visual: CustomerVisual): void {
     visual.bubble.setText("Welcome in!");
-    refitType(visual.bubble);
+    this.refitShopSpeech(visual.bubble);
     visual.feedback.setText("Thanks!");
     visual.bubble.setVisible(true);
     visual.feedback.setVisible(true);
@@ -839,6 +849,7 @@ export class ShopScene extends Phaser.Scene {
       noWrap: true,
       padX: SHOP_SPEECH_PAD_X,
       padY: SHOP_SPEECH_PAD_Y,
+      inkPad: SHOP_SPEECH_INK_PAD,
       maxWidth: CUSTOMER_SPEECH_MAX_W,
       maxHeight: CUSTOMER_SPEECH_H,
     })
@@ -918,7 +929,7 @@ export class ShopScene extends Phaser.Scene {
       if (!visual) visual = this.acquireCustomerVisual(customer.orderId, customer.look);
       if (visual.bubble.text !== customer.bubble) {
         visual.bubble.setText(customer.bubble);
-        refitType(visual.bubble);
+        this.refitShopSpeech(visual.bubble);
       }
       syncSignPlaque(visual.bubble);
     }
@@ -972,7 +983,7 @@ export class ShopScene extends Phaser.Scene {
         bubble.setAlpha(1);
         if (bubble.text !== customer.bubble) {
           bubble.setText(customer.bubble);
-          refitType(bubble);
+          this.refitShopSpeech(bubble);
         }
         const pin = layout
           ? { x: layout.x, y: layout.y }
