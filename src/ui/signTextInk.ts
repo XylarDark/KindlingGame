@@ -1,5 +1,5 @@
-import { SIGN_PAD_X, SIGN_PAD_Y } from "./signPlaque";
-import { parseFontPx } from "./typeMetrics";
+import { SIGN_FRAME_W, SIGN_PAD_X, SIGN_PAD_Y } from "./signPlaque";
+import { parseFontPx, readTokenMetrics } from "./typeMetrics";
 
 const INK_CEILING_SLACK = 0.5;
 
@@ -63,6 +63,13 @@ export function measureInkLineWidth(text: Phaser.GameObjects.Text, line: string)
   return Math.ceil(lineWidth);
 }
 
+/** Per-line ink height — mirrors Phaser GetTextSize (`metrics.fontSize + stroke`). */
+function inkLineHeight(text: Phaser.GameObjects.Text): number {
+  const px = parseFontPx(text.style.fontSize);
+  const metrics = readTokenMetrics(text, px);
+  return metrics.fontSize + (text.style.strokeThickness ?? 0);
+}
+
 export function measureInkWidth(text: Phaser.GameObjects.Text, lines: readonly string[]): number {
   let maxLine = 0;
   for (const line of lines) maxLine = Math.max(maxLine, measureInkLineWidth(text, line));
@@ -71,8 +78,7 @@ export function measureInkWidth(text: Phaser.GameObjects.Text, lines: readonly s
 
 export function measureInkHeight(text: Phaser.GameObjects.Text, lineCount: number): number {
   if (lineCount <= 0) return 0;
-  const style = text.style;
-  const lineHeight = parseFontPx(style.fontSize) + (style.strokeThickness ?? 0);
+  const lineHeight = inkLineHeight(text);
   let height = lineHeight * lineCount;
   if (lineCount > 1) height += text.lineSpacing * (lineCount - 1);
   return height + padExtents(text).y;
@@ -146,9 +152,10 @@ export function inkInsidePlaque(
     ink.bottom += inkShiftY;
   }
   const panel = plaqueAabb(plaque);
-  if (ink.top < panel.top + pad.y - tolerance) return { ok: false, reason: "top-clipped ink" };
-  if (ink.left < panel.left + pad.x - tolerance) return { ok: false, reason: "left-clipped ink" };
-  if (ink.right > panel.right - pad.x + tolerance) return { ok: false, reason: "right-clipped ink" };
-  if (ink.bottom > panel.bottom - pad.y + tolerance) return { ok: false, reason: "bottom-clipped ink" };
+  const field = { x: pad.x + SIGN_FRAME_W, y: pad.y + SIGN_FRAME_W };
+  if (ink.top < panel.top + field.y - tolerance) return { ok: false, reason: "top-clipped ink" };
+  if (ink.left < panel.left + field.x - tolerance) return { ok: false, reason: "left-clipped ink" };
+  if (ink.right > panel.right - field.x + tolerance) return { ok: false, reason: "right-clipped ink" };
+  if (ink.bottom > panel.bottom - field.y + tolerance) return { ok: false, reason: "bottom-clipped ink" };
   return { ok: true };
 }

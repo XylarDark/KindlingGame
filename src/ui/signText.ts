@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { notePerfPlaquePump, notePerfSetText } from "./perfProbe";
-import { SIGN_BORDER, SIGN_PAD_X, SIGN_PAD_Y } from "./signPlaque";
+import { SIGN_BORDER, SIGN_FRAME_W, SIGN_PAD_X, SIGN_PAD_Y } from "./signPlaque";
 import { glyphLocalBounds as glyphLocalBoundsInk, inkInsidePlaque as inkFitsPlaque, plaqueCenterFromInkBox, tightInkLayout } from "./signTextInk";
 import { makePlaqueNineSlice, plaqueTextureForAccent } from "./signPlaqueNine";
 import { makeType, type TypeStyle } from "./typekit";
@@ -37,10 +37,18 @@ export interface SignTextOptions extends UiTextOptions {
   padY?: number;
   /** Chip-local vertical ink nudge inside the plaque (negative lifts glyphs). */
   inkShiftY?: number;
+  /**
+   * Extra Phaser Text padding included in tight-ink measure — opt-in only.
+   * Use when {@link applyTightInkBox} would crop descenders or side stroke.
+   */
+  inkPad?: { left?: number; top?: number; right?: number; bottom?: number };
 }
 
 const SIGN_PAD = "signPad";
 const SIGN_INK_SHIFT = "signInkShift";
+const SIGN_INK_PAD = "signInkPad";
+
+export type SignInkPad = { left: number; top: number; right: number; bottom: number };
 
 function signPads(text: Phaser.GameObjects.Text): { x: number; y: number } {
   const custom = text.getData(SIGN_PAD) as { x: number; y: number } | undefined;
@@ -49,6 +57,20 @@ function signPads(text: Phaser.GameObjects.Text): { x: number; y: number } {
 
 function signInkShift(text: Phaser.GameObjects.Text): number {
   return (text.getData(SIGN_INK_SHIFT) as number | undefined) ?? 0;
+}
+
+function signInkPad(text: Phaser.GameObjects.Text): SignInkPad | undefined {
+  return text.getData(SIGN_INK_PAD) as SignInkPad | undefined;
+}
+
+/** Re-apply stored ink pad after typekit refit — no-op when the chip never opted in. */
+export function applySignInkPad(text: Phaser.GameObjects.Text): void {
+  const pad = signInkPad(text);
+  if (!pad) return;
+  text.setPadding(pad.left, pad.top, pad.right, pad.bottom);
+  text.updateText();
+  const entry = entryFor(text);
+  if (entry) pumpFor(text.scene).markDirty(entry);
 }
 
 type SignPlaqueEntry = {
@@ -365,8 +387,8 @@ function layoutPlaque(entry: SignPlaqueEntry): void {
   const w = layout.width;
   const h = layout.height;
   const pad = signPads(text);
-  const panelW = Math.max(8, w + pad.x * 2);
-  const panelH = Math.max(8, h + pad.y * 2);
+  const panelW = Math.max(8, w + pad.x * 2 + SIGN_FRAME_W * 2);
+  const panelH = Math.max(8, h + pad.y * 2 + SIGN_FRAME_W * 2);
   const accent = accentOf(text);
   const tex = plaqueTextureForAccent(accent);
   if (plaque.texture.key !== tex) plaque.setTexture(tex);
@@ -417,7 +439,7 @@ export function addSignText(
   content: string,
   options: SignTextOptions = {},
 ): Phaser.GameObjects.Text {
-  const { accent, padVariant, padX, padY, padding: _pad, inkShiftY, ...style } = options;
+  const { accent, padVariant, padX, padY, padding: _pad, inkShiftY, inkPad, ...style } = options;
   const host = scene.add.container(x, y);
   const text = makeType(scene, 0, 0, content, {
     ...(style as TypeStyle),
@@ -435,6 +457,16 @@ export function addSignText(
         : padForVariant("default");
   text.setData(SIGN_PAD, pads);
   if (inkShiftY !== undefined) text.setData(SIGN_INK_SHIFT, inkShiftY);
+  if (inkPad !== undefined) {
+    const resolved: SignInkPad = {
+      left: inkPad.left ?? 0,
+      top: inkPad.top ?? 0,
+      right: inkPad.right ?? 0,
+      bottom: inkPad.bottom ?? 0,
+    };
+    text.setData(SIGN_INK_PAD, resolved);
+    text.setPadding(resolved.left, resolved.top, resolved.right, resolved.bottom);
+  }
 
   const plaque = makePlaqueNineSlice(scene, pads.x * 2 + 8, pads.y * 2 + 8, accent ?? SIGN_BORDER);
   host.add([plaque, text]);

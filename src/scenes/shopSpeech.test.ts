@@ -48,8 +48,15 @@ describe("speech stays off the models it belongs to", () => {
       /keyLeadBubble = addSignText[\s\S]*?\.setOrigin\(0\.5, 0\.5\)/,
     );
     expect(src, "key-lead holding copy stays single-line with room to breathe").toMatch(
-      /keyLeadBubble = addSignText[\s\S]*noWrap: true[\s\S]*padX: SHOP_SPEECH_PAD_X[\s\S]*inkShiftY: KEY_LEAD_INK_SHIFT_Y[\s\S]*typeRoleBox\(660, "speech"\)/,
+      /keyLeadBubble = addSignText[\s\S]*noWrap: true[\s\S]*padX: SHOP_SPEECH_PAD_X[\s\S]*inkPad: SHOP_SPEECH_INK_PAD[\s\S]*typeRoleBox\(660, "speech"\)/,
     );
+    expect(src, "driver bubble uses the same wider speech pad and ink slack").toMatch(
+      /driverBubble = addSignText[\s\S]*padX: SHOP_SPEECH_PAD_X[\s\S]*padY: SHOP_SPEECH_PAD_Y[\s\S]*inkPad: SHOP_SPEECH_INK_PAD/,
+    );
+    expect(src, "customer order speech opts into ink pad").toMatch(
+      /bubble = addSignText[\s\S]*inkPad: SHOP_SPEECH_INK_PAD/,
+    );
+    expect(src, "speech refit restores ink pad after typekit clamp-fit").toContain("refitShopSpeech");
     expect(src, "driver bubble centered above head").toMatch(
       /driverBubble = addSignText[\s\S]*?\.setOrigin\(0\.5, 0\.5\)/,
     );
@@ -59,10 +66,10 @@ describe("speech stays off the models it belongs to", () => {
   it("dirty-guards key-lead and driver bubble setText and pins only on copy/visibility change", () => {
     const sync = between(src, "private sync(snap: SimSnapshot)", "const packNext", "shop sync");
     expect(sync, "key-lead text guarded and refit").toMatch(
-      /const textDirty = this\.keyLeadBubble\.text !== callout[\s\S]*if \(textDirty\)[\s\S]*setText\(callout\)[\s\S]*refitType\(this\.keyLeadBubble\)/,
+      /const textDirty = this\.keyLeadBubble\.text !== callout[\s\S]*if \(textDirty\)[\s\S]*setText\(callout\)[\s\S]*refitShopSpeech\(this\.keyLeadBubble\)/,
     );
     expect(sync, "driver text guarded and refit").toMatch(
-      /const driverTextDirty = this\.driverBubble\.text !== driverLine[\s\S]*if \(driverTextDirty\)[\s\S]*setText\(driverLine\)[\s\S]*refitType\(this\.driverBubble\)/,
+      /const driverTextDirty = this\.driverBubble\.text !== driverLine[\s\S]*if \(driverTextDirty\)[\s\S]*setText\(driverLine\)[\s\S]*refitShopSpeech\(this\.driverBubble\)/,
     );
     expect(sync, "no unconditional key-lead setText").not.toMatch(/keyLeadBubble[\s\S]*?\.setText\(callout \?\? ""\)/);
     expect(sync, "pin key-lead only when shown").toMatch(/if \(showKeyLeadBubble\)/);
@@ -111,7 +118,7 @@ describe("speech stays off the models it belongs to", () => {
     expect(sync, "layout keyed on order id + quantized x + plaque height").toMatch(/Math\.round\(h\)/);
     expect(sync, "measures plaque before layoutCustomerSpeech").toMatch(/signPlaqueExtents\(visual\.bubble\)/);
     expect(sync, "bubble setText guarded and refit").toMatch(
-      /if \(bubble\.text !== customer\.bubble\)[\s\S]*bubble\.setText[\s\S]*refitType\(bubble\)/,
+      /if \(bubble\.text !== customer\.bubble\)[\s\S]*bubble\.setText[\s\S]*refitShopSpeech\(bubble\)/,
     );
     const make = between(src, "private makeCustomerVisual(", "return { sprite, bubble, feedback", "makeCustomerVisual");
     expect(make, "fixed speech token at build").toMatch(/typeRole: "speech"/);
