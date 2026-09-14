@@ -7,6 +7,7 @@ import {
   DRIVE_CHIP_PAD_X,
   DRIVE_CHIP_PAD_Y,
   DRIVE_PIN_MAX_H,
+  DRIVE_PIN_INK_PAD_H,
   DRIVE_PIN_LINE_SPACING,
   DRIVE_PIN_PLAQUE_PAD,
   DRIVE_PIN_MAX_W,
@@ -51,7 +52,8 @@ describe("drive HUD callout sizing", () => {
     expect(pinCreate).not.toContain("...driveChipSignOpts");
     const refit = hud.slice(hud.indexOf("private refitDrivePinLabel("), hud.indexOf("private paintDriveCallouts"));
     expect(refit).toContain("fitTypeToBox(");
-    expect(refit).toContain("setPadding(0, 0, 0, DRIVE_PIN_LINE_SPACING)");
+    expect(refit).toContain("DRIVE_PIN_INK_PAD_H");
+    expect(pinCreate).toContain("noWrap: true");
     expect(callouts).toContain("this.refitDrivePinLabel()");
     expect(create).toContain('typeRoleBox(DRIVE_VAN_MAX_W, "hudBody")');
     expect(create).toContain('typeRoleBox(DRIVE_SHOP_CAP_MAX_W, "hudBody")');
