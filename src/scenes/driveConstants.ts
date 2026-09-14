@@ -13,7 +13,7 @@ export const DRIVE_PIN_MAX_W = 400;
 /** Two-line house title + customer/SLA row at hudBody. */
 export const DRIVE_PIN_MAX_H = 120;
 /** drivePinLabel-only plaque margin (both axes); replaces compact pad so ink clears borders. */
-export const DRIVE_PIN_PLAQUE_PAD = 36;
+export const DRIVE_PIN_PLAQUE_PAD = 56;
 export const DRIVE_VAN_MAX_W = 300;
 export const DRIVE_SHOP_CAP_MAX_W = 240;
 
