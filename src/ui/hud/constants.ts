@@ -10,6 +10,11 @@ import { PORTRAIT_H, PORTRAIT_W } from "../../art/peopleSize";
 import { fitCityPanel } from "../../maps/cityMinimap";
 import { Color } from "../theme";
 
+/** Door porch — pad inside each corner pocket before centering SCORE / clock. */
+export const DOOR_CORNER_READOUT_PAD = 20;
+/** Max width of each door corner pocket used to optically center readouts. */
+export const DOOR_CORNER_POCKET_W = 280;
+
 /** Corner fallback keeps clear of the ceiling band on the road and at doors. */
 export const HUD_CORNER_TOP = 76;
 /** Score row on drive/shop — below ID dim (24) and panel (25). */

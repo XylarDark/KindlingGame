@@ -22,6 +22,8 @@ import { typeClockPx, typeRoleBox, typeRolePx } from "../typeScale";
 import { worldToScreen } from "../worldProject";
 import { designHudInset, hudSceneViewport, readCssSafeArea, type SafeInset } from "../viewFit";
 import {
+  DOOR_CORNER_POCKET_W,
+  DOOR_CORNER_READOUT_PAD,
   HUD_CORNER_TOP,
   HUD_DOOR_READOUT_DEPTH,
   HUD_READOUT_DEPTH,
@@ -36,6 +38,24 @@ import {
 import type { ChipPlacer } from "./chipCollision";
 import { placeChip, textInkAabb, unionAabb } from "./placeChips";
 import { CHIP_GAP, chipPriority, SLOT_GUTTER } from "./slots";
+
+/** Door porch — center SCORE row and clock in their corner pockets with even edge air. */
+export function doorCornerReadoutAnchors(
+  inset: SafeInset,
+  viewW: number,
+  top: number,
+  scoreRowW: number,
+  clockW: number,
+): { scoreLeft: number; clockRight: number; rowY: number } {
+  const pad = DOOR_CORNER_READOUT_PAD;
+  const pocketW = Math.min(DOOR_CORNER_POCKET_W, (viewW - inset.left - inset.right) * 0.24);
+  const rowY = top + pad;
+  const safeLeft = inset.left + pad;
+  const safeRight = viewW - inset.right - pad;
+  const scoreLeft = safeLeft + Math.max(0, (pocketW - scoreRowW) / 2);
+  const clockRight = safeRight - Math.max(0, (pocketW - clockW) / 2);
+  return { scoreLeft, clockRight, rowY };
+}
 
 /** Plaque center when the panel's top-left corner sits at `(left, top)`. */
 function plaqueCenterFromTopLeft(
@@ -204,6 +224,21 @@ export class HudReadouts {
       this.scoreCaption.setOrigin(1, 0.5).setPosition(signLeft - valueW - gap, y);
       this.clockText.setOrigin(0, 0.5).setPosition(signRight, y);
       this.scorePopLayer.setPosition(signLeft, y - 46);
+    } else if (this.readoutsAtDoor) {
+      const inset = designHudInset(readCssSafeArea(document.getElementById("game-root")));
+      const { width: viewW } = hudSceneViewport(this.scene);
+      const scoreRowW = captionW + HUD_SCORE_GAP + valueW;
+      const { scoreLeft, clockRight, rowY } = doorCornerReadoutAnchors(
+        inset,
+        viewW,
+        this.readoutCorner.top,
+        scoreRowW,
+        this.clockText.width,
+      );
+      this.scoreCaption.setOrigin(0, 0.5).setPosition(scoreLeft, rowY);
+      this.scoreText.setOrigin(0, 0.5).setPosition(scoreLeft + captionW + HUD_SCORE_GAP, rowY);
+      this.clockText.setOrigin(1, 0.5).setPosition(clockRight, rowY);
+      this.scorePopLayer.setPosition(scoreLeft + scoreRowW / 2, rowY - 46);
     } else {
       const inset = designHudInset(readCssSafeArea(document.getElementById("game-root")));
       const { width: viewW } = hudSceneViewport(this.scene);
