@@ -172,7 +172,7 @@ describe("HUD chip resolver wiring", () => {
     expect(readouts).not.toContain("syncDriveReadoutScale");
     expect(readouts).not.toContain("DRIVE_HUD_SCORE_PX");
     const constants = read("../ui/hud/constants.ts");
-    expect(constants).toContain("DOOR_CORNER_READOUT_PAD");
+    expect(constants).toMatch(/DOOR_CORNER_READOUT_PAD = 10/);
     expect(constants).toContain("DOOR_CORNER_POCKET_W");
     expect(constants).not.toContain("DRIVE_HUD_READOUT_SCALE");
     const place = between(readouts, "placeReadouts(): void {", "\n  }", "placeReadouts");
