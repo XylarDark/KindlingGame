@@ -25,8 +25,8 @@ describe("drive HUD callout sizing", () => {
 
   it("caps projected plaque width and uses compact sign pads", () => {
     expect(DRIVE_PIN_MAX_W).toBeGreaterThanOrEqual(160);
-    expect(DRIVE_PIN_MAX_W).toBeLessThanOrEqual(240);
-    expect(DRIVE_VAN_MAX_W).toBeGreaterThan(DRIVE_PIN_MAX_W);
+    expect(DRIVE_PIN_MAX_W).toBeLessThanOrEqual(480);
+    expect(DRIVE_PIN_MAX_W).toBeGreaterThan(DRIVE_VAN_MAX_W);
     expect(DRIVE_SHOP_CAP_MAX_W).toBeGreaterThanOrEqual(180);
     expect(DRIVE_CHIP_PAD_X).toBeLessThan(12);
     expect(DRIVE_CHIP_PAD_Y).toBeLessThan(8);

@@ -9,7 +9,7 @@ export const DRIVE_VAN_TEX_H = 104;
 export const DRIVE_CHIP_GAP = 14;
 
 /** Design-space chip box limits (passed through {@link typeRoleBox}). */
-export const DRIVE_PIN_MAX_W = 200;
+export const DRIVE_PIN_MAX_W = 400;
 export const DRIVE_PIN_MAX_H = 76;
 export const DRIVE_VAN_MAX_W = 300;
 export const DRIVE_SHOP_CAP_MAX_W = 240;
