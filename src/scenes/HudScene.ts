@@ -40,9 +40,11 @@ import { onRenderBudgetChange, syncSceneRenderCamera, tickRenderBudget } from ".
 import { updateFeelMeter } from "../ui/feelMeter";
 import { notePerfRawDelta } from "../ui/perfProbe";
 import { Color, MENU_TYPE_FIT, Type } from "../ui/theme";
+import { fitTypeToBox } from "../ui/typekit";
 import { typeRoleBox, typeRolePx } from "../ui/typeScale";
 import { worldToScreen } from "../ui/worldProject";
 import {
+  DRIVE_PIN_MAX_H,
   DRIVE_PIN_MAX_W,
   DRIVE_SHOP_CAP_MAX_W,
   DRIVE_VAN_MAX_W,
@@ -174,6 +176,7 @@ export class HudScene extends Phaser.Scene {
       fontStyle: "700",
       ...driveChipSignOpts,
       maxWidth: typeRoleBox(DRIVE_PIN_MAX_W, "hudBody"),
+      maxHeight: typeRoleBox(DRIVE_PIN_MAX_H, "hudBody"),
     })
       .setOrigin(0.5, 1)
       .setDepth(21)
@@ -554,6 +557,16 @@ export class HudScene extends Phaser.Scene {
     this.scene.setVisible(show, "shop");
   }
 
+  /** Clamp pin ink into the drive box — setSignCopy alone skips typekit refit. */
+  private refitDrivePinLabel(): void {
+    if (!String(this.drivePinLabel.text ?? "").trim()) return;
+    fitTypeToBox(
+      this.drivePinLabel,
+      typeRoleBox(DRIVE_PIN_MAX_W, "hudBody"),
+      typeRoleBox(DRIVE_PIN_MAX_H, "hudBody"),
+    );
+  }
+
   /** Active delivery line top-center; van/shop map captions stay off the drive map. */
   private paintDriveCallouts(snap: SimSnapshot, driving: boolean, flashNext: TutorialHint | null): void {
     const stopId = driving ? snap.run?.nextStopId : null;
@@ -568,6 +581,7 @@ export class HudScene extends Phaser.Scene {
       }
       setSignAccent(this.drivePinLabel, isSlaUrgent(destOrder.slaRemainingMs) ? Color.danger : undefined);
       if (flashNext?.kind === "gpsPin") setSignAccent(this.drivePinLabel, Color.lime);
+      this.refitDrivePinLabel();
       syncSignPlaque(this.drivePinLabel);
       this.drivePinLabel.setVisible(true);
       signContainer(this.drivePinLabel).setVisible(true);
