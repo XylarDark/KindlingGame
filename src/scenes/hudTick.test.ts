@@ -136,8 +136,11 @@ describe("HudScene paint dirty guards", () => {
     expect(resolve).not.toContain('placeChip(placer, "pad"');
     expect(src).toContain("const showPad = false");
     const callouts = src.slice(src.indexOf("private paintDriveCallouts"), src.indexOf("private tutorialFlashHint"));
-    expect(callouts).toContain("drivePinLabel.setVisible(false)");
-    expect(callouts).not.toContain("clampSignPlaqueCenter(this.drivePinLabel");
+    expect(callouts).toContain("placeInstructionChip(this.drivePinLabel");
+    expect(callouts).toContain("houseTitle(stopId)");
+    expect(callouts).toContain("formatSlaClock(destOrder.slaRemainingMs)");
+    expect(callouts).toContain("driveVanBanner.setVisible(false)");
+    expect(resolve).toContain('placeChip(placer, "drivePin"');
   });
 
   it("keeps HUD above the door scene for the whole porch visit", () => {
