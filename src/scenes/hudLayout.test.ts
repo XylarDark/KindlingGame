@@ -159,7 +159,21 @@ describe("HUD chip resolver wiring", () => {
     expect(readouts).toContain('"counterSign"');
   });
 
+<<<<<<< HEAD
   it("places drive and door SCORE top-left with clock top-right", () => {
+=======
+  it("scales drive SCORE and clock 50% larger without touching shop/door sizes", () => {
+    const constants = read("../ui/hud/constants.ts");
+    expect(constants).toContain("DRIVE_HUD_READOUT_SCALE = 1.5");
+    expect(constants).toContain("DRIVE_HUD_SCORE_PX = HUD_SCORE_PX * DRIVE_HUD_READOUT_SCALE");
+    expect(constants).toContain("DRIVE_HUD_CLOCK_PX = HUD_READOUT_PX * DRIVE_HUD_READOUT_SCALE");
+    expect(readouts).toContain("syncDriveReadoutScale");
+    expect(readouts).toMatch(/!this\.readoutsInShop && !this\.readoutsAtDoor[\s\S]*DRIVE_HUD_SCORE_PX/);
+    expect(readouts).toMatch(/!this\.readoutsInShop && !this\.readoutsAtDoor[\s\S]*DRIVE_HUD_CLOCK_PX/);
+  });
+
+  it("places drive SCORE inline top-left; door SCORE left and clock right", () => {
+>>>>>>> 70a1afe (fix(hud): scale drive SCORE and clock 50% larger)
     const column = between(readouts, "layoutReadoutColumn(inset: SafeInset): void {", "\n  }", "layoutReadoutColumn");
     expect(column).toContain("SLOT_GUTTER");
     const place = between(readouts, "placeReadouts(): void {", "\n  }", "placeReadouts");

@@ -8,7 +8,12 @@ import {
 } from "../../art/phoneArt";
 import { PORTRAIT_H, PORTRAIT_W } from "../../art/peopleSize";
 import { fitCityPanel } from "../../maps/cityMinimap";
-import { Color } from "../theme";
+import { Color, HUD_READOUT_PX, HUD_SCORE_PX } from "../theme";
+
+/** Drive map SCORE + clock — 50% larger than shop/door chrome. */
+export const DRIVE_HUD_READOUT_SCALE = 1.5;
+export const DRIVE_HUD_SCORE_PX = HUD_SCORE_PX * DRIVE_HUD_READOUT_SCALE;
+export const DRIVE_HUD_CLOCK_PX = HUD_READOUT_PX * DRIVE_HUD_READOUT_SCALE;
 
 /** Corner fallback keeps clear of the ceiling band on the road and at doors. */
 export const HUD_CORNER_TOP = 76;

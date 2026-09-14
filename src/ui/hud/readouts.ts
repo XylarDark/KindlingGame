@@ -22,6 +22,9 @@ import { typeClockPx, typeRoleBox, typeRolePx } from "../typeScale";
 import { worldToScreen } from "../worldProject";
 import { designHudInset, hudSceneViewport, readCssSafeArea, type SafeInset } from "../viewFit";
 import {
+  DRIVE_HUD_CLOCK_PX,
+  DRIVE_HUD_READOUT_SCALE,
+  DRIVE_HUD_SCORE_PX,
   HUD_CORNER_TOP,
   HUD_DOOR_READOUT_DEPTH,
   HUD_READOUT_DEPTH,
@@ -75,6 +78,7 @@ export class HudReadouts {
   scorePopLayer!: Phaser.GameObjects.Container;
 
   private captionPx = HUD_SCORE_PX;
+  private driveReadoutScaled = false;
   readoutsInShop = true;
   /** Driver at the doorstep — SCORE top-left, clock top-right; orange status top-center. */
   readoutsAtDoor = false;
@@ -190,6 +194,7 @@ export class HudReadouts {
   }
 
   placeReadouts(): void {
+    this.syncDriveReadoutScale();
     this.matchCaptionToValue();
     const valueW = this.scoreText.width;
     const captionW = this.scoreCaption.width;
@@ -222,6 +227,24 @@ export class HudReadouts {
   resetReadoutChromeCache(): void {
     this.lastReadoutsHidden = null;
     this.lastShopReadoutsLayer = null;
+  }
+
+  /** Drive map only — bump SCORE row and clock ~50% without touching shop/door sizes. */
+  private syncDriveReadoutScale(): void {
+    const onDrive = !this.readoutsInShop && !this.readoutsAtDoor;
+    if (onDrive === this.driveReadoutScaled) return;
+    this.driveReadoutScaled = onDrive;
+    const scorePx = onDrive ? DRIVE_HUD_SCORE_PX : HUD_SCORE_PX;
+    const clockPx = onDrive ? DRIVE_HUD_CLOCK_PX : HUD_READOUT_PX;
+    const scoreOutline = readoutOutline(scorePx);
+    this.scoreText.setStroke(scoreOutline.stroke, scoreOutline.strokeThickness);
+    retypeSize(this.scoreText, scorePx);
+    this.scoreCaption.setStroke(scoreOutline.stroke, scoreOutline.strokeThickness);
+    retypeSize(this.scoreCaption, scorePx);
+    this.captionPx = scorePx;
+    const clockOutline = readoutOutline(clockPx);
+    this.clockText.setStroke(clockOutline.stroke, clockOutline.strokeThickness);
+    retypeSize(this.clockText, clockPx);
   }
 
   /** Counter SCORE/clock live in ShopScene so speech (depth 10) paints above them. */
