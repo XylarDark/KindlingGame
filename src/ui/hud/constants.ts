@@ -11,7 +11,7 @@ import { fitCityPanel } from "../../maps/cityMinimap";
 import { Color } from "../theme";
 
 /** Drive and door — pad inside each corner pocket before centering SCORE / clock. */
-export const DOOR_CORNER_READOUT_PAD = 20;
+export const DOOR_CORNER_READOUT_PAD = 10;
 /** Max width of each corner pocket used to optically center readouts. */
 export const DOOR_CORNER_POCKET_W = 280;
 
