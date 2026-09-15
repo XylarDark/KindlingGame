@@ -435,18 +435,37 @@ the thing it described.
 
 ---
 
-## Phase 0 — size / speed / readability baseline (2026-09-15)
+## Size / speed / readability plan — closed (2026-09-15)
 
-**Purpose:** freeze measurement procedure and inventories before perf/type phases — **not** a failure entry. Full tables live in [operational/perf-baseline-phase0.md](operational/perf-baseline-phase0.md); phase order in [plans/2026-09-15-size-speed-readability.md](plans/2026-09-15-size-speed-readability.md).
+**Purpose:** measurement procedure, inventories, and contract guards for the phased perf/readability plan — **not** a failure entry. Baseline tables: [operational/perf-baseline-phase0.md](operational/perf-baseline-phase0.md). Phase scans: [operational/perf-phase6-scans.md](operational/perf-phase6-scans.md). Plan: [plans/2026-09-15-size-speed-readability.md](plans/2026-09-15-size-speed-readability.md).
 
-| Item | Baseline |
-|------|----------|
-| **Meter** | `?meter=1` overlay (`feelMeter.ts`) + `kindlingClock.stats()` / `kindlingPerfProbe.sample()` — record idle Shop, tap strain, Hit the road, first door, how-to; **`resize×` must stay 0** on coarse after boot |
-| **Bake** | Shop 2×1920×1080 RT; Door 1×1920×1080; Drive 6×≤2048² cells over 4800×3360 map |
-| **Gates** | PR **#60** tokens, PR **#42** dropoff gate, Title start-click — **hold** (tests/source as of Phase 0) |
-| **Phase order** | 1 correctness → 2 type → 3 VRAM → 4 boot → 5 optional atlas → 6 scans |
+### Meter checklist (`?meter=1`)
 
-If Title/HUD leak or dropoff skip regresses, **Phase 1** owns the fix — do not mix into baseline/perf PRs.
+| # | Scenario | What to record |
+|---|----------|----------------|
+| A | Idle Shop | fps, p95, tier, renderScale, **`resize× === 0`** on coarse after boot |
+| B | Tap strain | TV jar click — p95 spike; `kindlingPerfProbe.sample()` setText / upload counts |
+| C | Hit the road | Depart frame p95 |
+| D | First door | Door prompt + HUD readout column |
+| E | How-to / Title | HUD hidden under title/how-to |
+
+Hooks: `feelMeter.ts` overlay, `kindlingClock.stats()`, `kindlingRenderBudget.resizeCount()`, `kindlingPerfProbe.sample()`.
+
+### Phase status (ShiftGame PRs #112–#117 + Phase 6)
+
+| Phase | Status | PR | Exit |
+|-------|--------|-----|------|
+| **0 — Baseline** | Shipped | [#112](https://github.com/XylarDark/ShiftGame/pull/112) | Meter checklist + bake/Text inventory + gate confirm |
+| **1 — Correctness** | Shipped | [#113](https://github.com/XylarDark/ShiftGame/pull/113) | Title/HUD/dropoff source guards |
+| **2 — Type** | Shipped | [#114](https://github.com/XylarDark/ShiftGame/pull/114) | Role-token setText without clamp-fit hitch |
+| **3 — VRAM** | Shipped | [#115](https://github.com/XylarDark/ShiftGame/pull/115) | Scene bakes at render tier |
+| **4 — Boot** | Shipped | [#116](https://github.com/XylarDark/ShiftGame/pull/116) | Boot warm residency + title pass-through |
+| **5 — Atlas** | Shipped | [#117](https://github.com/XylarDark/ShiftGame/pull/117) | Coarse phone BitmapText atlas for HUD roles |
+| **6 — Scans** | Shipped | *(Phase 6 PR)* | `phase6Guards.test.ts` + this table |
+
+**Contracts enforced by Phase 6 scans:** no `snapshot(` on `pointerdown`; no `rawDelta` in `src/sim/**`; coarse `sessionTierLocked` (no mid-session `scale.resize`; mid **0.85**, not 0.45/0.32); no `throw` in `layoutPlaque`. Pages CI: `npm test` + `npm run build` + `npm run build:embed` → `dist/` + `dist/embed/`.
+
+If Title/HUD leak or dropoff skip regresses, fix under the correctness guards — do not mix into unrelated PRs.
 
 ---
 
