@@ -438,8 +438,8 @@ the thing it described.
 - **Date:** 2026-09-15
 - **Symptom:** on coarse-pointer phones (mid tier 0.85), the canvas stayed shell blue after load; side rails looked oversized because the 16:9 stage never painted. Game loop stuck at ~frame 11; only `boot` scene active.
 - **Cause:** Phase 5 `registerTypeAtlas()` ran inside `BootScene.runBootWarm` while GPU texture flush / shop warm was in flight. The atlas canvas upload blocked the loop on coarse mid tier. A secondary hazard was `applyRenderScale(0.85)` on `Phaser.Core.Events.READY` resizing the backbuffer before boot warm finished.
-- **Fix:** defer `registerTypeAtlas` to `TitleScene.create` (after boot warm); gate mid-tier `scale.resize` + world camera zoom at 1 until Title via `bootRenderGate.ts`; stamp shop static bakes at camera zoom 1 (Door #119 pattern).
-- **Prevention:** `bootResidency.test.ts` + `typeAtlas.test.ts` source-scan boot vs title registration; `renderBudget.test.ts` boot render gate; coarse mid capture script (`?meter=1`, 844×390).
+- **Fix:** defer `registerTypeAtlas` to `TitleScene.create` (after boot warm); gate mid-tier `scale.resize` + world camera zoom at 1 until Title via `bootRenderGate.ts`; stamp shop static bakes at camera zoom 1 (Door #119 pattern); `forceBootExit` wall-clock watchdog so a Door-stall never orphans the loading gate; wide phone landscape uses `width-fill` (844×390 → zero side rails, vertical crop); narrow portrait gates even when Chrome omits `(pointer: coarse)`.
+- **Prevention:** `bootResidency.test.ts` + `typeAtlas.test.ts` source-scan boot vs title registration; `renderBudget.test.ts` boot render gate; `viewFit.test.ts` width-fill on 844×390; coarse mid capture (`?meter=1`, touch emulation, 844×390).
 
 ---
 
