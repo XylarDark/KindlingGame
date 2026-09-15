@@ -2,7 +2,10 @@ import Phaser from "phaser";
 import { MARK } from "./copy";
 import { TYPE_MIN_FIT_PX, Type, designPxForMinCss } from "./theme";
 import { type TypeRole, skipsClampFitTypeRole } from "./typeScale";
+import { isAtlasRole, makeAtlasInk, shouldUseTypeAtlas } from "./typeAtlas";
+import { isAtlasInk, type UiInk } from "./typeInk";
 import { warmTokenMetrics } from "./typeMetrics";
+import { notePerfTextUpload } from "./perfProbe";
 import { canReuseFitSize, clampFitSize, typeFitRange, type SizeMeasure } from "./typeFit";
 import {
   capsTracking,
@@ -73,6 +76,7 @@ export function polishText(text: Phaser.GameObjects.Text, scene?: Phaser.Scene):
   enableCanvasSmoothing(text);
   text.texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
   text.setData(TYPEKIT_DATA, true);
+  notePerfTextUpload();
   return text;
 }
 
@@ -118,11 +122,17 @@ function boxLimitsMatch(
 }
 
 export function fitTypeToBox(
-  text: Phaser.GameObjects.Text,
+  text: UiInk,
   maxWidth?: number,
   maxHeight?: number,
   minPx = MIN_FIT_PX,
-): Phaser.GameObjects.Text {
+): UiInk {
+  if (isAtlasInk(text)) {
+    const box = (text.getData(TYPEKIT_BOX) as TypeBox | undefined) ?? {};
+    text.setData(TYPEKIT_BOX, { ...box, maxWidth: maxWidth ?? box.maxWidth, minPx, noWrap: box.noWrap ?? false });
+    applyAtlasWrap(text);
+    return text;
+  }
   if (import.meta.env.DEV) devFitMeasureCount = 0;
   text.setScale(1);
   const box: TypeBox = text.getData(TYPEKIT_BOX) ?? {};
@@ -212,7 +222,7 @@ export function fitTypeToBox(
 }
 
 /** @deprecated Prefer fitTypeToBox — kept for call sites that only constrain width. */
-export function fitTypeToWidth(text: Phaser.GameObjects.Text, maxWidth: number, minPx = MIN_FIT_PX): Phaser.GameObjects.Text {
+export function fitTypeToWidth(text: UiInk, maxWidth: number, minPx = MIN_FIT_PX): UiInk {
   return fitTypeToBox(text, maxWidth, undefined, minPx);
 }
 
@@ -222,7 +232,8 @@ export function fitTypeToWidth(text: Phaser.GameObjects.Text, maxWidth: number, 
  * refit — a viewport change is enough — would put the old step back. The seed lives in
  * the stored box, and this is the only way to move it.
  */
-export function retypeSize(text: Phaser.GameObjects.Text, px: number): Phaser.GameObjects.Text {
+export function retypeSize(text: UiInk, px: number): UiInk {
+  if (isAtlasInk(text)) return text;
   const box = (text.getData(TYPEKIT_BOX) as TypeBox | undefined) ?? {};
   text.setData(TYPEKIT_BOX, { ...box, basePx: px } satisfies TypeBox);
   const role = roleToken(text);
@@ -241,12 +252,16 @@ export function refitType(text: Phaser.GameObjects.Text): Phaser.GameObjects.Tex
   return text;
 }
 
-function roleToken(text: Phaser.GameObjects.Text): TypeRole | undefined {
+function roleToken(text: UiInk): TypeRole | undefined {
   return text.getData(TYPEKIT_ROLE) as TypeRole | undefined;
 }
 
 /** Apply stored wrap width only — no font-size clamp search (role tokens + speech). */
-export function applyWrapOnly(text: Phaser.GameObjects.Text): Phaser.GameObjects.Text {
+export function applyWrapOnly(text: UiInk): UiInk {
+  if (isAtlasInk(text)) {
+    applyAtlasWrap(text);
+    return text;
+  }
   const box = (text.getData(TYPEKIT_BOX) as TypeBox | undefined) ?? {};
   const basePx = box.basePx ?? parseFontPx(text.style.fontSize);
   const pad = padExtents(text);
@@ -276,6 +291,59 @@ function refitStoredBox(text: Phaser.GameObjects.Text): void {
   const box = text.getData(TYPEKIT_BOX) as TypeBox | undefined;
   if (!box) return;
   fitTypeToBox(text, box.maxWidth, box.maxHeight, box.minPx ?? MIN_FIT_PX);
+}
+
+function hasStroke(options: TypeStyle): boolean {
+  const strokeOff = options.strokeThickness === 0 || (options.strokeThickness === undefined && !options.stroke);
+  return !strokeOff;
+}
+
+function bindAtlasPolish(text: Phaser.GameObjects.BitmapText, explicitTracking?: number): void {
+  const raw = text.setText.bind(text);
+  text.setText = ((value: string | string[]) => {
+    const content = Array.isArray(value) ? value.join("\n") : value;
+    if (content === text.text) return text;
+    raw(value);
+    if (explicitTracking !== undefined) text.setLetterSpacing(explicitTracking);
+    applyAtlasWrap(text);
+    return text;
+  }) as typeof text.setText;
+}
+
+function applyAtlasWrap(text: Phaser.GameObjects.BitmapText): void {
+  const box = (text.getData(TYPEKIT_BOX) as TypeBox | undefined) ?? {};
+  const basePx = box.basePx ?? 18;
+  if (box.noWrap) {
+    text.setMaxWidth(0);
+    return;
+  }
+  const widthLimit = box.maxWidth;
+  if (widthLimit && widthLimit > 0) {
+    const gutter = Math.max(4, Math.round(basePx * 0.35));
+    text.setMaxWidth(Math.max(8, widthLimit - gutter));
+  }
+}
+
+function finishAtlasType(
+  text: Phaser.GameObjects.BitmapText,
+  content: string,
+  options: TypeStyle,
+): Phaser.GameObjects.BitmapText {
+  const basePx = parseFontPx(options.size ?? Type.body);
+  const role = options.typeRole;
+  if (role !== undefined) text.setData(TYPEKIT_ROLE, role);
+  text.setData(TYPEKIT_BOX, {
+    maxWidth: options.maxWidth ?? options.wordWrap?.width,
+    basePx,
+    noWrap: options.noWrap ?? false,
+  } satisfies TypeBox);
+  const tracking =
+    options.letterSpacing ??
+    (content.includes("\n") ? 0 : isAllCaps(content) ? capsTracking(basePx) : 0);
+  if (tracking !== 0) text.setLetterSpacing(tracking);
+  bindAtlasPolish(text, options.letterSpacing);
+  applyAtlasWrap(text);
+  return text;
 }
 
 function bindPolish(text: Phaser.GameObjects.Text, scene: Phaser.Scene, explicitTracking?: number): void {
@@ -388,7 +456,24 @@ export function makeType(
   y: number,
   content: string,
   options: TypeStyle = {},
-): Phaser.GameObjects.Text {
+): UiInk {
+  const role = options.typeRole;
+  if (shouldUseTypeAtlas(role, hasStroke(options)) && isAtlasRole(role)) {
+    const px = parseFontPx(options.size ?? Type.body);
+    const rawWrap = options.noWrap ? undefined : (options.wordWrap?.width ?? options.maxWidth);
+    return finishAtlasType(
+      makeAtlasInk(scene, x, y, content, role, {
+        fontStyle: options.fontStyle,
+        color: options.color,
+        align: options.align,
+        lineSpacing: options.lineSpacing ?? Math.max(2, Math.round(px * 0.2)),
+        letterSpacing: options.letterSpacing,
+        maxWidth: rawWrap,
+      }),
+      content,
+      options,
+    );
+  }
   const text = scene.make.text({
     x,
     y,
@@ -405,7 +490,13 @@ export function addType(
   y: number,
   content: string,
   options: TypeStyle = {},
-): Phaser.GameObjects.Text {
+): UiInk {
+  const role = options.typeRole;
+  if (shouldUseTypeAtlas(role, hasStroke(options)) && isAtlasRole(role)) {
+    const ink = makeType(scene, x, y, content, options);
+    scene.add.existing(ink);
+    return ink;
+  }
   const text = scene.add.text(x, y, content, canvasStyle(options));
   return finishType(text, scene, content, options);
 }
@@ -428,7 +519,7 @@ export function addMark(
     minPx: minPx ?? MIN_FIT_PX,
     ...style,
   });
-  return text;
+  return text as Phaser.GameObjects.Text;
 }
 
 function eachText(obj: Phaser.GameObjects.GameObject, visit: (text: Phaser.GameObjects.Text) => void): void {

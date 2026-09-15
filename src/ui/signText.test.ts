@@ -176,7 +176,7 @@ describe("text boxes are all the counter plaque", () => {
   });
 
   it("hides host + plaque when copy is empty", () => {
-    expect(helper).toMatch(/const show = text\.visible && copy\.trim\(\)\.length > 0/);
+    expect(helper).toMatch(/const show = inkVisible\(text\) && copy\.trim\(\)\.length > 0/);
     expect(helper).toMatch(/host\.setVisible\(show\)/);
   });
 

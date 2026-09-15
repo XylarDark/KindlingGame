@@ -25,6 +25,9 @@ describe("perfProbe", () => {
     expect(sample.p95RawDeltaMs).toBe(19);
     expect(sample.setTextCount).toBe(2);
     expect(sample.plaquePumpCount).toBe(1);
+    expect(sample.textUploadCount).toBe(0);
+    expect(sample.canvasTextCount).toBe(0);
+    expect(sample.atlasTextCount).toBe(0);
     expect(sample.windowMs).toBe(1000);
   });
 

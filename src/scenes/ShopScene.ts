@@ -90,7 +90,8 @@ import type { ChipAabb, ChipPlacer } from "../ui/hud/chipCollision";
 import { beginChipFrame, placeChip } from "../ui/hud/placeChips";
 import { chipPriority } from "../ui/hud/slots";
 import { designHudInset, readCssSafeArea } from "../ui/viewFit";
-import { addUiText } from "../ui/text";
+import { inkSetColor } from "../ui/typeInk";
+import { addUiText, type UiInk } from "../ui/text";
 import {
   Color,
   HUD_SCORE_PX,
@@ -132,8 +133,8 @@ const CUSTOMER_VISUAL_MAX = CUSTOMER_VISUAL_POOL;
 
 type CustomerVisual = {
   sprite: Phaser.GameObjects.Image;
-  bubble: Phaser.GameObjects.Text;
-  feedback: Phaser.GameObjects.Text;
+  bubble: UiInk;
+  feedback: UiInk;
   orderId: string | null;
   /** Last look applied — applyPersonTexture only when this differs. */
   look: number;
@@ -153,22 +154,22 @@ export class ShopScene extends Phaser.Scene {
   private bagRack!: Phaser.GameObjects.Image;
   private tabletScreen!: Phaser.GameObjects.Graphics;
   private tabletHit!: Phaser.GameObjects.Rectangle;
-  private tabletLabel!: Phaser.GameObjects.Text;
-  private queueBadge!: Phaser.GameObjects.Text;
-  private keyLeadBubble!: Phaser.GameObjects.Text;
-  private driverBubble!: Phaser.GameObjects.Text;
+  private tabletLabel!: UiInk;
+  private queueBadge!: UiInk;
+  private keyLeadBubble!: UiInk;
+  private driverBubble!: UiInk;
   private customerPool: CustomerVisual[] = [];
   private customers = new Map<string, CustomerVisual>();
-  private targetCallout!: Phaser.GameObjects.Text;
+  private targetCallout!: UiInk;
   private readyBag!: Phaser.GameObjects.Image;
-  private readyCount!: Phaser.GameObjects.Text;
+  private readyCount!: UiInk;
   private pickupBag!: Phaser.GameObjects.Image;
-  private pickupCount!: Phaser.GameObjects.Text;
+  private pickupCount!: UiInk;
   private receiptSlip!: Phaser.GameObjects.Image;
   private receiptRail!: Phaser.GameObjects.Graphics;
-  private receiptRows: Phaser.GameObjects.Text[] = [];
+  private receiptRows: UiInk[] = [];
   private tvs: Phaser.GameObjects.Rectangle[] = [];
-  private tvLabels: Phaser.GameObjects.Text[] = [];
+  private tvLabels: UiInk[] = [];
   private jarSkus: string[] = [];
   private sky!: Phaser.GameObjects.Graphics;
   private windowGlow!: Phaser.GameObjects.Graphics;
@@ -470,7 +471,7 @@ export class ShopScene extends Phaser.Scene {
   }
 
   /** World speech — SF1 host depth + above-head center (door prompt pattern). */
-  private pinShopSpeech(chip: Phaser.GameObjects.Text, centerX: number, centerY: number): void {
+  private pinShopSpeech(chip: UiInk, centerX: number, centerY: number): void {
     setSignScrollFactor(chip, 1, 1);
     syncSignPlaque(chip);
     setSignPlaqueCenter(chip, centerX, centerY);
@@ -484,7 +485,7 @@ export class ShopScene extends Phaser.Scene {
   private placeShopChip(
     placer: ChipPlacer,
     id: string,
-    chip: Phaser.GameObjects.Text,
+    chip: UiInk,
     preferredX: number,
     preferredY: number,
     priority: number,
@@ -582,7 +583,7 @@ export class ShopScene extends Phaser.Scene {
       },
       color: 0x88ff44,
     });
-    const pinPlaque = (chip: Phaser.GameObjects.Text, color: number, label: string): void => {
+    const pinPlaque = (chip: UiInk, color: number, label: string): void => {
       if (!chip.visible || !String(chip.text ?? "").trim()) return;
       syncSignPlaque(chip);
       const center = signPlaqueCenterWorld(chip);
@@ -652,7 +653,7 @@ export class ShopScene extends Phaser.Scene {
     // rather than every frame. The old per-frame refit also re-narrowed the box to the
     // screen minus 16, which would have quietly undone TABLET_LABEL_INSET.
     this.tabletLabel.setAlpha(1);
-    this.tabletLabel.setColor(Color.creamHex);
+    inkSetColor(this.tabletLabel, Color.creamHex);
     this.queueBadge.setVisible(count >= 1);
     if (this.queueBadge.visible && this.queueBadge.text !== String(count)) {
       this.queueBadge.setText(String(count));
@@ -725,7 +726,7 @@ export class ShopScene extends Phaser.Scene {
   }
 
   /** The count printed on a bag's label panel — the word under it is baked in. */
-  private bagCount(spot: { x: number; y: number }, depth: number): Phaser.GameObjects.Text {
+  private bagCount(spot: { x: number; y: number }, depth: number): UiInk {
     return addUiText(this, spot.x, spot.y + BAG_PANEL.countCy, "", {
       size: Type.title,
       color: Color.inkHex,
@@ -761,13 +762,13 @@ export class ShopScene extends Phaser.Scene {
       row.setVisible(!!slip);
       if (!slip) return;
       if (row.text !== slip.line) row.setText(slip.line);
-      row.setColor(slip.urgent ? Color.dangerHex : Color.inkHex);
+      inkSetColor(row, slip.urgent ? Color.dangerHex : Color.inkHex);
     });
   }
 
   private showBagCount(
     bag: Phaser.GameObjects.Image,
-    count: Phaser.GameObjects.Text,
+    count: UiInk,
     value: number,
     urgent: boolean,
   ): void {
@@ -777,7 +778,7 @@ export class ShopScene extends Phaser.Scene {
     const label = String(value);
     // setText refits the type box, so only pay for it when the count changes.
     if (count.text !== label) count.setText(label);
-    count.setColor(urgent ? Color.dangerHex : Color.inkHex);
+    inkSetColor(count, urgent ? Color.dangerHex : Color.inkHex);
   }
 
 
@@ -811,7 +812,7 @@ export class ShopScene extends Phaser.Scene {
   }
 
   /** Restore speech ink pad after setText — role token skips clamp-fit. */
-  private refitShopSpeech(text: Phaser.GameObjects.Text): void {
+  private refitShopSpeech(text: UiInk): void {
     applySignInkPad(text);
   }
 
@@ -904,7 +905,7 @@ export class ShopScene extends Phaser.Scene {
     visual.look = -1;
   }
 
-  private customerSpeechPlaqueH(bubble: Phaser.GameObjects.Text): number {
+  private customerSpeechPlaqueH(bubble: UiInk): number {
     syncSignPlaque(bubble);
     return signPlaqueExtents(bubble).panelH;
   }

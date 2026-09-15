@@ -27,6 +27,7 @@ import { markSceneWarm, resetSceneWarmFlags, sceneWarmTimeout } from "../ui/scen
 import { hideLoading, showLoading } from "../ui/loadingGate";
 import { applyRenderBudgetToGame, getRenderBudget } from "../ui/renderBudget";
 import { registerSignPlaqueTextures } from "../ui/signPlaqueNine";
+import { registerTypeAtlas } from "../ui/typeAtlas";
 import { installTypekit } from "../ui/typekit";
 import { loadWorldScenes } from "./worldScenes";
 
@@ -107,6 +108,8 @@ export class BootScene extends Phaser.Scene {
 
   private async runBootWarm(): Promise<void> {
     await this.waitForFonts();
+    if (this.warmAborted) return;
+    registerTypeAtlas(this);
     if (this.warmAborted) return;
     this.showBootStage("Art");
     generateTextures(this);

@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import type { UiInk } from "./typeInk";
 import {
   PERSON_DISPLAY_MAX_H,
   SHOP_KEY_LEAD_BAND_HEAD_BIAS,
@@ -11,7 +12,7 @@ import { signPlaqueExtents, signPlaqueMid, signYAbove, syncSignPlaque } from "./
 
 /** Phaser adapter — preferred plaque center above a model head. */
 export function speechPlaqueAboveHead(
-  chip: Phaser.GameObjects.Text,
+  chip: UiInk,
   centerX: number,
   headTopY: number,
   gap = 14,
@@ -24,7 +25,7 @@ export function speechPlaqueAboveHead(
 
 /** Key-lead callouts — head↔TV band with bias toward the live hat for even visual air. */
 export function keyLeadSpeechPlaqueAboveHead(
-  chip: Phaser.GameObjects.Text,
+  chip: UiInk,
   centerX: number,
   headTopY: number,
 ): { x: number; y: number } {
@@ -40,7 +41,7 @@ export function keyLeadSpeechPlaqueAboveHead(
 
 /** Phaser adapter — key-lead band between head top and TV row bottom. */
 export function leadSpeechPlaqueCenter(
-  chip: Phaser.GameObjects.Text,
+  chip: UiInk,
   centerX: number,
   headTopY: number,
   tvBottomY: number,

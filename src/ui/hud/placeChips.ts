@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import type { UiInk } from "../typeInk";
 import {
   setSignCopy,
   setSignPosition,
@@ -48,7 +49,7 @@ export function chipPlacerFor(game: Phaser.Game): ChipPlacer | undefined {
 }
 
 /** Plain Text readout bounds (no plaque) for the scoreClock slot blocker. */
-export function textInkAabb(text: Phaser.GameObjects.Text): ChipAabb {
+export function textInkAabb(text: UiInk): ChipAabb {
   const w = text.width;
   const h = text.height;
   const left = text.x - w * text.originX;
@@ -64,7 +65,7 @@ export function textInkAabb(text: Phaser.GameObjects.Text): ChipAabb {
 export function placeChip(
   placer: ChipPlacer,
   id: string,
-  host: Phaser.GameObjects.Text,
+  host: UiInk,
   preferredX: number,
   preferredY: number,
   priority = chipPriority(id),

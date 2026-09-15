@@ -21,7 +21,7 @@ import { hideLoading, showLoading } from "../ui/loadingGate";
 import { loadWorldScenes } from "./worldScenes";
 import { getRenderBudget, syncSceneRenderCamera } from "../ui/renderBudget";
 import { SIGN_FRAME_W, signPlaqueRings } from "../ui/signPlaque";
-import { addUiText } from "../ui/text";
+import { addUiText, type UiInk } from "../ui/text";
 import { setTitleOverlayActive } from "../ui/titleHtmlInput";
 import { Color, MENU_TYPE_FIT, Type } from "../ui/theme";
 import { fitTypeToWidth } from "../ui/typekit";
@@ -42,7 +42,7 @@ export class TitleScene extends Phaser.Scene {
   private started = false;
   private phase: "welcome" | "howto" | "paused" = "paused";
   private welcomeLayer: Phaser.GameObjects.GameObject[] = [];
-  private pauseHint?: Phaser.GameObjects.Text;
+  private pauseHint?: UiInk;
   private pausePlaque?: Phaser.GameObjects.Graphics;
   private dimOverlay!: Phaser.GameObjects.Rectangle;
   /** Blocks begin() until deferred drive/door warm finishes — no mid-shift launch. */
