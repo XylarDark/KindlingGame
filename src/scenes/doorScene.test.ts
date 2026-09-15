@@ -104,14 +104,12 @@ describe("doorstep prompt", () => {
     expect(src).toContain("setSignCopy(this.prompt");
   });
 
-  it("refits prompt ink after copy changes so the plaque and glyphs stay aligned", () => {
-    const sync = between(src, "if (promptLine !== this.lastPrompt)", "this.prompt.setAlpha(1);", "prompt refit");
-    expect(sync).toContain("this.refitDoorPrompt()");
+  it("relies on role-token wrap-only typekit — no interaction-frame clamp-fit", () => {
+    const sync = between(src, "if (promptLine !== this.lastPrompt)", "this.prompt.setAlpha(1);", "prompt sync");
+    expect(sync).not.toContain("refitDoorPrompt");
+    expect(sync).not.toContain("fitTypeToBox");
     expect(src).toContain("onPreRenderDoorPrompt");
-    const refit = between(src, "private refitDoorPrompt(", "\n  }", "refitDoorPrompt");
-    expect(refit).toContain("fitTypeToBox(");
-    expect(refit).toContain("DOOR_PROMPT_MAX_W");
-    expect(refit).toContain("DOOR_PROMPT_MAX_H");
+    expect(src).not.toContain("refitDoorPrompt");
   });
 
   it("clears the door prompt while the ID card carries confirm copy", () => {

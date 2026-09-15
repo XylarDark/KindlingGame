@@ -14,7 +14,7 @@ vi.mock("./viewFit", () => ({
 }));
 
 import { capsTracking, isAllCaps, isCoarsePointer, overlayStroke, parseFontPx, typeResolution } from "./typeMetrics";
-import { __devFitMeasureCount, fitTypeToBox } from "./typekit";
+import { __devFitMeasureCount, applyWrapOnly, fitTypeToBox } from "./typekit";
 
 const typekitSrc = readFileSync(new URL("./typekit.ts", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 
@@ -151,6 +151,30 @@ describe("overlayStroke", () => {
   it("keeps a hairline, not a 4px blob", () => {
     expect(overlayStroke(20).strokeThickness).toBeLessThanOrEqual(2);
     expect(overlayStroke(15).strokeThickness).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("role tokens skip clamp-fit on setText", () => {
+  it("applyWrapOnly never walks clamp-fit probes", () => {
+    const text = mockFitText("Tap tablet for orders", {
+      typekitBox: {
+        maxWidth: 280,
+        minPx: 10,
+        basePx: 22,
+        noWrap: false,
+        growBox: false,
+      },
+    });
+    applyWrapOnly(text);
+    expect(__devFitMeasureCount()).toBe(0);
+    text.text = "Different copy on the same chip";
+    applyWrapOnly(text);
+    expect(__devFitMeasureCount()).toBe(0);
+  });
+
+  it("bindPolish uses applyWrapOnly for role tokens, not fitTypeToBox", () => {
+    expect(typekitSrc).toContain('const TYPEKIT_ROLE = "typekitRole"');
+    expect(typekitSrc).toMatch(/refitStoredBox[\s\S]*skipsClampFitTypeRole\(role\)[\s\S]*applyWrapOnly/);
   });
 });
 

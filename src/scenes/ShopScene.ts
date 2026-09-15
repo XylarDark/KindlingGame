@@ -91,7 +91,6 @@ import { beginChipFrame, placeChip } from "../ui/hud/placeChips";
 import { chipPriority } from "../ui/hud/slots";
 import { designHudInset, readCssSafeArea } from "../ui/viewFit";
 import { addUiText } from "../ui/text";
-import { refitType } from "../ui/typekit";
 import {
   Color,
   HUD_SCORE_PX,
@@ -809,9 +808,8 @@ export class ShopScene extends Phaser.Scene {
     }
   }
 
-  /** Typekit refit + speech ink pad — padding must survive clamp-fit. */
+  /** Restore speech ink pad after setText — role token skips clamp-fit. */
   private refitShopSpeech(text: Phaser.GameObjects.Text): void {
-    refitType(text);
     applySignInkPad(text);
   }
 

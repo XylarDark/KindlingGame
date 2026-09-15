@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { MARK } from "./copy";
 import { TYPE_MIN_FIT_PX, Type, designPxForMinCss } from "./theme";
-import { type TypeRole, isFixedTypeRole } from "./typeScale";
+import { type TypeRole, skipsClampFitTypeRole } from "./typeScale";
 import { warmTokenMetrics } from "./typeMetrics";
 import { canReuseFitSize, clampFitSize, typeFitRange, type SizeMeasure } from "./typeFit";
 import {
@@ -21,6 +21,7 @@ export type { TypeResolutionInput } from "./typeMetrics";
 
 const TYPEKIT_DATA = "kindlingTypekit";
 const TYPEKIT_BOX = "typekitBox";
+const TYPEKIT_ROLE = "typekitRole";
 const MIN_FIT_PX = TYPE_MIN_FIT_PX;
 
 type TypeBox = {
@@ -224,6 +225,13 @@ export function fitTypeToWidth(text: Phaser.GameObjects.Text, maxWidth: number, 
 export function retypeSize(text: Phaser.GameObjects.Text, px: number): Phaser.GameObjects.Text {
   const box = (text.getData(TYPEKIT_BOX) as TypeBox | undefined) ?? {};
   text.setData(TYPEKIT_BOX, { ...box, basePx: px } satisfies TypeBox);
+  const role = roleToken(text);
+  if (role !== undefined && skipsClampFitTypeRole(role)) {
+    text.setFontSize(px);
+    applyTracking(text, text.text, text.getData("typekitTracking"));
+    applyWrapOnly(text);
+    return polishText(text, text.scene);
+  }
   return fitTypeToBox(text, box.maxWidth, box.maxHeight, box.minPx ?? MIN_FIT_PX);
 }
 
@@ -233,7 +241,38 @@ export function refitType(text: Phaser.GameObjects.Text): Phaser.GameObjects.Tex
   return text;
 }
 
+function roleToken(text: Phaser.GameObjects.Text): TypeRole | undefined {
+  return text.getData(TYPEKIT_ROLE) as TypeRole | undefined;
+}
+
+/** Apply stored wrap width only — no font-size clamp search (role tokens + speech). */
+export function applyWrapOnly(text: Phaser.GameObjects.Text): Phaser.GameObjects.Text {
+  const box = (text.getData(TYPEKIT_BOX) as TypeBox | undefined) ?? {};
+  const basePx = box.basePx ?? parseFontPx(text.style.fontSize);
+  const pad = padExtents(text);
+  text.setScale(1);
+  if (box.noWrap) {
+    text.setStyle({ wordWrap: { width: 0 } });
+  } else {
+    const widthLimit = box.maxWidth;
+    if (widthLimit && widthLimit > 0) {
+      const gutter = Math.max(4, Math.round(basePx * 0.35));
+      const wrapW = Math.max(8, widthLimit - pad.x - gutter);
+      text.setStyle({ wordWrap: { width: wrapW } });
+    }
+  }
+  text.setFixedSize(0, 0);
+  text.updateText();
+  return text;
+}
+
 function refitStoredBox(text: Phaser.GameObjects.Text): void {
+  const role = roleToken(text);
+  if (role !== undefined && skipsClampFitTypeRole(role)) {
+    applyWrapOnly(text);
+    polishText(text, text.scene);
+    return;
+  }
   const box = text.getData(TYPEKIT_BOX) as TypeBox | undefined;
   if (!box) return;
   fitTypeToBox(text, box.maxWidth, box.maxHeight, box.minPx ?? MIN_FIT_PX);
@@ -315,14 +354,17 @@ function finishType(
   options: TypeStyle,
 ): Phaser.GameObjects.Text {
   const basePx = parseFontPx(options.size ?? Type.body);
-  const fixedRole = options.typeRole !== undefined && isFixedTypeRole(options.typeRole);
-  const wrapOnly = fixedRole && (options.maxWidth || options.wordWrap?.width);
+  const role = options.typeRole;
+  const skipClamp = role !== undefined && skipsClampFitTypeRole(role);
+  if (role !== undefined) text.setData(TYPEKIT_ROLE, role);
   text.setData(TYPEKIT_BOX, {
-    maxWidth: wrapOnly ? (options.maxWidth ?? options.wordWrap?.width) : undefined,
-    maxHeight: fixedRole ? undefined : options.maxHeight,
+    maxWidth: skipClamp
+      ? (options.maxWidth ?? options.wordWrap?.width)
+      : options.maxWidth ?? options.wordWrap?.width,
+    maxHeight: skipClamp ? undefined : options.maxHeight,
     minPx: options.minPx ?? MIN_FIT_PX,
-    minCssFloor: fixedRole ? undefined : options.minCssFloor,
-    maxCssCeiling: fixedRole ? undefined : options.maxCssCeiling,
+    minCssFloor: skipClamp ? undefined : options.minCssFloor,
+    maxCssCeiling: skipClamp ? undefined : options.maxCssCeiling,
     basePx,
     noWrap: options.noWrap ?? false,
     growBox: options.growBox ?? false,
@@ -332,10 +374,10 @@ function finishType(
   bindPolish(text, scene, options.letterSpacing);
   warmTokenMetrics(text, basePx);
   polishText(text, scene);
-  if (!fixedRole && (options.maxWidth || options.maxHeight || options.wordWrap)) {
+  if (skipClamp) {
+    applyWrapOnly(text);
+  } else if (options.maxWidth || options.maxHeight || options.wordWrap) {
     fitTypeToBox(text, options.maxWidth ?? options.wordWrap?.width, options.maxHeight, options.minPx);
-  } else if (wrapOnly) {
-    fitTypeToBox(text, options.maxWidth ?? options.wordWrap?.width, undefined, basePx);
   }
   return text;
 }

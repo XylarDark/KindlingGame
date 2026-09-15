@@ -134,5 +134,10 @@ export function isFixedTypeRole(role: TypeRole): boolean {
   return role === "hudTitle" || role === "hudBody" || role === "hudSmall";
 }
 
+/** All four role tokens skip clamp-fit probes on setText; speech may still word-wrap. */
+export function skipsClampFitTypeRole(role: TypeRole): boolean {
+  return role === "hudTitle" || role === "hudBody" || role === "hudSmall" || role === "speech";
+}
+
 /** Closed role count — guards against drift. */
 export const TYPE_ROLE_COUNT = 4;
