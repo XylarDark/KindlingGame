@@ -240,4 +240,22 @@ describe("scene perf guards", () => {
     expect(update).toContain("getSim().trafficForDrive()");
     expect(update).not.toMatch(/trafficCars\(/);
   });
+
+  it("Shop/Door/Drive allocate scene bakes at renderScale, not full design pixels", () => {
+    const shop = read("src/scenes/ShopScene.ts");
+    const door = read("src/scenes/DoorScene.ts");
+    const drive = read("src/scenes/DriveScene.ts");
+    const bakeShop = shop.slice(shop.indexOf("private bakeStaticShop"), shop.indexOf("private warmCustomerPool"));
+    expect(bakeShop).toContain("sceneBakeDimensions");
+    expect(bakeShop).toContain("configureSceneBakeRT");
+    expect(bakeShop).not.toMatch(/renderTexture\(0, 0, GAME_WIDTH, GAME_HEIGHT\)/);
+    const bakeDoor = door.slice(door.indexOf("private bakeDoorFacade"), door.indexOf("private paintDoorDayNight"));
+    expect(bakeDoor).toContain("sceneBakeDimensions");
+    expect(bakeDoor).toContain("configureSceneBakeRT");
+    expect(bakeDoor).not.toMatch(/renderTexture\(0, 0, GAME_WIDTH, GAME_HEIGHT\)/);
+    const bakeCity = drive.slice(drive.indexOf("private async bakeStaticCityMap"), drive.indexOf("private yieldToRenderer"));
+    expect(bakeCity).toContain("bakeCellDimension");
+    expect(bakeCity).toContain("configureSceneBakeRT");
+    expect(bakeCity).not.toMatch(/renderTexture\(x, y, w, h\)/);
+  });
 });
