@@ -1,5 +1,6 @@
 import { isStandaloneDisplay } from "../shell";
 import { installCoachBodies } from "./brand";
+import { syncTitleHtmlInput } from "./titleHtmlInput";
 
 /** sessionStorage key — dismiss for this tab/session only ("Not now"). */
 export const INSTALL_COACH_DISMISSED_KEY = "kindling.installCoachDismissed";
@@ -416,6 +417,8 @@ export function presentInstallCoach(opts: InstallCoachShowOpts = {}): boolean {
 
   el.hidden = false;
   el.setAttribute("aria-hidden", "false");
+  // Title sits under the coach — keep taps on OPEN THE SHOP when the overlay is up.
+  syncTitleHtmlInput();
   return true;
 }
 
