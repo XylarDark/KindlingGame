@@ -435,8 +435,24 @@ the thing it described.
 
 ---
 
+## Phase 0 — size / speed / readability baseline (2026-09-15)
+
+**Purpose:** freeze measurement procedure and inventories before perf/type phases — **not** a failure entry. Full tables live in [operational/perf-baseline-phase0.md](operational/perf-baseline-phase0.md); phase order in [plans/2026-09-15-size-speed-readability.md](plans/2026-09-15-size-speed-readability.md).
+
+| Item | Baseline |
+|------|----------|
+| **Meter** | `?meter=1` overlay (`feelMeter.ts`) + `kindlingClock.stats()` / `kindlingPerfProbe.sample()` — record idle Shop, tap strain, Hit the road, first door, how-to; **`resize×` must stay 0** on coarse after boot |
+| **Bake** | Shop 2×1920×1080 RT; Door 1×1920×1080; Drive 6×≤2048² cells over 4800×3360 map |
+| **Gates** | PR **#60** tokens, PR **#42** dropoff gate, Title start-click — **hold** (tests/source as of Phase 0) |
+| **Phase order** | 1 correctness → 2 type → 3 VRAM → 4 boot → 5 optional atlas → 6 scans |
+
+If Title/HUD leak or dropoff skip regresses, **Phase 1** owns the fix — do not mix into baseline/perf PRs.
+
+---
+
 ## Related
 
 - [AGENTS.md](../AGENTS.md) — operational protocol and definition of done
 - [operational/automation-gaps.md](operational/automation-gaps.md) — what automation cannot do reliably
+- [operational/perf-baseline-phase0.md](operational/perf-baseline-phase0.md) — Phase 0 meter checklist, bake/Text inventory, gate status
 - [.cursor/rules/05-error-handling.mdc](../.cursor/rules/05-error-handling.mdc) — defensive coding and where to record errors
