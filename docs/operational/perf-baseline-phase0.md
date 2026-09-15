@@ -148,9 +148,9 @@ Counts are **static create** + documented pools — not runtime peak strings.
 
 ---
 
-## 4. Gate confirm (Phase 0 — no fixes)
+## 4. Gate confirm (Phases 0–6 — plan closed)
 
-Status as of Phase 0 doc pass: **all gates hold** via existing tests/source scans. No Title/HUD leak or dropoff-skip regression found — **Phase 1** owns any future break.
+Status as of Phase 6 closure: **all gates hold** via tests and source scans. Shipped PRs [#112](https://github.com/XylarDark/ShiftGame/pull/112)–[#117](https://github.com/XylarDark/ShiftGame/pull/117); Phase 6 adds [perf-phase6-scans.md](./perf-phase6-scans.md) contract guards.
 
 ### PR #60 — four type role tokens
 
@@ -191,7 +191,7 @@ Status as of Phase 0 doc pass: **all gates hold** via existing tests/source scan
 | HUD above door for porch | `bringToTop("door")` then `bringToTop()` order |
 | Cover only in shop keyLead role | `readouts.paintCover` guard |
 
-**Phase 1 trigger:** if a capture or QA script shows Title overlay leaking into Shop, HUD chrome visible during how-to, dropoff skipping HAND BAG/PHOTO, or shop tablet visible on Door — **stop and fix under Phase 1** before type/VRAM work.
+**Regression trigger:** if a capture or QA script shows Title overlay leaking into Shop, HUD chrome visible during how-to, dropoff skipping HAND BAG/PHOTO, or shop tablet visible on Door — fix under the Phase 1 correctness guards before unrelated work.
 
 ---
 

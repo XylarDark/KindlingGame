@@ -30,9 +30,9 @@ Design layout stays **1920×1080** (`GAME_WIDTH` × `GAME_HEIGHT`). Only the Web
 | **3 — VRAM** | RT count × tier, bake cell sizing, texture upload spikes | Meter + memory heuristics on Shop/Drive/Door |
 | **4 — Boot** | `#loading-gate` wall time, warm path, first-show hitches | Boot capture + perfProbe first-show counts |
 | **5 — Atlas (optional)** | Batch binds, offline compressed formats | Only if Phase 3–4 still show bind/upload cliffs |
-| **6 — Scans** | Source-scan / audit harness extensions | New guards for whatever Phase 1–5 touched |
+| **6 — Scans** | Source-scan / audit harness extensions | `phase6Guards.test.ts` + [perf-phase6-scans.md](../operational/perf-phase6-scans.md) |
 
-Phases **1–6 are out of scope** until Phase 0 baseline is merged.
+**Status (2026-09-15):** Phases **0–6 shipped** on ShiftGame — PRs [#112](https://github.com/XylarDark/ShiftGame/pull/112)–[#117](https://github.com/XylarDark/ShiftGame/pull/117) plus Phase 6 closure PR.
 
 ---
 
