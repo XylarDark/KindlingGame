@@ -20,6 +20,10 @@ describe("isPortraitPhone", () => {
   it("does not cover a mouse-driven desktop window", () => {
     expect(isPortraitPhone(900, 1400, false)).toBe(false);
   });
+
+  it("gates narrow portrait even when Chrome omits (pointer: coarse)", () => {
+    expect(isPortraitPhone(390, 844, false)).toBe(true);
+  });
 });
 
 describe("tryLockLandscape", () => {

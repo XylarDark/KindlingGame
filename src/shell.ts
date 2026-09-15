@@ -3,6 +3,7 @@ import { GAME_HEIGHT, GAME_WIDTH } from "./sim/constants";
 import {
   containStage,
   GAME_ASPECT,
+  pickPhoneStageFitMode,
   notifyViewfit,
   phaserDisplayScale,
   RAIL_MIN_CSS_PX,
@@ -18,8 +19,10 @@ export function isPortraitPhone(
   height: number,
   coarsePointer: boolean,
 ): boolean {
-  if (!coarsePointer) return false;
-  return height > width + 24;
+  if (height <= width + 24) return false;
+  if (coarsePointer) return true;
+  // Chrome mobile emulation often omits (pointer: coarse) — still gate narrow portrait.
+  return Math.min(width, height) <= 480;
 }
 
 export function viewportSize(): { width: number; height: number } {
@@ -88,8 +91,8 @@ function layoutRails(
 
 /**
  * Layout the 16:9 playfield.
- * Phones (coarse): height-fill with side rails / side crop — no top letterbox.
- * Desktop / IDE panes (fine): classic contain so the full stage stays visible.
+ * Phones (coarse): width-fill on wide landscape (no side rails), height-fill on
+ * taller tablets (side crop, no top bar). Desktop / IDE panes: classic contain.
  */
 export function installMobileShell(game: Phaser.Game): void {
   const shell = document.getElementById("kindling-shell");
@@ -116,7 +119,11 @@ export function installMobileShell(game: Phaser.Game): void {
     const theme = document.querySelector('meta[name="theme-color"]');
     if (theme) theme.setAttribute("content", Color.skyTopHex);
 
-    const packed = containStage({ width, height }, GAME_ASPECT, coarse() ? "height-fill" : "contain");
+    const packed = containStage(
+      { width, height },
+      GAME_ASPECT,
+      coarse() ? pickPhoneStageFitMode({ width, height }) : "contain",
+    );
     // Publish contain scale before viewfit so type floors / mobile ramp see it.
     setStageContainScale(stageContainScale(packed.stage));
     setStageFrame(packed.stage);

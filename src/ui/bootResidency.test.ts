@@ -19,6 +19,8 @@ describe("Phase 4 — boot residency", () => {
     expect(boot).not.toContain("registerTypeAtlas");
     const ready = boot.slice(boot.indexOf("private async bootReady"), boot.indexOf("private showBootStage"));
     expect(ready).not.toContain("applyRenderBudgetToGame");
+    expect(boot).toContain("forceBootExit");
+    expect(boot).toContain("WARM_BOOT_TIMEOUT_MS + 250");
   });
 
   it("cold boot shows the loading gate before Phaser and hides it before Title", () => {
