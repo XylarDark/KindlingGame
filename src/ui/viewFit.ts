@@ -85,13 +85,25 @@ export interface ContainedStage {
 }
 
 /** How the 16:9 stage sits in the viewport. */
-export type StageFitMode = "height-fill" | "contain";
+export type StageFitMode = "height-fill" | "width-fill" | "contain";
+
+/**
+ * Pick phone fit: wide landscape (844×390) fills width and crops top/bottom so
+ * side rails stay hidden; taller tablets (1024×768) fill height and crop the sides.
+ */
+export function pickPhoneStageFitMode(view: ViewSize, aspect = GAME_ASPECT): StageFitMode {
+  const vw = Math.max(view.width, 1);
+  const vh = Math.max(view.height, 1);
+  return vw / vh > aspect ? "width-fill" : "height-fill";
+}
 
 /**
  * Place a 16:9 stage in the viewport.
  *
- * - `height-fill` (phones): stage always fills viewport height. Leftover width
- *   becomes side rails; taller-than-16:9 viewports crop the sides — no top bar.
+ * - `width-fill` (wide phone landscape): stage fills viewport width; excess height
+ *   is cropped — no side rails on 20:9 phones.
+ * - `height-fill` (tablet landscape): stage fills viewport height; excess width is
+ *   cropped — no top letterbox on 4:3 iPads.
  * - `contain` (desktop / IDE panes): stage fits entirely inside the viewport
  *   (letterbox and/or pillarbox). Never crops — Cursor browser panes are often
  *   taller than 16:9 and height-fill looked permanently zoomed-in.
@@ -103,6 +115,20 @@ export function containStage(
 ): ContainedStage {
   const vw = Math.max(view.width, 1);
   const vh = Math.max(view.height, 1);
+
+  if (mode === "width-fill") {
+    const stageW = vw;
+    const stageH = stageW / aspect;
+    const left = 0;
+    const top = (vh - stageH) / 2;
+    return {
+      stage: { width: stageW, height: stageH, left, top },
+      railLeft: 0,
+      railRight: 0,
+      railTop: Math.max(0, top),
+      railBottom: Math.max(0, vh - top - stageH),
+    };
+  }
 
   if (mode === "contain") {
     let stageW = vw;
@@ -221,18 +247,34 @@ export function stageCropCss(stage: { left: number }): { left: number; right: nu
   return { left: crop, right: crop };
 }
 
+/** Vertical crop when width-fill extends past the viewport top/bottom. */
+export function stageVerticalCropCss(stage: { top: number; height: number }, viewH: number): {
+  top: number;
+  bottom: number;
+} {
+  const top = Math.max(0, -stage.top);
+  const bottom = Math.max(0, stage.top + stage.height - viewH);
+  return { top, bottom };
+}
+
 /**
- * Safe-area plus height-fill side crop, in design pixels. HUD chrome must use this
- * (not bare {@link designSafeInset}) or cog/pad sit in the clipped overhang on iPads.
+ * Safe-area plus stage crop (height-fill side or width-fill vertical), in design
+ * pixels. HUD chrome must use this (not bare {@link designSafeInset}) or controls
+ * sit in the clipped overhang.
  */
-export function designLayoutInset(stage: ViewSize & { left: number }, css: SafeInset): SafeInset {
-  const crop = stageCropCss(stage);
+export function designLayoutInset(
+  stage: ViewSize & { left: number; top: number },
+  css: SafeInset,
+  viewH?: number,
+): SafeInset {
+  const hCrop = stageCropCss(stage);
+  const vCrop = stageVerticalCropCss(stage, viewH ?? stage.height);
   const safe = designSafeInset(stage, css);
   return {
-    left: safe.left + cssPxToDesign(crop.left, "x", stage),
-    right: safe.right + cssPxToDesign(crop.right, "x", stage),
-    top: safe.top,
-    bottom: safe.bottom,
+    left: safe.left + cssPxToDesign(hCrop.left, "x", stage),
+    right: safe.right + cssPxToDesign(hCrop.right, "x", stage),
+    top: safe.top + cssPxToDesign(vCrop.top, "y", stage),
+    bottom: safe.bottom + cssPxToDesign(vCrop.bottom, "y", stage),
   };
 }
 

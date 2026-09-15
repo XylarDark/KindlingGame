@@ -1,5 +1,6 @@
 import type Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH } from "../sim/constants";
+import { isBootRenderGateActive } from "./bootRenderGate";
 
 export type RenderTier = "high" | "mid" | "low";
 
@@ -216,6 +217,7 @@ export function syncSceneRenderCamera(
   scene: Phaser.Scene,
   scale: number = getRenderBudget().renderScale,
 ): void {
+  if (isBootRenderGateActive()) scale = 1;
   const cam = scene.cameras?.main;
   if (!cam) return;
   if (scene.sys.settings.key === "hud") {
@@ -232,6 +234,7 @@ export function syncSceneRenderCamera(
 }
 
 export function applyRenderScale(game: Phaser.Game, scale: number): void {
+  if (isBootRenderGateActive()) return;
   if (Math.abs(scale - appliedScale) >= 0.01) {
     appliedScale = scale;
     const w = Math.max(320, Math.round(GAME_WIDTH * scale));

@@ -1,4 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
+import { isBootRenderGateActive, releaseBootRenderGate, resetBootRenderGateForTests } from "./bootRenderGate";
 import {
   applyRenderBudgetToGame,
   applyRenderScale,
@@ -143,8 +144,41 @@ describe("scene bake dimensions (Phase 3 VRAM)", () => {
   });
 });
 
+describe("boot render gate", () => {
+  beforeEach(() => {
+    resetRenderBudgetForTests();
+    resetBootRenderGateForTests();
+  });
+
+  it("blocks mid-tier resize until BootScene releases the gate", () => {
+    expect(isBootRenderGateActive()).toBe(true);
+    const resizeCalls: Array<[number, number]> = [];
+    const game = {
+      scale: { resize: (w: number, h: number) => resizeCalls.push([w, h]) },
+      scene: { getScenes: () => [] },
+    };
+    applyRenderScale(game as unknown as Phaser.Game, 0.85);
+    expect(resizeCalls).toEqual([]);
+    releaseBootRenderGate();
+    applyRenderScale(game as unknown as Phaser.Game, 0.85);
+    expect(resizeCalls[0]).toEqual([Math.round(GAME_WIDTH * 0.85), Math.round(GAME_HEIGHT * 0.85)]);
+  });
+
+  it("keeps world cameras at zoom 1 while the gate is active", () => {
+    const shopCam = { zoom: 1, setZoom(z: number) { this.zoom = z; }, centerOn() {} };
+    syncSceneRenderCamera({ sys: { settings: { key: "shop" } }, cameras: { main: shopCam } } as never, 0.85);
+    expect(shopCam.zoom).toBe(1);
+    releaseBootRenderGate();
+    syncSceneRenderCamera({ sys: { settings: { key: "shop" } }, cameras: { main: shopCam } } as never, 0.85);
+    expect(shopCam.zoom).toBe(0.85);
+  });
+});
+
 describe("applyRenderScale / applyRenderBudgetToGame", () => {
-  beforeEach(() => resetRenderBudgetForTests());
+  beforeEach(() => {
+    resetRenderBudgetForTests();
+    releaseBootRenderGate();
+  });
 
   it("resizes the backbuffer and zooms world scenes; HUD stays at zoom 1", () => {
     const resizeCalls: Array<[number, number]> = [];

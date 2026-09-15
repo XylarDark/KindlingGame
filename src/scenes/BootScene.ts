@@ -25,9 +25,8 @@ import { clearBootWarmPending, setBootWarmPending } from "../ui/bootWarm";
 import { isCityBuildComplete, resetCityBuildFlags } from "../ui/cityBuild";
 import { markSceneWarm, resetSceneWarmFlags, sceneWarmTimeout } from "../ui/sceneWarm";
 import { hideLoading, showLoading } from "../ui/loadingGate";
-import { applyRenderBudgetToGame, getRenderBudget } from "../ui/renderBudget";
+import { getRenderBudget } from "../ui/renderBudget";
 import { registerSignPlaqueTextures } from "../ui/signPlaqueNine";
-import { registerTypeAtlas } from "../ui/typeAtlas";
 import { installTypekit } from "../ui/typekit";
 import { loadWorldScenes } from "./worldScenes";
 
@@ -61,7 +60,21 @@ export class BootScene extends Phaser.Scene {
     registerDayNightPipeline(this.game);
     installMusicUnlock(this.game);
     prewarmCameraSfx(this.game);
-    void this.bootReady();
+    // Wall-clock backstop — sync create/warm can ignore warmAborted; never orphan the gate.
+    const forceBootTimer = globalThis.setTimeout(() => {
+      this.forceBootExit("wall-clock");
+    }, WARM_BOOT_TIMEOUT_MS + 250);
+    void this.bootReady().finally(() => globalThis.clearTimeout(forceBootTimer));
+  }
+
+  /** Dismiss loading and reach Title when async warm cannot (Door stall, sync create). */
+  private forceBootExit(reason: string): void {
+    if (!this.scene.isActive("boot")) return;
+    this.warmAborted = true;
+    console.debug("boot: force exit", { reason });
+    hideLoading();
+    this.scene.start("title");
+    applyCanvasDisplayScale(this.game);
   }
 
   private async bootReady(): Promise<void> {
@@ -95,8 +108,8 @@ export class BootScene extends Phaser.Scene {
       }
       hideLoading();
     }
+    // Mid-tier scale.resize during boot warm froze coarse phones — Title applies it once.
     this.scene.start("title");
-    applyRenderBudgetToGame(this.game);
     applyCanvasDisplayScale(this.game);
   }
 
@@ -108,8 +121,6 @@ export class BootScene extends Phaser.Scene {
 
   private async runBootWarm(): Promise<void> {
     await this.waitForFonts();
-    if (this.warmAborted) return;
-    registerTypeAtlas(this);
     if (this.warmAborted) return;
     this.showBootStage("Art");
     generateTextures(this);

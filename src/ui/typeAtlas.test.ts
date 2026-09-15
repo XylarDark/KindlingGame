@@ -17,11 +17,13 @@ describe("typeAtlas", () => {
     expect(atlas).toMatch(/hasStroke/);
   });
 
-  it("Boot registers atlas after fonts and before art flush", () => {
+  it("Title registers atlas after boot warm — not during BootScene GPU flush", () => {
     const boot = read("../scenes/BootScene.ts");
-    const warm = boot.slice(boot.indexOf("private async runBootWarm"), boot.indexOf("showBootStage(\"Art\")") + 40);
-    expect(warm.indexOf("waitForFonts")).toBeLessThan(warm.indexOf("registerTypeAtlas"));
-    expect(warm.indexOf("registerTypeAtlas")).toBeLessThan(warm.indexOf("showBootStage(\"Art\")"));
+    const title = read("../scenes/TitleScene.ts");
+    expect(boot).not.toContain("registerTypeAtlas");
+    const create = title.slice(title.indexOf("create(): void"), title.indexOf("this.scene.bringToTop"));
+    expect(create).toContain("registerTypeAtlas(this)");
+    expect(create.indexOf("applyRenderBudgetToGame")).toBeLessThan(create.indexOf("registerTypeAtlas"));
   });
 
   it("typekit routes role tokens through atlas on coarse when ready", () => {

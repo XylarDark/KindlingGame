@@ -8,6 +8,7 @@ import {
   RAIL_MIN_CSS_PX,
   clientToGame,
   containStage,
+  pickPhoneStageFitMode,
   stageContainScale,
   getStageContainScale,
   setStageContainScale,
@@ -45,15 +46,18 @@ describe("displayScale NONE + CSS contain", () => {
     }
   });
 
-  it("pillarboxes wide phones and never letterboxes tall viewports", () => {
-    const phone = containStage({ width: 844, height: 390 });
+  it("width-fills wide phone landscape with no side rails (844×390)", () => {
+    expect(pickPhoneStageFitMode({ width: 844, height: 390 })).toBe("width-fill");
+    const phone = containStage({ width: 844, height: 390 }, GAME_ASPECT, "width-fill");
+    expect(phone.stage.width).toBe(844);
     expect(phone.stage.width / phone.stage.height).toBeCloseTo(GAME_ASPECT, 5);
-    expect(phone.stage.height).toBe(390);
-    expect(phone.railTop).toBe(0);
-    expect(phone.railBottom).toBe(0);
-    expect(phone.railLeft).toBeGreaterThan(RAIL_MIN_CSS_PX);
-    expect(phone.railRight).toBeGreaterThan(RAIL_MIN_CSS_PX);
-    expect(phone.railLeft + phone.stage.width + phone.railRight).toBeCloseTo(844, 0);
+    expect(phone.railLeft).toBe(0);
+    expect(phone.railRight).toBe(0);
+    expect(phone.stage.top).toBeLessThan(0);
+  });
+
+  it("height-fills taller tablet landscape with side crop, not side rails", () => {
+    expect(pickPhoneStageFitMode({ width: 800, height: 600 })).toBe("height-fill");
     const tall = containStage({ width: 800, height: 600 });
     expect(tall.stage.height).toBe(600);
     expect(tall.railTop).toBe(0);
@@ -76,13 +80,20 @@ describe("displayScale NONE + CSS contain", () => {
     expect(tall.stage.left + tall.stage.width).toBeLessThanOrEqual(1268 + 0.01);
   });
 
-  it("keeps railTop and railBottom at zero on every popular landscape size", () => {
+  it("keeps side rails off popular wide phone landscape sizes", () => {
     for (const view of POPULAR_MOBILE_LANDSCAPE) {
-      const packed = containStage(view);
+      const mode = pickPhoneStageFitMode(view);
+      const packed = containStage(view, GAME_ASPECT, mode);
       expect(packed.railTop).toBe(0);
       expect(packed.railBottom).toBe(0);
-      expect(packed.stage.height).toBe(view.height);
-      expect(packed.stage.top).toBe(0);
+      if (view.width / view.height > GAME_ASPECT) {
+        expect(packed.railLeft).toBe(0);
+        expect(packed.railRight).toBe(0);
+        expect(packed.stage.width).toBe(view.width);
+      } else {
+        expect(packed.stage.height).toBe(view.height);
+        expect(packed.stage.top).toBe(0);
+      }
     }
   });
 
