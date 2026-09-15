@@ -1,5 +1,22 @@
 /** Let Phaser receive taps while the title overlay is up — HTML shells sit above the canvas. */
 
+let titleOverlayActive = false;
+
+/** TitleScene sets this for the whole welcome / how-to / pause overlay. */
+export function setTitleOverlayActive(active: boolean): void {
+  titleOverlayActive = active;
+  syncTitleHtmlInput();
+}
+
+export function isTitleOverlayActive(): boolean {
+  return titleOverlayActive;
+}
+
+/** Re-apply pointer pass-through from {@link titleOverlayActive} — call after HTML overlays show. */
+export function syncTitleHtmlInput(): void {
+  setTitleHtmlInputPassThrough(titleOverlayActive);
+}
+
 export function setTitleHtmlInputPassThrough(passThrough: boolean): void {
   if (typeof document === "undefined") return;
   const gate = document.getElementById("loading-gate");

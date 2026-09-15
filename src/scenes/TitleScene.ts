@@ -22,7 +22,7 @@ import { loadWorldScenes } from "./worldScenes";
 import { getRenderBudget, syncSceneRenderCamera } from "../ui/renderBudget";
 import { SIGN_FRAME_W, signPlaqueRings } from "../ui/signPlaque";
 import { addUiText } from "../ui/text";
-import { setTitleHtmlInputPassThrough } from "../ui/titleHtmlInput";
+import { setTitleOverlayActive } from "../ui/titleHtmlInput";
 import { Color, MENU_TYPE_FIT, Type } from "../ui/theme";
 import { fitTypeToWidth } from "../ui/typekit";
 import { TYPE_INTRO, typeIntroN, typeIntroPx } from "../ui/typeScale";
@@ -61,7 +61,7 @@ export class TitleScene extends Phaser.Scene {
     setPwaIdle(true);
     syncSceneRenderCamera(this);
     this.scene.setVisible(false, "hud");
-    setTitleHtmlInputPassThrough(true);
+    setTitleOverlayActive(true);
 
     // If Boot aborted before drive/door sleep, finish under the gate (never orphan showLoading).
     this.deferredWarm = this.finishDeferredWarm();
@@ -69,7 +69,6 @@ export class TitleScene extends Phaser.Scene {
     // Mobile / early play: coach install for a chrome-free session (no-op if standalone
     // or already dismissed). HTML overlay sits above the Phaser canvas.
     presentInstallCoach();
-    setTitleHtmlInputPassThrough(true);
 
     const showOverlays = shouldShowHowTo();
     this.phase = showOverlays ? "welcome" : "paused";
@@ -124,7 +123,7 @@ export class TitleScene extends Phaser.Scene {
     });
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      setTitleHtmlInputPassThrough(false);
+      setTitleOverlayActive(false);
       this.scene.setVisible(true, "hud");
     });
   }
@@ -481,7 +480,7 @@ export class TitleScene extends Phaser.Scene {
     }
     if (this.started) return;
     this.started = true;
-    setTitleHtmlInputPassThrough(false);
+    setTitleOverlayActive(false);
     this.scene.setVisible(true, "hud");
     setPwaIdle(false);
     // User-gesture path: prefer fullscreen when the Settings toggle is on. A deny

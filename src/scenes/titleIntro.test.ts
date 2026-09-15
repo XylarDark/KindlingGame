@@ -74,8 +74,8 @@ describe("title how-to start flow", () => {
   });
 
   it("passes HTML overlay taps through to the canvas while title is up", () => {
-    expect(src).toContain("setTitleHtmlInputPassThrough(true)");
-    expect(src).toContain("setTitleHtmlInputPassThrough(false)");
+    expect(src).toContain("setTitleOverlayActive(true)");
+    expect(src).toContain("setTitleOverlayActive(false)");
   });
 
   it("hides HUD chrome under the title overlay and during how-to", () => {
