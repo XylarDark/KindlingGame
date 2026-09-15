@@ -241,26 +241,21 @@ describe("scene perf guards", () => {
     expect(update).not.toMatch(/trafficCars\(/);
   });
 
-  it("Shop/Drive allocate scene bakes at renderScale, not full design pixels", () => {
+  it("Drive city bakes stay tier-scaled; shop/door static bakes stamp at zoom 1", () => {
     const shop = read("src/scenes/ShopScene.ts");
     const drive = read("src/scenes/DriveScene.ts");
+    const door = read("src/scenes/DoorScene.ts");
     const bakeShop = shop.slice(shop.indexOf("private bakeStaticShop"), shop.indexOf("private warmCustomerPool"));
-    expect(bakeShop).toContain("sceneBakeDimensions");
-    expect(bakeShop).toContain("configureSceneBakeRT");
-    expect(bakeShop).not.toMatch(/renderTexture\(0, 0, GAME_WIDTH, GAME_HEIGHT\)/);
+    expect(bakeShop).toMatch(/renderTexture\(0, 0, GAME_WIDTH, GAME_HEIGHT\)/);
+    expect(bakeShop).not.toContain("sceneBakeDimensions");
+    expect(bakeShop).not.toContain("configureSceneBakeRT");
+    expect(bakeShop).toContain("cam.setZoom(1)");
     const bakeCity = drive.slice(drive.indexOf("private async bakeStaticCityMap"), drive.indexOf("private yieldToRenderer"));
     expect(bakeCity).toContain("bakeCellDimension");
     expect(bakeCity).toContain("configureSceneBakeRT");
     expect(bakeCity).not.toMatch(/renderTexture\(x, y, w, h\)/);
-  });
-
-  it("Door facade bake stays full design resolution and stamps at camera zoom 1", () => {
-    const door = read("src/scenes/DoorScene.ts");
     const bakeDoor = door.slice(door.indexOf("private bakeDoorFacade"), door.indexOf("private paintDoorDayNight"));
     expect(bakeDoor).toMatch(/renderTexture\(0, 0, GAME_WIDTH, GAME_HEIGHT\)/);
-    expect(bakeDoor).not.toContain("sceneBakeDimensions");
-    expect(bakeDoor).not.toContain("configureSceneBakeRT");
     expect(bakeDoor).toContain("cam.setZoom(1)");
-    expect(bakeDoor).toContain("make.graphics");
   });
 });

@@ -3,7 +3,7 @@ import { applyCrewTexture, applyPersonTexture, personImageKey } from "../art/peo
 import { drawReceiptRail } from "../art/receiptRail";
 import { shopGrade } from "../art/dayNightGrade";
 import { applyDayNight, attachDayNight, dayNightFrom, type DayNightPipeline } from "../art/dayNightPipeline";
-import { configureSceneBakeRT, getRenderBudget, sceneBakeDimensions, syncSceneRenderCamera } from "../ui/renderBudget";
+import { getRenderBudget, syncSceneRenderCamera } from "../ui/renderBudget";
 import { wireSceneDayNightLifecycle } from "../ui/sceneDayNightLifecycle";
 import { loadWorldScenes } from "./worldScenes";
 import { drawShopCounter, drawShopInterior, paintShopDayNight, paintWindowGlow } from "../art/shopInterior";
@@ -786,6 +786,10 @@ export class ShopScene extends Phaser.Scene {
    * Stamp non-moving shop Graphics/Text into one RenderTexture, then destroy
    * individuals — customers/keylead/hand/interactive stay live.
    */
+  /**
+   * Full design-resolution bake at camera zoom 1 — tier-scaled RT + live camera zoom
+   * misaligns static interior/counter art on mid phones (same root cause as Door #119).
+   */
   private bakeStaticShop(objects: Phaser.GameObjects.GameObject[], depth: number): void {
     if (objects.length === 0) return;
     const layers = [...objects].sort((a, b) => {
@@ -793,12 +797,20 @@ export class ShopScene extends Phaser.Scene {
       const db = "depth" in b ? Number((b as { depth: number }).depth) : 0;
       return da - db;
     });
-    const bake = sceneBakeDimensions();
-    const rt = this.add.renderTexture(0, 0, bake.w, bake.h).setOrigin(0, 0).setDepth(depth);
-    configureSceneBakeRT(rt, GAME_WIDTH, GAME_HEIGHT);
+    const cam = this.cameras.main;
+    const savedZoom = cam.zoom;
+    const savedScrollX = cam.scrollX;
+    const savedScrollY = cam.scrollY;
+    cam.setZoom(1);
+    cam.setScroll(0, 0);
+
+    const rt = this.add.renderTexture(0, 0, GAME_WIDTH, GAME_HEIGHT).setOrigin(0, 0).setDepth(depth);
     rt.beginDraw();
     for (const obj of layers) rt.batchDraw(obj);
     rt.endDraw();
+
+    cam.setZoom(savedZoom);
+    cam.setScroll(savedScrollX, savedScrollY);
     this.shopBakeLayers.push(rt);
     for (const obj of objects) obj.destroy();
   }

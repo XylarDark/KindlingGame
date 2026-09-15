@@ -7,6 +7,20 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (rel: string): string => readFileSync(join(root, rel), "utf8").replace(/\r\n/g, "\n");
 
 describe("Phase 4 — boot residency", () => {
+  it("defers mid-tier backbuffer resize until boot warm finishes on coarse phones", () => {
+    const budget = read("src/ui/renderBudget.ts");
+    const boot = read("src/scenes/BootScene.ts");
+    expect(budget).toContain("isBootRenderGateActive");
+    expect(budget).toMatch(/if \(isBootRenderGateActive\(\)\) return;/);
+    const title = read("src/scenes/TitleScene.ts");
+    expect(title).toContain("releaseBootRenderGate()");
+    expect(title).toContain("applyRenderBudgetToGame(this.game)");
+    expect(title).toContain("registerTypeAtlas(this)");
+    expect(boot).not.toContain("registerTypeAtlas");
+    const ready = boot.slice(boot.indexOf("private async bootReady"), boot.indexOf("private showBootStage"));
+    expect(ready).not.toContain("applyRenderBudgetToGame");
+  });
+
   it("cold boot shows the loading gate before Phaser and hides it before Title", () => {
     const main = read("src/main.ts");
     const boot = read("src/scenes/BootScene.ts");

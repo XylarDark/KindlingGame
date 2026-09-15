@@ -19,7 +19,10 @@ import { setPwaIdle } from "../pwaUpdate";
 import { presentInstallCoach } from "../ui/installCoach";
 import { hideLoading, showLoading } from "../ui/loadingGate";
 import { loadWorldScenes } from "./worldScenes";
-import { getRenderBudget, syncSceneRenderCamera } from "../ui/renderBudget";
+import { releaseBootRenderGate } from "../ui/bootRenderGate";
+import { applyRenderBudgetToGame, getRenderBudget, syncSceneRenderCamera } from "../ui/renderBudget";
+import { applyCanvasDisplayScale } from "../shell";
+import { registerTypeAtlas } from "../ui/typeAtlas";
 import { SIGN_FRAME_W, signPlaqueRings } from "../ui/signPlaque";
 import { addUiText, type UiInk } from "../ui/text";
 import { setTitleOverlayActive } from "../ui/titleHtmlInput";
@@ -53,6 +56,12 @@ export class TitleScene extends Phaser.Scene {
   }
 
   create(): void {
+    // First scene after boot — safe point to shrink the backbuffer on coarse mid tier.
+    releaseBootRenderGate();
+    applyRenderBudgetToGame(this.game);
+    applyCanvasDisplayScale(this.game);
+    // Phase 5 atlas — after boot warm. Registering during BootScene froze coarse mid phones.
+    registerTypeAtlas(this);
     this.scene.bringToTop();
     this.scene.pause("shop");
     this.scene.pause("hud");

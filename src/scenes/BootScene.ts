@@ -25,9 +25,8 @@ import { clearBootWarmPending, setBootWarmPending } from "../ui/bootWarm";
 import { isCityBuildComplete, resetCityBuildFlags } from "../ui/cityBuild";
 import { markSceneWarm, resetSceneWarmFlags, sceneWarmTimeout } from "../ui/sceneWarm";
 import { hideLoading, showLoading } from "../ui/loadingGate";
-import { applyRenderBudgetToGame, getRenderBudget } from "../ui/renderBudget";
+import { getRenderBudget } from "../ui/renderBudget";
 import { registerSignPlaqueTextures } from "../ui/signPlaqueNine";
-import { registerTypeAtlas } from "../ui/typeAtlas";
 import { installTypekit } from "../ui/typekit";
 import { loadWorldScenes } from "./worldScenes";
 
@@ -95,8 +94,8 @@ export class BootScene extends Phaser.Scene {
       }
       hideLoading();
     }
+    // Mid-tier scale.resize during boot warm froze coarse phones — Title applies it once.
     this.scene.start("title");
-    applyRenderBudgetToGame(this.game);
     applyCanvasDisplayScale(this.game);
   }
 
@@ -109,7 +108,6 @@ export class BootScene extends Phaser.Scene {
   private async runBootWarm(): Promise<void> {
     await this.waitForFonts();
     if (this.warmAborted) return;
-    registerTypeAtlas(this);
     if (this.warmAborted) return;
     this.showBootStage("Art");
     generateTextures(this);

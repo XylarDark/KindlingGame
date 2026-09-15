@@ -12,6 +12,7 @@ import {
   getRenderBudget,
   getRenderResizeCount,
   initRenderBudget,
+  isSessionTierLocked,
   onRenderBudgetChange,
   setRenderBudgetAuto,
   tickRenderBudget,
@@ -62,8 +63,14 @@ function startGame(): void {
   const game = new Phaser.Game(config);
   installMobileShell(game);
   installInstallCoach();
-  onRenderBudgetChange(() => applyBudget(game));
-  game.events.once(Phaser.Core.Events.READY, () => applyBudget(game));
+  onRenderBudgetChange(() => {
+    if (!isSessionTierLocked()) applyBudget(game);
+  });
+  game.events.once(Phaser.Core.Events.READY, () => {
+    applyCanvasDisplayScale(game);
+    syncDayNightCameras(game);
+    if (!isSessionTierLocked()) applyBudget(game);
+  });
   // Dev-only handle for the typography/layout QA harness (see docs/qa-typography.md).
   const handle = globalThis as unknown as {
     kindlingGame?: Phaser.Game;
