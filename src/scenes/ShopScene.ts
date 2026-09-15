@@ -275,8 +275,8 @@ export class ShopScene extends Phaser.Scene {
       align: "center",
       fontStyle: "700",
       noWrap: true,
-      padX: SIGN_PAD_X,
-      padY: SIGN_PAD_Y + 4,
+      padX: 18,
+      padY: 16,
       inkShiftY: -4,
     })
       .setOrigin(0.5, 0.5)

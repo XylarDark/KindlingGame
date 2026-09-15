@@ -228,8 +228,8 @@ describe("ORDERS queue badge", () => {
     expect(badgeBlock).not.toContain("maxHeight:");
     expect(badgeBlock).not.toContain("stroke:");
     expect(badgeBlock).not.toContain("strokeThickness:");
-    expect(badgeBlock).toContain("padX: SIGN_PAD_X");
-    expect(badgeBlock).toContain("padY: SIGN_PAD_Y + 4");
+    expect(badgeBlock).toContain("padX: 18");
+    expect(badgeBlock).toContain("padY: 16");
     expect(badgeBlock).toContain("inkShiftY: -4");
     expect(shop).toContain("private pinQueueBadge(");
   });
