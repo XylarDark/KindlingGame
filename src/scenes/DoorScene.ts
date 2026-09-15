@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { applyCrewTexture, applyPersonTexture } from "../art/peopleAtlas";
 import { doorGrade } from "../art/dayNightGrade";
 import { applyDayNight, attachDayNight, dayNightFrom, shouldApplyGrade, type DayNightPipeline } from "../art/dayNightPipeline";
-import { configureSceneBakeRT, getRenderBudget, sceneBakeDimensions, syncSceneRenderCamera } from "../ui/renderBudget";
+import { getRenderBudget, syncSceneRenderCamera } from "../ui/renderBudget";
 import { wireSceneDayNightLifecycle } from "../ui/sceneDayNightLifecycle";
 import {
   paintDoorstepNightFx,
@@ -338,16 +338,29 @@ export class DoorScene extends Phaser.Scene {
     this.prompt.setAlpha(1);
   }
 
+  /**
+   * Full design-resolution bake. Phase 3 tier-scaled RT + configureSceneBakeRT left the
+   * facade misaligned with standing sprites; batchDraw also inherits the live scene
+   * camera zoom, so mid-tier bakes drift ~50px above the lawn unless we stamp at zoom 1.
+   */
   private bakeDoorFacade(houseIndex: number): Phaser.GameObjects.RenderTexture {
-    const scratch = this.add.graphics().setVisible(false);
+    const cam = this.cameras.main;
+    const savedZoom = cam.zoom;
+    const savedScrollX = cam.scrollX;
+    const savedScrollY = cam.scrollY;
+    cam.setZoom(1);
+    cam.setScroll(0, 0);
+
+    const scratch = this.make.graphics({ x: 0, y: 0 }, false);
     paintDoorstepStatic(scratch, houseIndex);
-    const bake = sceneBakeDimensions();
-    const rt = this.add.renderTexture(0, 0, bake.w, bake.h).setOrigin(0, 0).setDepth(0.5);
-    configureSceneBakeRT(rt, GAME_WIDTH, GAME_HEIGHT);
+    const rt = this.add.renderTexture(0, 0, GAME_WIDTH, GAME_HEIGHT).setOrigin(0, 0).setDepth(0.5);
     rt.beginDraw();
     rt.batchDraw(scratch);
     rt.endDraw();
     scratch.destroy();
+
+    cam.setZoom(savedZoom);
+    cam.setScroll(savedScrollX, savedScrollY);
     return rt;
   }
 
