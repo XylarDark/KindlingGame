@@ -31,7 +31,6 @@ import {
   syncSignPlaque,
 } from "../ui/signText";
 import { Color } from "../ui/theme";
-import { fitTypeToBox } from "../ui/typekit";
 import { typeRoleBox, typeRolePx } from "../ui/typeScale";
 import { designHudInset, HUD_TOUCH_MIN_DESIGN, readCssSafeArea, VIEWFIT_EVENT } from "../ui/viewFit";
 
@@ -188,16 +187,6 @@ export class DoorScene extends Phaser.Scene {
     this.placePrompt();
   }
 
-  /** Clamp prompt ink into the wide door box — setSignCopy alone skips typekit refit. */
-  private refitDoorPrompt(): void {
-    if (!String(this.prompt.text ?? "").trim()) return;
-    fitTypeToBox(
-      this.prompt,
-      typeRoleBox(DOOR_PROMPT_MAX_W, "hudTitle"),
-      typeRoleBox(DOOR_PROMPT_MAX_H, "hudTitle"),
-    );
-  }
-
   /** Match customer scroll — scrollFactor(0) signs drift beside sprites on a zoomed door cam. */
   private syncPromptScroll(): void {
     const host = signContainer(this.prompt);
@@ -213,7 +202,6 @@ export class DoorScene extends Phaser.Scene {
   private placePrompt(): void {
     if (!String(this.prompt.text ?? "").trim()) return;
     this.syncPromptScroll();
-    this.refitDoorPrompt();
     syncSignPlaque(this.prompt);
     this.syncPromptScroll();
     const headTop = standingPersonHeadTop(this.customer);
@@ -345,7 +333,6 @@ export class DoorScene extends Phaser.Scene {
     if (promptLine !== this.lastPrompt) {
       this.lastPrompt = promptLine;
       setSignCopy(this.prompt, promptLine);
-      this.refitDoorPrompt();
     }
     this.prompt.setAlpha(1);
   }

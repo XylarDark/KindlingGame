@@ -56,7 +56,8 @@ describe("speech stays off the models it belongs to", () => {
     expect(src, "customer order speech opts into ink pad").toMatch(
       /bubble = addSignText[\s\S]*inkPad: SHOP_SPEECH_INK_PAD/,
     );
-    expect(src, "speech refit restores ink pad after typekit clamp-fit").toContain("refitShopSpeech");
+    expect(src, "speech refit restores ink pad without clamp-fit").toContain("refitShopSpeech");
+    expect(src, "ShopScene does not call fitTypeToBox on speech").not.toContain("fitTypeToBox");
     expect(src, "driver bubble centered above head").toMatch(
       /driverBubble = addSignText[\s\S]*?\.setOrigin\(0\.5, 0\.5\)/,
     );

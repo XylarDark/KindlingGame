@@ -50,11 +50,11 @@ describe("drive HUD callout sizing", () => {
     expect(create).not.toContain("DRIVE_PIN_PLAQUE_PAD * 0.39");
     const pinCreate = create.slice(create.indexOf("drivePinLabel = addSignText"), create.indexOf("driveVanBanner = addSignText"));
     expect(pinCreate).not.toContain("...driveChipSignOpts");
-    const refit = hud.slice(hud.indexOf("private refitDrivePinLabel("), hud.indexOf("private paintDriveCallouts"));
-    expect(refit).toContain("fitTypeToBox(");
-    expect(refit).toContain("DRIVE_PIN_INK_PAD_H");
+    expect(pinCreate).toContain("inkPad:");
+    expect(pinCreate).toContain("DRIVE_PIN_INK_PAD_H");
     expect(pinCreate).toContain("noWrap: true");
-    expect(callouts).toContain("this.refitDrivePinLabel()");
+    expect(callouts).not.toContain("refitDrivePinLabel");
+    expect(hud).not.toContain("fitTypeToBox(");
     expect(create).toContain('typeRoleBox(DRIVE_VAN_MAX_W, "hudBody")');
     expect(create).toContain('typeRoleBox(DRIVE_SHOP_CAP_MAX_W, "hudBody")');
     expect(create).toContain("...driveChipSignOpts");

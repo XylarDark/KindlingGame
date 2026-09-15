@@ -395,10 +395,12 @@ describe("tight ink measurement", () => {
   });
 });
 
-describe("typekit fixed HUD roles", () => {
-  it("skips clamp-fit for fixed typeRole tokens", () => {
+describe("typekit role tokens", () => {
+  it("skips clamp-fit for all four typeRole tokens on setText", () => {
     const typekit = read("./typekit.ts");
-    expect(typekit).toContain("isFixedTypeRole");
-    expect(typekit).toMatch(/if \(!fixedRole && \(options\.maxWidth/);
+    expect(typekit).toContain("skipsClampFitTypeRole");
+    expect(typekit).toContain("applyWrapOnly");
+    expect(typekit).toMatch(/if \(role !== undefined && skipsClampFitTypeRole\(role\)\)/);
+    expect(typekit).toMatch(/if \(skipClamp\) \{\s*applyWrapOnly\(text\)/);
   });
 });
