@@ -433,6 +433,14 @@ the thing it described.
 - **Fix:** cap final `typeResolution` at 3 on `(pointer: coarse)` (desktop keeps 4–8); boot-warm customer pool bubbles with sample copy under the loading gate; ID card template strings rasterize at Hud create.
 - **Prevention:** `typekit.test.ts` asserts coarse DPR 3 → resolution ≤3; shop pool `warmCustomerSpeech` guarded by boot warm tests.
 
+### Coarse mid-tier boot freeze — blue shell (#1b2238)
+
+- **Date:** 2026-09-15
+- **Symptom:** on coarse-pointer phones (mid tier 0.85), the canvas stayed shell blue after load; side rails looked oversized because the 16:9 stage never painted. Game loop stuck at ~frame 11; only `boot` scene active.
+- **Cause:** Phase 5 `registerTypeAtlas()` ran inside `BootScene.runBootWarm` while GPU texture flush / shop warm was in flight. The atlas canvas upload blocked the loop on coarse mid tier. A secondary hazard was `applyRenderScale(0.85)` on `Phaser.Core.Events.READY` resizing the backbuffer before boot warm finished.
+- **Fix:** defer `registerTypeAtlas` to `TitleScene.create` (after boot warm); gate mid-tier `scale.resize` + world camera zoom at 1 until Title via `bootRenderGate.ts`; stamp shop static bakes at camera zoom 1 (Door #119 pattern).
+- **Prevention:** `bootResidency.test.ts` + `typeAtlas.test.ts` source-scan boot vs title registration; `renderBudget.test.ts` boot render gate; coarse mid capture script (`?meter=1`, 844×390).
+
 ---
 
 ## Size / speed / readability plan — closed (2026-09-15)
