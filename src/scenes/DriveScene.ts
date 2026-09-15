@@ -3,7 +3,7 @@ import { cityTileImageKey } from "../art/cityTileAtlas";
 import { applyPersonTexture, personImageKey } from "../art/peopleAtlas";
 import { driveGrade } from "../art/dayNightGrade";
 import { applyDayNight, attachDayNight, dayNightFrom, shouldApplyGrade, type DayNightPipeline } from "../art/dayNightPipeline";
-import { getRenderBudget, syncSceneRenderCamera } from "../ui/renderBudget";
+import { bakeCellDimension, configureSceneBakeRT, getRenderBudget, syncSceneRenderCamera } from "../ui/renderBudget";
 import { wireSceneDayNightLifecycle } from "../ui/sceneDayNightLifecycle";
 import { PIN_CYCLE_MS } from "./driveConstants";
 
@@ -498,8 +498,11 @@ export class DriveScene extends Phaser.Scene {
       for (let x = 0; x < MAP_PX_W; x += CITY_BAKE_CELL) {
         const w = Math.min(CITY_BAKE_CELL, MAP_PX_W - x);
         const h = Math.min(CITY_BAKE_CELL, MAP_PX_H - y);
-        const rt = this.add.renderTexture(x, y, w, h).setOrigin(0, 0).setDepth(0);
-        rt.camera.setScroll(x, y);
+        const rt = this.add
+          .renderTexture(x, y, bakeCellDimension(w), bakeCellDimension(h))
+          .setOrigin(0, 0)
+          .setDepth(0);
+        configureSceneBakeRT(rt, w, h, { scrollX: x, scrollY: y });
         rt.beginDraw();
         for (const obj of layers) {
           if (!staticIntersectsBakeCell(obj, x, y, w, h)) continue;

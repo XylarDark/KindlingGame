@@ -2,12 +2,14 @@ import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import {
   applyRenderBudgetToGame,
   applyRenderScale,
+  bakeCellDimension,
   forceRenderBudget,
   getRenderBudget,
   initRenderBudget,
   isSessionTierLocked,
   pickRenderTier,
   resetRenderBudgetForTests,
+  sceneBakeDimensions,
   syncSceneRenderCamera,
   tickRenderBudget,
 } from "./renderBudget";
@@ -112,6 +114,32 @@ describe("init / tickRenderBudget", () => {
     initRenderBudget(false);
     expect(tickRenderBudget(22, 2_000)).toBe(true);
     expect(getRenderBudget().tier).toBe("mid");
+  });
+});
+
+describe("scene bake dimensions (Phase 3 VRAM)", () => {
+  beforeEach(() => resetRenderBudgetForTests());
+
+  it("sceneBakeDimensions matches backbuffer rounding per tier", () => {
+    forceRenderBudget("high");
+    expect(sceneBakeDimensions()).toEqual({ w: 1920, h: 1080 });
+    forceRenderBudget("mid");
+    expect(sceneBakeDimensions()).toEqual({
+      w: Math.round(GAME_WIDTH * 0.85),
+      h: Math.round(GAME_HEIGHT * 0.85),
+    });
+    forceRenderBudget("low");
+    expect(sceneBakeDimensions()).toEqual({
+      w: Math.round(GAME_WIDTH * 0.65),
+      h: Math.round(GAME_HEIGHT * 0.65),
+    });
+  });
+
+  it("bakeCellDimension scales city bake cells and clamps tiny sizes", () => {
+    forceRenderBudget("mid");
+    expect(bakeCellDimension(2048)).toBe(Math.round(2048 * 0.85));
+    expect(bakeCellDimension(704)).toBe(Math.round(704 * 0.85));
+    expect(bakeCellDimension(32)).toBe(64);
   });
 });
 

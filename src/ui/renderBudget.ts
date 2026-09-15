@@ -179,6 +179,39 @@ export function tickRenderBudget(actualFps: number, nowMs = performance.now()): 
   return true;
 }
 
+/** RT pixel size for full-scene bakes (shop/door) — tier scale, not design 1920×1080. */
+export function sceneBakeDimensions(scale: number = getRenderBudget().renderScale): {
+  w: number;
+  h: number;
+} {
+  return {
+    w: Math.max(320, Math.round(GAME_WIDTH * scale)),
+    h: Math.max(180, Math.round(GAME_HEIGHT * scale)),
+  };
+}
+
+/** Scale one design-space pixel dimension for city/shop cell RT allocation. */
+export function bakeCellDimension(designPx: number, scale: number = getRenderBudget().renderScale): number {
+  return Math.max(64, Math.round(designPx * scale));
+}
+
+/**
+ * Match RT internal resolution to renderScale while keeping design-space footprint.
+ * Call once after creating the RT at bakeCellDimension / sceneBakeDimensions size.
+ */
+export function configureSceneBakeRT(
+  rt: Phaser.GameObjects.RenderTexture,
+  designW: number,
+  designH: number,
+  opts?: { scale?: number; scrollX?: number; scrollY?: number },
+): void {
+  const scale = opts?.scale ?? getRenderBudget().renderScale;
+  rt.setDisplaySize(designW, designH);
+  const cam = rt.camera;
+  cam.setZoom(scale);
+  cam.setScroll(opts?.scrollX ?? 0, opts?.scrollY ?? 0);
+}
+
 export function syncSceneRenderCamera(
   scene: Phaser.Scene,
   scale: number = getRenderBudget().renderScale,

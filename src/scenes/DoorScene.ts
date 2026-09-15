@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { applyCrewTexture, applyPersonTexture } from "../art/peopleAtlas";
 import { doorGrade } from "../art/dayNightGrade";
 import { applyDayNight, attachDayNight, dayNightFrom, shouldApplyGrade, type DayNightPipeline } from "../art/dayNightPipeline";
-import { getRenderBudget, syncSceneRenderCamera } from "../ui/renderBudget";
+import { configureSceneBakeRT, getRenderBudget, sceneBakeDimensions, syncSceneRenderCamera } from "../ui/renderBudget";
 import { wireSceneDayNightLifecycle } from "../ui/sceneDayNightLifecycle";
 import {
   paintDoorstepNightFx,
@@ -340,7 +340,9 @@ export class DoorScene extends Phaser.Scene {
   private bakeDoorFacade(houseIndex: number): Phaser.GameObjects.RenderTexture {
     const scratch = this.add.graphics().setVisible(false);
     paintDoorstepStatic(scratch, houseIndex);
-    const rt = this.add.renderTexture(0, 0, GAME_WIDTH, GAME_HEIGHT).setOrigin(0, 0).setDepth(0.5);
+    const bake = sceneBakeDimensions();
+    const rt = this.add.renderTexture(0, 0, bake.w, bake.h).setOrigin(0, 0).setDepth(0.5);
+    configureSceneBakeRT(rt, GAME_WIDTH, GAME_HEIGHT);
     rt.beginDraw();
     rt.batchDraw(scratch);
     rt.endDraw();

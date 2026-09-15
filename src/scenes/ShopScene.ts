@@ -3,7 +3,7 @@ import { applyCrewTexture, applyPersonTexture, personImageKey } from "../art/peo
 import { drawReceiptRail } from "../art/receiptRail";
 import { shopGrade } from "../art/dayNightGrade";
 import { applyDayNight, attachDayNight, dayNightFrom, type DayNightPipeline } from "../art/dayNightPipeline";
-import { getRenderBudget, syncSceneRenderCamera } from "../ui/renderBudget";
+import { configureSceneBakeRT, getRenderBudget, sceneBakeDimensions, syncSceneRenderCamera } from "../ui/renderBudget";
 import { wireSceneDayNightLifecycle } from "../ui/sceneDayNightLifecycle";
 import { loadWorldScenes } from "./worldScenes";
 import { drawShopCounter, drawShopInterior, paintShopDayNight, paintWindowGlow } from "../art/shopInterior";
@@ -792,7 +792,9 @@ export class ShopScene extends Phaser.Scene {
       const db = "depth" in b ? Number((b as { depth: number }).depth) : 0;
       return da - db;
     });
-    const rt = this.add.renderTexture(0, 0, GAME_WIDTH, GAME_HEIGHT).setOrigin(0, 0).setDepth(depth);
+    const bake = sceneBakeDimensions();
+    const rt = this.add.renderTexture(0, 0, bake.w, bake.h).setOrigin(0, 0).setDepth(depth);
+    configureSceneBakeRT(rt, GAME_WIDTH, GAME_HEIGHT);
     rt.beginDraw();
     for (const obj of layers) rt.batchDraw(obj);
     rt.endDraw();
