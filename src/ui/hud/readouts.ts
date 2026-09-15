@@ -16,7 +16,8 @@ import {
   signPlaqueMid,
   syncSignPlaque,
 } from "../signText";
-import { addUiText } from "../text";
+import { inkFontSizePx, inkSetStroke } from "../typeInk";
+import { addUiText, type UiInk } from "../text";
 import { Color, HUD_READOUT_PX, HUD_SCORE_PX } from "../theme";
 import { typeClockPx, typeRoleBox, typeRolePx } from "../typeScale";
 import { worldToScreen } from "../worldProject";
@@ -59,7 +60,7 @@ export function doorCornerReadoutAnchors(
 
 /** Plaque center when the panel's top-left corner sits at `(left, top)`. */
 function plaqueCenterFromTopLeft(
-  text: Phaser.GameObjects.Text,
+  text: UiInk,
   left: number,
   top: number,
 ): { x: number; y: number } {
@@ -79,7 +80,7 @@ export interface HudReadoutsChrome {
   cog: Phaser.GameObjects.Image;
   settingsOpen: boolean;
   resultsVisible: boolean;
-  releaseScorePop(label: Phaser.GameObjects.Text): void;
+  releaseScorePop(label: UiInk): void;
 }
 
 /**
@@ -87,11 +88,11 @@ export interface HudReadoutsChrome {
  * KINDLING plaque via screen projection; corner mode is the road fallback.
  */
 export class HudReadouts {
-  scoreText!: Phaser.GameObjects.Text;
-  scoreCaption!: Phaser.GameObjects.Text;
-  clockText!: Phaser.GameObjects.Text;
-  coverText!: Phaser.GameObjects.Text;
-  doorTitleText!: Phaser.GameObjects.Text;
+  scoreText!: UiInk;
+  scoreCaption!: UiInk;
+  clockText!: UiInk;
+  coverText!: UiInk;
+  doorTitleText!: UiInk;
   scorePopLayer!: Phaser.GameObjects.Container;
 
   private captionPx = HUD_SCORE_PX;
@@ -103,11 +104,11 @@ export class HudReadouts {
   private lastReadoutsHidden: boolean | null = null;
   /** Shop-owned counter row — HudScene duplicates hide while this is active. */
   private lastShopReadoutsLayer: boolean | null = null;
-  private shopScoreText?: Phaser.GameObjects.Text;
-  private shopScoreCaption?: Phaser.GameObjects.Text;
-  private shopClockText?: Phaser.GameObjects.Text;
-  private scorePopPool: Phaser.GameObjects.Text[] = [];
-  private scorePopFree: Phaser.GameObjects.Text[] = [];
+  private shopScoreText?: UiInk;
+  private shopScoreCaption?: UiInk;
+  private shopClockText?: UiInk;
+  private scorePopPool: UiInk[] = [];
+  private scorePopFree: UiInk[] = [];
 
   constructor(private readonly scene: Phaser.Scene) {}
 
@@ -322,14 +323,14 @@ export class HudReadouts {
   }
 
   matchCaptionToValue(): void {
-    const px = parseFontPx(this.scoreText.style.fontSize);
+    const px = inkFontSizePx(this.scoreText);
     if (px === this.captionPx) return;
     this.captionPx = px;
     const outline = readoutOutline(px);
-    this.scoreCaption.setStroke(outline.stroke, outline.strokeThickness);
+    inkSetStroke(this.scoreCaption, outline.stroke, outline.strokeThickness);
     retypeSize(this.scoreCaption, px);
     if (this.shopScoreCaption) {
-      this.shopScoreCaption.setStroke(outline.stroke, outline.strokeThickness);
+      inkSetStroke(this.shopScoreCaption, outline.stroke, outline.strokeThickness);
       retypeSize(this.shopScoreCaption, px);
     }
   }
@@ -463,7 +464,7 @@ export class HudReadouts {
     }
   }
 
-  acquireScorePop(delta: number, besideActor = false): Phaser.GameObjects.Text {
+  acquireScorePop(delta: number, besideActor = false): UiInk {
     let label = this.scorePopFree.pop();
     if (!label) {
       label = this.scorePopPool[0]!;
@@ -483,7 +484,7 @@ export class HudReadouts {
     return label;
   }
 
-  releaseScorePop(label: Phaser.GameObjects.Text): void {
+  releaseScorePop(label: UiInk): void {
     const host = signContainer(label);
     this.scene.tweens.killTweensOf(host);
     host.setVisible(false).setAlpha(0).setY(0);

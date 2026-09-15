@@ -63,7 +63,7 @@ describe("HudScene paint dirty guards", () => {
     expect(src).toContain("lastToast");
     expect(phone).toContain("lastPhoneLine");
     expect(phone).toContain("if (phoneLine !== this.lastPhoneLine)");
-    expect(phone).toMatch(/setPadding\(10, 6, 10, 6\)[\s\S]*phoneStatus\.setText\(phoneLine\)/);
+    expect(phone).toMatch(/inkSetPadding\(this\.phoneStatus, 10, 6, 10, 6\)[\s\S]*phoneStatus\.setText\(phoneLine\)/);
     expect(phone).not.toContain("refitType(this.phoneStatus)");
     const cover = readouts.slice(readouts.indexOf("paintCover("), readouts.indexOf("coverMaxWidth(): number"));
     expect(cover).not.toContain("refitType(this.coverText)");

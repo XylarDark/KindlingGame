@@ -6,7 +6,8 @@ import { loadDisplayPrefs, saveDisplayPrefs } from "../displayPrefs";
 import { openInstallCoachFromSettings } from "../installCoach";
 import { addHudButton, addPanel } from "../chrome";
 import { END_SHIFT_CAPTION, END_SHIFT_LABEL } from "../copy";
-import { addUiText } from "../text";
+import { inkSetColor } from "../typeInk";
+import { addUiText, type UiInk } from "../text";
 import { settingsGeom, type SettingsGeom } from "../settingsGeom";
 import { Color, HUD_TYPE_FIT, MENU_TYPE_FIT } from "../theme";
 import type { SafeInset } from "../viewFit";
@@ -49,12 +50,12 @@ export class HudSettings {
   settingsDim!: Phaser.GameObjects.Rectangle;
   settingsPanel!: Phaser.GameObjects.Container;
   settingsBox!: SettingsGeom;
-  musicValue!: Phaser.GameObjects.Text;
-  fullscreenValue!: Phaser.GameObjects.Text;
+  musicValue!: UiInk;
+  fullscreenValue!: UiInk;
   volumeTrack!: Phaser.GameObjects.Rectangle;
   volumeFill!: Phaser.GameObjects.Rectangle;
   volumeKnob!: Phaser.GameObjects.Arc;
-  volumePct!: Phaser.GameObjects.Text;
+  volumePct!: UiInk;
   volumeHit!: Phaser.GameObjects.Rectangle;
   endShiftBtn!: Phaser.GameObjects.Container;
 
@@ -401,7 +402,7 @@ export class HudSettings {
   refreshMusicControls(): void {
     const prefs = getMusicPrefs();
     this.musicValue.setText(prefs.enabled ? "ON" : "OFF");
-    this.musicValue.setColor(prefs.enabled ? "#3d6a44" : Color.muteHex);
+    inkSetColor(this.musicValue, prefs.enabled ? "#3d6a44" : Color.muteHex);
     const t = prefs.volume;
     this.volumeFill.width = Math.max(8, VOL_TRACK_W * t);
     this.volumeKnob.setPosition(VOL_TRACK_X + VOL_TRACK_W * t, this.settingsBox.volTrackY);
@@ -411,7 +412,7 @@ export class HudSettings {
   refreshFullscreenControl(): void {
     const on = loadDisplayPrefs().startInFullscreen;
     this.fullscreenValue.setText(on ? "ON" : "OFF");
-    this.fullscreenValue.setColor(on ? "#3d6a44" : Color.muteHex);
+    inkSetColor(this.fullscreenValue, on ? "#3d6a44" : Color.muteHex);
   }
 
   setVolumeFromPointer(p: Phaser.Input.Pointer): void {

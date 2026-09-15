@@ -22,6 +22,7 @@ import { skyAt, skyVisualDirtyKey } from "../sim/dayNight";
 import { addHudButton, addPanel } from "../ui/chrome";
 import { formatSlaClock, isSlaUrgent, RESULTS_NEW_DAY, RESULTS_TITLE } from "../ui/copy";
 import { houseTitle } from "../maps/cityT0";
+import type { UiInk } from "../ui/typeInk";
 import {
   addSignText,
   setSignAccent,
@@ -93,12 +94,12 @@ export class HudScene extends Phaser.Scene {
 
   private padRing!: Phaser.GameObjects.Graphics;
   private padKnob!: Phaser.GameObjects.Arc;
-  private padLabel!: Phaser.GameObjects.Text;
+  private padLabel!: UiInk;
   private flash!: Phaser.GameObjects.Rectangle;
-  private toastText!: Phaser.GameObjects.Text;
-  private drivePinLabel!: Phaser.GameObjects.Text;
-  private driveVanBanner!: Phaser.GameObjects.Text;
-  private driveShopCaption!: Phaser.GameObjects.Text;
+  private toastText!: UiInk;
+  private drivePinLabel!: UiInk;
+  private driveVanBanner!: UiInk;
+  private driveShopCaption!: UiInk;
   private lastPinWho = "";
   private lastVanToast = "";
   private lastShopCaptionKey = "";
@@ -110,11 +111,11 @@ export class HudScene extends Phaser.Scene {
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
   private resultsDim!: Phaser.GameObjects.Rectangle;
   private resultsPanel!: Phaser.GameObjects.Container;
-  private resultsTitle!: Phaser.GameObjects.Text;
-  private resultsScore!: Phaser.GameObjects.Text;
-  private resultsBreakdown!: Phaser.GameObjects.Text;
-  private resultsVerdict!: Phaser.GameObjects.Text;
-  private resultsClock!: Phaser.GameObjects.Text;
+  private resultsTitle!: UiInk;
+  private resultsScore!: UiInk;
+  private resultsBreakdown!: UiInk;
+  private resultsVerdict!: UiInk;
+  private resultsClock!: UiInk;
   private resultsVisible = false;
   private lastScoreFlashId = 0;
   private lastSfxId = 0;
@@ -321,7 +322,7 @@ export class HudScene extends Phaser.Scene {
 
   /** Instruction / toast plaques pin top-center, clear of the safe inset. */
   private placeInstructionChip(
-    chip: Phaser.GameObjects.Text,
+    chip: UiInk,
     inset: SafeInset,
     viewW: number,
     viewH: number,
@@ -920,7 +921,7 @@ export class HudScene extends Phaser.Scene {
 
 /** Nudge a preferred plaque center so the panel stays inside the HUD viewport. */
 function clampSignPlaqueCenter(
-  text: Phaser.GameObjects.Text,
+  text: UiInk,
   centerX: number,
   centerY: number,
   viewW: number,

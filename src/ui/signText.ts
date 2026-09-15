@@ -1,4 +1,20 @@
 import Phaser from "phaser";
+import {
+  inkCopy,
+  inkDepth,
+  inkOriginX,
+  inkOriginY,
+  inkRefresh,
+  inkSetFontSize,
+  inkSetOrigin,
+  inkSetPosition,
+  inkSetText,
+  inkSetVisible,
+  inkVisible,
+  inkWidth,
+  isAtlasInk,
+  type UiInk,
+} from "./typeInk";
 import { notePerfPlaquePump, notePerfSetText } from "./perfProbe";
 import { SIGN_BORDER, SIGN_FRAME_W, SIGN_PAD_X, SIGN_PAD_Y } from "./signPlaque";
 import { glyphLocalBounds as glyphLocalBoundsInk, inkInsidePlaque as inkFitsPlaque, plaqueCenterFromInkBox, tightInkLayout } from "./signTextInk";
@@ -50,23 +66,23 @@ const SIGN_INK_PAD = "signInkPad";
 
 export type SignInkPad = { left: number; top: number; right: number; bottom: number };
 
-function signPads(text: Phaser.GameObjects.Text): { x: number; y: number } {
+function signPads(text: UiInk): { x: number; y: number } {
   const custom = text.getData(SIGN_PAD) as { x: number; y: number } | undefined;
   return custom ?? { x: SIGN_PAD_X, y: SIGN_PAD_Y };
 }
 
-function signInkShift(text: Phaser.GameObjects.Text): number {
+function signInkShift(text: UiInk): number {
   return (text.getData(SIGN_INK_SHIFT) as number | undefined) ?? 0;
 }
 
-function signInkPad(text: Phaser.GameObjects.Text): SignInkPad | undefined {
+function signInkPad(text: UiInk): SignInkPad | undefined {
   return text.getData(SIGN_INK_PAD) as SignInkPad | undefined;
 }
 
 /** Re-apply stored ink pad after typekit refit — no-op when the chip never opted in. */
-export function applySignInkPad(text: Phaser.GameObjects.Text): void {
+export function applySignInkPad(text: UiInk): void {
   const pad = signInkPad(text);
-  if (!pad) return;
+  if (!pad || isAtlasInk(text)) return;
   text.setPadding(pad.left, pad.top, pad.right, pad.bottom);
   text.updateText();
   const entry = entryFor(text);
@@ -74,7 +90,7 @@ export function applySignInkPad(text: Phaser.GameObjects.Text): void {
 }
 
 type SignPlaqueEntry = {
-  text: Phaser.GameObjects.Text;
+  text: UiInk;
   host: Phaser.GameObjects.Container;
   plaque: Phaser.GameObjects.NineSlice;
   scene: Phaser.Scene;
@@ -130,7 +146,7 @@ class SceneSignPlaquePump {
     }
   };
 
-  private hookText(text: Phaser.GameObjects.Text, entry: SignPlaqueEntry): void {
+  private hookText(text: UiInk, entry: SignPlaqueEntry): void {
     const mark = (): void => this.markDirty(entry);
     const rawSetText = text.setText.bind(text);
     text.setText = ((value: string | string[]) => {
@@ -141,7 +157,7 @@ class SceneSignPlaquePump {
     }) as typeof text.setText;
     const rawSetVisible = text.setVisible.bind(text);
     text.setVisible = ((value: boolean) => {
-      const wasVisible = text.visible;
+      const wasVisible = inkVisible(text);
       const out = rawSetVisible(value);
       if (wasVisible !== value) {
         entry.lastLayoutKey = "";
@@ -152,12 +168,14 @@ class SceneSignPlaquePump {
       mark();
       return out;
     }) as typeof text.setVisible;
-    const rawSetFontSize = text.setFontSize.bind(text);
-    text.setFontSize = ((size: string | number) => {
-      const out = rawSetFontSize(size);
-      mark();
-      return out;
-    }) as typeof text.setFontSize;
+    if (!isAtlasInk(text)) {
+      const rawSetFontSize = text.setFontSize.bind(text);
+      text.setFontSize = ((size: string | number) => {
+        const out = rawSetFontSize(size);
+        mark();
+        return out;
+      }) as typeof text.setFontSize;
+    }
     const rawSetOrigin = text.setOrigin.bind(text);
     text.setOrigin = ((x?: number, y?: number) => {
       const out = rawSetOrigin(x, y);
@@ -183,11 +201,11 @@ function pumpFor(scene: Phaser.Scene): SceneSignPlaquePump {
   return pump;
 }
 
-function entryFor(text: Phaser.GameObjects.Text): SignPlaqueEntry | undefined {
+function entryFor(text: UiInk): SignPlaqueEntry | undefined {
   return text.getData(PUMP_REGISTRY) as SignPlaqueEntry | undefined;
 }
 
-function accentOf(text: Phaser.GameObjects.Text): number {
+function accentOf(text: UiInk): number {
   const accent = text.getData(ACCENT) as number | undefined;
   return accent ?? SIGN_BORDER;
 }
@@ -204,25 +222,25 @@ function syncChildScrollFactors(host: Phaser.GameObjects.Container): void {
 }
 
 /** World-placed sign chips (shop customers, door prompt) must match sprite scroll — not HUD SF0. */
-export function setSignScrollFactor(text: Phaser.GameObjects.Text, x: number, y: number): void {
+export function setSignScrollFactor(text: UiInk, x: number, y: number): void {
   const host = signContainer(text);
   host.setScrollFactor(x, y);
   syncChildScrollFactors(host);
 }
 
 /** Host container for a sign chip — position this, not the inner Text alone. */
-export function signContainer(text: Phaser.GameObjects.Text): Phaser.GameObjects.Container {
+export function signContainer(text: UiInk): Phaser.GameObjects.Container {
   return (text.getData(SIGN_HOST) as Phaser.GameObjects.Container | undefined) ?? text.parentContainer ?? text.scene.add.container(text.x, text.y);
 }
 
 /** World position of a sign chip's host — inner Text x/y are local to the plaque. */
-export function signHostPosition(text: Phaser.GameObjects.Text): { x: number; y: number } {
+export function signHostPosition(text: UiInk): { x: number; y: number } {
   const host = text.getData(SIGN_HOST) as Phaser.GameObjects.Container | undefined;
   return host ? { x: host.x, y: host.y } : { x: text.x, y: text.y };
 }
 
 /** Move a sign chip — updates the host container when present. */
-export function setSignPosition(text: Phaser.GameObjects.Text, x: number, y: number): void {
+export function setSignPosition(text: UiInk, x: number, y: number): void {
   const host = text.getData(SIGN_HOST) as Phaser.GameObjects.Container | undefined;
   if (host) host.setPosition(x, y);
   else text.setPosition(x, y);
@@ -238,14 +256,14 @@ export interface SignPlaqueExtents {
   bottomLocal: number;
 }
 
-function glyphLocalBounds(text: Phaser.GameObjects.Text, w: number, h: number): { left: number; top: number } {
-  return glyphLocalBoundsInk({ width: w, height: h, originX: text.originX, originY: text.originY });
+function glyphLocalBounds(text: UiInk, w: number, h: number): { left: number; top: number } {
+  return glyphLocalBoundsInk({ width: w, height: h, originX: inkOriginX(text), originY: inkOriginY(text) });
 }
 
 export { glyphAabb, inkInsidePlaque } from "./signTextInk";
 
 function plaqueCenterFromGlyphs(
-  text: Phaser.GameObjects.Text,
+  text: UiInk,
   layout: { width: number; height: number; originX: number; originY: number },
 ): { x: number; y: number } {
   const ink = glyphLocalBoundsInk(layout);
@@ -257,9 +275,10 @@ function plaqueCenterFromGlyphs(
   });
 }
 
-function applyTightInkBox(text: Phaser.GameObjects.Text, layout: ReturnType<typeof tightInkLayout>): void {
+function applyTightInkBox(text: UiInk, layout: ReturnType<typeof tightInkLayout>): void {
+  if (isAtlasInk(text)) return;
   const slack = 0.5;
-  const shrinkW = text.width > layout.width + slack;
+  const shrinkW = inkWidth(text) > layout.width + slack;
   const shrinkH = text.height > layout.height + slack;
   if (shrinkW || shrinkH) {
     text.setFixedSize(layout.width, layout.height);
@@ -268,7 +287,7 @@ function applyTightInkBox(text: Phaser.GameObjects.Text, layout: ReturnType<type
 }
 
 /** Laid-out plaque bounds — pads and 9-slice included, not bare Text.displayHeight. */
-export function signPlaqueExtents(text: Phaser.GameObjects.Text): SignPlaqueExtents {
+export function signPlaqueExtents(text: UiInk): SignPlaqueExtents {
   syncSignPlaque(text);
   const plaque = text.getData(SIGN_PLAQUE) as Phaser.GameObjects.NineSlice | undefined;
   const layout = tightInkLayout(text);
@@ -299,17 +318,17 @@ export function signPlaqueExtents(text: Phaser.GameObjects.Text): SignPlaqueExte
 }
 
 /** Host Y so the plaque's lowest pixel sits `gap` px above `ceilingY` (smaller y = higher). */
-export function signYAbove(text: Phaser.GameObjects.Text, ceilingY: number, gap: number): number {
+export function signYAbove(text: UiInk, ceilingY: number, gap: number): number {
   return ceilingY - gap - signPlaqueExtents(text).bottomLocal;
 }
 
 /** Host Y so the plaque's top pixel sits at least `gap` px below `floorY`. */
-export function signYFloor(text: Phaser.GameObjects.Text, floorY: number, gap: number): number {
+export function signYFloor(text: UiInk, floorY: number, gap: number): number {
   return floorY + gap - signPlaqueExtents(text).topLocal;
 }
 
 /** Plaque AABB center in host-local space — use with {@link setSignPosition} host coords. */
-export function signPlaqueMid(text: Phaser.GameObjects.Text): { midX: number; midY: number } {
+export function signPlaqueMid(text: UiInk): { midX: number; midY: number } {
   const ext = signPlaqueExtents(text);
   return {
     midX: (ext.leftLocal + ext.rightLocal) / 2,
@@ -318,14 +337,14 @@ export function signPlaqueMid(text: Phaser.GameObjects.Text): { midX: number; mi
 }
 
 /** Plaque AABB center in world/design space. */
-export function signPlaqueCenterWorld(text: Phaser.GameObjects.Text): { x: number; y: number } {
+export function signPlaqueCenterWorld(text: UiInk): { x: number; y: number } {
   const host = signHostPosition(text);
   const mid = signPlaqueMid(text);
   return { x: host.x + mid.midX, y: host.y + mid.midY };
 }
 
 /** Move a sign chip so its plaque center sits at `(worldX, worldY)`. */
-export function setSignPlaqueCenter(text: Phaser.GameObjects.Text, worldX: number, worldY: number): void {
+export function setSignPlaqueCenter(text: UiInk, worldX: number, worldY: number): void {
   syncSignPlaque(text);
   const mid = signPlaqueMid(text);
   setSignPosition(text, worldX - mid.midX, worldY - mid.midY);
@@ -333,7 +352,7 @@ export function setSignPlaqueCenter(text: Phaser.GameObjects.Text, worldX: numbe
 
 /** Pin a plaque's left or right edge at `worldX`; `worldY` is the plaque vertical center. */
 export function setSignPlaqueEdge(
-  text: Phaser.GameObjects.Text,
+  text: UiInk,
   worldX: number,
   worldY: number,
   edge: "left" | "right",
@@ -346,7 +365,7 @@ export function setSignPlaqueEdge(
 }
 
 /** Hit-test the plaque host, not inner Text at local glyph offsets. */
-export function syncSignHit(text: Phaser.GameObjects.Text): void {
+export function syncSignHit(text: UiInk): void {
   const host = text.getData(SIGN_HOST) as Phaser.GameObjects.Container | undefined;
   const plaque = text.getData(SIGN_PLAQUE) as Phaser.GameObjects.NineSlice | undefined;
   if (!host || !plaque) return;
@@ -370,8 +389,8 @@ export function syncSignHit(text: Phaser.GameObjects.Text): void {
 
 function layoutPlaque(entry: SignPlaqueEntry): void {
   const { text, host, plaque } = entry;
-  const copy = String(text.text ?? "");
-  const show = text.visible && copy.trim().length > 0;
+  const copy = inkCopy(text);
+  const show = inkVisible(text) && copy.trim().length > 0;
   host.setVisible(show);
   plaque.setVisible(show);
   if (!show) {
@@ -380,7 +399,7 @@ function layoutPlaque(entry: SignPlaqueEntry): void {
     return;
   }
 
-  text.updateText();
+  inkRefresh(text);
   let layout = tightInkLayout(text);
   applyTightInkBox(text, layout);
   layout = tightInkLayout(text);
@@ -393,8 +412,8 @@ function layoutPlaque(entry: SignPlaqueEntry): void {
   const tex = plaqueTextureForAccent(accent);
   if (plaque.texture.key !== tex) plaque.setTexture(tex);
 
-  const textX = -w * text.originX;
-  const textY = -h * text.originY;
+  const textX = -w * inkOriginX(text);
+  const textY = -h * inkOriginY(text);
   const inkShiftY = signInkShift(text);
   const plaqueCenter = plaqueCenterFromGlyphs(text, layout);
   // Always repair inner layout — patched setPosition must not leave glyphs orphaned at (0,0).
@@ -416,15 +435,15 @@ function layoutPlaque(entry: SignPlaqueEntry): void {
     return;
   }
 
-  const key = [copy, w, h, text.originX, text.originY, accent, text.depth, tex, pad.x, pad.y, inkShiftY].join(":");
+  const key = [copy, w, h, inkOriginX(text), inkOriginY(text), accent, inkDepth(text), tex, pad.x, pad.y, inkShiftY].join(":");
   if (key === entry.lastLayoutKey) {
     entry.dirty = false;
     return;
   }
   entry.lastLayoutKey = key;
 
-  plaque.setDepth(text.depth - 0.5);
-  host.setDepth(text.depth);
+  plaque.setDepth(inkDepth(text) - 0.5);
+  host.setDepth(inkDepth(text));
   entry.dirty = false;
 }
 
@@ -438,7 +457,7 @@ export function addSignText(
   y: number,
   content: string,
   options: SignTextOptions = {},
-): Phaser.GameObjects.Text {
+): UiInk {
   const { accent, padVariant, padX, padY, padding: _pad, inkShiftY, inkPad, ...style } = options;
   const host = scene.add.container(x, y);
   const text = makeType(scene, 0, 0, content, {
@@ -457,7 +476,7 @@ export function addSignText(
         : padForVariant("default");
   text.setData(SIGN_PAD, pads);
   if (inkShiftY !== undefined) text.setData(SIGN_INK_SHIFT, inkShiftY);
-  if (inkPad !== undefined) {
+  if (inkPad !== undefined && !isAtlasInk(text)) {
     const resolved: SignInkPad = {
       left: inkPad.left ?? 0,
       top: inkPad.top ?? 0,
@@ -494,7 +513,7 @@ export function addSignText(
   return text;
 }
 
-export function setSignAccent(text: Phaser.GameObjects.Text, accent: number = SIGN_BORDER): void {
+export function setSignAccent(text: UiInk, accent: number = SIGN_BORDER): void {
   text.setData(ACCENT, accent);
   const entry = entryFor(text);
   if (entry) {
@@ -503,15 +522,15 @@ export function setSignAccent(text: Phaser.GameObjects.Text, accent: number = SI
   }
 }
 
-export function syncSignPlaque(text: Phaser.GameObjects.Text): void {
+export function syncSignPlaque(text: UiInk): void {
   const entry = entryFor(text);
   if (!entry) return;
   entry.dirty = true;
   layoutPlaque(entry);
 }
 
-export function setSignCopy(text: Phaser.GameObjects.Text, copy: string): void {
-  text.setText(copy);
+export function setSignCopy(text: UiInk, copy: string): void {
+  inkSetText(text, copy);
   const show = copy.trim().length > 0;
   text.setVisible(show);
   const entry = entryFor(text);

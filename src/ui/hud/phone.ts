@@ -6,7 +6,8 @@ import { getSim } from "../../session";
 import type { SimSnapshot } from "../../sim/gameSim";
 import { ackTap, releaseTapAck } from "../../input/tapAck";
 import { addSignText, setSignAccent, signContainer } from "../signText";
-import { addUiText } from "../text";
+import { inkSetPadding } from "../typeInk";
+import { addUiText, type UiInk } from "../text";
 import { brand } from "../brand";
 import { Color, HUD_TYPE_FIT } from "../theme";
 import type { SafeInset } from "../viewFit";
@@ -34,8 +35,8 @@ export class HudPhone {
   phoneChrome!: Phaser.GameObjects.Graphics;
   phoneMapBase!: Phaser.GameObjects.RenderTexture;
   phoneMap!: Phaser.GameObjects.Graphics;
-  phoneTitle!: Phaser.GameObjects.Text;
-  phoneStatus!: Phaser.GameObjects.Text;
+  phoneTitle!: UiInk;
+  phoneStatus!: UiInk;
 
   private lastPhoneLine = "";
   private lastPhoneAccentKey = "";
@@ -235,7 +236,7 @@ export class HudPhone {
     }
     if (phoneLine !== this.lastPhoneLine) {
       this.lastPhoneLine = phoneLine;
-      this.phoneStatus.setPadding(10, 6, 10, 6);
+      inkSetPadding(this.phoneStatus, 10, 6, 10, 6);
       this.phoneStatus.setText(phoneLine);
     }
     if (accentKey !== this.lastPhoneAccentKey) {

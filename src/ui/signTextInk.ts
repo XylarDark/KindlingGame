@@ -1,4 +1,5 @@
 import { SIGN_FRAME_W, SIGN_PAD_X, SIGN_PAD_Y } from "./signPlaque";
+import { inkCopy, inkLineSpacing, inkLocalBounds, inkPadding, inkRefresh, isAtlasInk, type UiInk } from "./typeInk";
 import { parseFontPx, readTokenMetrics } from "./typeMetrics";
 
 const INK_CEILING_SLACK = 0.5;
@@ -28,13 +29,17 @@ export interface PlaqueLayout {
 
 const INK_PAD_TOLERANCE = 0.5;
 
-function padExtents(text: Phaser.GameObjects.Text): { x: number; y: number } {
-  const p = text.padding;
-  return { x: (p?.left ?? 0) + (p?.right ?? 0), y: (p?.top ?? 0) + (p?.bottom ?? 0) };
+function padExtents(text: UiInk): { x: number; y: number } {
+  const p = inkPadding(text);
+  return { x: p.left + p.right, y: p.top + p.bottom };
 }
 
 /** Lines Phaser actually draws — respects maxLines truncation. */
-export function drawnWrappedLines(text: Phaser.GameObjects.Text): string[] {
+export function drawnWrappedLines(text: UiInk): string[] {
+  if (isAtlasInk(text)) {
+    const copy = inkCopy(text);
+    return copy.includes("\n") ? copy.split("\n") : [copy];
+  }
   const lines = text.getWrappedText();
   const maxLines = text.style.maxLines;
   if (maxLines > 0 && maxLines < lines.length) return lines.slice(0, maxLines);
@@ -70,17 +75,19 @@ function inkLineHeight(text: Phaser.GameObjects.Text): number {
   return metrics.fontSize + (text.style.strokeThickness ?? 0);
 }
 
-export function measureInkWidth(text: Phaser.GameObjects.Text, lines: readonly string[]): number {
+export function measureInkWidth(text: UiInk, lines: readonly string[]): number {
+  if (isAtlasInk(text)) return inkLocalBounds(text).width + padExtents(text).x;
   let maxLine = 0;
   for (const line of lines) maxLine = Math.max(maxLine, measureInkLineWidth(text, line));
   return maxLine + padExtents(text).x;
 }
 
-export function measureInkHeight(text: Phaser.GameObjects.Text, lineCount: number): number {
+export function measureInkHeight(text: UiInk, lineCount: number): number {
   if (lineCount <= 0) return 0;
+  if (isAtlasInk(text)) return inkLocalBounds(text).height + padExtents(text).y;
   const lineHeight = inkLineHeight(text);
   let height = lineHeight * lineCount;
-  if (lineCount > 1) height += text.lineSpacing * (lineCount - 1);
+  if (lineCount > 1) height += inkLineSpacing(text) * (lineCount - 1);
   return height + padExtents(text).y;
 }
 
@@ -88,10 +95,11 @@ export function measureInkHeight(text: Phaser.GameObjects.Text, lineCount: numbe
  * Ink box for plaque layout — shrinks to longest line / drawn stack when Phaser's
  * measured width or height is inflated by a wrap or clip ceiling.
  */
-export function tightInkLayout(text: Phaser.GameObjects.Text): GlyphLayout {
-  text.updateText();
-  const reportedW = text.width;
-  const reportedH = text.height;
+export function tightInkLayout(text: UiInk): GlyphLayout {
+  inkRefresh(text);
+  const reported = inkLocalBounds(text);
+  const reportedW = reported.width;
+  const reportedH = reported.height;
   const lines = drawnWrappedLines(text);
   const tightW = measureInkWidth(text, lines);
   const tightH = measureInkHeight(text, lines.length);

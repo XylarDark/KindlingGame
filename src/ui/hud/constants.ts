@@ -8,6 +8,7 @@ import {
 } from "../../art/phoneArt";
 import { PORTRAIT_H, PORTRAIT_W } from "../../art/peopleSize";
 import { fitCityPanel } from "../../maps/cityMinimap";
+import type { UiInk } from "../typeInk";
 import { Color } from "../theme";
 
 /** Drive and door — pad inside each corner pocket before centering SCORE / clock. */
@@ -40,7 +41,7 @@ export function readoutOutline(px: number): { stroke: string; strokeThickness: n
 }
 
 /** Vertical centre of a top-anchored settings row label, for the value opposite it. */
-export function rowMidY(label: Phaser.GameObjects.Text): number {
+export function rowMidY(label: UiInk): number {
   return label.y + label.height / 2;
 }
 
@@ -50,8 +51,8 @@ export function rowMidY(label: Phaser.GameObjects.Text): number {
  * when the type step moves.
  */
 export function rowBand(
-  label: Phaser.GameObjects.Text,
-  value: Phaser.GameObjects.Text,
+  label: UiInk,
+  value: UiInk,
   minHeight = 56,
 ): { mid: number; height: number } {
   const top = Math.min(label.y, value.y - value.height / 2);

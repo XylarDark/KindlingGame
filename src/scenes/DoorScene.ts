@@ -21,6 +21,7 @@ import type { SimSnapshot } from "../sim/gameSim";
 import { layoutDebugEnabled, paintLayoutDebug, type LayoutDebugLayer } from "../ui/layoutDebug";
 import { aboveHeadBand, plaqueAabbFromCenter } from "../ui/plaquePlacement";
 import { standingPersonHeadTop } from "../ui/plaquePlacementPhaser";
+import type { UiInk } from "../ui/typeInk";
 import {
   addSignText,
   setSignCopy,
@@ -82,7 +83,7 @@ export class DoorScene extends Phaser.Scene {
   private driver!: Phaser.GameObjects.Image;
   private customer!: Phaser.GameObjects.Image;
   private bag!: Phaser.GameObjects.Image;
-  private prompt!: Phaser.GameObjects.Text;
+  private prompt!: UiInk;
   private floorY = 0;
   /** Cached so the per-frame chip placement does not re-read CSS safe areas. */
   private insetTop = 0;
