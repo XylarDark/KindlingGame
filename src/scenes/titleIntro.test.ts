@@ -41,6 +41,13 @@ describe("title how-to start flow", () => {
     expect(src).not.toContain("this.input.setTopOnly(true)");
   });
 
+  it("sizes OPEN THE SHOP at or above HUD touch minimum", () => {
+    const howto = src.slice(src.indexOf("private drawHowTo"), src.indexOf("private async finishDeferredWarm"));
+    expect(howto).toContain("HUD_BUTTON_MIN_H");
+    expect(howto).toMatch(/btnH = Math\.max\(HUD_BUTTON_MIN_H/);
+    expect(howto).toContain("minHeight: btnH");
+  });
+
   it("makes the dim visual-only on how-to and routes the button straight to begin()", () => {
     const howto = src.slice(src.indexOf("private drawHowTo"), src.indexOf("private async finishDeferredWarm"));
     expect(howto).toContain("OPEN THE SHOP");

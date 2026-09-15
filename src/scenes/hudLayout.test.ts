@@ -210,6 +210,17 @@ describe("HUD chip resolver wiring", () => {
     expect(layout).not.toContain("cogTop - PHONE_COG_GAP");
   });
 
+  it("keeps cover and doorTitle mutually exclusive — cover never paints at the porch", () => {
+    const cover = between(readouts, "paintCover(", "\n  clipCoverLine(", "paintCover");
+    expect(cover).toContain("!atDoor");
+    expect(cover).toContain('snap.playerRole === "keyLead"');
+    const resolve = between(readouts, "resolvePlaqueSlots(", "\n  }", "resolvePlaqueSlots");
+    expect(resolve).toMatch(/if \(this\.coverText\.visible[\s\S]*placeChip\(placer, "cover"/);
+    expect(resolve).toMatch(/if \(atDoor && this\.doorTitleText\.visible[\s\S]*setSignPlaqueCenter\(this\.doorTitleText/);
+    expect(resolve).not.toMatch(/placeChip\(placer, "cover"[\s\S]*placeChip\(placer, "doorTitle"/);
+    expect(resolve).not.toMatch(/placeChip\(placer, "doorTitle"[\s\S]*placeChip\(placer, "cover"/);
+  });
+
   it("caps cover width so it cannot reach the shop lot mark", () => {
     const cover = between(readouts, "coverMaxWidth(): number {", "\n  }", "coverMaxWidth");
     expect(cover).toContain("Math.min");

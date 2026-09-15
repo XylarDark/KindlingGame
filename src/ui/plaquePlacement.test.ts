@@ -174,6 +174,31 @@ describe("door prompt placement contract", () => {
     expect(doorSrc).not.toContain("promptAnchor");
   });
 
+  it("door prompt plaque stays disjoint from the bag hit target during hand and photo steps", () => {
+    const DOOR_HEAD_GAP = 30;
+    const BAG_HIT_PAD = 88;
+    const DOOR_BAG_SCALE = 0.7 * 1.25;
+    const BAG_TEX_H = 120;
+    const CUSTOMER_X = 960 + 200;
+    const floorY = 838;
+    const headTop = floorY - 307;
+    const bagY = floorY - 307 * 0.42;
+    const bagDisplayH = BAG_TEX_H * DOOR_BAG_SCALE;
+    const bagTop = bagY - bagDisplayH * (1 - 0.22) - BAG_HIT_PAD;
+    const bagLeft = CUSTOMER_X - 44 - 48 * DOOR_BAG_SCALE - BAG_HIT_PAD;
+    const bagRight = CUSTOMER_X - 44 + 48 * DOOR_BAG_SCALE + BAG_HIT_PAD;
+    const bagBottom = bagY + bagDisplayH * 0.22 + BAG_HIT_PAD;
+    const bagAabb = { left: bagLeft, top: bagTop, right: bagRight, bottom: bagBottom };
+
+    for (const line of ["Tap bag → Ren.", "Photo — tap bag."] as const) {
+      const plaque = mockSpeechPlaque(line.length > 16 ? 480 : 440, 88);
+      const center = doorPromptPlaqueCenter(plaque, CUSTOMER_X, headTop, DOOR_HEAD_GAP);
+      const promptAabb = plaqueAabbFromCenter(center.x, center.y, plaque);
+      assertPlacement(overlapsObstacle(promptAabb, bagAabb), `prompt "${line}" vs bag`);
+      expect(promptAabb.bottom).toBeLessThan(bagAabb.top);
+    }
+  });
+
   it("door orange status sits inline with the score row and top-center on x", () => {
     const rowY = 28;
     const plaque = mockSpeechPlaque(520, 48);
